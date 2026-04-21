@@ -33,6 +33,7 @@ namespace IndustryLogisticV
         private readonly SimpleMenu _officeMenu;
         private readonly SimpleMenu _industryMenu;
         private readonly SimpleMenu _upgradeMenu;
+        private readonly IndustryTabletUi _industryTablet;
 
         private readonly List<Blip> _industryBlips;
         private readonly List<VehicleCargoType> _filterOrder;
@@ -98,6 +99,10 @@ namespace IndustryLogisticV
             {
                 Subtitle = "Invest profits into modules",
             };
+            _industryTablet = new IndustryTabletUi();
+            _industryTablet.LoadRequested += HandleTabletLoadRequested;
+            _industryTablet.UnloadRequested += HandleTabletUnloadRequested;
+            _industryTablet.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
 
             _industryBlips = new List<Blip>();
             _filterOrder = new List<VehicleCargoType> { VehicleCargoType.Loose, VehicleCargoType.Crate, VehicleCargoType.Fluid };
@@ -126,7 +131,7 @@ namespace IndustryLogisticV
 
         private bool AnyMenuOpen
         {
-            get { return _officeMenu.IsOpen || _industryMenu.IsOpen || _upgradeMenu.IsOpen; }
+            get { return _officeMenu.IsOpen || _industryMenu.IsOpen || _upgradeMenu.IsOpen || _industryTablet.IsOpen; }
         }
 
         private void OnTick(object sender, EventArgs e)
@@ -167,6 +172,7 @@ namespace IndustryLogisticV
             DrawMarkers(player);
             UpdateTransfer(gameTime);
             DrawOpenMenus();
+            DrawIndustryTablet(player);
 
             if (_showDashboard)
             {
@@ -194,6 +200,11 @@ namespace IndustryLogisticV
             _heldKeys.Add(e.KeyCode);
 
             if (!CanHandleKeyPress(e.KeyCode))
+            {
+                return;
+            }
+
+            if (HandleTabletKey(e.KeyCode))
             {
                 return;
             }
@@ -236,19 +247,36 @@ namespace IndustryLogisticV
                     return;
                 }
 
-                TryOpenIndustryTransferMenu();
+                TryOpenIndustryTablet();
                 return;
             }
 
-            if (e.KeyCode == _controls.OpenUpgrade)
-            {
-                TryOpenUpgradeMenu();
-            }
         }
 
         private void OnKeyUp(object sender, WinForms.KeyEventArgs e)
         {
             _heldKeys.Remove(e.KeyCode);
+        }
+
+        private bool HandleTabletKey(WinForms.Keys key)
+        {
+            if (!_industryTablet.IsOpen)
+            {
+                return false;
+            }
+
+            if (_industryTablet.HandleKey(key, _controls))
+            {
+                return true;
+            }
+
+            if (key == _controls.Interact || key == _controls.MenuBack || key == WinForms.Keys.Escape)
+            {
+                CloseIndustryTablet();
+                return true;
+            }
+
+            return true;
         }
 
         private bool HandleMenuKey(WinForms.Keys key)
@@ -279,7 +307,7 @@ namespace IndustryLogisticV
             var now = Game.GameTime;
             var cooldownMs = AnyMenuOpen ? 95 : 220;
 
-            if (key == _controls.Interact || key == _controls.OpenUpgrade)
+            if (key == _controls.Interact)
             {
                 cooldownMs = 320;
             }
@@ -312,6 +340,44 @@ namespace IndustryLogisticV
             {
                 _upgradeMenu.Draw();
             }
+        }
+
+        private void DrawIndustryTablet(Ped player)
+        {
+            if (!_industryTablet.IsOpen)
+            {
+                return;
+            }
+
+            if (player == null || !player.Exists())
+            {
+                CloseIndustryTablet();
+                return;
+            }
+
+            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
+            {
+                ShowStatus("Tablet disconnected. Exit your vehicle first.");
+                CloseIndustryTablet();
+                return;
+            }
+
+            var industry = _industryTablet.ActiveIndustry;
+            if (industry == null)
+            {
+                CloseIndustryTablet();
+                return;
+            }
+
+            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 2.4f)
+            {
+                ShowStatus("Tablet signal lost. Move closer to the industry marker.");
+                CloseIndustryTablet();
+                return;
+            }
+
+            _industryTablet.UpdateProfitBalance(_profit);
+            _industryTablet.DrawAndHandleInput();
         }
 
         private void DrawMarkers(Ped player)
@@ -374,9 +440,8 @@ namespace IndustryLogisticV
                 if (canShowPrompts && _nearestIndustry == industry && playerPos.DistanceTo(markerPos) <= IndustryInteractionDistance)
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
-                        "Press {0} for transfer menu. Press {1} for upgrades.",
-                        KeyName(_controls.Interact),
-                        KeyName(_controls.OpenUpgrade))));
+                        "Press {0} for tablet.",
+                        KeyName(_controls.Interact))));
                 }
             }
         }
@@ -583,6 +648,7 @@ namespace IndustryLogisticV
 
         private void OpenOfficeMenu()
         {
+            CloseIndustryTablet();
             CloseNonOfficeMenus();
             RebuildOfficeMenuItems();
             _officeMenu.Open();
@@ -592,6 +658,7 @@ namespace IndustryLogisticV
         {
             _industryMenu.Close();
             _upgradeMenu.Close();
+            CloseIndustryTablet();
         }
 
         private void CloseAllMenus()
@@ -599,6 +666,7 @@ namespace IndustryLogisticV
             _officeMenu.Close();
             _industryMenu.Close();
             _upgradeMenu.Close();
+            CloseIndustryTablet();
         }
 
         private void RebuildOfficeMenuItems()
@@ -818,6 +886,40 @@ namespace IndustryLogisticV
             ShowStatus(message);
         }
 
+        private void TryOpenIndustryTablet()
+        {
+            if (_pendingTransfer != null)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return;
+            }
+
+            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
+            {
+                ShowStatus("Exit your vehicle to open the industry tablet.");
+                return;
+            }
+
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            {
+                ShowStatus("No industry marker in range.");
+                return;
+            }
+
+            _menuIndustry = _nearestIndustry;
+            _officeMenu.Close();
+            _industryMenu.Close();
+            _upgradeMenu.Close();
+
+            _industryTablet.Open(_nearestIndustry);
+        }
+
         private void TryOpenIndustryTransferMenu()
         {
             if (_pendingTransfer != null)
@@ -925,6 +1027,261 @@ namespace IndustryLogisticV
             }
 
             return true;
+        }
+
+        private bool TryGetIndustryTabletContext(Industry industry, out Vehicle cargoVehicle, out VehicleCargoState cargoState, out string error)
+        {
+            cargoVehicle = null;
+            cargoState = null;
+            error = string.Empty;
+
+            if (industry == null)
+            {
+                error = "No target industry.";
+                return false;
+            }
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                error = "Player unavailable.";
+                return false;
+            }
+
+            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
+            {
+                error = "Exit your vehicle to use the tablet.";
+                return false;
+            }
+
+            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 1.2f)
+            {
+                error = "Move closer to the industry marker.";
+                return false;
+            }
+
+            Vehicle driverVehicle;
+            cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                error = "Bring a cargo vehicle close to the industry.";
+                return false;
+            }
+
+            cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            if (cargoState == null)
+            {
+                error = "Unable to initialize cargo state.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void HandleTabletLoadRequested(Industry industry)
+        {
+            if (_pendingTransfer != null)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            Vehicle cargoVehicle;
+            VehicleCargoState cargoState;
+            string error;
+            if (!TryGetIndustryTabletContext(industry, out cargoVehicle, out cargoState, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
+            if (!cargoState.IsEmpty)
+            {
+                ShowStatus("Vehicle already carries cargo. Unload first.");
+                return;
+            }
+
+            var cargoType = cargoState.CargoType;
+            if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
+            {
+                cargoType = _selectedFilter;
+            }
+
+            var products = _industryManager.GetLoadableOutputs(industry, cargoType);
+            if (products.Count == 0)
+            {
+                ShowStatus("No compatible product available to load.");
+                return;
+            }
+
+            var selectedProduct = GetPreferredOreCommodity(products);
+            var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
+
+            if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
+            {
+                cargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+            }
+
+            if (shouldAnimateCrateDoors)
+            {
+                SetRearCargoDoors(cargoVehicle, true);
+            }
+
+            CloseIndustryTablet();
+            StartTransfer(
+                string.Format("Loading {0:0.0}t {1}...", requested, selectedProduct),
+                2600,
+                () =>
+                {
+                    try
+                    {
+                        float loaded;
+                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
+                        {
+                            ShowStatus("Loading failed: product unavailable.");
+                            return;
+                        }
+
+                        cargoState.Commodity = selectedProduct;
+                        cargoState.WeightTons += loaded;
+                        cargoState.CargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+                        _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                        ShowStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
+                    }
+                    finally
+                    {
+                        if (shouldAnimateCrateDoors)
+                        {
+                            SetRearCargoDoors(cargoVehicle, false);
+                        }
+                    }
+                });
+        }
+
+        private void HandleTabletUnloadRequested(Industry industry)
+        {
+            if (_pendingTransfer != null)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            Vehicle cargoVehicle;
+            VehicleCargoState cargoState;
+            string error;
+            if (!TryGetIndustryTabletContext(industry, out cargoVehicle, out cargoState, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
+            if (cargoState.IsEmpty)
+            {
+                ShowStatus("Vehicle is empty.");
+                return;
+            }
+
+            if (!cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
+                return;
+            }
+
+            if (!industry.AcceptsCommodity(cargoState.Commodity))
+            {
+                ShowStatus("This industry does not accept Omega fluid.");
+                return;
+            }
+
+            var tonsToUnload = cargoState.WeightTons;
+            var commodity = cargoState.Commodity;
+
+            CloseIndustryTablet();
+            StartTransfer(
+                string.Format("Unloading {0:0.0}t {1}...", tonsToUnload, commodity),
+                2800,
+                () =>
+                {
+                    float accepted;
+                    if (!_industryManager.TryUnload(industry, commodity, tonsToUnload, out accepted))
+                    {
+                        ShowStatus("Unloading failed: destination storage full.");
+                        return;
+                    }
+
+                    var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                    _profit += revenue;
+
+                    cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                    if (cargoState.WeightTons <= 0.001f)
+                    {
+                        cargoState.ClearCargo();
+                        _fleetManager.ClearCargoVisuals(cargoState);
+                    }
+                    else
+                    {
+                        _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                    }
+
+                    ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
+                });
+        }
+
+        private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)
+        {
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return;
+            }
+
+            if (industry == null)
+            {
+                ShowStatus("No industry selected.");
+                return;
+            }
+
+            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
+            {
+                ShowStatus("Exit your vehicle to use the tablet.");
+                return;
+            }
+
+            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 2.4f)
+            {
+                ShowStatus("Move closer to an industry to manage upgrades.");
+                return;
+            }
+
+            float cost;
+            string result;
+            if (!industry.TryUpgradeModule(module, ref _profit, out cost, out result))
+            {
+                ShowStatus(result);
+                return;
+            }
+
+            industry.ClampBuffersToCapacity();
+            ShowStatus(result);
+
+            if (_upgradeMenu.IsOpen && _menuIndustry == industry)
+            {
+                RebuildUpgradeMenuItems();
+            }
+        }
+
+        private static string GetPreferredOreCommodity(List<string> products)
+        {
+            for (int i = 0; i < products.Count; i++)
+            {
+                if (products[i].Equals("Ore", StringComparison.OrdinalIgnoreCase))
+                {
+                    return products[i];
+                }
+            }
+
+            return products[0];
         }
 
         private void RebuildIndustryMenuItems()
@@ -1241,6 +1598,7 @@ namespace IndustryLogisticV
             }
 
             _menuIndustry = _nearestIndustry;
+            CloseIndustryTablet();
             _officeMenu.Close();
             _industryMenu.Close();
             RebuildUpgradeMenuItems();
@@ -1452,6 +1810,16 @@ namespace IndustryLogisticV
                         false)
                     .Draw();
                 }
+
+        private void CloseIndustryTablet()
+        {
+            if (!_industryTablet.IsOpen)
+            {
+                return;
+            }
+
+            _industryTablet.Close();
+        }
 
         private void CreateMapBlips()
         {
@@ -1744,6 +2112,9 @@ namespace IndustryLogisticV
             DestroyMapBlips();
             _pendingTransfer = null;
             CloseAllMenus();
+            _industryTablet.LoadRequested -= HandleTabletLoadRequested;
+            _industryTablet.UnloadRequested -= HandleTabletUnloadRequested;
+            _industryTablet.UpgradeModuleRequested -= HandleTabletUpgradeModuleRequested;
             _heldKeys.Clear();
         }
 

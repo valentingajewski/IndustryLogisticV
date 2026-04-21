@@ -8,6 +8,7 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
 
   <ItemGroup>
@@ -17,6 +18,10 @@
     </Reference>
     <Reference Include="ScriptHookVDotNet3">
       <HintPath>scripthookdotnet\ScriptHookVDotNet3.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="LemonUI.SHVDN3">
+      <HintPath>scripthookdotnet\LemonUI.SHVDN3.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

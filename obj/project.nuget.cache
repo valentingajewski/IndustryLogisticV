@@ -1,0 +1,11 @@
+{
+  "version": 2,
+  "dgSpecHash": "8pWcY4Xq4+o=",
+  "success": true,
+  "projectFilePath": "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\IndustryLogisticV.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\valga\\.nuget\\packages\\microsoft.netframework.referenceassemblies\\1.0.3\\microsoft.netframework.referenceassemblies.1.0.3.nupkg.sha512",
+    "C:\\Users\\valga\\.nuget\\packages\\microsoft.netframework.referenceassemblies.net48\\1.0.3\\microsoft.netframework.referenceassemblies.net48.1.0.3.nupkg.sha512"
+  ],
+  "logs": []
+}
