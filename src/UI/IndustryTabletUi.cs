@@ -20,6 +20,10 @@ namespace IndustryLogisticV.UI
 
         private const float UiFallbackWidth = 1280f;
         private const float UiFallbackHeight = 720f;
+        private const float MenuBackgroundWidth = 784f;
+        private const float MenuBackgroundHeight = 536f;
+
+        private readonly ScaledRectangle _menuBackground;
         private readonly ScaledRectangle _loadButton;
         private readonly ScaledRectangle _unloadButton;
         private readonly ScaledRectangle _statsButton;
@@ -38,6 +42,11 @@ namespace IndustryLogisticV.UI
 
         public IndustryTabletUi()
         {
+            _menuBackground = new ScaledRectangle(new PointF(0f, 0f), new SizeF(MenuBackgroundWidth, MenuBackgroundHeight))
+            {
+                Color = Color.FromArgb(204, 8, 12, 18),
+            };
+
             _loadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
             _unloadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
             _statsButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
@@ -236,6 +245,7 @@ namespace IndustryLogisticV.UI
             }
 
             UpdateLayout();
+            _menuBackground.Draw();
 
             var industryName = BuildIndustryLabel(_industry.Name);
             var stockpile = _industry.GetInputStockTotal() + _industry.GetOutputStockTotal();
@@ -638,6 +648,7 @@ namespace IndustryLogisticV.UI
             // Keep text and sub-panels aligned to the centered button column.
             _frameX = buttonX - 72f;
             _frameY = buttonTopY - 112f;
+            _menuBackground.Position = new PointF(_frameX, _frameY);
 
             _loadButton.Position = new PointF(buttonX, buttonTopY);
             _unloadButton.Position = new PointF(buttonX, buttonTopY + buttonSpacing);

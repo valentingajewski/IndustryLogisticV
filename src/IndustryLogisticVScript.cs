@@ -58,6 +58,7 @@ namespace IndustryLogisticV
         private int _selectedVehicleIndex;
         private int _selectedTractorIndex;
         private int _selectedIndustryProductIndex;
+        private int _dashboardViewButtonIndex;
         private int _dashboardPage;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
@@ -68,6 +69,7 @@ namespace IndustryLogisticV
 
         private float _profit;
         private VehicleCargoType _selectedFilter;
+        private DashboardOverviewMode _dashboardView;
         private IndustryTransferMode _industryTransferMode;
 
         private bool _showDashboard;
@@ -114,6 +116,8 @@ namespace IndustryLogisticV
             _selectedFilter = VehicleCargoType.Crate;
             _filteredVehicles = new List<VehicleDefinition>();
             _industryTransferProducts = new List<string>();
+            _dashboardView = DashboardOverviewMode.Industries;
+            _dashboardViewButtonIndex = 1;
             _industryTransferMode = IndustryTransferMode.Load;
             _profit = 20000f;
 
@@ -176,7 +180,15 @@ namespace IndustryLogisticV
 
             if (_showDashboard)
             {
-                DrawDashboard(player);
+                try
+                {
+                    DrawDashboard(player);
+                }
+                catch (Exception)
+                {
+                    _showDashboard = false;
+                    ShowStatus("Dashboard draw error detected. Reopen with F8.");
+                }
             }
 
             if (_showContext)
@@ -226,15 +238,8 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_showDashboard && e.KeyCode == _controls.DashboardPageDown)
+            if (_showDashboard && HandleDashboardKey(e.KeyCode))
             {
-                _dashboardPage += 1;
-                return;
-            }
-
-            if (_showDashboard && e.KeyCode == _controls.DashboardPageUp)
-            {
-                _dashboardPage = Math.Max(0, _dashboardPage - 1);
                 return;
             }
 
@@ -302,6 +307,55 @@ namespace IndustryLogisticV
             return false;
         }
 
+        private bool HandleDashboardKey(WinForms.Keys key)
+        {
+            if (!_showDashboard)
+            {
+                return false;
+            }
+
+            if (key == _controls.MenuLeft)
+            {
+                _dashboardViewButtonIndex = _dashboardViewButtonIndex <= 0 ? 1 : 0;
+                return true;
+            }
+
+            if (key == _controls.MenuRight)
+            {
+                _dashboardViewButtonIndex = (_dashboardViewButtonIndex + 1) % 2;
+                return true;
+            }
+
+            if (key == _controls.MenuSelect)
+            {
+                var selectedView = _dashboardViewButtonIndex == 0
+                    ? DashboardOverviewMode.PetrolStations
+                    : DashboardOverviewMode.Industries;
+
+                if (_dashboardView != selectedView)
+                {
+                    _dashboardView = selectedView;
+                    _dashboardPage = 0;
+                }
+
+                return true;
+            }
+
+            if (key == _controls.DashboardPageDown)
+            {
+                _dashboardPage += 1;
+                return true;
+            }
+
+            if (key == _controls.DashboardPageUp)
+            {
+                _dashboardPage = Math.Max(0, _dashboardPage - 1);
+                return true;
+            }
+
+            return false;
+        }
+
         private bool CanHandleKeyPress(WinForms.Keys key)
         {
             var now = Game.GameTime;
@@ -351,13 +405,6 @@ namespace IndustryLogisticV
 
             if (player == null || !player.Exists())
             {
-                CloseIndustryTablet();
-                return;
-            }
-
-            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
-            {
-                ShowStatus("Tablet disconnected. Exit your vehicle first.");
                 CloseIndustryTablet();
                 return;
             }
@@ -448,12 +495,15 @@ namespace IndustryLogisticV
 
         private void DrawDashboard(Ped player)
         {
-            var ordered = _industryManager.Industries
+            var filtered = _industryManager.Industries
+                .Where(x => _dashboardView == DashboardOverviewMode.PetrolStations
+                    ? IsPetrolServiceStation(x)
+                    : !IsPetrolServiceStation(x))
                 .OrderBy(x => x.Position.DistanceToSquared(player.Position))
                 .ToList();
 
             const int pageSize = 10;
-            var pageCount = Math.Max(1, (int)Math.Ceiling(ordered.Count / (float)pageSize));
+            var pageCount = Math.Max(1, (int)Math.Ceiling(filtered.Count / (float)pageSize));
             if (_dashboardPage >= pageCount)
             {
                 _dashboardPage = pageCount - 1;
@@ -468,143 +518,275 @@ namespace IndustryLogisticV
             var y = resolution.Height * 0.08f;
             var width = resolution.Width * 0.92f;
             var height = resolution.Height * 0.78f;
-            var topHeaderHeight = resolution.Height * 0.09f;
+            var topHeaderHeight = resolution.Height * 0.14f;
             var tableHeaderHeight = resolution.Height * 0.042f;
             var rowHeight = resolution.Height * 0.052f;
+            var loadingBarHeight = Math.Max(6f, rowHeight * 0.2f);
+            var title = _dashboardView == DashboardOverviewMode.PetrolStations
+                ? "PETROL SERVICE STATION OVERVIEW"
+                : "INDUSTRY NETWORK OVERVIEW";
 
             DrawRect(resolution.Width, resolution.Height, x + 7f, y + 7f, width, height, Color.FromArgb(90, 0, 0, 0));
             DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
             DrawRect(resolution.Width, resolution.Height, x, y, width, 5f, Color.FromArgb(238, 227, 170, 58));
             DrawRect(resolution.Width, resolution.Height, x, y + 5f, width, topHeaderHeight - 5f, Color.FromArgb(182, 14, 20, 28));
 
-            new TextElement(
-                    "INDUSTRY NETWORK OVERVIEW",
-                    ToScriptTextCoords(resolution, x + 12f, y + 10f),
-                    0.47f,
-                    Color.FromArgb(250, 244, 250, 255),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawDashboardText(
+                resolution,
+                title,
+                x + 12f,
+                y + 10f,
+                0.47f,
+                Color.FromArgb(250, 244, 250, 255),
+                GTA.UI.Font.ChaletComprimeCologne);
 
-            new TextElement(
-                    string.Format("Profit ${0:0}   Market x{1:0.00}", _profit, _globalMarket.PriceMultiplier),
-                    ToScriptTextCoords(resolution, x + 13f, y + 35f),
-                    0.30f,
-                    Color.FromArgb(235, 224, 232, 240),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawDashboardText(
+                resolution,
+                string.Format("Profit ${0:0}   Market x{1:0.00}", _profit, _globalMarket.PriceMultiplier),
+                x + 13f,
+                y + 43f,
+                0.30f,
+                Color.FromArgb(235, 224, 232, 240),
+                GTA.UI.Font.ChaletLondon);
 
-            new TextElement(
-                    string.Format(
-                        "Page {0}/{1}   {2}/{3} pages",
-                        _dashboardPage + 1,
-                        pageCount,
-                        KeyName(_controls.DashboardPageUp),
-                        KeyName(_controls.DashboardPageDown)),
-                    ToScriptTextCoords(resolution, x + (width * 0.73f), y + 18f),
-                    0.28f,
-                    Color.FromArgb(232, 221, 228, 236),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawDashboardText(
+                resolution,
+                string.Format(
+                    "Page {0}/{1}   {2}/{3} pages",
+                    _dashboardPage + 1,
+                    pageCount,
+                    KeyName(_controls.DashboardPageUp),
+                    KeyName(_controls.DashboardPageDown)),
+                x + (width * 0.71f),
+                y + 43f,
+                0.28f,
+                Color.FromArgb(232, 221, 228, 236),
+                GTA.UI.Font.ChaletLondon);
+
+            var buttonY = y + topHeaderHeight - 36f;
+            var buttonHeight = 36f;
+            var buttonWidth = width * 0.28f;
+            DrawDashboardModeButton(
+                resolution,
+                x + 12f,
+                buttonY,
+                buttonWidth,
+                buttonHeight,
+                "PETROL SERVICE STATIONS",
+                _dashboardViewButtonIndex == 0,
+                _dashboardView == DashboardOverviewMode.PetrolStations);
+            DrawDashboardModeButton(
+                resolution,
+                x + 24f + buttonWidth,
+                buttonY,
+                buttonWidth,
+                buttonHeight,
+                "INDUSTRIES OVERVIEW",
+                _dashboardViewButtonIndex == 1,
+                _dashboardView == DashboardOverviewMode.Industries);
 
             var tableY = y + topHeaderHeight;
             DrawRect(resolution.Width, resolution.Height, x, tableY, width, tableHeaderHeight, Color.FromArgb(210, 24, 30, 41));
 
-            var colIndexX = x + 14f;
-            var colNameX = x + (width * 0.06f);
-            var colStockX = x + (width * 0.49f);
-            var colRateX = x + (width * 0.64f);
-            var colUtilX = x + (width * 0.74f);
-            var colFillX = x + (width * 0.83f);
-            var barX = x + (width * 0.89f);
-            var barWidth = width * 0.09f;
-
-            DrawTableHeaderText(resolution, "#", colIndexX, tableY + 7f);
-            DrawTableHeaderText(resolution, "INDUSTRY", colNameX, tableY + 7f);
-            DrawTableHeaderText(resolution, "STOCK", colStockX, tableY + 7f);
-            DrawTableHeaderText(resolution, "RATE/H", colRateX, tableY + 7f);
-            DrawTableHeaderText(resolution, "UTIL", colUtilX, tableY + 7f);
-            DrawTableHeaderText(resolution, "FILL", colFillX, tableY + 7f);
-
             var pageStart = _dashboardPage * pageSize;
-            var maxIndex = Math.Min(ordered.Count, pageStart + pageSize);
+            var maxIndex = Math.Min(filtered.Count, pageStart + pageSize);
             var rowTop = tableY + tableHeaderHeight;
 
-            for (int i = pageStart; i < maxIndex; i++)
+            if (_dashboardView == DashboardOverviewMode.PetrolStations)
             {
-                var row = i - pageStart;
-                var industry = ordered[i];
-                var lineY = rowTop + (row * rowHeight);
-                var rowColor = row % 2 == 0
-                    ? Color.FromArgb(112, 16, 22, 31)
-                    : Color.FromArgb(92, 12, 17, 24);
-                DrawRect(resolution.Width, resolution.Height, x, lineY, width, rowHeight, rowColor);
+                var colIndexX = x + 14f;
+                var colNameX = x + (width * 0.06f);
+                var colFuelX = x + (width * 0.53f);
+                var colCapX = x + (width * 0.67f);
+                var colFillX = x + (width * 0.79f);
+                var barX = x + (width * 0.88f);
+                var barWidth = width * 0.10f;
 
-                var totalStock = industry.GetInputStockTotal() + industry.GetOutputStockTotal();
-                var totalCapacity = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
-                var fillRatio = Math.Max(0f, Math.Min(1f, totalStock / totalCapacity));
-                var util = Math.Max(0f, Math.Min(100f, industry.LastUtilizationPercent));
+                DrawTableHeaderText(resolution, "#", colIndexX, tableY + 7f);
+                DrawTableHeaderText(resolution, "STATION", colNameX, tableY + 7f);
+                DrawTableHeaderText(resolution, "FUEL", colFuelX, tableY + 7f);
+                DrawTableHeaderText(resolution, "CAP", colCapX, tableY + 7f);
+                DrawTableHeaderText(resolution, "FILL", colFillX, tableY + 7f);
 
-                var name = industry.Name;
-                if (name.Length > 29)
+                for (int i = pageStart; i < maxIndex; i++)
                 {
-                    name = name.Substring(0, 26) + "...";
-                }
+                    var row = i - pageStart;
+                    var industry = filtered[i];
+                    var lineY = rowTop + (row * rowHeight);
+                    var rowColor = row % 2 == 0
+                        ? Color.FromArgb(112, 16, 22, 31)
+                        : Color.FromArgb(92, 12, 17, 24);
+                    DrawRect(resolution.Width, resolution.Height, x, lineY, width, rowHeight, rowColor);
 
-                if (industry.HasOmegaBoost)
+                    var fuelStock = industry.GetInputStockTotal();
+                    var fuelCapacity = Math.Max(1f, industry.InputCapacityTons);
+                    var fillRatio = Clamp01(fuelStock / fuelCapacity);
+                    var fillColor = fillRatio >= 0.75f
+                        ? Color.FromArgb(230, 86, 191, 113)
+                        : (fillRatio >= 0.35f
+                            ? Color.FromArgb(230, 223, 177, 76)
+                            : Color.FromArgb(230, 208, 88, 74));
+
+                    var name = industry.Name;
+                    if (name.Length > 34)
+                    {
+                        name = name.Substring(0, 31) + "...";
+                    }
+
+                    DrawTableRowText(resolution, (i + 1).ToString(), colIndexX, lineY + 8f, Color.FromArgb(230, 230, 236, 244));
+                    DrawTableRowText(resolution, name, colNameX, lineY + 8f, Color.FromArgb(240, 236, 242, 248));
+                    DrawTableRowText(resolution, string.Format("{0:0.0}t", fuelStock), colFuelX, lineY + 8f, Color.FromArgb(226, 219, 229, 239));
+                    DrawTableRowText(resolution, string.Format("{0:0.0}t", fuelCapacity), colCapX, lineY + 8f, Color.FromArgb(226, 219, 229, 239));
+                    DrawTableRowText(resolution, string.Format("{0:0}%", fillRatio * 100f), colFillX, lineY + 8f, Color.FromArgb(232, 227, 234, 242));
+
+                    var barY = lineY + ((rowHeight - loadingBarHeight) * 0.5f);
+                    DrawCompactLoadingBar(resolution, barX, barY, barWidth, loadingBarHeight, fillRatio, fillColor);
+                }
+            }
+            else
+            {
+                var colIndexX = x + 14f;
+                var colNameX = x + (width * 0.06f);
+                var colStockX = x + (width * 0.41f);
+                var colRateX = x + (width * 0.56f);
+                var colUtilX = x + (width * 0.66f);
+                var colFillX = x + (width * 0.75f);
+                var colOmegaX = x + (width * 0.82f);
+                var fillBarX = x + (width * 0.87f);
+                var fillBarWidth = width * 0.055f;
+                var omegaBarX = x + (width * 0.93f);
+                var omegaBarWidth = width * 0.055f;
+
+                DrawTableHeaderText(resolution, "#", colIndexX, tableY + 7f);
+                DrawTableHeaderText(resolution, "INDUSTRY", colNameX, tableY + 7f);
+                DrawTableHeaderText(resolution, "STOCK", colStockX, tableY + 7f);
+                DrawTableHeaderText(resolution, "RATE/H", colRateX, tableY + 7f);
+                DrawTableHeaderText(resolution, "UTIL", colUtilX, tableY + 7f);
+                DrawTableHeaderText(resolution, "FILL", colFillX, tableY + 7f);
+                DrawTableHeaderText(resolution, "OMEGA", colOmegaX, tableY + 7f);
+
+                for (int i = pageStart; i < maxIndex; i++)
                 {
-                    name += "  OMEGA";
+                    var row = i - pageStart;
+                    var industry = filtered[i];
+                    var lineY = rowTop + (row * rowHeight);
+                    var rowColor = row % 2 == 0
+                        ? Color.FromArgb(112, 16, 22, 31)
+                        : Color.FromArgb(92, 12, 17, 24);
+                    DrawRect(resolution.Width, resolution.Height, x, lineY, width, rowHeight, rowColor);
+
+                    var totalStock = industry.GetInputStockTotal() + industry.GetOutputStockTotal();
+                    var totalCapacity = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
+                    var fillRatio = Clamp01(totalStock / totalCapacity);
+                    var util = Math.Max(0f, Math.Min(100f, industry.LastUtilizationPercent));
+                    var omegaRatio = industry.SupportsOmegaBoost
+                        ? Clamp01(industry.OmegaStorage / Math.Max(1f, industry.OmegaCapacityTons))
+                        : 0f;
+
+                    var name = industry.Name;
+                    if (name.Length > 29)
+                    {
+                        name = name.Substring(0, 26) + "...";
+                    }
+
+                    if (industry.HasOmegaBoost)
+                    {
+                        name += "  OMEGA";
+                    }
+
+                    var fillColor = fillRatio >= 0.75f
+                        ? Color.FromArgb(230, 86, 191, 113)
+                        : (fillRatio >= 0.35f
+                            ? Color.FromArgb(230, 223, 177, 76)
+                            : Color.FromArgb(230, 208, 88, 74));
+                    var omegaColor = industry.SupportsOmegaBoost
+                        ? Color.FromArgb(230, 112, 164, 236)
+                        : Color.FromArgb(160, 74, 82, 94);
+
+                    DrawTableRowText(resolution, (i + 1).ToString(), colIndexX, lineY + 8f, Color.FromArgb(230, 230, 236, 244));
+                    DrawTableRowText(resolution, name, colNameX, lineY + 8f, Color.FromArgb(240, 236, 242, 248));
+                    DrawTableRowText(resolution, string.Format("{0:0.0}/{1:0.0}t", totalStock, totalCapacity), colStockX, lineY + 8f, Color.FromArgb(226, 219, 229, 239));
+                    DrawTableRowText(resolution, string.Format("{0:0.0}", industry.CurrentOutputPerHourTons), colRateX, lineY + 8f, Color.FromArgb(226, 219, 229, 239));
+                    DrawTableRowText(resolution, string.Format("{0:0}%", util), colUtilX, lineY + 8f, Color.FromArgb(232, 227, 234, 242));
+                    DrawTableRowText(resolution, string.Format("{0:0}%", fillRatio * 100f), colFillX, lineY + 8f, Color.FromArgb(232, 227, 234, 242));
+                    DrawTableRowText(
+                        resolution,
+                        industry.SupportsOmegaBoost ? string.Format("{0:0}%", omegaRatio * 100f) : "-",
+                        colOmegaX,
+                        lineY + 8f,
+                        Color.FromArgb(232, 227, 234, 242));
+
+                    var barY = lineY + ((rowHeight - loadingBarHeight) * 0.5f);
+                    DrawCompactLoadingBar(resolution, fillBarX, barY, fillBarWidth, loadingBarHeight, fillRatio, fillColor);
+                    DrawCompactLoadingBar(resolution, omegaBarX, barY, omegaBarWidth, loadingBarHeight, omegaRatio, omegaColor);
                 }
+            }
 
-                DrawTableRowText(resolution, (i + 1).ToString(), colIndexX, lineY + 8f, Color.FromArgb(230, 230, 236, 244));
-                DrawTableRowText(resolution, name, colNameX, lineY + 8f, Color.FromArgb(240, 236, 242, 248));
-                DrawTableRowText(resolution, string.Format("{0:0.0}/{1:0.0}t", totalStock, totalCapacity), colStockX, lineY + 8f, Color.FromArgb(226, 219, 229, 239));
-                DrawTableRowText(resolution, string.Format("{0:0.0}", industry.CurrentOutputPerHourTons), colRateX, lineY + 8f, Color.FromArgb(226, 219, 229, 239));
-                DrawTableRowText(resolution, string.Format("{0:0}%", util), colUtilX, lineY + 8f, Color.FromArgb(232, 227, 234, 242));
-                DrawTableRowText(resolution, string.Format("{0:0}%", fillRatio * 100f), colFillX, lineY + 8f, Color.FromArgb(232, 227, 234, 242));
-
-                DrawRect(resolution.Width, resolution.Height, barX, lineY + 12f, barWidth, rowHeight - 24f, Color.FromArgb(165, 6, 10, 15));
-
-                var fillColor = fillRatio >= 0.75f
-                    ? Color.FromArgb(230, 86, 191, 113)
-                    : (fillRatio >= 0.35f
-                        ? Color.FromArgb(230, 223, 177, 76)
-                        : Color.FromArgb(230, 208, 88, 74));
-
-                DrawRect(
-                    resolution.Width,
-                    resolution.Height,
-                    barX + 1f,
-                    lineY + 13f,
-                    Math.Max(1f, (barWidth - 2f) * fillRatio),
-                    rowHeight - 26f,
-                    fillColor);
+            if (filtered.Count == 0)
+            {
+                DrawRect(resolution.Width, resolution.Height, x, rowTop, width, rowHeight, Color.FromArgb(96, 12, 17, 24));
+                DrawTableRowText(
+                    resolution,
+                    "No entries in this overview.",
+                    x + 16f,
+                    rowTop + 8f,
+                    Color.FromArgb(224, 214, 223, 233));
             }
 
             var footerY = y + height - (resolution.Height * 0.04f);
             DrawRect(resolution.Width, resolution.Height, x, footerY, width, resolution.Height * 0.032f, Color.FromArgb(178, 16, 22, 30));
-            new TextElement(
-                    string.Format(
-                        "{0}/{1} change page   {2} close dashboard",
-                        KeyName(_controls.DashboardPageUp),
-                        KeyName(_controls.DashboardPageDown),
-                        KeyName(_controls.ToggleDashboard)),
-                    ToScriptTextCoords(resolution, x + 12f, footerY + 4f),
-                    0.27f,
-                    Color.FromArgb(230, 222, 230, 238),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawDashboardText(
+                resolution,
+                string.Format(
+                    "{0}/{1} select tab   {2} open tab   {3}/{4} page   {5} close dashboard",
+                    KeyName(_controls.MenuLeft),
+                    KeyName(_controls.MenuRight),
+                    KeyName(_controls.MenuSelect),
+                    KeyName(_controls.DashboardPageUp),
+                    KeyName(_controls.DashboardPageDown),
+                    KeyName(_controls.ToggleDashboard)),
+                x + 12f,
+                footerY + 4f,
+                0.27f,
+                Color.FromArgb(230, 222, 230, 238),
+                GTA.UI.Font.ChaletLondon);
+        }
+
+        private static void DrawDashboardModeButton(Size resolution, float x, float y, float width, float height, string label, bool focused, bool active)
+        {
+            var fillColor = active
+                ? Color.FromArgb(212, 88, 125, 150)
+                : (focused ? Color.FromArgb(190, 61, 82, 100) : Color.FromArgb(162, 34, 47, 60));
+
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, fillColor);
+            if (focused)
+            {
+                DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, 4f, height - 2f, Color.FromArgb(244, 252, 246, 220));
+            }
+
+            DrawDashboardText(
+                resolution,
+                label,
+                x + 10f,
+                y + 5f,
+                0.275f,
+                active || focused ? Color.FromArgb(246, 247, 251, 255) : Color.FromArgb(226, 220, 230, 239),
+                GTA.UI.Font.ChaletLondon);
+        }
+
+        private static void DrawCompactLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color fillColor)
+        {
+            ratio = Clamp01(ratio);
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(165, 6, 10, 15));
+
+            var innerHeight = Math.Max(2f, height - 2f);
+            var innerWidth = Math.Max(0f, (width - 2f) * ratio);
+            if (innerWidth <= 0f)
+            {
+                return;
+            }
+
+            DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, innerWidth, innerHeight, fillColor);
         }
 
         private void DrawContextPanel(Ped player)
@@ -900,12 +1082,6 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
-            {
-                ShowStatus("Exit your vehicle to open the industry tablet.");
-                return;
-            }
-
             if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
             {
                 ShowStatus("No industry marker in range.");
@@ -1048,12 +1224,6 @@ namespace IndustryLogisticV
                 return false;
             }
 
-            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
-            {
-                error = "Exit your vehicle to use the tablet.";
-                return false;
-            }
-
             if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 1.2f)
             {
                 error = "Move closer to the industry marker.";
@@ -1117,6 +1287,7 @@ namespace IndustryLogisticV
             var selectedProduct = GetPreferredOreCommodity(products);
             var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
             var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
+            var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
 
             if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
             {
@@ -1126,6 +1297,11 @@ namespace IndustryLogisticV
             if (shouldAnimateCrateDoors)
             {
                 SetRearCargoDoors(cargoVehicle, true);
+            }
+
+            if (usesLooseVisual)
+            {
+                _fleetManager.ClearCargoVisuals(cargoState);
             }
 
             CloseIndustryTablet();
@@ -1139,6 +1315,11 @@ namespace IndustryLogisticV
                         float loaded;
                         if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
                         {
+                            if (usesLooseVisual)
+                            {
+                                _fleetManager.ClearCargoVisuals(cargoState);
+                            }
+
                             ShowStatus("Loading failed: product unavailable.");
                             return;
                         }
@@ -1239,12 +1420,6 @@ namespace IndustryLogisticV
             if (industry == null)
             {
                 ShowStatus("No industry selected.");
-                return;
-            }
-
-            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
-            {
-                ShowStatus("Exit your vehicle to use the tablet.");
                 return;
             }
 
@@ -1536,6 +1711,7 @@ namespace IndustryLogisticV
             var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
             var cargoType = cargoState.CargoType;
             var shouldAnimateCrateDoorsOnLoad = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
+            var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
             if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
             {
                 cargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
@@ -1544,6 +1720,11 @@ namespace IndustryLogisticV
             if (shouldAnimateCrateDoorsOnLoad)
             {
                 SetRearCargoDoors(cargoVehicle, true);
+            }
+
+            if (usesLooseVisual)
+            {
+                _fleetManager.ClearCargoVisuals(cargoState);
             }
 
             _industryMenu.Close();
@@ -1557,6 +1738,11 @@ namespace IndustryLogisticV
                         float loaded;
                         if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
                         {
+                            if (usesLooseVisual)
+                            {
+                                _fleetManager.ClearCargoVisuals(cargoState);
+                            }
+
                             ShowStatus("Loading failed: product unavailable.");
                             return;
                         }
@@ -1687,7 +1873,7 @@ namespace IndustryLogisticV
             RebuildUpgradeMenuItems();
         }
 
-        private void StartTransfer(string label, int durationMs, Action complete)
+        private void StartTransfer(string label, int durationMs, Action complete, Action<float> onProgress = null)
         {
             _pendingTransfer = new PendingTransfer
             {
@@ -1695,6 +1881,7 @@ namespace IndustryLogisticV
                 DurationMs = durationMs,
                 StartMs = Game.GameTime,
                 OnComplete = complete,
+                OnProgress = onProgress,
             };
         }
 
@@ -1707,6 +1894,18 @@ namespace IndustryLogisticV
 
             var elapsed = now - _pendingTransfer.StartMs;
             var progress = Math.Min(1f, elapsed / (float)_pendingTransfer.DurationMs);
+
+            try
+            {
+                _pendingTransfer.OnProgress?.Invoke(progress);
+            }
+            catch (Exception)
+            {
+                // Disable progress callback after first failure so transfer can still complete safely.
+                _pendingTransfer.OnProgress = null;
+                ShowStatus("Transfer visual callback failed. Continuing without preview.");
+            }
+
             DrawProgressBar(_pendingTransfer.Label, progress);
 
             if (elapsed < _pendingTransfer.DurationMs)
@@ -1716,7 +1915,24 @@ namespace IndustryLogisticV
 
             var completed = _pendingTransfer;
             _pendingTransfer = null;
-            completed.OnComplete?.Invoke();
+
+            try
+            {
+                completed.OnComplete?.Invoke();
+            }
+            catch (Exception)
+            {
+                ShowStatus("Transfer completion failed.");
+            }
+        }
+
+        private static bool IsLooseVisualCommodity(string commodity)
+        {
+            var normalized = CommodityCatalog.Normalize(commodity);
+            return normalized.Equals("Ore", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("Coal", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
+                   normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase);
         }
 
         private void DrawProgressBar(string label, float progress)
@@ -1783,33 +1999,45 @@ namespace IndustryLogisticV
             }
         }
 
-                private static void DrawTableHeaderText(Size resolution, string text, float x, float y)
-                {
-                    new TextElement(
-                        text,
-                        ToScriptTextCoords(resolution, x, y),
-                        0.28f,
-                        Color.FromArgb(233, 227, 233, 241),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left,
-                        true,
-                        false)
-                    .Draw();
-                }
+        private static void DrawTableHeaderText(Size resolution, string text, float x, float y)
+        {
+            DrawDashboardText(
+                resolution,
+                text,
+                x,
+                y,
+                0.28f,
+                Color.FromArgb(233, 227, 233, 241),
+                GTA.UI.Font.ChaletLondon);
+        }
 
-                private static void DrawTableRowText(Size resolution, string text, float x, float y, Color color)
-                {
-                    new TextElement(
-                        text,
-                        ToScriptTextCoords(resolution, x, y),
-                        0.295f,
-                        color,
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left,
-                        true,
-                        false)
-                    .Draw();
-                }
+        private static void DrawTableRowText(Size resolution, string text, float x, float y, Color color)
+        {
+            DrawDashboardText(
+                resolution,
+                text,
+                x,
+                y,
+                0.295f,
+                color,
+                GTA.UI.Font.ChaletLondon);
+        }
+
+        private static void DrawDashboardText(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font)
+        {
+            var normalizedX = x / resolution.Width;
+            var normalizedY = y / resolution.Height;
+
+            Function.Call(Hash.SET_TEXT_FONT, (int)font);
+            Function.Call(Hash.SET_TEXT_SCALE, 1.0f, scale);
+            Function.Call(Hash.SET_TEXT_COLOUR, color.R, color.G, color.B, color.A);
+            Function.Call(Hash.SET_TEXT_PROPORTIONAL, true);
+            Function.Call(Hash.SET_TEXT_CENTRE, false);
+
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text ?? string.Empty);
+            Function.Call(Hash.END_TEXT_COMMAND_DISPLAY_TEXT, normalizedX, normalizedY, 0);
+        }
 
         private void CloseIndustryTablet()
         {
@@ -1831,7 +2059,7 @@ namespace IndustryLogisticV
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var industry = _industryManager.Industries[i];
-                var isPetrolStation = industry.Id.StartsWith("Petrol Station", StringComparison.OrdinalIgnoreCase);
+                var isPetrolStation = IsPetrolServiceStation(industry);
                 var sprite = isPetrolStation
                     ? BlipSprite.JerryCan
                     : (industry.IsSink ? BlipSprite.Store : BlipSprite.PointOfInterest);
@@ -1964,9 +2192,9 @@ namespace IndustryLogisticV
             var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? BaseDirectory;
             var candidates = new[]
             {
-                Path.Combine(assemblyDir, "config.ini"),
-                Path.Combine(BaseDirectory, "config.ini"),
-                Path.Combine(BaseDirectory, "scripts", "config.ini"),
+                Path.Combine(assemblyDir, "IndustryLogisticV.ini"),
+                Path.Combine(BaseDirectory, "IndustryLogisticV.ini"),
+                Path.Combine(BaseDirectory, "scripts", "IndustryLogisticV.ini"),
             };
 
             for (int i = 0; i < candidates.Length; i++)
@@ -2107,6 +2335,36 @@ namespace IndustryLogisticV
             return key == WinForms.Keys.Back ? "Backspace" : key.ToString();
         }
 
+        private static bool IsPetrolServiceStation(Industry industry)
+        {
+            if (industry == null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(industry.Id) && industry.Id.IndexOf("Petrol Station", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            return industry.IsSink && industry.Inputs.Count == 1 && industry.Inputs.Contains("Fuel");
+        }
+
+        private static float Clamp01(float value)
+        {
+            if (value <= 0f)
+            {
+                return 0f;
+            }
+
+            if (value >= 1f)
+            {
+                return 1f;
+            }
+
+            return value;
+        }
+
         private void OnAborted(object sender, EventArgs e)
         {
             DestroyMapBlips();
@@ -2124,12 +2382,19 @@ namespace IndustryLogisticV
             public int StartMs { get; set; }
             public int DurationMs { get; set; }
             public Action OnComplete { get; set; }
+            public Action<float> OnProgress { get; set; }
         }
 
         private enum IndustryTransferMode
         {
             Load = 0,
             Unload = 1,
+        }
+
+        private enum DashboardOverviewMode
+        {
+            PetrolStations = 0,
+            Industries = 1,
         }
     }
 }

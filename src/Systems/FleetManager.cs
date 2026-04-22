@@ -1,9 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using GTA;
 using GTA.Math;
-using GTA.UI;
+using GTA.Native;
 using IndustryLogisticV.Config;
 using IndustryLogisticV.Domain;
 
@@ -207,7 +208,18 @@ namespace IndustryLogisticV.Systems
             }
 
             ClearCargoVisuals(cargoState);
-            if (cargoState.CargoType != VehicleCargoType.Crate || cargoState.IsEmpty)
+            if (cargoState.IsEmpty)
+            {
+                return;
+            }
+
+            if (cargoState.CargoType == VehicleCargoType.Loose)
+            {
+                // Loose cargo is rendered as a marker overlay during loading ticks.
+                return;
+            }
+
+            if (cargoState.CargoType != VehicleCargoType.Crate)
             {
                 return;
             }

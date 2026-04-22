@@ -28,12 +28,14 @@ namespace IndustryLogisticV.Systems
                     InputCapacityTons = industryConfig.InputCapacityTons,
                     OutputCapacityTons = industryConfig.OutputCapacityTons,
                     ProductionRate = industryConfig.ProductionRate,
+                    StartingTankRatio = industryConfig.StartingTankRatio,
                 };
 
                 var supportsOmegaBoost = ShouldUseOmegaBoost(groundedConfig);
                 var recipes = BuildRecipes(groundedConfig, supportsOmegaBoost);
                 var industry = new Industry(groundedConfig, recipes, supportsOmegaBoost, config.IndustryOmegaCapacityMultiplier);
                 SeedInitialOutput(industry);
+                SeedStartingTank(industry, groundedConfig);
                 _industries.Add(industry);
             }
         }
@@ -371,6 +373,28 @@ namespace IndustryLogisticV.Systems
             {
                 industry.SeedOutput(output, perOutputSeed);
             }
+        }
+
+        private static void SeedStartingTank(Industry industry, IndustryConfig config)
+        {
+            if (industry == null || config == null)
+            {
+                return;
+            }
+
+            var startingRatio = Math.Max(0f, Math.Min(1f, config.StartingTankRatio));
+            if (startingRatio <= 0f || !industry.Inputs.Contains("Fuel"))
+            {
+                return;
+            }
+
+            var seedTons = industry.InputCapacityTons * startingRatio;
+            if (seedTons <= 0f)
+            {
+                return;
+            }
+
+            industry.AddInput("Fuel", seedTons);
         }
 
         private static Vector3 GetGroundedPosition(Vector3 position)
