@@ -103,7 +103,9 @@ namespace IndustryLogisticV
             };
             _industryTablet = new IndustryTabletUi();
             _industryTablet.LoadRequested += HandleTabletLoadRequested;
+            _industryTablet.LoadCommodityRequested += HandleTabletLoadCommodityRequested;
             _industryTablet.UnloadRequested += HandleTabletUnloadRequested;
+            _industryTablet.UnloadModeRequested += HandleTabletUnloadModeRequested;
             _industryTablet.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
 
             _industryBlips = new List<Blip>();
@@ -424,7 +426,40 @@ namespace IndustryLogisticV
             }
 
             _industryTablet.UpdateProfitBalance(_profit);
+            UpdateTabletLoadOptions(player, industry);
             _industryTablet.DrawAndHandleInput();
+        }
+
+        private void UpdateTabletLoadOptions(Ped player, Industry industry)
+        {
+            if (!_industryTablet.IsOpen || industry == null || player == null || !player.Exists())
+            {
+                _industryTablet.SetLoadOptions(new List<string>());
+                return;
+            }
+
+            Vehicle driverVehicle;
+            var cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                _industryTablet.SetLoadOptions(new List<string>());
+                return;
+            }
+
+            var cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            if (cargoState == null || !cargoState.IsEmpty)
+            {
+                _industryTablet.SetLoadOptions(new List<string>());
+                return;
+            }
+
+            var cargoType = cargoState.CargoType;
+            if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
+            {
+                cargoType = _selectedFilter;
+            }
+
+            _industryTablet.SetLoadOptions(_industryManager.GetLoadableOutputs(industry, cargoType));
         }
 
         private void DrawMarkers(Ped player)
@@ -487,7 +522,7 @@ namespace IndustryLogisticV
                 if (canShowPrompts && _nearestIndustry == industry && playerPos.DistanceTo(markerPos) <= IndustryInteractionDistance)
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
-                        "Press {0} for tablet.",
+                        "Press {0} for opening the industry menu.",
                         KeyName(_controls.Interact))));
                 }
             }
@@ -798,9 +833,9 @@ namespace IndustryLogisticV
             if (cargoVehicle != null && cargoVehicle.Exists())
             {
                 var state = _fleetManager.GetOrCreateCargoState(cargoVehicle);
-                lines.Add(string.Format("Veh: {0}", cargoVehicle.DisplayName));
-                lines.Add(string.Format("Type: {0}", state.CargoType));
-                lines.Add(string.Format("Cargo: {0}", state.IsEmpty ? "Empty" : state.Commodity));
+                lines.Add(string.Format("Vehicle: {0}", cargoVehicle.DisplayName));
+                lines.Add(string.Format("Cargo type: {0}", state.CargoType));
+                lines.Add(string.Format("Current cargo: {0}", state.IsEmpty ? "Empty" : state.Commodity));
                 lines.Add(string.Format("Weight: {0:0.0}/{1:0.0}t", state.WeightTons, state.CapacityTons));
             }
             else
@@ -812,17 +847,17 @@ namespace IndustryLogisticV
 
             if (_nearestIndustry != null && player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) <= 40f)
             {
-                lines.Add(string.Format("Ind: {0}", _nearestIndustry.Name));
-                lines.Add(string.Format("In: {0}", JoinSet(_nearestIndustry.Inputs)));
-                lines.Add(string.Format("Out: {0}", JoinSet(_nearestIndustry.Outputs)));
+                lines.Add(string.Format("Industry: {0}", _nearestIndustry.Name));
+                lines.Add(string.Format("Inputs: {0}", JoinSet(_nearestIndustry.Inputs)));
+                lines.Add(string.Format("Outputs: {0}", JoinSet(_nearestIndustry.Outputs)));
                 lines.Add(string.Format("Rate: {0:0.0} t/h", _nearestIndustry.CurrentOutputPerHourTons));
-                lines.Add(string.Format("Util: {0:0}%", _nearestIndustry.LastUtilizationPercent));
+                lines.Add(string.Format("Utilization: {0:0}%", _nearestIndustry.LastUtilizationPercent));
                 lines.Add(string.Format("Omega: {0:0.0}/{1:0.0}t", _nearestIndustry.OmegaStorage, _nearestIndustry.OmegaCapacityTons));
-                lines.Add(string.Format("Modules Lv: {0}", _nearestIndustry.UpgradeLevel));
             }
+
             else
             {
-                lines.Add("Ind: none in range");
+                lines.Add("Industry: none in range");
             }
 
             DrawPanel(lines, 0.73f, 0.08f, 0.245f, Color.FromArgb(196, 10, 15, 24), Color.FromArgb(235, 219, 165, 57));
@@ -1285,6 +1320,119 @@ namespace IndustryLogisticV
             }
 
             var selectedProduct = GetPreferredOreCommodity(products);
+            StartTabletLoadTransfer(industry, cargoVehicle, cargoState, cargoType, selectedProduct);
+        }
+
+        private void HandleTabletLoadCommodityRequested(Industry industry, string selectedProduct)
+        {
+            if (_pendingTransfer != null)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedProduct))
+            {
+                ShowStatus("No product selected for loading.");
+                return;
+            }
+
+            Vehicle cargoVehicle;
+            VehicleCargoState cargoState;
+            string error;
+            if (!TryGetIndustryTabletContext(industry, out cargoVehicle, out cargoState, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
+            if (!cargoState.IsEmpty)
+            {
+                ShowStatus("Vehicle already carries cargo. Unload first.");
+                return;
+            }
+
+            var cargoType = cargoState.CargoType;
+            if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
+            {
+                cargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+            }
+
+            StartTabletLoadTransfer(industry, cargoVehicle, cargoState, cargoType, selectedProduct);
+        }
+
+        private void HandleTabletUnloadRequested(Industry industry)
+        {
+            if (_pendingTransfer != null)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            Vehicle cargoVehicle;
+            VehicleCargoState cargoState;
+            string error;
+            if (!TryGetIndustryTabletContext(industry, out cargoVehicle, out cargoState, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
+            if (cargoState.IsEmpty)
+            {
+                ShowStatus("Vehicle is empty.");
+                return;
+            }
+
+            if (IndustryHasMultipleInputs(industry))
+            {
+                ShowStatus("Select unload mode from the tablet menu.");
+                return;
+            }
+
+            if (!cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            {
+                ShowStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
+                return;
+            }
+
+            StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, true);
+        }
+
+        private void HandleTabletUnloadModeRequested(Industry industry, bool omegaOnly)
+        {
+            if (_pendingTransfer != null)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            Vehicle cargoVehicle;
+            VehicleCargoState cargoState;
+            string error;
+            if (!TryGetIndustryTabletContext(industry, out cargoVehicle, out cargoState, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
+            if (cargoState.IsEmpty)
+            {
+                ShowStatus("Vehicle is empty.");
+                return;
+            }
+
+            StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, omegaOnly);
+        }
+
+        private void StartTabletLoadTransfer(Industry industry, Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleCargoType cargoType, string selectedProduct)
+        {
+            if (string.IsNullOrWhiteSpace(selectedProduct))
+            {
+                ShowStatus("No product selected for loading.");
+                return;
+            }
+
             var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
             var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
             var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
@@ -1304,6 +1452,7 @@ namespace IndustryLogisticV
                 _fleetManager.ClearCargoVisuals(cargoState);
             }
 
+            _industryMenu.Close();
             CloseIndustryTablet();
             StartTransfer(
                 string.Format("Loading {0:0.0}t {1}...", requested, selectedProduct),
@@ -1340,30 +1489,15 @@ namespace IndustryLogisticV
                 });
         }
 
-        private void HandleTabletUnloadRequested(Industry industry)
+        private void StartTabletUnloadTransfer(Industry industry, Vehicle cargoVehicle, VehicleCargoState cargoState, bool omegaOnly)
         {
-            if (_pendingTransfer != null)
-            {
-                ShowStatus("Transfer already in progress.");
-                return;
-            }
-
-            Vehicle cargoVehicle;
-            VehicleCargoState cargoState;
-            string error;
-            if (!TryGetIndustryTabletContext(industry, out cargoVehicle, out cargoState, out error))
-            {
-                ShowStatus(error);
-                return;
-            }
-
             if (cargoState.IsEmpty)
             {
                 ShowStatus("Vehicle is empty.");
                 return;
             }
 
-            if (!cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            if (omegaOnly && !cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
             {
                 ShowStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
                 return;
@@ -1371,13 +1505,14 @@ namespace IndustryLogisticV
 
             if (!industry.AcceptsCommodity(cargoState.Commodity))
             {
-                ShowStatus("This industry does not accept Omega fluid.");
+                ShowStatus(string.Format("This industry does not accept {0}.", cargoState.Commodity));
                 return;
             }
 
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
 
+            _industryMenu.Close();
             CloseIndustryTablet();
             StartTransfer(
                 string.Format("Unloading {0:0.0}t {1}...", tonsToUnload, commodity),
@@ -1407,6 +1542,11 @@ namespace IndustryLogisticV
 
                     ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
                 });
+        }
+
+        private static bool IndustryHasMultipleInputs(Industry industry)
+        {
+            return industry != null && industry.Inputs != null && industry.Inputs.Count > 1;
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)
@@ -2371,7 +2511,9 @@ namespace IndustryLogisticV
             _pendingTransfer = null;
             CloseAllMenus();
             _industryTablet.LoadRequested -= HandleTabletLoadRequested;
+            _industryTablet.LoadCommodityRequested -= HandleTabletLoadCommodityRequested;
             _industryTablet.UnloadRequested -= HandleTabletUnloadRequested;
+            _industryTablet.UnloadModeRequested -= HandleTabletUnloadModeRequested;
             _industryTablet.UpgradeModuleRequested -= HandleTabletUpgradeModuleRequested;
             _heldKeys.Clear();
         }
