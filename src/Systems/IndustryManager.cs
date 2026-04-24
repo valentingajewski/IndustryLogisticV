@@ -11,10 +11,12 @@ namespace IndustryLogisticV.Systems
     public sealed class IndustryManager
     {
         private readonly List<Industry> _industries;
+        private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
 
         public IndustryManager(ModConfig config)
         {
             _industries = new List<Industry>();
+            _petrolStationDrainRatePerMinuteByIndustryId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foreach (var pair in config.IndustryConfigs)
             {
                 var industryConfig = pair.Value;
@@ -29,6 +31,7 @@ namespace IndustryLogisticV.Systems
                     OutputCapacityTons = industryConfig.OutputCapacityTons,
                     ProductionRate = industryConfig.ProductionRate,
                     StartingTankRatio = industryConfig.StartingTankRatio,
+                    Density = industryConfig.Density,
                 };
 
                 var supportsOmegaBoost = ShouldUseOmegaBoost(groundedConfig);
@@ -37,6 +40,12 @@ namespace IndustryLogisticV.Systems
                 SeedInitialOutput(industry);
                 SeedStartingTank(industry, groundedConfig);
                 _industries.Add(industry);
+
+                float drainRatePerMinute;
+                if (TryGetPetrolStationDrainRatePerMinute(groundedConfig, out drainRatePerMinute))
+                {
+                    _petrolStationDrainRatePerMinuteByIndustryId[groundedConfig.Id] = drainRatePerMinute;
+                }
             }
         }
 
@@ -49,7 +58,14 @@ namespace IndustryLogisticV.Systems
         {
             for (int i = 0; i < _industries.Count; i++)
             {
-                _industries[i].Update(deltaMinutes, omegaMultiplier);
+                var industry = _industries[i];
+                industry.Update(deltaMinutes, omegaMultiplier);
+
+                float drainRatePerMinute;
+                if (_petrolStationDrainRatePerMinuteByIndustryId.TryGetValue(industry.Id, out drainRatePerMinute))
+                {
+                    DrainPetrolStationFuel(industry, deltaMinutes, drainRatePerMinute);
+                }
             }
         }
 
@@ -395,6 +411,68 @@ namespace IndustryLogisticV.Systems
             }
 
             industry.AddInput("Fuel", seedTons);
+        }
+
+        private static bool TryGetPetrolStationDrainRatePerMinute(IndustryConfig config, out float drainRatePerMinute)
+        {
+            drainRatePerMinute = 0f;
+            if (config == null)
+            {
+                return false;
+            }
+
+            if (config.Outputs.Count != 0 || config.Inputs.Count != 1 || !config.Inputs.Contains("Fuel"))
+            {
+                return false;
+            }
+
+            // Ported from oil_mod density emptying rates, converted from L/s to tons/min.
+            // Conversion uses 1000L ~= 1t so: tons/min = liters/second * 60 / 1000.
+            const float litersPerSecondToTonsPerMinute = 0.06f;
+            var density = (config.Density ?? "medium").Trim().ToLowerInvariant();
+            float litersPerSecond;
+
+            if (density == "very low" || density == "verylow")
+            {
+                litersPerSecond = 0.35f;
+            }
+            else if (density == "low")
+            {
+                litersPerSecond = 0.8f;
+            }
+            else if (density == "high")
+            {
+                litersPerSecond = 4.0f;
+            }
+            else
+            {
+                litersPerSecond = 2.25f;
+            }
+
+            drainRatePerMinute = litersPerSecond * litersPerSecondToTonsPerMinute;
+            return drainRatePerMinute > 0f;
+        }
+
+        private static void DrainPetrolStationFuel(Industry industry, float deltaMinutes, float drainRatePerMinute)
+        {
+            if (industry == null || deltaMinutes <= 0f || drainRatePerMinute <= 0f)
+            {
+                return;
+            }
+
+            var currentFuel = Math.Max(0f, industry.GetStock("Fuel"));
+            if (currentFuel <= 0.0001f)
+            {
+                return;
+            }
+
+            var consumed = drainRatePerMinute * deltaMinutes;
+            if (consumed <= 0f)
+            {
+                return;
+            }
+
+            industry.BufferStorage["Fuel"] = Math.Max(0f, currentFuel - consumed);
         }
 
         private static Vector3 GetGroundedPosition(Vector3 position)

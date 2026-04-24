@@ -98,6 +98,7 @@ namespace IndustryLogisticV.Config
                 var inputCapTons = inputCapRaw / 1000f;
                 var outputCapTons = outputCapRaw / 1000f;
                 var startingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f)));
+                var density = ini.GetString(section, "Density", "medium");
 
                 float productionRate = ini.GetFloat(section, "ProductionRate", float.NaN);
                 if (float.IsNaN(productionRate))
@@ -141,6 +142,7 @@ namespace IndustryLogisticV.Config
                     OutputCapacityTons = Math.Max(10f, outputCapTons),
                     ProductionRate = productionRate,
                     StartingTankRatio = startingTankRatio,
+                    Density = density,
                 };
             }
         }
