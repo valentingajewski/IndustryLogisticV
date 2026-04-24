@@ -8,6 +8,12 @@ using WinForms = System.Windows.Forms;
 
 namespace IndustryLogisticV.UI
 {
+    public enum SimpleMenuTheme
+    {
+        Classic = 0,
+        Tablet = 1,
+    }
+
     public sealed class MenuItem
     {
         public Func<string> CaptionFactory { get; set; }
@@ -26,10 +32,16 @@ namespace IndustryLogisticV.UI
             Subtitle = string.Empty;
             _items = new List<MenuItem>();
             SelectedIndex = 0;
+            Theme = SimpleMenuTheme.Classic;
+            TabletWidthScale = 1f;
+            TabletAlignRight = false;
         }
 
         public string Title { get; set; }
         public string Subtitle { get; set; }
+        public SimpleMenuTheme Theme { get; set; }
+        public float TabletWidthScale { get; set; }
+        public bool TabletAlignRight { get; set; }
         public bool IsOpen { get; private set; }
         public int SelectedIndex { get; private set; }
 
@@ -109,6 +121,17 @@ namespace IndustryLogisticV.UI
                 return;
             }
 
+            if (Theme == SimpleMenuTheme.Tablet)
+            {
+                DrawTabletTheme();
+                return;
+            }
+
+            DrawClassicTheme();
+        }
+
+        private void DrawClassicTheme()
+        {
             var resolution = GTA.UI.Screen.MainWindowResolution;
             var x = resolution.Width * 0.56f;
             var y = resolution.Height * 0.15f;
@@ -185,6 +208,97 @@ namespace IndustryLogisticV.UI
                     ToScriptTextCoords(resolution, x + 12f, footerY + 4f),
                     0.255f,
                     Color.FromArgb(228, 214, 223, 233),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    true,
+                    false)
+                .Draw();
+        }
+
+        private void DrawTabletTheme()
+        {
+            var resolution = GTA.UI.Screen.MainWindowResolution;
+            var y = resolution.Height * 0.14f;
+            var scale = Math.Max(0.25f, TabletWidthScale);
+            var width = resolution.Width * 0.60f * scale;
+            var sideMargin = resolution.Width * 0.035f;
+            var x = TabletAlignRight
+                ? resolution.Width - width - sideMargin
+                : (resolution.Width - width) * 0.5f;
+            var lineHeight = resolution.Height * 0.043f;
+            var contentHeight = lineHeight * Math.Max(1, _items.Count);
+            var headerHeight = lineHeight * 1.62f;
+            var footerHeight = lineHeight * 0.82f;
+            var height = contentHeight + headerHeight + footerHeight + 12f;
+
+            DrawRect(resolution.Width, resolution.Height, x + 7f, y + 7f, width, height, Color.FromArgb(98, 8, 10, 16));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
+            DrawRect(resolution.Width, resolution.Height, x, y + 4f, width, headerHeight - 4f, Color.FromArgb(156, 20, 30, 40));
+
+            new TextElement(
+                    Title,
+                    ToScriptTextCoords(resolution, x + 14f, y + 9f),
+                    0.41f,
+                    Color.FromArgb(236, 242, 246, 252),
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left,
+                    true,
+                    false)
+                .Draw();
+
+            if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                new TextElement(
+                        Subtitle,
+                        ToScriptTextCoords(resolution, x + 14f, y + 33f),
+                        0.275f,
+                        Color.FromArgb(222, 214, 225, 236),
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Left,
+                        true,
+                        false)
+                    .Draw();
+            }
+
+            for (int i = 0; i < _items.Count; i++)
+            {
+                var rowY = y + headerHeight + (lineHeight * i);
+                var selected = i == SelectedIndex;
+                var idleColor = Color.FromArgb(160, 46, 60, 76);
+                var activeColor = Color.FromArgb(210, 92, 126, 158);
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    x + 12f,
+                    rowY + 3f,
+                    width - 24f,
+                    lineHeight - 6f,
+                    selected ? activeColor : idleColor);
+
+                var captionFactory = _items[i].CaptionFactory;
+                var caption = captionFactory != null ? captionFactory() : string.Empty;
+                var color = selected
+                    ? Color.FromArgb(238, 245, 249, 255)
+                    : Color.FromArgb(220, 222, 231, 240);
+                new TextElement(
+                        caption,
+                        ToScriptTextCoords(resolution, x + 28f, rowY + 8f),
+                        0.305f,
+                        color,
+                        GTA.UI.Font.ChaletComprimeCologne,
+                        Alignment.Left,
+                        true,
+                        false)
+                    .Draw();
+            }
+
+            var footerY = y + headerHeight + contentHeight;
+            DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, Color.FromArgb(148, 16, 24, 34));
+            new TextElement(
+                    "Arrow Up/Down to navigate | Left/Right to edit | Enter to select | Backspace/Esc to close",
+                    ToScriptTextCoords(resolution, x + 14f, footerY + 5f),
+                    0.245f,
+                    Color.FromArgb(214, 195, 206, 218),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     true,

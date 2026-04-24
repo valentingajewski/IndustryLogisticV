@@ -92,6 +92,9 @@ namespace IndustryLogisticV
             _officeMenu = new SimpleMenu("Industrial Logistics Office")
             {
                 Subtitle = "Manage workers and fleet deployment",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.6f,
+                TabletAlignRight = true,
             };
             _industryMenu = new SimpleMenu("Industry Transfer")
             {
@@ -254,7 +257,16 @@ namespace IndustryLogisticV
                     return;
                 }
 
-                TryOpenIndustryTablet();
+                if (player != null && player.Exists())
+                {
+                    var nearbyIndustry = GetIndustryInInteractionRange(player.Position);
+                    if (nearbyIndustry != null)
+                    {
+                        _nearestIndustry = nearbyIndustry;
+                        TryOpenIndustryTablet();
+                    }
+                }
+
                 return;
             }
 
@@ -896,14 +908,14 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Worker Model: {0}", GetWorkerDisplayName(_config.WorkerModels[_workerIndex])),
+                    CaptionFactory = () => string.Format("Worker Model: < {0} >", GetWorkerDisplayName(_config.WorkerModels[_workerIndex])),
                     OnLeft = () => ChangeWorkerIndex(-1),
                     OnRight = () => ChangeWorkerIndex(1),
                     OnActivate = ApplyWorkerModel,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Cargo Filter: {0}", _selectedFilter),
+                    CaptionFactory = () => string.Format("Cargo Filter: < {0} >", _selectedFilter),
                     OnLeft = () => ChangeFilter(-1),
                     OnRight = () => ChangeFilter(1),
                     OnActivate = RefreshFilteredVehicles,
@@ -1037,30 +1049,30 @@ namespace IndustryLogisticV
         {
             if (_filteredVehicles.Count == 0)
             {
-                return "Vehicle: none for this cargo filter";
+                return "Vehicle: < none for this cargo filter >";
             }
 
-            return string.Format("Vehicle: {0}", _filteredVehicles[_selectedVehicleIndex]);
+            return string.Format("Vehicle: < {0} >", _filteredVehicles[_selectedVehicleIndex]);
         }
 
         private string CurrentTractorCaption()
         {
             if (_filteredVehicles.Count == 0)
             {
-                return "Trailer Truck: n/a";
+                return "Trailer Truck: < n/a >";
             }
 
             if (!_filteredVehicles[_selectedVehicleIndex].IsTrailer)
             {
-                return "Trailer Truck: auto (not needed)";
+                return "Trailer Truck: < auto (not needed) >";
             }
 
             if (_tractorVehicles.Count == 0)
             {
-                return "Trailer Truck: unavailable";
+                return "Trailer Truck: < unavailable >";
             }
 
-            return string.Format("Trailer Truck: {0}", _tractorVehicles[_selectedTractorIndex].ModelName);
+            return string.Format("Trailer Truck: < {0} >", _tractorVehicles[_selectedTractorIndex].ModelName);
         }
 
         private void SpawnSelectedVehicle()
@@ -1511,6 +1523,13 @@ namespace IndustryLogisticV
 
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
+            var shouldAnimateCrateDoors = cargoState.CargoType == VehicleCargoType.Crate
+                || CommodityCatalog.GetCargoTypeForCommodity(commodity) == VehicleCargoType.Crate;
+
+            if (shouldAnimateCrateDoors)
+            {
+                SetRearCargoDoors(cargoVehicle, true);
+            }
 
             _industryMenu.Close();
             CloseIndustryTablet();
@@ -1519,28 +1538,38 @@ namespace IndustryLogisticV
                 2800,
                 () =>
                 {
-                    float accepted;
-                    if (!_industryManager.TryUnload(industry, commodity, tonsToUnload, out accepted))
+                    try
                     {
-                        ShowStatus("Unloading failed: destination storage full.");
-                        return;
+                        float accepted;
+                        if (!_industryManager.TryUnload(industry, commodity, tonsToUnload, out accepted))
+                        {
+                            ShowStatus("Unloading failed: destination storage full.");
+                            return;
+                        }
+
+                        var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                        _profit += revenue;
+
+                        cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                        if (cargoState.WeightTons <= 0.001f)
+                        {
+                            cargoState.ClearCargo();
+                            _fleetManager.ClearCargoVisuals(cargoState);
+                        }
+                        else
+                        {
+                            _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                        }
+
+                        ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
                     }
-
-                    var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
-                    _profit += revenue;
-
-                    cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
-                    if (cargoState.WeightTons <= 0.001f)
+                    finally
                     {
-                        cargoState.ClearCargo();
-                        _fleetManager.ClearCargoVisuals(cargoState);
+                        if (shouldAnimateCrateDoors)
+                        {
+                            SetRearCargoDoors(cargoVehicle, false);
+                        }
                     }
-                    else
-                    {
-                        _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
-                    }
-
-                    ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
                 });
         }
 
@@ -2200,9 +2229,7 @@ namespace IndustryLogisticV
             {
                 var industry = _industryManager.Industries[i];
                 var isPetrolStation = IsPetrolServiceStation(industry);
-                var sprite = isPetrolStation
-                    ? BlipSprite.JerryCan
-                    : (industry.IsSink ? BlipSprite.Store : BlipSprite.PointOfInterest);
+                var sprite = ResolveIndustryBlipSprite(industry, isPetrolStation);
                 var color = isPetrolStation
                     ? BlipColor.Yellow
                     : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
@@ -2285,6 +2312,36 @@ namespace IndustryLogisticV
         private bool IsNearMainOffice(Vector3 position)
         {
             return position.DistanceTo(GetGroundPosition(_mainOfficeMarkerSeed)) <= OfficeInteractionDistance;
+        }
+
+        private Industry GetIndustryInInteractionRange(Vector3 position)
+        {
+            if (_nearestIndustry != null && position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) <= IndustryInteractionDistance)
+            {
+                return _nearestIndustry;
+            }
+
+            var nearest = _industryManager.GetNearestIndustry(position, IndustryInteractionDistance + 1.0f);
+            if (nearest == null)
+            {
+                return null;
+            }
+
+            return position.DistanceTo(GetGroundPosition(nearest.Position)) <= IndustryInteractionDistance
+                ? nearest
+                : null;
+        }
+
+        private static BlipSprite ResolveIndustryBlipSprite(Industry industry, bool isPetrolStation)
+        {
+            if (isPetrolStation)
+            {
+                return BlipSprite.JerryCan;
+            }
+
+            return industry != null && industry.IsSink
+                ? BlipSprite.Store
+                : BlipSprite.Warehouse;
         }
 
         private static PointF ToScriptTextCoords(Size resolution, float x, float y)

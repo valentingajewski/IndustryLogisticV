@@ -12,12 +12,22 @@ namespace IndustryLogisticV.UI
 {
     public sealed class IndustryTabletUi
     {
+        private struct CommodityStatEntry
+        {
+            public string Commodity;
+            public float Stock;
+            public float Capacity;
+            public float Ratio;
+            public bool IsInput;
+        }
+
         private enum TabletPage
         {
             Main = 0,
             Upgrades = 1,
             LoadSelection = 2,
             UnloadSelection = 3,
+            Statistics = 4,
         }
 
         private const float UiFallbackWidth = 1280f;
@@ -35,7 +45,6 @@ namespace IndustryLogisticV.UI
         private readonly List<string> _loadOptions;
 
         private Industry _industry;
-        private bool _showStatsPanel;
         private float _frameX;
         private float _frameY;
         private float _profitBalance;
@@ -43,13 +52,14 @@ namespace IndustryLogisticV.UI
         private int _selectedUpgradeIndex;
         private int _selectedLoadOptionIndex;
         private int _selectedUnloadOptionIndex;
+        private int _statsScrollIndex;
         private TabletPage _currentPage;
 
         public IndustryTabletUi()
         {
             _menuBackground = new ScaledRectangle(new PointF(0f, 0f), new SizeF(MenuBackgroundWidth, MenuBackgroundHeight))
             {
-                Color = Color.FromArgb(204, 8, 12, 18),
+                Color = Color.FromArgb(230, 8, 12, 18),
             };
 
             _loadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
@@ -73,6 +83,7 @@ namespace IndustryLogisticV.UI
             _selectedUpgradeIndex = 0;
             _selectedLoadOptionIndex = 0;
             _selectedUnloadOptionIndex = 0;
+            _statsScrollIndex = 0;
             _currentPage = TabletPage.Main;
             _loadOptions = new List<string>();
             UpdateLayout();
@@ -147,7 +158,6 @@ namespace IndustryLogisticV.UI
                 {
                     _currentPage = TabletPage.Main;
                     _selectedMainIndex = 3;
-                    _showStatsPanel = false;
                     return true;
                 }
 
@@ -162,6 +172,13 @@ namespace IndustryLogisticV.UI
                 {
                     _currentPage = TabletPage.Main;
                     _selectedMainIndex = 1;
+                    return true;
+                }
+
+                if (_currentPage == TabletPage.Statistics)
+                {
+                    _currentPage = TabletPage.Main;
+                    _selectedMainIndex = 2;
                     return true;
                 }
 
@@ -217,8 +234,14 @@ namespace IndustryLogisticV.UI
                 return;
             }
 
-            const int unloadChoiceCount = 3;
-            _selectedUnloadOptionIndex = (_selectedUnloadOptionIndex + delta + unloadChoiceCount) % unloadChoiceCount;
+            if (_currentPage == TabletPage.UnloadSelection)
+            {
+                const int unloadChoiceCount = 3;
+                _selectedUnloadOptionIndex = (_selectedUnloadOptionIndex + delta + unloadChoiceCount) % unloadChoiceCount;
+                return;
+            }
+
+            MoveStatsSelection(delta);
         }
 
         private void ActivateSelection()
@@ -236,7 +259,6 @@ namespace IndustryLogisticV.UI
                     {
                         _currentPage = TabletPage.LoadSelection;
                         _selectedLoadOptionIndex = 0;
-                        _showStatsPanel = false;
                         return;
                     }
 
@@ -257,7 +279,6 @@ namespace IndustryLogisticV.UI
                     {
                         _currentPage = TabletPage.UnloadSelection;
                         _selectedUnloadOptionIndex = 0;
-                        _showStatsPanel = false;
                         return;
                     }
 
@@ -267,7 +288,8 @@ namespace IndustryLogisticV.UI
 
                 if (_selectedMainIndex == 2)
                 {
-                    _showStatsPanel = !_showStatsPanel;
+                    _currentPage = TabletPage.Statistics;
+                    _statsScrollIndex = 0;
                     return;
                 }
 
@@ -275,7 +297,6 @@ namespace IndustryLogisticV.UI
                 {
                     _currentPage = TabletPage.Upgrades;
                     _selectedUpgradeIndex = 0;
-                    _showStatsPanel = false;
                 }
 
                 return;
@@ -313,6 +334,18 @@ namespace IndustryLogisticV.UI
                 return;
             }
 
+            if (_currentPage == TabletPage.Statistics)
+            {
+                _currentPage = TabletPage.Main;
+                _selectedMainIndex = 2;
+                return;
+            }
+
+            if (_currentPage != TabletPage.Upgrades)
+            {
+                return;
+            }
+
             if (_selectedUpgradeIndex == 4)
             {
                 _currentPage = TabletPage.Main;
@@ -333,11 +366,11 @@ namespace IndustryLogisticV.UI
 
             _industry = industry;
             IsOpen = true;
-            _showStatsPanel = false;
             _selectedMainIndex = 0;
             _selectedUpgradeIndex = 0;
             _selectedLoadOptionIndex = 0;
             _selectedUnloadOptionIndex = 0;
+            _statsScrollIndex = 0;
             _currentPage = TabletPage.Main;
         }
 
@@ -350,12 +383,12 @@ namespace IndustryLogisticV.UI
 
             _industry = null;
             IsOpen = false;
-            _showStatsPanel = false;
             _currentPage = TabletPage.Main;
             _selectedMainIndex = 0;
             _selectedUpgradeIndex = 0;
             _selectedLoadOptionIndex = 0;
             _selectedUnloadOptionIndex = 0;
+            _statsScrollIndex = 0;
             _loadOptions.Clear();
             HideUpgradeModuleButtons();
             HideMainButtons();
@@ -430,9 +463,9 @@ namespace IndustryLogisticV.UI
                 DrawButton(
                     _statsButton,
                     string.Format("VIEW {0} STATISTICS", industryName),
-                    "Display live stockpile, output and utilization graph",
-                    _showStatsPanel ? Color.FromArgb(195, 74, 95, 58) : Color.FromArgb(170, 46, 66, 50),
-                    _showStatsPanel ? Color.FromArgb(226, 120, 172, 98) : Color.FromArgb(205, 85, 124, 94),
+                    "Open statistics page with input/output loading bars",
+                    Color.FromArgb(170, 46, 66, 50),
+                    Color.FromArgb(205, 85, 124, 94),
                     _selectedMainIndex == 2);
 
                 DrawButton(
@@ -443,16 +476,7 @@ namespace IndustryLogisticV.UI
                     Color.FromArgb(212, 124, 104, 178),
                     _selectedMainIndex == 3);
 
-                if (_showStatsPanel)
-                {
-                    _statsPanel.Color = Color.FromArgb(185, 20, 30, 40);
-                    _statsPanel.Draw();
-                    DrawStatsText(stockpile, totalCapacity, stockRatio, utilizationRatio, omegaRatio);
-                }
-                else
-                {
-                    _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
-                }
+                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
 
                 DrawText(
                     "Arrow Up/Down to navigate | Enter to select | E or Backspace or Esc to close",
@@ -577,6 +601,44 @@ namespace IndustryLogisticV.UI
 
                 DrawText(
                     "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
+                    _frameX + 80f,
+                    _frameY + 515f,
+                    0.28f,
+                    Color.FromArgb(214, 195, 206, 218),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    0f);
+            }
+            else if (_currentPage == TabletPage.Statistics)
+            {
+                HideMainButtons();
+                HideUpgradeModuleButtons();
+                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+                DrawText(
+                    "INDUSTRY STATISTICS",
+                    _frameX + 80f,
+                    _frameY + 116f,
+                    0.39f,
+                    Color.FromArgb(236, 234, 242, 252),
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left,
+                    0f);
+
+                DrawText(
+                    "Input and output stock by commodity",
+                    _frameX + 82f,
+                    _frameY + 143f,
+                    0.30f,
+                    Color.FromArgb(224, 214, 226, 236),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    0f);
+
+                DrawIndustryStatistics(stockpile, totalCapacity, stockRatio, utilizationRatio, omegaRatio);
+
+                DrawText(
+                    "Arrow Up/Down to scroll | Enter or Backspace or Esc to return",
                     _frameX + 80f,
                     _frameY + 515f,
                     0.28f,
@@ -727,55 +789,202 @@ namespace IndustryLogisticV.UI
             }
         }
 
-        private void DrawStatsText(float stockpile, float totalCapacity, float stockRatio, float utilizationRatio, float omegaRatio)
+        private void MoveStatsSelection(int delta)
+        {
+            var entries = BuildCommodityStatsEntries();
+            const int visibleRows = 6;
+            var maxScroll = Math.Max(0, entries.Count - visibleRows);
+            _statsScrollIndex = Math.Max(0, Math.Min(maxScroll, _statsScrollIndex + delta));
+        }
+
+        private void DrawIndustryStatistics(float stockpile, float totalCapacity, float stockRatio, float utilizationRatio, float omegaRatio)
         {
             DrawText(
-                string.Format("Omega Fill: {0:0}%", omegaRatio * 100f),
-                _frameX + 88f,
-                _frameY + 436f,
-                0.30f,
+                string.Format("Total Stockpile: {0:0.0}/{1:0.0} t", stockpile, totalCapacity),
+                _frameX + 84f,
+                _frameY + 170f,
+                0.275f,
                 Color.FromArgb(220, 214, 223, 236),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
 
             DrawLoadingBar(
-                _frameX + 300f,
-                _frameY + 444f,
-                190f,
-                12f,
-                omegaRatio,
-                Color.FromArgb(170, 28, 40, 54),
-                Color.FromArgb(230, 112, 164, 236));
-
-            DrawText(
-                string.Format("Stockpile: {0:0.0}/{1:0.0} t", stockpile, totalCapacity),
-                _frameX + 88f,
-                _frameY + 458f,
-                0.30f,
-                Color.FromArgb(220, 214, 223, 236),
-                GTA.UI.Font.ChaletLondon,
-                Alignment.Left,
-                0f);
-
-            DrawLoadingBar(
-                _frameX + 300f,
-                _frameY + 466f,
-                190f,
-                12f,
+                _frameX + 336f,
+                _frameY + 178f,
+                274f,
+                11f,
                 stockRatio,
                 Color.FromArgb(170, 28, 40, 54),
                 Color.FromArgb(230, 214, 188, 96));
 
             DrawText(
-                string.Format("Output: {0:0.0} t/h", _industry.CurrentOutputPerHourTons),
-                _frameX + 88f,
-                _frameY + 482f,
-                0.30f,
-                Color.FromArgb(220, 214, 223, 236),
+                string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, _industry.CurrentOutputPerHourTons),
+                _frameX + 84f,
+                _frameY + 192f,
+                0.25f,
+                Color.FromArgb(214, 205, 217, 228),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
+
+
+            var entries = BuildCommodityStatsEntries();
+            if (entries.Count == 0)
+            {
+                DrawText(
+                    "No input/output commodities configured for this industry.",
+                    _frameX + 84f,
+                    _frameY + 266f,
+                    0.29f,
+                    Color.FromArgb(224, 214, 226, 236),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    0f);
+                return;
+            }
+
+            const int visibleRows = 6;
+            var maxScroll = Math.Max(0, entries.Count - visibleRows);
+            if (_statsScrollIndex > maxScroll)
+            {
+                _statsScrollIndex = maxScroll;
+            }
+
+            var visibleCount = Math.Min(visibleRows, entries.Count - _statsScrollIndex);
+            var listTopY = _frameY + 246f;
+
+            DrawText(
+                "IN = input storage | OUT = output storage",
+                _frameX + 84f,
+                _frameY + 232f,
+                0.24f,
+                Color.FromArgb(206, 193, 206, 219),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            for (int i = 0; i < visibleCount; i++)
+            {
+                var entry = entries[_statsScrollIndex + i];
+                var rowY = listTopY + (i * 43f);
+                var titleColor = entry.IsInput
+                    ? Color.FromArgb(226, 132, 206, 184)
+                    : Color.FromArgb(226, 223, 196, 128);
+                var fillColor = entry.IsInput
+                    ? Color.FromArgb(228, 98, 170, 148)
+                    : Color.FromArgb(228, 214, 188, 96);
+
+                DrawText(
+                    string.Format("{0} {1}", entry.IsInput ? "IN" : "OUT", entry.Commodity.ToUpperInvariant()),
+                    _frameX + 84f,
+                    rowY,
+                    0.27f,
+                    titleColor,
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left,
+                    0f);
+
+                DrawText(
+                    string.Format("{0:0.0}/{1:0.0} t", entry.Stock, entry.Capacity),
+                    _frameX + 84f,
+                    rowY + 14f,
+                    0.235f,
+                    Color.FromArgb(214, 205, 217, 228),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    0f);
+
+                DrawLoadingBar(
+                    _frameX + 336f,
+                    rowY + 14f,
+                    274f,
+                    11f,
+                    entry.Ratio,
+                    Color.FromArgb(170, 28, 40, 54),
+                    fillColor);
+            }
+
+            if (maxScroll > 0)
+            {
+                DrawText(
+                    string.Format("{0}-{1}/{2}", _statsScrollIndex + 1, _statsScrollIndex + visibleCount, entries.Count),
+                    _frameX + 690f,
+                    _frameY + 232f,
+                    0.24f,
+                    Color.FromArgb(206, 193, 206, 219),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right,
+                    0f);
+            }
+        }
+
+        private List<CommodityStatEntry> BuildCommodityStatsEntries()
+        {
+            var entries = new List<CommodityStatEntry>();
+            if (_industry == null)
+            {
+                return entries;
+            }
+
+            var inputs = _industry.GetSortedInputs();
+            for (int i = 0; i < inputs.Count; i++)
+            {
+                var commodity = inputs[i];
+                var stock = Math.Max(0f, _industry.GetStock(commodity));
+                var capacity = GetCommodityCapacityForStats(commodity, true);
+                entries.Add(new CommodityStatEntry
+                {
+                    Commodity = commodity,
+                    Stock = stock,
+                    Capacity = capacity,
+                    Ratio = Clamp01(stock / Math.Max(0.01f, capacity)),
+                    IsInput = true,
+                });
+            }
+
+            var outputs = _industry.GetSortedOutputs();
+            for (int i = 0; i < outputs.Count; i++)
+            {
+                var commodity = outputs[i];
+                var stock = Math.Max(0f, _industry.GetStock(commodity));
+                var capacity = GetCommodityCapacityForStats(commodity, false);
+                entries.Add(new CommodityStatEntry
+                {
+                    Commodity = commodity,
+                    Stock = stock,
+                    Capacity = capacity,
+                    Ratio = Clamp01(stock / Math.Max(0.01f, capacity)),
+                    IsInput = false,
+                });
+            }
+
+            return entries;
+        }
+
+        private float GetCommodityCapacityForStats(string commodity, bool isInput)
+        {
+            if (_industry == null)
+            {
+                return 0.01f;
+            }
+
+            var stock = Math.Max(0f, _industry.GetStock(commodity));
+            var freeSpace = Math.Max(0f, _industry.GetMaxTransferTonsForCommodity(commodity));
+            var capacity = stock + freeSpace;
+
+            if (capacity <= 0.001f)
+            {
+                var bucketCount = isInput
+                    ? Math.Max(1, _industry.Inputs.Count)
+                    : Math.Max(1, _industry.Outputs.Count);
+                var totalCapacity = isInput
+                    ? Math.Max(1f, _industry.InputCapacityTons)
+                    : Math.Max(1f, _industry.OutputCapacityTons);
+                capacity = totalCapacity / bucketCount;
+            }
+
+            return Math.Max(0.01f, capacity);
         }
 
         private static void DrawLoadingBar(float x, float y, float width, float height, float ratio, Color backgroundColor, Color fillColor)

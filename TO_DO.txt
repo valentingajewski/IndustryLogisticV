@@ -1,0 +1,19 @@
+MUST HAVE:
+
+
+- Much opacity for background "tablet"
+- alloy rework. Should be solid (crate) and add props if possible
+- F6 menu visual rework
+- When unloading, rear doors must be opened
+- Store shouldn't have OMEGA unload option
+- Loading message must tell the exact value we are loading
+- "Tablet" menu must show how cargo there is in load cargo selection menu
+- Cannot unload recyclable at recycling center
+- Add a draining mechanism where petrol station are drained from time to time regarding of their frequency
+
+SHOULD HAVE:
+- Hire NPC for automation
+
+NICE TO HAVE:
+- XP mechanism
+- Global market where price varies regarding the demand
