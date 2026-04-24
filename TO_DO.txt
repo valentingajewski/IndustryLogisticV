@@ -3,9 +3,9 @@ MUST HAVE:
 
 - alloy rework. Should be solid (crate) and add props if possible
 
-- Store shouldn't have OMEGA unload option
 - Loading message must tell the exact value we are loading
 - "Tablet" menu must show how cargo there is in load cargo selection menu
+- When unloading, the crates props are still there
 - Cannot unload recyclable at recycling center
 - Add a draining mechanism where petrol station are drained from time to time regarding of their frequency
 

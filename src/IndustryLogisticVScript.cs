@@ -1451,7 +1451,14 @@ namespace IndustryLogisticV
                 return;
             }
 
-            var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
+            if (targetLoadTons <= 0.001f)
+            {
+                ShowStatus("Loading failed: product unavailable.");
+                return;
+            }
+
             var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
             var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
 
@@ -1473,14 +1480,14 @@ namespace IndustryLogisticV
             _industryMenu.Close();
             CloseIndustryTablet();
             StartTransfer(
-                string.Format("Loading {0:0.0}t {1}...", requested, selectedProduct),
+                BuildLoadingTransferLabel(0f, targetLoadTons, selectedProduct),
                 2600,
                 () =>
                 {
                     try
                     {
                         float loaded;
-                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
+                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, targetLoadTons, out loaded))
                         {
                             if (usesLooseVisual)
                             {
@@ -1504,6 +1511,16 @@ namespace IndustryLogisticV
                             SetRearCargoDoors(cargoVehicle, false);
                         }
                     }
+                },
+                progress =>
+                {
+                    if (_pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    var currentTons = targetLoadTons * Clamp01(progress);
+                    _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
                 });
         }
 
@@ -1886,7 +1903,14 @@ namespace IndustryLogisticV
             }
 
             var selectedProduct = _industryTransferProducts[_selectedIndustryProductIndex];
-            var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
+            if (targetLoadTons <= 0.001f)
+            {
+                ShowStatus("Loading failed: product unavailable.");
+                return;
+            }
+
             var cargoType = cargoState.CargoType;
             var shouldAnimateCrateDoorsOnLoad = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
             var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
@@ -1907,14 +1931,14 @@ namespace IndustryLogisticV
 
             _industryMenu.Close();
             StartTransfer(
-                string.Format("Loading {0:0.0}t {1}...", requested, selectedProduct),
+                BuildLoadingTransferLabel(0f, targetLoadTons, selectedProduct),
                 2600,
                 () =>
                 {
                     try
                     {
                         float loaded;
-                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
+                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, targetLoadTons, out loaded))
                         {
                             if (usesLooseVisual)
                             {
@@ -1938,6 +1962,16 @@ namespace IndustryLogisticV
                             SetRearCargoDoors(cargoVehicle, false);
                         }
                     }
+                },
+                progress =>
+                {
+                    if (_pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    var currentTons = targetLoadTons * Clamp01(progress);
+                    _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
                 });
         }
 
@@ -2111,6 +2145,26 @@ namespace IndustryLogisticV
                    normalized.Equals("Coal", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(commodity) || requestedTons <= 0f)
+            {
+                return 0f;
+            }
+
+            var available = Math.Max(0f, industry.GetStock(commodity));
+            return Math.Min(requestedTons, available);
+        }
+
+        private static string BuildLoadingTransferLabel(float currentTons, float targetTons, string commodity)
+        {
+            return string.Format(
+                "Loading {0:0.0}/{1:0.0}t {2}...",
+                Math.Max(0f, currentTons),
+                Math.Max(0f, targetTons),
+                commodity ?? string.Empty);
         }
 
         private void DrawProgressBar(string label, float progress)
