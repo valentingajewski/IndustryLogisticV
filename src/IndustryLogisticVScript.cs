@@ -471,7 +471,41 @@ namespace IndustryLogisticV
                 cargoType = _selectedFilter;
             }
 
-            _industryTablet.SetLoadOptions(_industryManager.GetLoadableOutputs(industry, cargoType));
+            var loadOptions = _industryManager.GetLoadableOutputs(industry, cargoType);
+            var loadOptionSubtitles = BuildTabletLoadOptionSubtitles(industry, loadOptions, cargoState.FreeCapacityTons);
+            _industryTablet.SetLoadOptions(loadOptions, loadOptionSubtitles);
+        }
+
+        private Dictionary<string, string> BuildTabletLoadOptionSubtitles(Industry industry, List<string> loadOptions, float truckFreeCapacityTons)
+        {
+            var subtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (industry == null || loadOptions == null || loadOptions.Count == 0)
+            {
+                return subtitles;
+            }
+
+            var maxLoadTons = Math.Max(0f, truckFreeCapacityTons);
+            for (int i = 0; i < loadOptions.Count; i++)
+            {
+                var commodity = loadOptions[i];
+                if (string.IsNullOrWhiteSpace(commodity))
+                {
+                    continue;
+                }
+
+                var availableTons = Math.Max(0f, industry.GetStock(commodity));
+                var loadableTons = Math.Min(availableTons, maxLoadTons);
+                var unitPrice = Math.Max(0f, _globalMarket.GetUnitPrice(commodity));
+                var cargoValue = loadableTons * unitPrice;
+
+                subtitles[commodity.Trim()] = string.Format(
+                    "Cargo value: ${0:0} ({1:0.0}t | ${2:0}/t)",
+                    cargoValue,
+                    loadableTons,
+                    unitPrice);
+            }
+
+            return subtitles;
         }
 
         private void DrawMarkers(Ped player)

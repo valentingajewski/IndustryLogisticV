@@ -43,6 +43,7 @@ namespace IndustryLogisticV.UI
         private readonly ScaledRectangle _statsPanel;
         private readonly List<ScaledRectangle> _upgradeModuleButtons;
         private readonly List<string> _loadOptions;
+        private readonly Dictionary<string, string> _loadOptionSubtitles;
 
         private Industry _industry;
         private float _frameX;
@@ -86,6 +87,7 @@ namespace IndustryLogisticV.UI
             _statsScrollIndex = 0;
             _currentPage = TabletPage.Main;
             _loadOptions = new List<string>();
+            _loadOptionSubtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             UpdateLayout();
         }
 
@@ -106,9 +108,10 @@ namespace IndustryLogisticV.UI
 
         public event Action<Industry, IndustryUpgradeModule> UpgradeModuleRequested;
 
-        public void SetLoadOptions(List<string> loadOptions)
+        public void SetLoadOptions(List<string> loadOptions, Dictionary<string, string> loadOptionSubtitles = null)
         {
             _loadOptions.Clear();
+            _loadOptionSubtitles.Clear();
             if (loadOptions != null)
             {
                 for (int i = 0; i < loadOptions.Count; i++)
@@ -120,6 +123,19 @@ namespace IndustryLogisticV.UI
                     }
 
                     _loadOptions.Add(entry.Trim());
+                }
+            }
+
+            if (loadOptionSubtitles != null)
+            {
+                foreach (var entry in loadOptionSubtitles)
+                {
+                    if (string.IsNullOrWhiteSpace(entry.Key) || string.IsNullOrWhiteSpace(entry.Value))
+                    {
+                        continue;
+                    }
+
+                    _loadOptionSubtitles[entry.Key.Trim()] = entry.Value.Trim();
                 }
             }
 
@@ -392,6 +408,7 @@ namespace IndustryLogisticV.UI
             _selectedUnloadOptionIndex = 0;
             _statsScrollIndex = 0;
             _loadOptions.Clear();
+            _loadOptionSubtitles.Clear();
             HideUpgradeModuleButtons();
             HideMainButtons();
         }
@@ -529,7 +546,7 @@ namespace IndustryLogisticV.UI
                         DrawUpgradeModuleButton(
                             i,
                             string.Format("LOAD {0}", _loadOptions[i].ToUpperInvariant()),
-                            "Start loading this resource",
+                            GetLoadOptionSubtitle(_loadOptions[i]),
                             _selectedLoadOptionIndex == i);
                     }
                     else if (i == _loadOptions.Count)
@@ -717,6 +734,22 @@ namespace IndustryLogisticV.UI
             }
 
             return string.Format("Lv.{0} -> ${1:0} | Press Enter to purchase", level, cost);
+        }
+
+        private string GetLoadOptionSubtitle(string commodity)
+        {
+            if (string.IsNullOrWhiteSpace(commodity))
+            {
+                return "Start loading this resource";
+            }
+
+            string subtitle;
+            if (_loadOptionSubtitles.TryGetValue(commodity.Trim(), out subtitle) && !string.IsNullOrWhiteSpace(subtitle))
+            {
+                return subtitle;
+            }
+
+            return "Start loading this resource";
         }
 
         private void DrawUpgradeModuleButton(int index, string title, string subtitle, bool selected)

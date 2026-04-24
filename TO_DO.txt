@@ -3,7 +3,6 @@ MUST HAVE:
 
 - alloy rework. Should be solid (crate) and add props if possible
 
-- Loading message must tell the exact value we are loading
 - "Tablet" menu must show how cargo there is in load cargo selection menu
 - When unloading, the crates props are still there
 - Cannot unload recyclable at recycling center
