@@ -1523,6 +1523,13 @@ namespace IndustryLogisticV
 
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
+            var shouldAnimateCrateDoors = cargoState.CargoType == VehicleCargoType.Crate
+                || CommodityCatalog.GetCargoTypeForCommodity(commodity) == VehicleCargoType.Crate;
+
+            if (shouldAnimateCrateDoors)
+            {
+                SetRearCargoDoors(cargoVehicle, true);
+            }
 
             _industryMenu.Close();
             CloseIndustryTablet();
@@ -1531,28 +1538,38 @@ namespace IndustryLogisticV
                 2800,
                 () =>
                 {
-                    float accepted;
-                    if (!_industryManager.TryUnload(industry, commodity, tonsToUnload, out accepted))
+                    try
                     {
-                        ShowStatus("Unloading failed: destination storage full.");
-                        return;
+                        float accepted;
+                        if (!_industryManager.TryUnload(industry, commodity, tonsToUnload, out accepted))
+                        {
+                            ShowStatus("Unloading failed: destination storage full.");
+                            return;
+                        }
+
+                        var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                        _profit += revenue;
+
+                        cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                        if (cargoState.WeightTons <= 0.001f)
+                        {
+                            cargoState.ClearCargo();
+                            _fleetManager.ClearCargoVisuals(cargoState);
+                        }
+                        else
+                        {
+                            _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                        }
+
+                        ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
                     }
-
-                    var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
-                    _profit += revenue;
-
-                    cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
-                    if (cargoState.WeightTons <= 0.001f)
+                    finally
                     {
-                        cargoState.ClearCargo();
-                        _fleetManager.ClearCargoVisuals(cargoState);
+                        if (shouldAnimateCrateDoors)
+                        {
+                            SetRearCargoDoors(cargoVehicle, false);
+                        }
                     }
-                    else
-                    {
-                        _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
-                    }
-
-                    ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
                 });
         }
 
