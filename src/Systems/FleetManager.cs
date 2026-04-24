@@ -553,9 +553,32 @@ namespace IndustryLogisticV.Systems
             for (int i = 0; i < cargoState.AttachedProps.Count; i++)
             {
                 var prop = cargoState.AttachedProps[i];
-                if (prop != null && prop.Exists())
+                if (prop == null)
                 {
+                    continue;
+                }
+
+                try
+                {
+                    if (!prop.Exists())
+                    {
+                        continue;
+                    }
+
+                    Function.Call(Hash.SET_ENTITY_AS_MISSION_ENTITY, prop.Handle, true, true);
                     prop.Delete();
+
+                    if (prop.Exists())
+                    {
+                        prop.IsVisible = false;
+                        var position = prop.Position;
+                        prop.Position = new Vector3(position.X, position.Y, position.Z - 250f);
+                        prop.Delete();
+                    }
+                }
+                catch
+                {
+                    // Keep cleanup resilient: one bad prop handle must not block deleting remaining props.
                 }
             }
 

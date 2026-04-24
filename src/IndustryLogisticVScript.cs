@@ -1610,8 +1610,7 @@ namespace IndustryLogisticV
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                         if (cargoState.WeightTons <= 0.001f)
                         {
-                            cargoState.ClearCargo();
-                            _fleetManager.ClearCargoVisuals(cargoState);
+                            ClearCargoStateAndVisuals(cargoVehicle, cargoState);
                         }
                         else
                         {
@@ -1902,8 +1901,7 @@ namespace IndustryLogisticV
                             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                             if (cargoState.WeightTons <= 0.001f)
                             {
-                                cargoState.ClearCargo();
-                                _fleetManager.ClearCargoVisuals(cargoState);
+                                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
                             }
                             else
                             {
@@ -2179,6 +2177,29 @@ namespace IndustryLogisticV
                    normalized.Equals("Coal", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void ClearCargoStateAndVisuals(Vehicle cargoVehicle, VehicleCargoState cargoState)
+        {
+            if (cargoState != null)
+            {
+                cargoState.ClearCargo();
+                _fleetManager.ClearCargoVisuals(cargoState);
+            }
+
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                return;
+            }
+
+            var stateForVehicle = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            if (stateForVehicle == null || object.ReferenceEquals(stateForVehicle, cargoState))
+            {
+                return;
+            }
+
+            stateForVehicle.ClearCargo();
+            _fleetManager.ClearCargoVisuals(stateForVehicle);
         }
 
         private static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)
