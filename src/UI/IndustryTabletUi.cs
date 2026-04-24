@@ -274,8 +274,10 @@ namespace IndustryLogisticV.UI
 
                 if (_selectedMainIndex == 1)
                 {
-                    var hasMultipleInputs = _industry.Inputs != null && _industry.Inputs.Count > 1;
-                    if (hasMultipleInputs)
+                    var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost
+                        && _industry.Inputs != null
+                        && _industry.Inputs.Count > 1;
+                    if (canChooseOmegaUnloadMode)
                     {
                         _currentPage = TabletPage.UnloadSelection;
                         _selectedUnloadOptionIndex = 0;
@@ -436,10 +438,14 @@ namespace IndustryLogisticV.UI
                 HideUpgradeModuleButtons();
 
                 var hasMultipleInputs = _industry.Inputs != null && _industry.Inputs.Count > 1;
-                var unloadTitle = hasMultipleInputs ? "UNLOAD CARGO" : "UNLOAD OMEGA FLUID";
-                var unloadSubtitle = hasMultipleInputs
+                var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost && hasMultipleInputs;
+                var isOmegaOnlyUnload = _industry.SupportsOmegaBoost && !hasMultipleInputs;
+                var unloadTitle = isOmegaOnlyUnload ? "UNLOAD OMEGA FLUID" : "UNLOAD CARGO";
+                var unloadSubtitle = canChooseOmegaUnloadMode
                     ? "Choose Omega or truck cargo in-tablet"
-                    : "Deliver Omega boost fluid from your tanker";
+                    : (isOmegaOnlyUnload
+                        ? "Deliver Omega boost fluid from your tanker"
+                        : "Deliver current truck cargo to this industry");
                 var loadSubtitle = _loadOptions.Count > 1
                     ? "Choose resource in-tablet after pressing load"
                     : "Initiate cargo load from local production stockpile";

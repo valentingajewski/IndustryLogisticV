@@ -1434,6 +1434,12 @@ namespace IndustryLogisticV
                 return;
             }
 
+            if (omegaOnly && (industry == null || !industry.SupportsOmegaBoost))
+            {
+                ShowStatus("Omega unload is not available for this industry.");
+                return;
+            }
+
             StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, omegaOnly);
         }
 
@@ -1575,7 +1581,10 @@ namespace IndustryLogisticV
 
         private static bool IndustryHasMultipleInputs(Industry industry)
         {
-            return industry != null && industry.Inputs != null && industry.Inputs.Count > 1;
+            return industry != null
+                && industry.SupportsOmegaBoost
+                && industry.Inputs != null
+                && industry.Inputs.Count > 1;
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)
