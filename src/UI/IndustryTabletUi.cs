@@ -59,7 +59,7 @@ namespace IndustryLogisticV.UI
         {
             _menuBackground = new ScaledRectangle(new PointF(0f, 0f), new SizeF(MenuBackgroundWidth, MenuBackgroundHeight))
             {
-                Color = Color.FromArgb(204, 8, 12, 18),
+                Color = Color.FromArgb(230, 8, 12, 18),
             };
 
             _loadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
