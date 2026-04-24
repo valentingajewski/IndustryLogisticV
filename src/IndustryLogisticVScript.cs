@@ -1436,13 +1436,14 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (!cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            var omegaOnly = IsOmegaOnlyUnloadIndustry(industry);
+            if (omegaOnly && !cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
             {
                 ShowStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
                 return;
             }
 
-            StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, true);
+            StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, omegaOnly);
         }
 
         private void HandleTabletUnloadModeRequested(Industry industry, bool omegaOnly)
@@ -1635,6 +1636,15 @@ namespace IndustryLogisticV
                 && industry.SupportsOmegaBoost
                 && industry.Inputs != null
                 && industry.Inputs.Count > 1;
+        }
+
+        private static bool IsOmegaOnlyUnloadIndustry(Industry industry)
+        {
+            return industry != null
+                && industry.SupportsOmegaBoost
+                && industry.Inputs != null
+                && industry.Inputs.Count == 1
+                && industry.Inputs.Contains("Omega");
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)
