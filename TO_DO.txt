@@ -1,9 +1,6 @@
 MUST HAVE:
 
-- Office menu rework
-- Industry stats 
-	- misplaced
-	- add stats for each inputs and outputs in a new window
+
 - Much opacity for background "tablet"
 - alloy rework. Should be solid (crate) and add props if possible
 - F6 menu visual rework
@@ -19,3 +16,4 @@ SHOULD HAVE:
 
 NICE TO HAVE:
 - XP mechanism
+- Global market where price varies regarding the demand
