@@ -35,6 +35,8 @@ namespace IndustryLogisticV
         private readonly SimpleMenu _officeMenu;
         private readonly SimpleMenu _industryMenu;
         private readonly SimpleMenu _upgradeMenu;
+        private readonly SimpleMenu _modControlMenu;
+        private readonly SimpleMenu _difficultyMenu;
         private readonly IndustryTabletUi _industryTablet;
 
         private readonly List<Blip> _industryBlips;
@@ -75,10 +77,13 @@ namespace IndustryLogisticV
         private float _profit;
         private VehicleCargoType _selectedFilter;
         private DashboardOverviewMode _dashboardView;
+        private GameModMode _gameModMode;
         private IndustryTransferMode _industryTransferMode;
 
         private bool _showDashboard;
         private bool _showContext;
+        private bool _modMechanicsEnabled;
+        private bool _vehicleFuelDifficultyEnabled;
 
         private PendingTransfer _pendingTransfer;
 
@@ -109,6 +114,20 @@ namespace IndustryLogisticV
             {
                 Subtitle = "Invest profits into modules",
             };
+            _modControlMenu = new SimpleMenu("Game Mod Control")
+            {
+                Subtitle = "Activate mechanics and configure gameplay",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.4f,
+                TabletAlignRight = true,
+            };
+            _difficultyMenu = new SimpleMenu("Difficulty Settings")
+            {
+                Subtitle = "Enable or disable challenge options",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.4f,
+                TabletAlignRight = true,
+            };
             _industryTablet = new IndustryTabletUi();
             _industryTablet.LoadRequested += HandleTabletLoadRequested;
             _industryTablet.LoadCommodityRequested += HandleTabletLoadCommodityRequested;
@@ -131,12 +150,16 @@ namespace IndustryLogisticV
             _industryTransferProducts = new List<string>();
             _dashboardView = DashboardOverviewMode.Industries;
             _dashboardViewButtonIndex = 1;
+            _gameModMode = GameModMode.Fun;
             _industryTransferMode = IndustryTransferMode.Load;
             _profit = 20000f;
+            _modMechanicsEnabled = false;
+            _vehicleFuelDifficultyEnabled = false;
 
             RefreshFilteredVehicles();
             RebuildOfficeMenuItems();
-            CreateMapBlips();
+            RebuildModControlMenuItems();
+            RebuildDifficultyMenuItems();
 
             Tick += OnTick;
             KeyDown += OnKeyDown;
@@ -148,7 +171,7 @@ namespace IndustryLogisticV
 
         private bool AnyMenuOpen
         {
-            get { return _officeMenu.IsOpen || _industryMenu.IsOpen || _upgradeMenu.IsOpen || _industryTablet.IsOpen; }
+            get { return _officeMenu.IsOpen || _industryMenu.IsOpen || _upgradeMenu.IsOpen || _modControlMenu.IsOpen || _difficultyMenu.IsOpen || _industryTablet.IsOpen; }
         }
 
         private void OnTick(object sender, EventArgs e)
@@ -163,6 +186,18 @@ namespace IndustryLogisticV
             if (_lastIndustryTickMs == 0)
             {
                 _lastIndustryTickMs = gameTime;
+            }
+
+            if (!_modMechanicsEnabled)
+            {
+                DrawOpenMenus();
+
+                if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
+                {
+                    Screen.ShowSubtitle(_statusMessage, 1);
+                }
+
+                return;
             }
 
             var elapsed = gameTime - _lastIndustryTickMs;
@@ -229,12 +264,23 @@ namespace IndustryLogisticV
                 return;
             }
 
+            if (e.KeyCode == _controls.OpenModMenu)
+            {
+                ToggleModControlMenu();
+                return;
+            }
+
             if (HandleTabletKey(e.KeyCode))
             {
                 return;
             }
 
             if (HandleMenuKey(e.KeyCode))
+            {
+                return;
+            }
+
+            if (!_modMechanicsEnabled)
             {
                 return;
             }
@@ -317,6 +363,18 @@ namespace IndustryLogisticV
 
         private bool HandleMenuKey(WinForms.Keys key)
         {
+            if (_modControlMenu.IsOpen)
+            {
+                _modControlMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_difficultyMenu.IsOpen)
+            {
+                _difficultyMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.HandleKey(key, _controls);
@@ -409,6 +467,18 @@ namespace IndustryLogisticV
 
         private void DrawOpenMenus()
         {
+            if (_modControlMenu.IsOpen)
+            {
+                _modControlMenu.Draw();
+                return;
+            }
+
+            if (_difficultyMenu.IsOpen)
+            {
+                _difficultyMenu.Draw();
+                return;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.Draw();
@@ -945,19 +1015,175 @@ namespace IndustryLogisticV
             _officeMenu.Open();
         }
 
+        private void ToggleModControlMenu()
+        {
+            if (_modControlMenu.IsOpen)
+            {
+                _modControlMenu.Close();
+                return;
+            }
+
+            CloseAllMenus();
+            RebuildModControlMenuItems();
+            _modControlMenu.Open();
+        }
+
         private void CloseNonOfficeMenus()
         {
             _industryMenu.Close();
             _upgradeMenu.Close();
+            _modControlMenu.Close();
+            _difficultyMenu.Close();
             CloseIndustryTablet();
         }
 
         private void CloseAllMenus()
         {
+            _modControlMenu.Close();
+            _difficultyMenu.Close();
             _officeMenu.Close();
             _industryMenu.Close();
             _upgradeMenu.Close();
             CloseIndustryTablet();
+        }
+
+        private void RebuildModControlMenuItems()
+        {
+            _modControlMenu.Title = "Game Mod Control";
+            _modControlMenu.Subtitle = "Activate mechanics and configure gameplay";
+
+            _modControlMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentActivationCaption,
+                    OnLeft = ToggleMechanicsFromMenu,
+                    OnRight = ToggleMechanicsFromMenu,
+                    OnActivate = ToggleMechanicsFromMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentGameModeCaption,
+                    OnLeft = () => ChangeGameModMode(-1),
+                    OnRight = () => ChangeGameModMode(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Difficulty settings",
+                    OnActivate = OpenDifficultyMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _modControlMenu.Close(),
+                },
+            });
+        }
+
+        private void RebuildDifficultyMenuItems()
+        {
+            _difficultyMenu.Title = "Difficulty Settings";
+            _difficultyMenu.Subtitle = "Enable or disable challenge options";
+
+            _difficultyMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentVehicleFuelSettingCaption,
+                    OnLeft = ToggleVehicleFuelSetting,
+                    OnRight = ToggleVehicleFuelSetting,
+                    OnActivate = ToggleVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    OnActivate = () =>
+                    {
+                        _difficultyMenu.Close();
+                        RebuildModControlMenuItems();
+                        _modControlMenu.Open();
+                    },
+                },
+            });
+        }
+
+        private void OpenDifficultyMenu()
+        {
+            _modControlMenu.Close();
+            RebuildDifficultyMenuItems();
+            _difficultyMenu.Open();
+        }
+
+        private string CurrentActivationCaption()
+        {
+            return _modMechanicsEnabled
+                ? "Activate: [~g~On~s~] [Off]"
+                : "Activate: [On] [~r~Off~s~]";
+        }
+
+        private string CurrentGameModeCaption()
+        {
+            return string.Format("Game mod: < {0} >", _gameModMode == GameModMode.Fun ? "fun" : "carrier");
+        }
+
+        private string CurrentVehicleFuelSettingCaption()
+        {
+            return string.Format("Vehicle fuel: < {0} >", _vehicleFuelDifficultyEnabled ? "Enable" : "Disable");
+        }
+
+        private void ToggleMechanicsFromMenu()
+        {
+            SetModMechanicsEnabled(!_modMechanicsEnabled, true);
+            RebuildModControlMenuItems();
+        }
+
+        private void ChangeGameModMode(int delta)
+        {
+            var next = ((int)_gameModMode + delta + 2) % 2;
+            _gameModMode = (GameModMode)next;
+        }
+
+        private void ToggleVehicleFuelSetting()
+        {
+            _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
+        }
+
+        private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)
+        {
+            if (_modMechanicsEnabled == enabled)
+            {
+                return;
+            }
+
+            _modMechanicsEnabled = enabled;
+
+            if (enabled)
+            {
+                _lastIndustryTickMs = Game.GameTime;
+                _lastNearestProbeMs = 0;
+                _lastBlipRefreshMs = 0;
+                CreateMapBlips();
+                ShowStatus("Mod mechanics enabled.");
+                return;
+            }
+
+            _pendingTransfer = null;
+            _showDashboard = false;
+            _showContext = false;
+            _officeMenu.Close();
+            _industryMenu.Close();
+            _upgradeMenu.Close();
+            _difficultyMenu.Close();
+            CloseIndustryTablet();
+            DestroyMapBlips();
+            _lastIndustryTickMs = Game.GameTime;
+
+            if (!keepControlMenuOpen)
+            {
+                _modControlMenu.Close();
+            }
+
+            ShowStatus("Mod mechanics disabled.");
         }
 
         private void RebuildOfficeMenuItems()
@@ -2944,6 +3170,12 @@ namespace IndustryLogisticV
         {
             Load = 0,
             Unload = 1,
+        }
+
+        private enum GameModMode
+        {
+            Fun = 0,
+            Carrier = 1,
         }
 
         private enum DashboardOverviewMode

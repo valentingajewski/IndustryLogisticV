@@ -260,6 +260,9 @@ namespace IndustryLogisticV.Config
             controls.ToggleContext = ControlBindings.ParseOrDefault(
                 ini.GetString("Controls", "ToggleContext", controls.ToggleContext.ToString()),
                 controls.ToggleContext);
+            controls.OpenModMenu = ControlBindings.ParseOrDefault(
+                ini.GetString("Controls", "OpenModMenu", controls.OpenModMenu.ToString()),
+                controls.OpenModMenu);
             controls.Interact = ControlBindings.ParseOrDefault(
                 ini.GetString("Controls", "Interact", controls.Interact.ToString()),
                 controls.Interact);
