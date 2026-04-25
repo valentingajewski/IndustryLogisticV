@@ -46,7 +46,7 @@ namespace IndustryLogisticV.Config
                 MarkerHeight = Math.Max(0.5f, ini.GetFloat("Markers", "MarkerHeight", 1.0f)),
                 MainOfficePosition = ini.GetVector3("MainOffice", "Coordinates", new Vector3(-333.33f, -2778.94f, 5.15f)),
                 VehicleSpawnPosition = ini.GetVector3("VehicleSpawn", "Coordinates", new Vector3(-360.04f, -2763.21f, 6f)),
-                VehicleSpawnHeading = 314f,
+                VehicleSpawnHeading = ini.GetFloat("VehicleSpawn", "VehicleSpawnHeading", ini.GetFloat("VehicleSpawn", "Heading", 230f)),
                 Controls = ParseControls(ini),
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
@@ -181,6 +181,37 @@ namespace IndustryLogisticV.Config
                     });
                 }
             }
+
+            EnsureDefaultSolidTrailer(config);
+        }
+
+        private static void EnsureDefaultSolidTrailer(ModConfig config)
+        {
+            if (config == null)
+            {
+                return;
+            }
+
+            var hasSolidTrailer = config.VehicleDefinitions.Any(x =>
+                x != null &&
+                x.IsEnabled &&
+                x.IsTrailer &&
+                x.CargoType == VehicleCargoType.Solid);
+
+            if (hasSolidTrailer)
+            {
+                return;
+            }
+
+            config.VehicleDefinitions.Add(new VehicleDefinition
+            {
+                SectionName = "SolidTrailers",
+                ModelName = "trflat",
+                CargoType = VehicleCargoType.Solid,
+                CapacityTons = 30f,
+                IsEnabled = true,
+                IsTrailer = true,
+            });
         }
 
         private static void ParseObjects(IniFile ini, ModConfig config)
@@ -290,6 +321,11 @@ namespace IndustryLogisticV.Config
             if (raw.Equals("Trailer", StringComparison.OrdinalIgnoreCase))
             {
                 return VehicleCargoType.Trailer;
+            }
+
+            if (raw.Equals("Solid", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Solid;
             }
 
             return VehicleCargoType.Unknown;

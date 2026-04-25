@@ -12,6 +12,9 @@ namespace IndustryLogisticV.Systems
 {
     public sealed class FleetManager
     {
+        private const string AlloySolidPropModel = "prop_pipes_01b";
+        private const string MetalSolidPropModel = "prop_pipes_04a";
+
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
@@ -59,9 +62,10 @@ namespace IndustryLogisticV.Systems
             if (current != null && current.Exists())
             {
                 driverVehicle = current;
-                if (current.TowedVehicle != null && current.TowedVehicle.Exists())
+                var currentTrailer = ResolveAttachedTrailer(current);
+                if (currentTrailer != null)
                 {
-                    return current.TowedVehicle;
+                    return currentTrailer;
                 }
 
                 return current;
@@ -71,12 +75,66 @@ namespace IndustryLogisticV.Systems
             if (nearest != null && nearest.Exists())
             {
                 driverVehicle = nearest;
-                if (nearest.TowedVehicle != null && nearest.TowedVehicle.Exists())
+                var nearestTrailer = ResolveAttachedTrailer(nearest);
+                if (nearestTrailer != null)
                 {
-                    return nearest.TowedVehicle;
+                    return nearestTrailer;
                 }
 
                 return nearest;
+            }
+
+            return null;
+        }
+
+        private static Vehicle ResolveAttachedTrailer(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return null;
+            }
+
+            var towedVehicle = vehicle.TowedVehicle;
+            if (towedVehicle != null && towedVehicle.Exists())
+            {
+                return towedVehicle;
+            }
+
+            var trailerHandleArg = new OutputArgument();
+            bool hasTrailer;
+            try
+            {
+                hasTrailer = Function.Call<bool>(Hash.GET_VEHICLE_TRAILER_VEHICLE, vehicle.Handle, trailerHandleArg);
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (!hasTrailer)
+            {
+                return null;
+            }
+
+            int trailerHandle;
+            try
+            {
+                trailerHandle = trailerHandleArg.GetResult<int>();
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (trailerHandle <= 0)
+            {
+                return null;
+            }
+
+            var trailerEntity = Entity.FromHandle(trailerHandle) as Vehicle;
+            if (trailerEntity != null && trailerEntity.Exists())
+            {
+                return trailerEntity;
             }
 
             return null;
@@ -213,31 +271,43 @@ namespace IndustryLogisticV.Systems
                 return;
             }
 
-            if (cargoState.CargoType == VehicleCargoType.Loose)
+            List<string> modelNames;
+            int count;
+            if (cargoState.CargoType == VehicleCargoType.Crate)
+            {
+                if (!_objectModels.TryGetValue("Box", out modelNames) || modelNames.Count == 0)
+                {
+                    return;
+                }
+
+                count = ResolveCratePropCount(cargoVehicle, cargoState);
+            }
+            else if (cargoState.CargoType == VehicleCargoType.Solid)
+            {
+                var solidModel = ResolveSolidPropModel(cargoState.Commodity);
+                if (string.IsNullOrWhiteSpace(solidModel))
+                {
+                    return;
+                }
+
+                modelNames = new List<string> { solidModel };
+                count = 1;
+            }
+            else
             {
                 // Loose cargo is rendered as a marker overlay during loading ticks.
                 return;
             }
 
-            if (cargoState.CargoType != VehicleCargoType.Crate)
-            {
-                return;
-            }
-
-            List<string> modelNames;
-            if (!_objectModels.TryGetValue("Box", out modelNames) || modelNames.Count == 0)
-            {
-                return;
-            }
-
-            var count = ResolveCratePropCount(cargoVehicle, cargoState);
             Vector3 modelMin;
             Vector3 modelMax;
             float bedMinX;
             float bedMaxX;
             float bedRearY;
             float bedFrontY;
-            if (!TryGetTruckBedBounds(cargoVehicle, out modelMin, out modelMax, out bedMinX, out bedMaxX, out bedRearY, out bedFrontY))
+            var definition = FindDefinition(cargoVehicle.Model);
+            var useFullLengthBed = definition != null && definition.IsTrailer;
+            if (!TryGetTruckBedBounds(cargoVehicle, useFullLengthBed, out modelMin, out modelMax, out bedMinX, out bedMaxX, out bedRearY, out bedFrontY))
             {
                 return;
             }
@@ -245,7 +315,7 @@ namespace IndustryLogisticV.Systems
             var columns = ResolveCrateColumnCount(count);
             var rows = (int)Math.Ceiling((float)count / columns);
 
-            var rootBone = cargoVehicle.Bones.Root;
+            var forceCenteredPlacement = cargoState.CargoType == VehicleCargoType.Solid;
             for (int i = 0; i < count; i++)
             {
                 var modelName = modelNames[i % modelNames.Count];
@@ -262,7 +332,24 @@ namespace IndustryLogisticV.Systems
                 var halfWidth = Math.Max(0.05f, (crateModelMax.X - crateModelMin.X) * 0.5f);
                 var halfLength = Math.Max(0.05f, (crateModelMax.Y - crateModelMin.Y) * 0.5f);
                 var localSlot = ResolveCrateLocalSlot(i, columns, rows, bedMinX, bedMaxX, bedRearY, bedFrontY);
+                if (forceCenteredPlacement && count == 1)
+                {
+                    localSlot = new Vector3(
+                        (bedMinX + bedMaxX) * 0.5f,
+                        (bedRearY + bedFrontY) * 0.5f,
+                        localSlot.Z);
+                }
+
                 localSlot = ConstrainCrateLocalSlotToBed(localSlot, bedMinX, bedMaxX, bedRearY, bedFrontY, halfWidth, halfLength);
+
+                var centerOffsetX = forceCenteredPlacement
+                    ? (crateModelMin.X + crateModelMax.X) * 0.5f
+                    : 0f;
+                var centerOffsetY = forceCenteredPlacement
+                    ? (crateModelMin.Y + crateModelMax.Y) * 0.5f
+                    : 0f;
+                var placementX = localSlot.X - centerOffsetX;
+                var placementY = localSlot.Y - centerOffsetY;
 
                 float floorLocalZ;
                 if (!TryProbeTruckBedFloor(cargoVehicle, localSlot.X, localSlot.Y, modelMin.Z, modelMax.Z, out floorLocalZ))
@@ -271,7 +358,7 @@ namespace IndustryLogisticV.Systems
                     continue;
                 }
 
-                var spawnPosition = cargoVehicle.GetOffsetPosition(new Vector3(localSlot.X, localSlot.Y, floorLocalZ + 0.35f));
+                var spawnPosition = cargoVehicle.GetOffsetPosition(new Vector3(placementX, placementY, floorLocalZ + 0.35f));
                 var prop = World.CreateProp(model, spawnPosition, true, false);
                 model.MarkAsNoLongerNeeded();
 
@@ -282,8 +369,10 @@ namespace IndustryLogisticV.Systems
 
                 if (!IsEntityInTruckBed(cargoVehicle, prop, bedRearY, bedFrontY, bedMinX, bedMaxX))
                 {
+                    var fallbackLocalY = (bedRearY + bedFrontY) * 0.5f;
+
                     var fallbackSlot = ConstrainCrateLocalSlotToBed(
-                        new Vector3((bedMinX + bedMaxX) * 0.5f, (bedRearY + bedFrontY) * 0.5f, 0f),
+                        new Vector3((bedMinX + bedMaxX) * 0.5f, fallbackLocalY, 0f),
                         bedMinX,
                         bedMaxX,
                         bedRearY,
@@ -299,15 +388,17 @@ namespace IndustryLogisticV.Systems
 
                     localSlot = fallbackSlot;
                     floorLocalZ = fallbackFloorLocalZ;
-                    prop.Position = cargoVehicle.GetOffsetPosition(new Vector3(localSlot.X, localSlot.Y, floorLocalZ + 0.35f));
+                    placementX = localSlot.X - centerOffsetX;
+                    placementY = localSlot.Y - centerOffsetY;
+                    prop.Position = cargoVehicle.GetOffsetPosition(new Vector3(placementX, placementY, floorLocalZ + 0.35f));
                 }
 
                 Vector3 crateMin;
                 Vector3 crateMax;
                 prop.Model.GetDimensions(out crateMin, out crateMax);
 
-                var offset = new Vector3(localSlot.X, localSlot.Y, floorLocalZ - crateMin.Z + 0.01f);
-                prop.AttachTo(rootBone, offset, Vector3.Zero);
+                var offset = new Vector3(placementX, placementY, floorLocalZ - crateMin.Z + 0.01f);
+                prop.AttachTo(cargoVehicle, offset, Vector3.Zero);
                 cargoState.AttachedProps.Add(prop);
             }
         }
@@ -333,8 +424,25 @@ namespace IndustryLogisticV.Systems
             return Math.Max(1, Math.Min(6, count));
         }
 
+        private static string ResolveSolidPropModel(string commodity)
+        {
+            var normalized = CommodityCatalog.Normalize(commodity);
+            if (normalized.Equals("Alloy", StringComparison.OrdinalIgnoreCase))
+            {
+                return AlloySolidPropModel;
+            }
+
+            if (normalized.Equals("Metal", StringComparison.OrdinalIgnoreCase))
+            {
+                return MetalSolidPropModel;
+            }
+
+            return null;
+        }
+
         private static bool TryGetTruckBedBounds(
             Vehicle truck,
+            bool useFullLengthBed,
             out Vector3 modelMin,
             out Vector3 modelMax,
             out float bedMinX,
@@ -370,9 +478,16 @@ namespace IndustryLogisticV.Systems
 
             var rearMargin = Math.Max(0.15f, length * 0.05f);
             bedRearY = modelMin.Y + rearMargin;
-            // Keep placement in rear cargo section to avoid cabin/roof area.
-            bedFrontY = modelMin.Y + (length * 0.48f);
-            bedFrontY = Math.Min(bedFrontY, modelMax.Y - rearMargin);
+            if (useFullLengthBed)
+            {
+                bedFrontY = modelMax.Y - rearMargin;
+            }
+            else
+            {
+                // Keep placement in rear cargo section to avoid cabin/roof area.
+                bedFrontY = modelMin.Y + (length * 0.48f);
+                bedFrontY = Math.Min(bedFrontY, modelMax.Y - rearMargin);
+            }
 
             if (bedMinX >= bedMaxX)
             {
@@ -385,7 +500,9 @@ namespace IndustryLogisticV.Systems
             if (bedRearY >= bedFrontY)
             {
                 bedRearY = modelMin.Y + (length * 0.12f);
-                bedFrontY = modelMin.Y + (length * 0.62f);
+                bedFrontY = useFullLengthBed
+                    ? modelMax.Y - (length * 0.08f)
+                    : modelMin.Y + (length * 0.62f);
             }
 
             if (bedMinX >= bedMaxX || bedRearY >= bedFrontY)

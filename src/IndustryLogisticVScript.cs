@@ -112,7 +112,7 @@ namespace IndustryLogisticV
             _industryTablet.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
 
             _industryBlips = new List<Blip>();
-            _filterOrder = new List<VehicleCargoType> { VehicleCargoType.Loose, VehicleCargoType.Crate, VehicleCargoType.Fluid };
+            _filterOrder = new List<VehicleCargoType> { VehicleCargoType.Loose, VehicleCargoType.Crate, VehicleCargoType.Solid, VehicleCargoType.Fluid };
             _tractorVehicles = _fleetManager.GetTractorDefinitions();
             _keyCooldownUntil = new Dictionary<WinForms.Keys, int>();
             _heldKeys = new HashSet<WinForms.Keys>();

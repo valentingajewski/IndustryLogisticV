@@ -3,9 +3,6 @@ MUST HAVE:
 
 - alloy rework. Should be solid (crate) and add props if possible
 
-- Can't unload cargo at store, they require only Omega
-- Cannot unload recyclable at recycling center
-- Add a draining mechanism where petrol station are drained from time to time regarding of their frequency
 
 - F6 menu visual rework
 
