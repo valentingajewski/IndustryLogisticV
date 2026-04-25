@@ -1,9 +1,5 @@
 MUST HAVE:
 
-
-- alloy rework. Should be solid (crate) and add props if possible
-
-
 - F6 menu visual rework
 
 SHOULD HAVE:

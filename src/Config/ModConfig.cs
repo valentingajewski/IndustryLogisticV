@@ -263,6 +263,9 @@ namespace IndustryLogisticV.Config
             controls.Interact = ControlBindings.ParseOrDefault(
                 ini.GetString("Controls", "Interact", controls.Interact.ToString()),
                 controls.Interact);
+            controls.GateInteract = ControlBindings.ParseOrDefault(
+                ini.GetString("Controls", "GateInteract", controls.GateInteract.ToString()),
+                controls.GateInteract);
             controls.OpenUpgrade = ControlBindings.ParseOrDefault(
                 ini.GetString("Controls", "OpenUpgrade", controls.OpenUpgrade.ToString()),
                 controls.OpenUpgrade);
