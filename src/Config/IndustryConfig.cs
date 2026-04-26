@@ -14,5 +14,6 @@ namespace IndustryLogisticV.Config
         public float OutputCapacityTons { get; set; }
         public float ProductionRate { get; set; }
         public float StartingTankRatio { get; set; }
+        public string Density { get; set; }
     }
 }

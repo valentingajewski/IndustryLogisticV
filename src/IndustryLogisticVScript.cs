@@ -23,6 +23,20 @@ namespace IndustryLogisticV
         private const float IndustryMarkerDrawDistance = 180f;
         private const float IndustryInteractionDistance = 4.8f;
         private const float OfficeInteractionDistance = 3.8f;
+        private const float BarrierInteractDistance = 8f;
+        private const float BarrierOpenAngleDegrees = 82f;
+        private static readonly HashSet<string> PreserveConfiguredZMarkerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Morningwood",
+            "Burton Mall",
+            "US Route 15",
+            "US Route 68 - Zancudo",
+            "US Route 68 - Grand Senora Desert - East",
+            "US Route 13",
+            "Popular St",
+            "Marina Dr",
+            "Sandy Shores Marina Drive",
+        };
 
         private readonly ModConfig _config;
         private readonly ControlBindings _controls;
@@ -33,6 +47,8 @@ namespace IndustryLogisticV
         private readonly SimpleMenu _officeMenu;
         private readonly SimpleMenu _industryMenu;
         private readonly SimpleMenu _upgradeMenu;
+        private readonly SimpleMenu _modControlMenu;
+        private readonly SimpleMenu _difficultyMenu;
         private readonly IndustryTabletUi _industryTablet;
 
         private readonly List<Blip> _industryBlips;
@@ -41,6 +57,9 @@ namespace IndustryLogisticV
         private readonly Dictionary<WinForms.Keys, int> _keyCooldownUntil;
         private readonly HashSet<WinForms.Keys> _heldKeys;
         private readonly Dictionary<string, string> _workerNameOverrides;
+        private readonly int[] _barrierModelHashes;
+        private readonly HashSet<int> _animatedBarrierModelHashes;
+        private readonly Dictionary<int, float> _barrierClosedHeadings;
 
         private readonly Vector3 _mainOfficeMarkerSeed;
         private readonly Vector3 _vehicleSpawnMarkerSeed;
@@ -70,10 +89,13 @@ namespace IndustryLogisticV
         private float _profit;
         private VehicleCargoType _selectedFilter;
         private DashboardOverviewMode _dashboardView;
+        private GameModMode _gameModMode;
         private IndustryTransferMode _industryTransferMode;
 
         private bool _showDashboard;
         private bool _showContext;
+        private bool _modMechanicsEnabled;
+        private bool _vehicleFuelDifficultyEnabled;
 
         private PendingTransfer _pendingTransfer;
 
@@ -104,6 +126,20 @@ namespace IndustryLogisticV
             {
                 Subtitle = "Invest profits into modules",
             };
+            _modControlMenu = new SimpleMenu("Game Mod Control")
+            {
+                Subtitle = "Activate mechanics and configure gameplay",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.4f,
+                TabletAlignRight = true,
+            };
+            _difficultyMenu = new SimpleMenu("Difficulty Settings")
+            {
+                Subtitle = "Enable or disable challenge options",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.4f,
+                TabletAlignRight = true,
+            };
             _industryTablet = new IndustryTabletUi();
             _industryTablet.LoadRequested += HandleTabletLoadRequested;
             _industryTablet.LoadCommodityRequested += HandleTabletLoadCommodityRequested;
@@ -112,23 +148,30 @@ namespace IndustryLogisticV
             _industryTablet.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
 
             _industryBlips = new List<Blip>();
-            _filterOrder = new List<VehicleCargoType> { VehicleCargoType.Loose, VehicleCargoType.Crate, VehicleCargoType.Fluid };
+            _filterOrder = new List<VehicleCargoType> { VehicleCargoType.Loose, VehicleCargoType.Crate, VehicleCargoType.Solid, VehicleCargoType.Fluid };
             _tractorVehicles = _fleetManager.GetTractorDefinitions();
             _keyCooldownUntil = new Dictionary<WinForms.Keys, int>();
             _heldKeys = new HashSet<WinForms.Keys>();
             _workerNameOverrides = CreateWorkerNameOverrides();
+            _barrierModelHashes = CreateBarrierModelHashes();
+            _animatedBarrierModelHashes = new HashSet<int>(CreateAnimatedBarrierModelHashes());
+            _barrierClosedHeadings = new Dictionary<int, float>();
 
             _selectedFilter = VehicleCargoType.Crate;
             _filteredVehicles = new List<VehicleDefinition>();
             _industryTransferProducts = new List<string>();
             _dashboardView = DashboardOverviewMode.Industries;
             _dashboardViewButtonIndex = 1;
+            _gameModMode = GameModMode.Fun;
             _industryTransferMode = IndustryTransferMode.Load;
             _profit = 20000f;
+            _modMechanicsEnabled = false;
+            _vehicleFuelDifficultyEnabled = false;
 
             RefreshFilteredVehicles();
             RebuildOfficeMenuItems();
-            CreateMapBlips();
+            RebuildModControlMenuItems();
+            RebuildDifficultyMenuItems();
 
             Tick += OnTick;
             KeyDown += OnKeyDown;
@@ -140,7 +183,7 @@ namespace IndustryLogisticV
 
         private bool AnyMenuOpen
         {
-            get { return _officeMenu.IsOpen || _industryMenu.IsOpen || _upgradeMenu.IsOpen || _industryTablet.IsOpen; }
+            get { return _officeMenu.IsOpen || _industryMenu.IsOpen || _upgradeMenu.IsOpen || _modControlMenu.IsOpen || _difficultyMenu.IsOpen || _industryTablet.IsOpen; }
         }
 
         private void OnTick(object sender, EventArgs e)
@@ -155,6 +198,18 @@ namespace IndustryLogisticV
             if (_lastIndustryTickMs == 0)
             {
                 _lastIndustryTickMs = gameTime;
+            }
+
+            if (!_modMechanicsEnabled)
+            {
+                DrawOpenMenus();
+
+                if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
+                {
+                    Screen.ShowSubtitle(_statusMessage, 1);
+                }
+
+                return;
             }
 
             var elapsed = gameTime - _lastIndustryTickMs;
@@ -221,12 +276,23 @@ namespace IndustryLogisticV
                 return;
             }
 
+            if (e.KeyCode == _controls.OpenModMenu)
+            {
+                ToggleModControlMenu();
+                return;
+            }
+
             if (HandleTabletKey(e.KeyCode))
             {
                 return;
             }
 
             if (HandleMenuKey(e.KeyCode))
+            {
+                return;
+            }
+
+            if (!_modMechanicsEnabled)
             {
                 return;
             }
@@ -248,17 +314,26 @@ namespace IndustryLogisticV
                 return;
             }
 
+            if (e.KeyCode == _controls.GateInteract)
+            {
+                var player = Game.Player.Character;
+                if (player != null && player.Exists() && TryOpenNearbyBarrier(player))
+                {
+                    return;
+                }
+            }
+
             if (e.KeyCode == _controls.Interact)
             {
                 var player = Game.Player.Character;
-                if (player != null && player.Exists() && IsNearMainOffice(player.Position))
-                {
-                    OpenOfficeMenu();
-                    return;
-                }
-
                 if (player != null && player.Exists())
                 {
+                    if (IsNearMainOffice(player.Position))
+                    {
+                        OpenOfficeMenu();
+                        return;
+                    }
+
                     var nearbyIndustry = GetIndustryInInteractionRange(player.Position);
                     if (nearbyIndustry != null)
                     {
@@ -300,6 +375,18 @@ namespace IndustryLogisticV
 
         private bool HandleMenuKey(WinForms.Keys key)
         {
+            if (_modControlMenu.IsOpen)
+            {
+                _modControlMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_difficultyMenu.IsOpen)
+            {
+                _difficultyMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.HandleKey(key, _controls);
@@ -375,7 +462,7 @@ namespace IndustryLogisticV
             var now = Game.GameTime;
             var cooldownMs = AnyMenuOpen ? 95 : 220;
 
-            if (key == _controls.Interact)
+            if (key == _controls.Interact || key == _controls.GateInteract)
             {
                 cooldownMs = 320;
             }
@@ -392,6 +479,18 @@ namespace IndustryLogisticV
 
         private void DrawOpenMenus()
         {
+            if (_modControlMenu.IsOpen)
+            {
+                _modControlMenu.Draw();
+                return;
+            }
+
+            if (_difficultyMenu.IsOpen)
+            {
+                _difficultyMenu.Draw();
+                return;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.Draw();
@@ -430,7 +529,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 2.4f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 2.4f)
             {
                 ShowStatus("Tablet signal lost. Move closer to the industry marker.");
                 CloseIndustryTablet();
@@ -471,7 +570,41 @@ namespace IndustryLogisticV
                 cargoType = _selectedFilter;
             }
 
-            _industryTablet.SetLoadOptions(_industryManager.GetLoadableOutputs(industry, cargoType));
+            var loadOptions = _industryManager.GetLoadableOutputs(industry, cargoType);
+            var loadOptionSubtitles = BuildTabletLoadOptionSubtitles(industry, loadOptions, cargoState.FreeCapacityTons);
+            _industryTablet.SetLoadOptions(loadOptions, loadOptionSubtitles);
+        }
+
+        private Dictionary<string, string> BuildTabletLoadOptionSubtitles(Industry industry, List<string> loadOptions, float truckFreeCapacityTons)
+        {
+            var subtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            if (industry == null || loadOptions == null || loadOptions.Count == 0)
+            {
+                return subtitles;
+            }
+
+            var maxLoadTons = Math.Max(0f, truckFreeCapacityTons);
+            for (int i = 0; i < loadOptions.Count; i++)
+            {
+                var commodity = loadOptions[i];
+                if (string.IsNullOrWhiteSpace(commodity))
+                {
+                    continue;
+                }
+
+                var availableTons = Math.Max(0f, industry.GetStock(commodity));
+                var loadableTons = Math.Min(availableTons, maxLoadTons);
+                var unitPrice = Math.Max(0f, _globalMarket.GetUnitPrice(commodity));
+                var cargoValue = loadableTons * unitPrice;
+
+                subtitles[commodity.Trim()] = string.Format(
+                    "Cargo value: ${0:0} ({1:0.0}t | ${2:0}/t)",
+                    cargoValue,
+                    loadableTons,
+                    unitPrice);
+            }
+
+            return subtitles;
         }
 
         private void DrawMarkers(Ped player)
@@ -479,6 +612,7 @@ namespace IndustryLogisticV
             var playerPos = player.Position;
             var officePos = GetGroundPosition(_mainOfficeMarkerSeed);
             var canShowPrompts = !AnyMenuOpen;
+            var promptShown = false;
 
             if (playerPos.DistanceToSquared(officePos) <= IndustryMarkerDrawDistance * IndustryMarkerDrawDistance)
             {
@@ -499,6 +633,7 @@ namespace IndustryLogisticV
                 if (canShowPrompts && IsNearMainOffice(playerPos))
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to open Logistics Main Office.", KeyName(_controls.Interact))));
+                    promptShown = true;
                 }
             }
 
@@ -506,7 +641,7 @@ namespace IndustryLogisticV
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var industry = _industryManager.Industries[i];
-                var markerPos = GetGroundPosition(industry.Position);
+                var markerPos = GetIndustryMarkerPosition(industry);
 
                 if (playerPos.DistanceToSquared(markerPos) > drawDistanceSq)
                 {
@@ -536,7 +671,16 @@ namespace IndustryLogisticV
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
                         "Press {0} for opening the industry menu.",
                         KeyName(_controls.Interact))));
+                    promptShown = true;
                 }
+            }
+
+            Prop nearestBarrier;
+            if (canShowPrompts && !promptShown && TryGetNearestBarrier(playerPos, out nearestBarrier))
+            {
+                Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
+                    "Press {0} to open nearby gate/door.",
+                    KeyName(_controls.GateInteract))));
             }
         }
 
@@ -857,7 +1001,7 @@ namespace IndustryLogisticV
 
             lines.Add(string.Empty);
 
-            if (_nearestIndustry != null && player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) <= 40f)
+            if (_nearestIndustry != null && player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) <= 40f)
             {
                 lines.Add(string.Format("Industry: {0}", _nearestIndustry.Name));
                 lines.Add(string.Format("Inputs: {0}", JoinSet(_nearestIndustry.Inputs)));
@@ -883,19 +1027,175 @@ namespace IndustryLogisticV
             _officeMenu.Open();
         }
 
+        private void ToggleModControlMenu()
+        {
+            if (_modControlMenu.IsOpen)
+            {
+                _modControlMenu.Close();
+                return;
+            }
+
+            CloseAllMenus();
+            RebuildModControlMenuItems();
+            _modControlMenu.Open();
+        }
+
         private void CloseNonOfficeMenus()
         {
             _industryMenu.Close();
             _upgradeMenu.Close();
+            _modControlMenu.Close();
+            _difficultyMenu.Close();
             CloseIndustryTablet();
         }
 
         private void CloseAllMenus()
         {
+            _modControlMenu.Close();
+            _difficultyMenu.Close();
             _officeMenu.Close();
             _industryMenu.Close();
             _upgradeMenu.Close();
             CloseIndustryTablet();
+        }
+
+        private void RebuildModControlMenuItems()
+        {
+            _modControlMenu.Title = "Game Mod Control";
+            _modControlMenu.Subtitle = "Activate mechanics and configure gameplay";
+
+            _modControlMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentActivationCaption,
+                    OnLeft = ToggleMechanicsFromMenu,
+                    OnRight = ToggleMechanicsFromMenu,
+                    OnActivate = ToggleMechanicsFromMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentGameModeCaption,
+                    OnLeft = () => ChangeGameModMode(-1),
+                    OnRight = () => ChangeGameModMode(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Difficulty settings",
+                    OnActivate = OpenDifficultyMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _modControlMenu.Close(),
+                },
+            });
+        }
+
+        private void RebuildDifficultyMenuItems()
+        {
+            _difficultyMenu.Title = "Difficulty Settings";
+            _difficultyMenu.Subtitle = "Enable or disable challenge options";
+
+            _difficultyMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentVehicleFuelSettingCaption,
+                    OnLeft = ToggleVehicleFuelSetting,
+                    OnRight = ToggleVehicleFuelSetting,
+                    OnActivate = ToggleVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    OnActivate = () =>
+                    {
+                        _difficultyMenu.Close();
+                        RebuildModControlMenuItems();
+                        _modControlMenu.Open();
+                    },
+                },
+            });
+        }
+
+        private void OpenDifficultyMenu()
+        {
+            _modControlMenu.Close();
+            RebuildDifficultyMenuItems();
+            _difficultyMenu.Open();
+        }
+
+        private string CurrentActivationCaption()
+        {
+            return _modMechanicsEnabled
+                ? "Activate: [~g~On~s~] [Off]"
+                : "Activate: [On] [~r~Off~s~]";
+        }
+
+        private string CurrentGameModeCaption()
+        {
+            return string.Format("Game mod: < {0} >", _gameModMode == GameModMode.Fun ? "Fun" : "Career");
+        }
+
+        private string CurrentVehicleFuelSettingCaption()
+        {
+            return string.Format("Vehicle fuel: < {0} >", _vehicleFuelDifficultyEnabled ? "Enable" : "Disable");
+        }
+
+        private void ToggleMechanicsFromMenu()
+        {
+            SetModMechanicsEnabled(!_modMechanicsEnabled, true);
+            RebuildModControlMenuItems();
+        }
+
+        private void ChangeGameModMode(int delta)
+        {
+            var next = ((int)_gameModMode + delta + 2) % 2;
+            _gameModMode = (GameModMode)next;
+        }
+
+        private void ToggleVehicleFuelSetting()
+        {
+            _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
+        }
+
+        private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)
+        {
+            if (_modMechanicsEnabled == enabled)
+            {
+                return;
+            }
+
+            _modMechanicsEnabled = enabled;
+
+            if (enabled)
+            {
+                _lastIndustryTickMs = Game.GameTime;
+                _lastNearestProbeMs = 0;
+                _lastBlipRefreshMs = 0;
+                CreateMapBlips();
+                ShowStatus("Mod mechanics enabled.");
+                return;
+            }
+
+            _pendingTransfer = null;
+            _showDashboard = false;
+            _showContext = false;
+            _officeMenu.Close();
+            _industryMenu.Close();
+            _upgradeMenu.Close();
+            _difficultyMenu.Close();
+            CloseIndustryTablet();
+            DestroyMapBlips();
+            _lastIndustryTickMs = Game.GameTime;
+
+            if (!keepControlMenuOpen)
+            {
+                _modControlMenu.Close();
+            }
+
+            ShowStatus("Mod mechanics disabled.");
         }
 
         private void RebuildOfficeMenuItems()
@@ -1129,7 +1429,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
             {
                 ShowStatus("No industry marker in range.");
                 return;
@@ -1163,7 +1463,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
             {
                 ShowStatus("No industry marker in range.");
                 return;
@@ -1228,7 +1528,7 @@ namespace IndustryLogisticV
                 return false;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 1.2f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
             {
                 error = "Move closer to the industry marker.";
                 return false;
@@ -1271,7 +1571,7 @@ namespace IndustryLogisticV
                 return false;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 1.2f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
             {
                 error = "Move closer to the industry marker.";
                 return false;
@@ -1402,13 +1702,14 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (!cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            var omegaOnly = IsOmegaOnlyUnloadIndustry(industry);
+            if (omegaOnly && !cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
             {
                 ShowStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
                 return;
             }
 
-            StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, true);
+            StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, omegaOnly);
         }
 
         private void HandleTabletUnloadModeRequested(Industry industry, bool omegaOnly)
@@ -1434,6 +1735,12 @@ namespace IndustryLogisticV
                 return;
             }
 
+            if (omegaOnly && (industry == null || !industry.SupportsOmegaBoost))
+            {
+                ShowStatus("Omega unload is not available for this industry.");
+                return;
+            }
+
             StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, omegaOnly);
         }
 
@@ -1445,7 +1752,14 @@ namespace IndustryLogisticV
                 return;
             }
 
-            var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
+            if (targetLoadTons <= 0.001f)
+            {
+                ShowStatus("Loading failed: product unavailable.");
+                return;
+            }
+
             var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
             var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
 
@@ -1467,14 +1781,14 @@ namespace IndustryLogisticV
             _industryMenu.Close();
             CloseIndustryTablet();
             StartTransfer(
-                string.Format("Loading {0:0.0}t {1}...", requested, selectedProduct),
+                BuildLoadingTransferLabel(0f, targetLoadTons, selectedProduct),
                 2600,
                 () =>
                 {
                     try
                     {
                         float loaded;
-                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
+                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, targetLoadTons, out loaded))
                         {
                             if (usesLooseVisual)
                             {
@@ -1498,6 +1812,16 @@ namespace IndustryLogisticV
                             SetRearCargoDoors(cargoVehicle, false);
                         }
                     }
+                },
+                progress =>
+                {
+                    if (_pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    var currentTons = targetLoadTons * Clamp01(progress);
+                    _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
                 });
         }
 
@@ -1553,8 +1877,7 @@ namespace IndustryLogisticV
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                         if (cargoState.WeightTons <= 0.001f)
                         {
-                            cargoState.ClearCargo();
-                            _fleetManager.ClearCargoVisuals(cargoState);
+                            ClearCargoStateAndVisuals(cargoVehicle, cargoState);
                         }
                         else
                         {
@@ -1575,7 +1898,19 @@ namespace IndustryLogisticV
 
         private static bool IndustryHasMultipleInputs(Industry industry)
         {
-            return industry != null && industry.Inputs != null && industry.Inputs.Count > 1;
+            return industry != null
+                && industry.SupportsOmegaBoost
+                && industry.Inputs != null
+                && industry.Inputs.Count > 1;
+        }
+
+        private static bool IsOmegaOnlyUnloadIndustry(Industry industry)
+        {
+            return industry != null
+                && industry.SupportsOmegaBoost
+                && industry.Inputs != null
+                && industry.Inputs.Count == 1
+                && industry.Inputs.Contains("Omega");
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)
@@ -1592,7 +1927,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 2.4f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 2.4f)
             {
                 ShowStatus("Move closer to an industry to manage upgrades.");
                 return;
@@ -1842,8 +2177,7 @@ namespace IndustryLogisticV
                             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                             if (cargoState.WeightTons <= 0.001f)
                             {
-                                cargoState.ClearCargo();
-                                _fleetManager.ClearCargoVisuals(cargoState);
+                                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
                             }
                             else
                             {
@@ -1877,7 +2211,14 @@ namespace IndustryLogisticV
             }
 
             var selectedProduct = _industryTransferProducts[_selectedIndustryProductIndex];
-            var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
+            if (targetLoadTons <= 0.001f)
+            {
+                ShowStatus("Loading failed: product unavailable.");
+                return;
+            }
+
             var cargoType = cargoState.CargoType;
             var shouldAnimateCrateDoorsOnLoad = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
             var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
@@ -1898,14 +2239,14 @@ namespace IndustryLogisticV
 
             _industryMenu.Close();
             StartTransfer(
-                string.Format("Loading {0:0.0}t {1}...", requested, selectedProduct),
+                BuildLoadingTransferLabel(0f, targetLoadTons, selectedProduct),
                 2600,
                 () =>
                 {
                     try
                     {
                         float loaded;
-                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, requested, out loaded))
+                        if (!_industryManager.TryLoadCommodity(industry, cargoType, selectedProduct, targetLoadTons, out loaded))
                         {
                             if (usesLooseVisual)
                             {
@@ -1929,6 +2270,16 @@ namespace IndustryLogisticV
                             SetRearCargoDoors(cargoVehicle, false);
                         }
                     }
+                },
+                progress =>
+                {
+                    if (_pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    var currentTons = targetLoadTons * Clamp01(progress);
+                    _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
                 });
         }
 
@@ -1946,7 +2297,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
             {
                 ShowStatus("Move closer to an industry to manage upgrades.");
                 return;
@@ -1975,37 +2326,52 @@ namespace IndustryLogisticV
             _upgradeMenu.Title = "Industry Upgrades";
             _upgradeMenu.Subtitle = _menuIndustry.Name;
 
-            _upgradeMenu.SetItems(new[]
+            var items = new List<OfficeMenuItem>
             {
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
                 },
-                new OfficeMenuItem
+            };
+
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.Production, "Production Module");
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.InputStorage, "Input Storage Module");
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.OutputStorage, "Output Storage Module");
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.OmegaStorage, "Omega Tank Module");
+
+            if (items.Count == 1)
+            {
+                items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.Production, "Production Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.Production),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.InputStorage, "Input Storage Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.InputStorage),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.OutputStorage, "Output Storage Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.OutputStorage),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.OmegaStorage, "Omega Tank Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.OmegaStorage),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Close",
-                    OnActivate = () => _upgradeMenu.Close(),
-                },
+                    CaptionFactory = () => "No upgrade modules available for this industry.",
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Close",
+                OnActivate = () => _upgradeMenu.Close(),
+            });
+
+            _upgradeMenu.SetItems(items);
+        }
+
+        private void AddUpgradeMenuItemIfAvailable(List<OfficeMenuItem> items, Industry industry, IndustryUpgradeModule module, string label)
+        {
+            if (items == null || industry == null)
+            {
+                return;
+            }
+
+            if (industry.GetUpgradeCost(module) <= 0f)
+            {
+                return;
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => GetUpgradeCaption(industry, module, label),
+                OnActivate = () => TryApplyUpgradeModule(module),
             });
         }
 
@@ -2102,6 +2468,49 @@ namespace IndustryLogisticV
                    normalized.Equals("Coal", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
                    normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void ClearCargoStateAndVisuals(Vehicle cargoVehicle, VehicleCargoState cargoState)
+        {
+            if (cargoState != null)
+            {
+                cargoState.ClearCargo();
+                _fleetManager.ClearCargoVisuals(cargoState);
+            }
+
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                return;
+            }
+
+            var stateForVehicle = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            if (stateForVehicle == null || object.ReferenceEquals(stateForVehicle, cargoState))
+            {
+                return;
+            }
+
+            stateForVehicle.ClearCargo();
+            _fleetManager.ClearCargoVisuals(stateForVehicle);
+        }
+
+        private static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(commodity) || requestedTons <= 0f)
+            {
+                return 0f;
+            }
+
+            var available = Math.Max(0f, industry.GetStock(commodity));
+            return Math.Min(requestedTons, available);
+        }
+
+        private static string BuildLoadingTransferLabel(float currentTons, float targetTons, string commodity)
+        {
+            return string.Format(
+                "Loading {0:0.0}/{1:0.0}t {2}...",
+                Math.Max(0f, currentTons),
+                Math.Max(0f, targetTons),
+                commodity ?? string.Empty);
         }
 
         private void DrawProgressBar(string label, float progress)
@@ -2233,7 +2642,7 @@ namespace IndustryLogisticV
                 var color = isPetrolStation
                     ? BlipColor.Yellow
                     : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
-                var blip = CreateStaticBlip(GetGroundPosition(industry.Position), sprite, color, industry.Name, 0.85f);
+                var blip = CreateStaticBlip(GetIndustryMarkerPosition(industry), sprite, color, industry.Name, 0.85f);
                 if (blip != null && blip.Exists())
                 {
                     _industryBlips.Add(blip);
@@ -2262,7 +2671,8 @@ namespace IndustryLogisticV
                     continue;
                 }
 
-                blip.Position = GetGroundPosition(_industryManager.Industries[i].Position);
+                var industry = _industryManager.Industries[i];
+                blip.Position = GetIndustryMarkerPosition(industry);
             }
         }
 
@@ -2316,7 +2726,7 @@ namespace IndustryLogisticV
 
         private Industry GetIndustryInInteractionRange(Vector3 position)
         {
-            if (_nearestIndustry != null && position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) <= IndustryInteractionDistance)
+            if (_nearestIndustry != null && position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) <= IndustryInteractionDistance)
             {
                 return _nearestIndustry;
             }
@@ -2327,9 +2737,41 @@ namespace IndustryLogisticV
                 return null;
             }
 
-            return position.DistanceTo(GetGroundPosition(nearest.Position)) <= IndustryInteractionDistance
+            return position.DistanceTo(GetIndustryMarkerPosition(nearest)) <= IndustryInteractionDistance
                 ? nearest
                 : null;
+        }
+
+        private static Vector3 GetIndustryMarkerPosition(Industry industry)
+        {
+            if (industry == null)
+            {
+                return Vector3.Zero;
+            }
+
+            if (ShouldUseConfiguredZForMarker(industry.Name))
+            {
+                return new Vector3(industry.Position.X, industry.Position.Y, industry.Position.Z + 0.05f);
+            }
+
+            return GetGroundPosition(industry.Position);
+        }
+
+        private static bool ShouldUseConfiguredZForMarker(string markerName)
+        {
+            if (string.IsNullOrWhiteSpace(markerName))
+            {
+                return false;
+            }
+
+            var normalized = markerName.Trim();
+            if (PreserveConfiguredZMarkerNames.Contains(normalized))
+            {
+                return true;
+            }
+
+            return normalized.IndexOf("Marina Dr", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("Marina Drive", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static BlipSprite ResolveIndustryBlipSprite(Industry industry, bool isPetrolStation)
@@ -2487,6 +2929,205 @@ namespace IndustryLogisticV
             };
         }
 
+        private bool TryGetNearestBarrier(Vector3 playerPos, out Prop nearestBarrier)
+        {
+            nearestBarrier = null;
+            if (_barrierModelHashes == null || _barrierModelHashes.Length == 0)
+            {
+                return false;
+            }
+
+            var bestDistanceSq = BarrierInteractDistance * BarrierInteractDistance;
+
+            for (int i = 0; i < _barrierModelHashes.Length; i++)
+            {
+                var modelHash = _barrierModelHashes[i];
+                var handle = Function.Call<int>(
+                    Hash.GET_CLOSEST_OBJECT_OF_TYPE,
+                    playerPos.X,
+                    playerPos.Y,
+                    playerPos.Z,
+                    BarrierInteractDistance,
+                    modelHash,
+                    false,
+                    false,
+                    false);
+
+                if (handle <= 0)
+                {
+                    continue;
+                }
+
+                var barrier = Entity.FromHandle(handle) as Prop;
+                if (barrier == null || !barrier.Exists())
+                {
+                    continue;
+                }
+
+                var distanceSq = barrier.Position.DistanceToSquared(playerPos);
+                if (distanceSq > bestDistanceSq)
+                {
+                    continue;
+                }
+
+                bestDistanceSq = distanceSq;
+                nearestBarrier = barrier;
+            }
+
+            return nearestBarrier != null;
+        }
+
+        private bool TryOpenNearbyBarrier(Ped player)
+        {
+            if (player == null || !player.Exists())
+            {
+                return false;
+            }
+
+            Prop nearestBarrier = null;
+            if (!TryGetNearestBarrier(player.Position, out nearestBarrier))
+            {
+                return false;
+            }
+
+            if (_animatedBarrierModelHashes.Contains(nearestBarrier.Model.Hash))
+            {
+                return TryOpenBarrierWithNativeAnimation(nearestBarrier);
+            }
+
+            float closedHeading;
+            if (!_barrierClosedHeadings.TryGetValue(nearestBarrier.Handle, out closedHeading))
+            {
+                closedHeading = nearestBarrier.Heading;
+                _barrierClosedHeadings[nearestBarrier.Handle] = closedHeading;
+            }
+
+            var playerLocalOffset = nearestBarrier.GetPositionOffset(player.Position);
+            var sideSign = playerLocalOffset.X >= 0f ? -1f : 1f;
+            nearestBarrier.Heading = closedHeading + (BarrierOpenAngleDegrees * sideSign);
+            return true;
+        }
+
+        private bool TryOpenBarrierWithNativeAnimation(Prop barrier)
+        {
+            if (barrier == null || !barrier.Exists())
+            {
+                return false;
+            }
+
+            var modelHash = barrier.Model.Hash;
+            if (!_animatedBarrierModelHashes.Contains(modelHash))
+            {
+                return false;
+            }
+
+            try
+            {
+                var pos = barrier.Position;
+                int doorSystemHash;
+                if (!TryGetDoorSystemHash(pos, modelHash, out doorSystemHash))
+                {
+                    doorSystemHash = BuildDoorSystemHash(barrier);
+                    if (!Function.Call<bool>(Hash.IS_DOOR_REGISTERED_WITH_SYSTEM, doorSystemHash))
+                    {
+                        Function.Call(
+                            Hash.ADD_DOOR_TO_SYSTEM,
+                            doorSystemHash,
+                            modelHash,
+                            pos.X,
+                            pos.Y,
+                            pos.Z,
+                            false,
+                            false,
+                            false);
+                    }
+                }
+
+                Function.Call(Hash.DOOR_SYSTEM_SET_DOOR_STATE, doorSystemHash, 0, true, true);
+                Function.Call(Hash.DOOR_SYSTEM_SET_HOLD_OPEN, doorSystemHash, true);
+                Function.Call(Hash.DOOR_SYSTEM_SET_OPEN_RATIO, doorSystemHash, 1f, true, true);
+
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryGetDoorSystemHash(Vector3 position, int modelHash, out int doorSystemHash)
+        {
+            doorSystemHash = 0;
+            var outputHash = new OutputArgument();
+            var found = Function.Call<bool>(
+                Hash.DOOR_SYSTEM_FIND_EXISTING_DOOR,
+                position.X,
+                position.Y,
+                position.Z,
+                modelHash,
+                outputHash);
+
+            if (!found)
+            {
+                return false;
+            }
+
+            doorSystemHash = outputHash.GetResult<int>();
+            return doorSystemHash != 0;
+        }
+
+        private static int BuildDoorSystemHash(Prop barrier)
+        {
+            if (barrier == null)
+            {
+                return 1;
+            }
+
+            var composed = unchecked((uint)(0x5A000000u ^ (uint)barrier.Handle ^ (uint)barrier.Model.Hash));
+            if (composed == 0u)
+            {
+                composed = 1u;
+            }
+
+            return unchecked((int)composed);
+        }
+
+        private static int[] CreateBarrierModelHashes()
+        {
+            return new[]
+                {
+                    "prop_sec_barier_01a",
+                    "prop_sec_barier_02a",
+                    "prop_sec_barier_03a",
+                    "prop_sec_barier_04a",
+                    "prop_sec_barrier_ld_01a",
+                    "prop_sec_barrier_ld_02a",
+                    "prop_fnclink_03gate5",
+                    "prop_gate_airport_01",
+                    "prop_gate_docks_ld",
+                }
+                .Select(x => new Model(x))
+                .Where(x => x.IsInCdImage && x.IsValid)
+                .Select(x => x.Hash)
+                .Distinct()
+                .ToArray();
+        }
+
+        private static int[] CreateAnimatedBarrierModelHashes()
+        {
+            return new[]
+                {
+                    "prop_fnclink_03gate5",
+                    "prop_gate_airport_01",
+                    "prop_gate_docks_ld",
+                }
+                .Select(x => new Model(x))
+                .Where(x => x.IsInCdImage && x.IsValid)
+                .Select(x => x.Hash)
+                .Distinct()
+                .ToArray();
+        }
+
         private static void SetRearCargoDoors(Vehicle vehicle, bool open)
         {
             if (vehicle == null || !vehicle.Exists())
@@ -2566,6 +3207,7 @@ namespace IndustryLogisticV
         {
             DestroyMapBlips();
             _pendingTransfer = null;
+            _barrierClosedHeadings.Clear();
             CloseAllMenus();
             _industryTablet.LoadRequested -= HandleTabletLoadRequested;
             _industryTablet.LoadCommodityRequested -= HandleTabletLoadCommodityRequested;
@@ -2588,6 +3230,12 @@ namespace IndustryLogisticV
         {
             Load = 0,
             Unload = 1,
+        }
+
+        private enum GameModMode
+        {
+            Fun = 0,
+            Career = 1,
         }
 
         private enum DashboardOverviewMode

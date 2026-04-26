@@ -7,5 +7,6 @@ namespace IndustryLogisticV.Domain
         Crate = 2,
         Fluid = 3,
         Trailer = 4,
+        Solid = 5,
     }
 }

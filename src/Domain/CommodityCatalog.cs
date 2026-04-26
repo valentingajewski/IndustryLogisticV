@@ -26,6 +26,12 @@ namespace IndustryLogisticV.Domain
                 return VehicleCargoType.Crate;
             }
 
+            if (normalized.Equals("Alloy", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Metal", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Solid;
+            }
+
             return VehicleCargoType.Loose;
         }
 
