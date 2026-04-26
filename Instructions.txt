@@ -104,25 +104,14 @@ Industry sections define coordinates, inputs/outputs, and capacities.
 7) Troubleshooting
 ------------------
 Tablet background not visible:
-1. Verify GTA5/scripts/tablet_images/tablet_template.png exists.
-2. Verify filename is exactly tablet_template.png.
-3. Verify IndustryLogisticV.dll is loaded from GTA5/scripts.
-4. Check ScriptHookVDotNet log for load errors.
-5. Ensure LemonUI.SHVDN3.dll exists in GTA5/scripts.
+1. Verify IndustryLogisticV.dll is loaded from GTA5/scripts.
+2. Check ScriptHookVDotNet log for load errors.
+3. Ensure LemonUI.SHVDN3.dll exists in GTA5/scripts.
 
-Tablet does not open:
+Industry Menu does not open:
 1. Ensure Interact key in config.ini matches your intended key.
 2. Move close to an industry marker and be on foot.
 
 Upgrades unavailable:
 1. Some modules can be unavailable depending on industry type.
 2. Ensure you have enough profit for module cost.
-
-
-8) Build
---------
-A standard Release build from repo root:
-- dotnet build IndustryLogisticV.csproj -c Release
-
-Output DLL:
-- bin/Release/net48/IndustryLogisticV.dll
