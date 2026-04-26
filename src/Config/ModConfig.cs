@@ -233,7 +233,7 @@ namespace IndustryLogisticV.Config
 
             if (!config.ObjectModels.ContainsKey("Box"))
             {
-                config.ObjectModels["Box"] = new List<string> { "v_serv_abox_02" };
+                config.ObjectModels["Box"] = new List<string> { "prop_boxpile_05a" };
             }
         }
 

@@ -1055,7 +1055,7 @@ namespace IndustryLogisticV.UI
             for (int i = 0; i < inputs.Count; i++)
             {
                 var commodity = inputs[i];
-                var stock = Math.Max(0f, _industry.GetStock(commodity));
+                var stock = GetCommodityStockForStats(commodity, true);
                 var capacity = GetCommodityCapacityForStats(commodity, true);
                 entries.Add(new CommodityStatEntry
                 {
@@ -1071,7 +1071,7 @@ namespace IndustryLogisticV.UI
             for (int i = 0; i < outputs.Count; i++)
             {
                 var commodity = outputs[i];
-                var stock = Math.Max(0f, _industry.GetStock(commodity));
+                var stock = GetCommodityStockForStats(commodity, false);
                 var capacity = GetCommodityCapacityForStats(commodity, false);
                 entries.Add(new CommodityStatEntry
                 {
@@ -1093,7 +1093,12 @@ namespace IndustryLogisticV.UI
                 return 0.01f;
             }
 
-            var stock = Math.Max(0f, _industry.GetStock(commodity));
+            if (IsOmegaInputStat(commodity, isInput))
+            {
+                return Math.Max(0.01f, _industry.OmegaCapacityTons);
+            }
+
+            var stock = GetCommodityStockForStats(commodity, isInput);
             var freeSpace = Math.Max(0f, _industry.GetMaxTransferTonsForCommodity(commodity));
             var capacity = stock + freeSpace;
 
@@ -1109,6 +1114,30 @@ namespace IndustryLogisticV.UI
             }
 
             return Math.Max(0.01f, capacity);
+        }
+
+        private float GetCommodityStockForStats(string commodity, bool isInput)
+        {
+            if (_industry == null)
+            {
+                return 0f;
+            }
+
+            if (IsOmegaInputStat(commodity, isInput))
+            {
+                return Math.Max(0f, _industry.OmegaStorage);
+            }
+
+            return Math.Max(0f, _industry.GetStock(commodity));
+        }
+
+        private bool IsOmegaInputStat(string commodity, bool isInput)
+        {
+            return isInput
+                && _industry != null
+                && _industry.SupportsOmegaBoost
+                && !string.IsNullOrWhiteSpace(commodity)
+                && commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void DrawLoadingBar(float x, float y, float width, float height, float ratio, Color backgroundColor, Color fillColor)

@@ -1135,7 +1135,7 @@ namespace IndustryLogisticV
 
         private string CurrentGameModeCaption()
         {
-            return string.Format("Game mod: < {0} >", _gameModMode == GameModMode.Fun ? "fun" : "carrier");
+            return string.Format("Game mod: < {0} >", _gameModMode == GameModMode.Fun ? "Fun" : "Career");
         }
 
         private string CurrentVehicleFuelSettingCaption()
@@ -3235,7 +3235,7 @@ namespace IndustryLogisticV
         private enum GameModMode
         {
             Fun = 0,
-            Carrier = 1,
+            Career = 1,
         }
 
         private enum DashboardOverviewMode
