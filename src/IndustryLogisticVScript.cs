@@ -25,6 +25,18 @@ namespace IndustryLogisticV
         private const float OfficeInteractionDistance = 3.8f;
         private const float BarrierInteractDistance = 8f;
         private const float BarrierOpenAngleDegrees = 82f;
+        private static readonly HashSet<string> PreserveConfiguredZMarkerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Morningwood",
+            "Burton Mall",
+            "US Route 15",
+            "US Route 68 - Zancudo",
+            "US Route 68 - Grand Senora Desert - East",
+            "US Route 13",
+            "Popular St",
+            "Marina Dr",
+            "Sandy Shores Marina Drive",
+        };
 
         private readonly ModConfig _config;
         private readonly ControlBindings _controls;
@@ -517,7 +529,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 2.4f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 2.4f)
             {
                 ShowStatus("Tablet signal lost. Move closer to the industry marker.");
                 CloseIndustryTablet();
@@ -629,7 +641,7 @@ namespace IndustryLogisticV
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var industry = _industryManager.Industries[i];
-                var markerPos = GetGroundPosition(industry.Position);
+                var markerPos = GetIndustryMarkerPosition(industry);
 
                 if (playerPos.DistanceToSquared(markerPos) > drawDistanceSq)
                 {
@@ -989,7 +1001,7 @@ namespace IndustryLogisticV
 
             lines.Add(string.Empty);
 
-            if (_nearestIndustry != null && player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) <= 40f)
+            if (_nearestIndustry != null && player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) <= 40f)
             {
                 lines.Add(string.Format("Industry: {0}", _nearestIndustry.Name));
                 lines.Add(string.Format("Inputs: {0}", JoinSet(_nearestIndustry.Inputs)));
@@ -1417,7 +1429,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
             {
                 ShowStatus("No industry marker in range.");
                 return;
@@ -1451,7 +1463,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
             {
                 ShowStatus("No industry marker in range.");
                 return;
@@ -1516,7 +1528,7 @@ namespace IndustryLogisticV
                 return false;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 1.2f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
             {
                 error = "Move closer to the industry marker.";
                 return false;
@@ -1559,7 +1571,7 @@ namespace IndustryLogisticV
                 return false;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 1.2f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
             {
                 error = "Move closer to the industry marker.";
                 return false;
@@ -1915,7 +1927,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (player.Position.DistanceTo(GetGroundPosition(industry.Position)) > IndustryInteractionDistance + 2.4f)
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 2.4f)
             {
                 ShowStatus("Move closer to an industry to manage upgrades.");
                 return;
@@ -2285,7 +2297,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) > IndustryInteractionDistance)
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
             {
                 ShowStatus("Move closer to an industry to manage upgrades.");
                 return;
@@ -2314,37 +2326,52 @@ namespace IndustryLogisticV
             _upgradeMenu.Title = "Industry Upgrades";
             _upgradeMenu.Subtitle = _menuIndustry.Name;
 
-            _upgradeMenu.SetItems(new[]
+            var items = new List<OfficeMenuItem>
             {
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
                 },
-                new OfficeMenuItem
+            };
+
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.Production, "Production Module");
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.InputStorage, "Input Storage Module");
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.OutputStorage, "Output Storage Module");
+            AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.OmegaStorage, "Omega Tank Module");
+
+            if (items.Count == 1)
+            {
+                items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.Production, "Production Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.Production),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.InputStorage, "Input Storage Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.InputStorage),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.OutputStorage, "Output Storage Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.OutputStorage),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => GetUpgradeCaption(_menuIndustry, IndustryUpgradeModule.OmegaStorage, "Omega Tank Module"),
-                    OnActivate = () => TryApplyUpgradeModule(IndustryUpgradeModule.OmegaStorage),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Close",
-                    OnActivate = () => _upgradeMenu.Close(),
-                },
+                    CaptionFactory = () => "No upgrade modules available for this industry.",
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Close",
+                OnActivate = () => _upgradeMenu.Close(),
+            });
+
+            _upgradeMenu.SetItems(items);
+        }
+
+        private void AddUpgradeMenuItemIfAvailable(List<OfficeMenuItem> items, Industry industry, IndustryUpgradeModule module, string label)
+        {
+            if (items == null || industry == null)
+            {
+                return;
+            }
+
+            if (industry.GetUpgradeCost(module) <= 0f)
+            {
+                return;
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => GetUpgradeCaption(industry, module, label),
+                OnActivate = () => TryApplyUpgradeModule(module),
             });
         }
 
@@ -2615,7 +2642,7 @@ namespace IndustryLogisticV
                 var color = isPetrolStation
                     ? BlipColor.Yellow
                     : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
-                var blip = CreateStaticBlip(GetGroundPosition(industry.Position), sprite, color, industry.Name, 0.85f);
+                var blip = CreateStaticBlip(GetIndustryMarkerPosition(industry), sprite, color, industry.Name, 0.85f);
                 if (blip != null && blip.Exists())
                 {
                     _industryBlips.Add(blip);
@@ -2644,7 +2671,8 @@ namespace IndustryLogisticV
                     continue;
                 }
 
-                blip.Position = GetGroundPosition(_industryManager.Industries[i].Position);
+                var industry = _industryManager.Industries[i];
+                blip.Position = GetIndustryMarkerPosition(industry);
             }
         }
 
@@ -2698,7 +2726,7 @@ namespace IndustryLogisticV
 
         private Industry GetIndustryInInteractionRange(Vector3 position)
         {
-            if (_nearestIndustry != null && position.DistanceTo(GetGroundPosition(_nearestIndustry.Position)) <= IndustryInteractionDistance)
+            if (_nearestIndustry != null && position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) <= IndustryInteractionDistance)
             {
                 return _nearestIndustry;
             }
@@ -2709,9 +2737,41 @@ namespace IndustryLogisticV
                 return null;
             }
 
-            return position.DistanceTo(GetGroundPosition(nearest.Position)) <= IndustryInteractionDistance
+            return position.DistanceTo(GetIndustryMarkerPosition(nearest)) <= IndustryInteractionDistance
                 ? nearest
                 : null;
+        }
+
+        private static Vector3 GetIndustryMarkerPosition(Industry industry)
+        {
+            if (industry == null)
+            {
+                return Vector3.Zero;
+            }
+
+            if (ShouldUseConfiguredZForMarker(industry.Name))
+            {
+                return new Vector3(industry.Position.X, industry.Position.Y, industry.Position.Z + 0.05f);
+            }
+
+            return GetGroundPosition(industry.Position);
+        }
+
+        private static bool ShouldUseConfiguredZForMarker(string markerName)
+        {
+            if (string.IsNullOrWhiteSpace(markerName))
+            {
+                return false;
+            }
+
+            var normalized = markerName.Trim();
+            if (PreserveConfiguredZMarkerNames.Contains(normalized))
+            {
+                return true;
+            }
+
+            return normalized.IndexOf("Marina Dr", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("Marina Drive", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static BlipSprite ResolveIndustryBlipSprite(Industry industry, bool isPetrolStation)

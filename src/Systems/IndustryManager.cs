@@ -10,6 +10,19 @@ namespace IndustryLogisticV.Systems
 {
     public sealed class IndustryManager
     {
+        private static readonly HashSet<string> PreserveConfiguredZMarkerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Morningwood",
+            "Burton Mall",
+            "US Route 15",
+            "US Route 68 - Zancudo",
+            "US Route 68 - Grand Senora Desert - East",
+            "US Route 13",
+            "Popular St",
+            "Marina Dr",
+            "Sandy Shores Marina Drive",
+        };
+
         private readonly List<Industry> _industries;
         private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
 
@@ -20,11 +33,14 @@ namespace IndustryLogisticV.Systems
             foreach (var pair in config.IndustryConfigs)
             {
                 var industryConfig = pair.Value;
+                var useConfiguredZ = ShouldUseConfiguredZForMarker(industryConfig.Name);
                 var groundedConfig = new IndustryConfig
                 {
                     Id = industryConfig.Id,
                     Name = industryConfig.Name,
-                    Position = GetGroundedPosition(industryConfig.Position),
+                    Position = useConfiguredZ
+                        ? industryConfig.Position
+                        : GetGroundedPosition(industryConfig.Position),
                     Inputs = new HashSet<string>(industryConfig.Inputs, StringComparer.OrdinalIgnoreCase),
                     Outputs = new HashSet<string>(industryConfig.Outputs, StringComparer.OrdinalIgnoreCase),
                     InputCapacityTons = industryConfig.InputCapacityTons,
@@ -484,6 +500,23 @@ namespace IndustryLogisticV.Systems
             }
 
             return position;
+        }
+
+        private static bool ShouldUseConfiguredZForMarker(string markerName)
+        {
+            if (string.IsNullOrWhiteSpace(markerName))
+            {
+                return false;
+            }
+
+            var normalized = markerName.Trim();
+            if (PreserveConfiguredZMarkerNames.Contains(normalized))
+            {
+                return true;
+            }
+
+            return normalized.IndexOf("Marina Dr", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("Marina Drive", StringComparison.OrdinalIgnoreCase) >= 0;
         }
     }
 }

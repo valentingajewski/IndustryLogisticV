@@ -288,13 +288,25 @@ namespace IndustryLogisticV.Domain
 
         public float GetUpgradeCost(IndustryUpgradeModule module)
         {
+            var isInputOnlySink = Outputs.Count == 0 && Inputs.Count > 0;
+
             if (module == IndustryUpgradeModule.Production)
             {
+                if (isInputOnlySink)
+                {
+                    return -1f;
+                }
+
                 return 5000f * (ProductionModuleLevel + 1);
             }
 
             if (module == IndustryUpgradeModule.InputStorage)
             {
+                if (isInputOnlySink)
+                {
+                    return -1f;
+                }
+
                 return 3500f * (InputStorageModuleLevel + 1);
             }
 
@@ -305,7 +317,7 @@ namespace IndustryLogisticV.Domain
 
             if (module == IndustryUpgradeModule.OmegaStorage)
             {
-                if (!_supportsOmegaBoost)
+                if (!_supportsOmegaBoost || isInputOnlySink)
                 {
                     return -1f;
                 }

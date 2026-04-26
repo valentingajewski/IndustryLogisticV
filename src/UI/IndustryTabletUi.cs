@@ -238,7 +238,7 @@ namespace IndustryLogisticV.UI
 
             if (_currentPage == TabletPage.Upgrades)
             {
-                const int upgradeCount = 5;
+                var upgradeCount = GetUpgradeSelectionCount();
                 _selectedUpgradeIndex = (_selectedUpgradeIndex + delta + upgradeCount) % upgradeCount;
                 return;
             }
@@ -364,14 +364,15 @@ namespace IndustryLogisticV.UI
                 return;
             }
 
-            if (_selectedUpgradeIndex == 4)
+            var availableModules = GetAvailableUpgradeModules();
+            if (_selectedUpgradeIndex >= availableModules.Count)
             {
                 _currentPage = TabletPage.Main;
                 _selectedMainIndex = 3;
                 return;
             }
 
-            var module = (IndustryUpgradeModule)_selectedUpgradeIndex;
+            var module = availableModules[_selectedUpgradeIndex];
             UpgradeModuleRequested?.Invoke(_industry, module);
         }
 
@@ -675,6 +676,13 @@ namespace IndustryLogisticV.UI
                 HideMainButtons();
                 _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
 
+                var availableModules = GetAvailableUpgradeModules();
+                var selectionCount = Math.Max(1, availableModules.Count + 1);
+                if (_selectedUpgradeIndex >= selectionCount)
+                {
+                    _selectedUpgradeIndex = selectionCount - 1;
+                }
+
                 DrawText(
                     "UPGRADE MODULES",
                     _frameX + 80f,
@@ -695,11 +703,30 @@ namespace IndustryLogisticV.UI
                     Alignment.Left,
                     0f);
 
-                DrawUpgradeModuleButton(0, "PRODUCTION MODULE", GetUpgradeModuleSubtitle(IndustryUpgradeModule.Production), _selectedUpgradeIndex == 0);
-                DrawUpgradeModuleButton(1, "INPUT STORAGE MODULE", GetUpgradeModuleSubtitle(IndustryUpgradeModule.InputStorage), _selectedUpgradeIndex == 1);
-                DrawUpgradeModuleButton(2, "OUTPUT STORAGE MODULE", GetUpgradeModuleSubtitle(IndustryUpgradeModule.OutputStorage), _selectedUpgradeIndex == 2);
-                DrawUpgradeModuleButton(3, "OMEGA TANK MODULE", GetUpgradeModuleSubtitle(IndustryUpgradeModule.OmegaStorage), _selectedUpgradeIndex == 3);
-                DrawUpgradeModuleButton(4, "BACK TO OPERATIONS", "Return to load/unload controls", _selectedUpgradeIndex == 4);
+                for (int i = 0; i < _upgradeModuleButtons.Count; i++)
+                {
+                    if (i < availableModules.Count)
+                    {
+                        var module = availableModules[i];
+                        DrawUpgradeModuleButton(
+                            i,
+                            GetUpgradeModuleTitle(module),
+                            GetUpgradeModuleSubtitle(module),
+                            _selectedUpgradeIndex == i);
+                    }
+                    else if (i == availableModules.Count)
+                    {
+                        DrawUpgradeModuleButton(
+                            i,
+                            "BACK TO OPERATIONS",
+                            "Return to load/unload controls",
+                            _selectedUpgradeIndex == i);
+                    }
+                    else
+                    {
+                        _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
+                    }
+                }
 
                 DrawText(
                     "Arrow Up/Down to navigate | Enter to buy | Backspace or Esc to return",
@@ -734,6 +761,64 @@ namespace IndustryLogisticV.UI
             }
 
             return string.Format("Lv.{0} -> ${1:0} | Press Enter to purchase", level, cost);
+        }
+
+        private int GetUpgradeSelectionCount()
+        {
+            return Math.Max(1, GetAvailableUpgradeModules().Count + 1);
+        }
+
+        private List<IndustryUpgradeModule> GetAvailableUpgradeModules()
+        {
+            var modules = new List<IndustryUpgradeModule>();
+            if (_industry == null)
+            {
+                return modules;
+            }
+
+            var candidates = new[]
+            {
+                IndustryUpgradeModule.Production,
+                IndustryUpgradeModule.InputStorage,
+                IndustryUpgradeModule.OutputStorage,
+                IndustryUpgradeModule.OmegaStorage,
+            };
+
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                var module = candidates[i];
+                if (_industry.GetUpgradeCost(module) > 0f)
+                {
+                    modules.Add(module);
+                }
+            }
+
+            return modules;
+        }
+
+        private static string GetUpgradeModuleTitle(IndustryUpgradeModule module)
+        {
+            if (module == IndustryUpgradeModule.Production)
+            {
+                return "PRODUCTION MODULE";
+            }
+
+            if (module == IndustryUpgradeModule.InputStorage)
+            {
+                return "INPUT STORAGE MODULE";
+            }
+
+            if (module == IndustryUpgradeModule.OutputStorage)
+            {
+                return "OUTPUT STORAGE MODULE";
+            }
+
+            if (module == IndustryUpgradeModule.OmegaStorage)
+            {
+                return "OMEGA TANK MODULE";
+            }
+
+            return "MODULE";
         }
 
         private string GetLoadOptionSubtitle(string commodity)
