@@ -5,6 +5,22 @@ namespace IndustryLogisticV.Systems
 {
     public sealed class GlobalMarketManager
     {
+        private static readonly Dictionary<string, float> BasePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Coal", 300f },
+            { "Ore", 380f },
+            { "Oil", 450f },
+            { "Plastic", 900f },
+            { "Fuel", 750f },
+            { "Metal", 1200f },
+            { "Alloy", 1500f },
+            { "Electronic", 2600f },
+            { "TV", 6500f },
+            { "Computer", 8200f },
+            { "Omega", 12000f },
+            { "Recyclable", 500f },
+        };
+
         private readonly Dictionary<string, float> _basePrices;
         private int _nextScarcityIncreaseAtMs;
 
@@ -12,21 +28,7 @@ namespace IndustryLogisticV.Systems
         {
             PriceMultiplier = 1f;
             _nextScarcityIncreaseAtMs = startGameTimeMs + 600000;
-            _basePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "Coal", 300f },
-                { "Ore", 380f },
-                { "Oil", 450f },
-                { "Plastic", 900f },
-                { "Fuel", 750f },
-                { "Metal", 1200f },
-                { "Alloy", 1500f },
-                { "Electronic", 2600f },
-                { "TV", 6500f },
-                { "Computer", 8200f },
-                { "Omega", 12000f },
-                { "Recyclable", 500f },
-            };
+            _basePrices = new Dictionary<string, float>(BasePrices, StringComparer.OrdinalIgnoreCase);
         }
 
         public float PriceMultiplier { get; private set; }
