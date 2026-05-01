@@ -456,6 +456,48 @@ namespace IndustryLogisticV.Domain
             HasOmegaBoost = OmegaStorage > 0.0001f;
         }
 
+        public void ApplyPersistentState(
+            Dictionary<string, float> bufferStorage,
+            float omegaStorage,
+            float productionRate,
+            float inputCapacityTons,
+            float outputCapacityTons,
+            float omegaCapacityTons,
+            int productionModuleLevel,
+            int inputStorageModuleLevel,
+            int outputStorageModuleLevel,
+            int omegaStorageModuleLevel)
+        {
+            if (bufferStorage != null)
+            {
+                foreach (var pair in bufferStorage)
+                {
+                    var commodity = CommodityCatalog.Normalize(pair.Key);
+                    if (!BufferStorage.ContainsKey(commodity))
+                    {
+                        continue;
+                    }
+
+                    BufferStorage[commodity] = Math.Max(0f, pair.Value);
+                }
+            }
+
+            ProductionRate = Math.Max(1f, productionRate);
+            InputCapacityTons = Math.Max(1f, inputCapacityTons);
+            OutputCapacityTons = Math.Max(1f, outputCapacityTons);
+            OmegaCapacityTons = Math.Max(1f, omegaCapacityTons);
+
+            ProductionModuleLevel = Math.Max(0, productionModuleLevel);
+            InputStorageModuleLevel = Math.Max(0, inputStorageModuleLevel);
+            OutputStorageModuleLevel = Math.Max(0, outputStorageModuleLevel);
+            OmegaStorageModuleLevel = Math.Max(0, omegaStorageModuleLevel);
+
+            OmegaStorage = Math.Max(0f, omegaStorage);
+            ClampBuffersToCapacity();
+            LastUtilizationPercent = 0f;
+            CurrentOutputPerHourTons = 0f;
+        }
+
         private float GetMaxCyclesFromOutputCapacity(ProductionRecipe recipe)
         {
             if (recipe.OutputsTons.Count == 0)

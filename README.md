@@ -23,7 +23,7 @@ Build profit by moving commodities through the logistics network:
 
 ## 3. Default Controls
 
-- `F7`: Open Game Mod Control menu (Activate On/Off, mode, difficulty)
+- `F7`: Open Game Mod Control menu (Activate, Industry persistence, mode, difficulty)
 - `E`: Interact with office/industry terminal
 - `E` (GateInteract): Open nearby gates/barriers
 - `F8`: Dashboard overview
@@ -110,3 +110,14 @@ Focus early upgrades on bottleneck processors (Refinery, Smelting, Processor, Co
 - Keep an eye on `F8` to avoid delivering to full destinations.
 - Use `F6` when near an industry to inspect local stock and omega values.
 - Keep mod mechanics **On** in F7, otherwise production/interaction systems stay disabled.
+
+## 10. Industry Persistence
+
+Industry persistence lets your industry values continue between sessions.
+
+- Open `F7` and set **Industry persistence** to **On**.
+- When you log off / the script unloads, industry state is saved automatically.
+- On next session, saved values are loaded automatically.
+- This includes important industry progression values such as stock levels, omega storage, capacities, production rate, and upgrade levels.
+
+If you set Industry persistence to Off, no save is written on logout.

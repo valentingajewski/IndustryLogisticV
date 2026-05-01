@@ -36,9 +36,12 @@ namespace IndustryLogisticV
             "Popular St",
             "Marina Dr",
             "Sandy Shores Marina Drive",
+            "El Rancho Blvd",
         };
 
         private readonly ModConfig _config;
+        private readonly string _configPath;
+        private readonly string _industryStatePath;
         private readonly ControlBindings _controls;
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
@@ -95,14 +98,16 @@ namespace IndustryLogisticV
         private bool _showDashboard;
         private bool _showContext;
         private bool _modMechanicsEnabled;
+        private bool _industryPersistenceEnabled;
         private bool _vehicleFuelDifficultyEnabled;
 
         private PendingTransfer _pendingTransfer;
 
         public IndustryLogisticVScript()
         {
-            var configPath = ResolveConfigPath();
-            _config = ModConfig.Load(configPath);
+            _configPath = ResolveConfigPath();
+            _industryStatePath = ResolveIndustryStatePath(_configPath);
+            _config = ModConfig.Load(_configPath);
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
@@ -166,7 +171,13 @@ namespace IndustryLogisticV
             _industryTransferMode = IndustryTransferMode.Load;
             _profit = 20000f;
             _modMechanicsEnabled = false;
+            _industryPersistenceEnabled = true;
             _vehicleFuelDifficultyEnabled = false;
+
+            if (_industryPersistenceEnabled)
+            {
+                TryLoadIndustryPersistence(false);
+            }
 
             RefreshFilteredVehicles();
             RebuildOfficeMenuItems();
@@ -1075,6 +1086,13 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = CurrentIndustryPersistenceCaption,
+                    OnLeft = ToggleIndustryPersistenceFromMenu,
+                    OnRight = ToggleIndustryPersistenceFromMenu,
+                    OnActivate = ToggleIndustryPersistenceFromMenu,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = CurrentGameModeCaption,
                     OnLeft = () => ChangeGameModMode(-1),
                     OnRight = () => ChangeGameModMode(1),
@@ -1138,6 +1156,13 @@ namespace IndustryLogisticV
             return string.Format("Game mod: < {0} >", _gameModMode == GameModMode.Fun ? "Fun" : "Career");
         }
 
+        private string CurrentIndustryPersistenceCaption()
+        {
+            return _industryPersistenceEnabled
+                ? "Industry persistence: [~g~On~s~] [Off]"
+                : "Industry persistence: [On] [~r~Off~s~]";
+        }
+
         private string CurrentVehicleFuelSettingCaption()
         {
             return string.Format("Vehicle fuel: < {0} >", _vehicleFuelDifficultyEnabled ? "Enable" : "Disable");
@@ -1158,6 +1183,66 @@ namespace IndustryLogisticV
         private void ToggleVehicleFuelSetting()
         {
             _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
+        }
+
+        private void ToggleIndustryPersistenceFromMenu()
+        {
+            _industryPersistenceEnabled = !_industryPersistenceEnabled;
+            if (_industryPersistenceEnabled)
+            {
+                var restored = TryLoadIndustryPersistence(true);
+                if (!restored)
+                {
+                    ShowStatus("Industry persistence enabled.");
+                }
+            }
+            else
+            {
+                ShowStatus("Industry persistence disabled.");
+            }
+
+            RebuildModControlMenuItems();
+        }
+
+        private bool TryLoadIndustryPersistence(bool notifyWhenNoData)
+        {
+            try
+            {
+                var restoredCount = IndustryPersistenceManager.Load(_industryStatePath, _industryManager.Industries);
+                if (restoredCount > 0)
+                {
+                    ShowStatus(string.Format("Loaded saved industry state for {0} nodes.", restoredCount), 4000);
+                    return true;
+                }
+
+                if (notifyWhenNoData)
+                {
+                    ShowStatus("No saved industry state found yet.");
+                }
+            }
+            catch (Exception)
+            {
+                ShowStatus("Failed to load industry persistence data.");
+            }
+
+            return false;
+        }
+
+        private void TrySaveIndustryPersistence()
+        {
+            if (!_industryPersistenceEnabled)
+            {
+                return;
+            }
+
+            try
+            {
+                IndustryPersistenceManager.Save(_industryStatePath, _industryManager.Industries);
+            }
+            catch (Exception)
+            {
+                ShowStatus("Failed to save industry persistence data.");
+            }
         }
 
         private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)
@@ -2847,6 +2932,20 @@ namespace IndustryLogisticV
             return candidates[0];
         }
 
+        private string ResolveIndustryStatePath(string configPath)
+        {
+            var configDirectory = string.IsNullOrWhiteSpace(configPath)
+                ? string.Empty
+                : Path.GetDirectoryName(configPath) ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(configDirectory))
+            {
+                return Path.Combine(configDirectory, "IndustryLogisticV.state.ini");
+            }
+
+            return Path.Combine(BaseDirectory, "IndustryLogisticV.state.ini");
+        }
+
         private void ShowStatus(string message, int durationMs = 3000)
         {
             var prefixed = PrefixMessage(message);
@@ -3205,6 +3304,7 @@ namespace IndustryLogisticV
 
         private void OnAborted(object sender, EventArgs e)
         {
+            TrySaveIndustryPersistence();
             DestroyMapBlips();
             _pendingTransfer = null;
             _barrierClosedHeadings.Clear();
