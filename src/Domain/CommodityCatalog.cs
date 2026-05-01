@@ -1,9 +1,22 @@
 using System;
+using System.Collections.Generic;
 
 namespace IndustryLogisticV.Domain
 {
     public static class CommodityCatalog
     {
+        private static readonly Dictionary<string, VehicleCargoType> CargoTypesByCommodity = new Dictionary<string, VehicleCargoType>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Oil", VehicleCargoType.Fluid },
+            { "Fuel", VehicleCargoType.Fluid },
+            { "Omega", VehicleCargoType.Fluid },
+            { "TV", VehicleCargoType.Crate },
+            { "Computer", VehicleCargoType.Crate },
+            { "Electronic", VehicleCargoType.Crate },
+            { "Alloy", VehicleCargoType.Solid },
+            { "Metal", VehicleCargoType.Solid },
+        };
+
         public static string Normalize(string commodity)
         {
             return (commodity ?? string.Empty).Trim();
@@ -12,24 +25,10 @@ namespace IndustryLogisticV.Domain
         public static VehicleCargoType GetCargoTypeForCommodity(string commodity)
         {
             var normalized = Normalize(commodity);
-            if (normalized.Equals("Oil", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Fuel", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            VehicleCargoType cargoType;
+            if (CargoTypesByCommodity.TryGetValue(normalized, out cargoType))
             {
-                return VehicleCargoType.Fluid;
-            }
-
-            if (normalized.Equals("TV", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Computer", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Electronic", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Crate;
-            }
-
-            if (normalized.Equals("Alloy", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Metal", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Solid;
+                return cargoType;
             }
 
             return VehicleCargoType.Loose;
