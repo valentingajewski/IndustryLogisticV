@@ -10,6 +10,7 @@ namespace IndustryLogisticV.Domain
             VehicleHandle = vehicleHandle;
             CargoType = cargoType;
             CapacityTons = capacityTons;
+            CargoCondition = 1f;
             AttachedProps = new List<Prop>();
         }
 
@@ -18,6 +19,10 @@ namespace IndustryLogisticV.Domain
         public float CapacityTons { get; set; }
         public string Commodity { get; set; }
         public float WeightTons { get; set; }
+        public float CargoCondition { get; set; }
+        public float TotalLostTons { get; set; }
+        public float LastTrackedRigHealth { get; set; }
+        public float LastTrackedRigSpeed { get; set; }
         public List<Prop> AttachedProps { get; }
 
         public bool IsEmpty
@@ -37,10 +42,33 @@ namespace IndustryLogisticV.Domain
             }
         }
 
+        public float FillRatio
+        {
+            get
+            {
+                if (CapacityTons <= 0.0001f)
+                {
+                    return 0f;
+                }
+
+                var ratio = WeightTons / CapacityTons;
+                if (ratio < 0f)
+                {
+                    return 0f;
+                }
+
+                return ratio > 1f ? 1f : ratio;
+            }
+        }
+
         public void ClearCargo()
         {
             Commodity = string.Empty;
             WeightTons = 0f;
+            CargoCondition = 1f;
+            TotalLostTons = 0f;
+            LastTrackedRigHealth = 0f;
+            LastTrackedRigSpeed = 0f;
         }
     }
 }

@@ -20,6 +20,7 @@ Build profit by moving commodities through the logistics network:
 5. Pick a cargo filter + vehicle and spawn it.
 6. Drive to an industry marker and press `E` to open the industry tablet.
 7. Load cargo, deliver it to the next step in the chain, unload, repeat.
+8. While carrying cargo, watch the minimap-side cargo overview: collisions reduce cargo condition and can spill part of the load.
 
 ## 3. Default Controls
 
@@ -107,6 +108,8 @@ Focus early upgrades on bottleneck processors (Refinery, Smelting, Processor, Co
 - Start with short routes first (one producer -> one processor).
 - Use `F8` to inspect industry storage, omega values, and gas station fill levels.
 - Use `F6` when near an industry to inspect local stock and omega values.
+- The cargo overview HUD appears next to the minimap whenever your truck or trailer carries a resource.
+- Heavy vehicle damage reduces cargo condition and can destroy part of the load, so rough driving directly lowers final payout.
 - Keep mod mechanics **On** in F7, otherwise production/interaction systems stay disabled.
 
 ## 10. Industry Persistence
