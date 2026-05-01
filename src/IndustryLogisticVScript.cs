@@ -25,6 +25,10 @@ namespace IndustryLogisticV
         private const float OfficeInteractionDistance = 3.8f;
         private const float BarrierInteractDistance = 8f;
         private const float BarrierOpenAngleDegrees = 82f;
+        private const float CargoRigMaxBodyHealth = 1000f;
+        private const float CargoDamageGraceHealth = 40f;
+        private const float CargoConditionLossPerDamageRatio = 0.75f;
+        private const float CargoLossPerDamageRatio = 0.35f;
         private static readonly HashSet<string> PreserveConfiguredZMarkerNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Morningwood",
@@ -248,6 +252,7 @@ namespace IndustryLogisticV
             UpdateTransfer(gameTime);
             DrawOpenMenus();
             DrawIndustryTablet(player);
+            UpdateCargoOverviewAndIntegrity(player, gameTime);
 
             if (_showDashboard)
             {
@@ -1028,6 +1033,368 @@ namespace IndustryLogisticV
             }
 
             DrawPanel(lines, 0.73f, 0.08f, 0.245f, Color.FromArgb(196, 10, 15, 24), Color.FromArgb(235, 219, 165, 57));
+        }
+
+        private void UpdateCargoOverviewAndIntegrity(Ped player, int now)
+        {
+            Vehicle cargoVehicle;
+            Vehicle driverVehicle;
+            VehicleCargoState cargoState;
+            if (!TryGetActiveCargoContext(player, out cargoVehicle, out driverVehicle, out cargoState))
+            {
+                return;
+            }
+
+            UpdateCargoDamageAndLoss(cargoVehicle, driverVehicle, cargoState, now);
+            if (cargoState.IsEmpty)
+            {
+                return;
+            }
+
+            DrawCargoOverview(cargoState);
+        }
+
+        private bool TryGetActiveCargoContext(Ped player, out Vehicle cargoVehicle, out Vehicle driverVehicle, out VehicleCargoState cargoState)
+        {
+            cargoVehicle = null;
+            driverVehicle = null;
+            cargoState = null;
+
+            if (player == null || !player.Exists())
+            {
+                return false;
+            }
+
+            cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                return false;
+            }
+
+            cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            return cargoState != null && !cargoState.IsEmpty;
+        }
+
+        private void UpdateCargoDamageAndLoss(Vehicle cargoVehicle, Vehicle driverVehicle, VehicleCargoState cargoState, int now)
+        {
+            if (cargoVehicle == null || !cargoVehicle.Exists() || cargoState == null || cargoState.IsEmpty)
+            {
+                return;
+            }
+
+            var currentRigHealth = GetActiveRigBodyHealth(driverVehicle, cargoVehicle);
+            var currentRigSpeed = GetActiveRigSpeed(driverVehicle, cargoVehicle);
+            if (currentRigHealth <= 0.001f)
+            {
+                return;
+            }
+
+            if (cargoState.LastTrackedRigHealth <= 0.001f)
+            {
+                cargoState.LastTrackedRigHealth = currentRigHealth;
+                cargoState.LastTrackedRigSpeed = currentRigSpeed;
+                return;
+            }
+
+            var previousEffectiveDamage = GetEffectiveCargoDamage(cargoState.LastTrackedRigHealth);
+            var currentEffectiveDamage = GetEffectiveCargoDamage(currentRigHealth);
+            var previousRigSpeed = cargoState.LastTrackedRigSpeed;
+            cargoState.LastTrackedRigHealth = currentRigHealth;
+            cargoState.LastTrackedRigSpeed = currentRigSpeed;
+
+            var damageDelta = currentEffectiveDamage - previousEffectiveDamage;
+            var damageRatioDelta = damageDelta <= 0.05f
+                ? 0f
+                : Clamp01(damageDelta / CargoRigMaxBodyHealth);
+
+            var collisionDamageRatio = 0f;
+            if (HasRigCollision(driverVehicle, cargoVehicle) && previousRigSpeed > 0.001f)
+            {
+                var speedDrop = Math.Max(0f, previousRigSpeed - currentRigSpeed);
+                if (speedDrop >= 1.1f)
+                {
+                    collisionDamageRatio = Clamp01(speedDrop / 70f);
+                }
+            }
+
+            damageRatioDelta = Math.Max(damageRatioDelta, collisionDamageRatio);
+            if (damageRatioDelta <= 0.0001f)
+            {
+                return;
+            }
+
+            cargoState.CargoCondition = Math.Max(0f, cargoState.CargoCondition - (damageRatioDelta * CargoConditionLossPerDamageRatio));
+
+            var cargoLossFactor = GetCargoLossFactor(cargoState.CargoType);
+            var lostTons = Math.Min(
+                cargoState.WeightTons,
+                cargoState.WeightTons * damageRatioDelta * CargoLossPerDamageRatio * cargoLossFactor);
+
+            if (lostTons <= 0.0001f)
+            {
+                return;
+            }
+
+            cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - lostTons);
+            cargoState.TotalLostTons += lostTons;
+
+            if (cargoState.WeightTons <= 0.001f)
+            {
+                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                return;
+            }
+
+            if (cargoState.CargoType == VehicleCargoType.Crate || cargoState.CargoType == VehicleCargoType.Solid)
+            {
+                _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+            }
+        }
+
+        private void DrawCargoOverview(VehicleCargoState cargoState)
+        {
+            if (cargoState == null || cargoState.IsEmpty)
+            {
+                return;
+            }
+
+            var resolution = Screen.MainWindowResolution;
+            var x = resolution.Width * 0.18f;
+            var y = resolution.Height * 0.845f;
+            var width = resolution.Width * 0.1075f;
+            var height = resolution.Height * 0.085f;
+            var quantityRatio = cargoState.FillRatio;
+            var conditionRatio = Clamp01(cargoState.CargoCondition);
+            var quantityColor = ResolveCargoOverviewAccent(cargoState.CargoType);
+            var conditionColor = ResolveCargoConditionColor(conditionRatio);
+
+            DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(92, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, 4f, quantityColor);
+
+            new TextElement(
+                    "CARGO",
+                    ToScriptTextCoords(resolution, x + 8f, y + 5f),
+                    0.24f,
+                    Color.FromArgb(248, 239, 247, 255),
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left,
+                    true,
+                    false)
+                .Draw();
+
+            new TextElement(
+                    cargoState.Commodity,
+                    ToScriptTextCoords(resolution, x + 8f, y + 17f),
+                    0.205f,
+                    Color.FromArgb(232, 220, 229, 239),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    true,
+                    false)
+                .Draw();
+
+            new TextElement(
+                    string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons),
+                    ToScriptTextCoords(resolution, x + 8f, y + 29f),
+                    0.18f,
+                    Color.FromArgb(224, 214, 223, 233),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    true,
+                    false)
+                .Draw();
+
+            DrawCompactLoadingBar(resolution, x + 8f, y + 39f, width - 16f, 5f, quantityRatio, quantityColor);
+
+            new TextElement(
+                    string.Format("Cond {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f),
+                    ToScriptTextCoords(resolution, x + 8f, y + 48f),
+                    0.18f,
+                    conditionColor,
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    true,
+                    false)
+                .Draw();
+
+            DrawCompactLoadingBar(resolution, x + 8f, y + 58f, width - 16f, 5f, conditionRatio, conditionColor);
+
+        }
+
+        private static float GetActiveRigBodyHealth(Vehicle driverVehicle, Vehicle cargoVehicle)
+        {
+            var best = CargoRigMaxBodyHealth;
+            var found = false;
+
+            if (driverVehicle != null && driverVehicle.Exists())
+            {
+                best = Math.Min(best, ClampVehicleBodyHealth(driverVehicle.BodyHealth));
+                found = true;
+            }
+
+            if (cargoVehicle != null && cargoVehicle.Exists())
+            {
+                best = Math.Min(best, ClampVehicleBodyHealth(cargoVehicle.BodyHealth));
+                found = true;
+            }
+
+            return found ? best : 0f;
+        }
+
+        private static float GetActiveRigSpeed(Vehicle driverVehicle, Vehicle cargoVehicle)
+        {
+            var best = 0f;
+
+            if (driverVehicle != null && driverVehicle.Exists())
+            {
+                best = Math.Max(best, GetEntitySpeed(driverVehicle));
+            }
+
+            if (cargoVehicle != null && cargoVehicle.Exists())
+            {
+                best = Math.Max(best, GetEntitySpeed(cargoVehicle));
+            }
+
+            return best;
+        }
+
+        private static bool HasRigCollision(Vehicle driverVehicle, Vehicle cargoVehicle)
+        {
+            return HasEntityCollision(driverVehicle)
+                || HasEntityCollision(cargoVehicle);
+        }
+
+        private static bool HasEntityCollision(Entity entity)
+        {
+            if (entity == null || !entity.Exists())
+            {
+                return false;
+            }
+
+            try
+            {
+                return Function.Call<bool>(Hash.HAS_ENTITY_COLLIDED_WITH_ANYTHING, entity.Handle);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static float GetEntitySpeed(Entity entity)
+        {
+            if (entity == null || !entity.Exists())
+            {
+                return 0f;
+            }
+
+            try
+            {
+                return Math.Max(0f, Function.Call<float>(Hash.GET_ENTITY_SPEED, entity.Handle));
+            }
+            catch
+            {
+                return 0f;
+            }
+        }
+
+        private static float GetEffectiveCargoDamage(float rigBodyHealth)
+        {
+            return Math.Max(0f, CargoRigMaxBodyHealth - ClampVehicleBodyHealth(rigBodyHealth) - CargoDamageGraceHealth);
+        }
+
+        private static float ClampVehicleBodyHealth(float bodyHealth)
+        {
+            if (bodyHealth <= 0f)
+            {
+                return 0f;
+            }
+
+            if (bodyHealth >= CargoRigMaxBodyHealth)
+            {
+                return CargoRigMaxBodyHealth;
+            }
+
+            return bodyHealth;
+        }
+
+        private static float GetCargoLossFactor(VehicleCargoType cargoType)
+        {
+            switch (cargoType)
+            {
+                case VehicleCargoType.Fluid:
+                    return 1.25f;
+                case VehicleCargoType.Loose:
+                    return 0.95f;
+                case VehicleCargoType.Crate:
+                    return 0.6f;
+                case VehicleCargoType.Solid:
+                    return 0.45f;
+                default:
+                    return 0.8f;
+            }
+        }
+
+        private static string GetCargoConditionLabel(float conditionRatio)
+        {
+            if (conditionRatio >= 0.9f)
+            {
+                return "Excellent";
+            }
+
+            if (conditionRatio >= 0.75f)
+            {
+                return "Good";
+            }
+
+            if (conditionRatio >= 0.55f)
+            {
+                return "Worn";
+            }
+
+            if (conditionRatio >= 0.35f)
+            {
+                return "Poor";
+            }
+
+            return "Critical";
+        }
+
+        private static Color ResolveCargoConditionColor(float conditionRatio)
+        {
+            if (conditionRatio >= 0.75f)
+            {
+                return Color.FromArgb(228, 108, 196, 142);
+            }
+
+            if (conditionRatio >= 0.5f)
+            {
+                return Color.FromArgb(228, 214, 188, 96);
+            }
+
+            if (conditionRatio >= 0.3f)
+            {
+                return Color.FromArgb(228, 226, 148, 82);
+            }
+
+            return Color.FromArgb(228, 214, 92, 92);
+        }
+
+        private static Color ResolveCargoOverviewAccent(VehicleCargoType cargoType)
+        {
+            switch (cargoType)
+            {
+                case VehicleCargoType.Fluid:
+                    return Color.FromArgb(228, 88, 150, 214);
+                case VehicleCargoType.Loose:
+                    return Color.FromArgb(228, 168, 144, 92);
+                case VehicleCargoType.Crate:
+                    return Color.FromArgb(228, 118, 188, 138);
+                case VehicleCargoType.Solid:
+                    return Color.FromArgb(228, 188, 176, 98);
+                default:
+                    return Color.FromArgb(228, 138, 154, 196);
+            }
         }
 
         private void OpenOfficeMenu()
@@ -1887,6 +2254,9 @@ namespace IndustryLogisticV
                         cargoState.Commodity = selectedProduct;
                         cargoState.WeightTons += loaded;
                         cargoState.CargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+                        cargoState.CargoCondition = 1f;
+                        cargoState.TotalLostTons = 0f;
+                        cargoState.LastTrackedRigHealth = 0f;
                         _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
                         ShowStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
                     }
@@ -1956,7 +2326,9 @@ namespace IndustryLogisticV
                             return;
                         }
 
-                        var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                        var baseRevenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                        var conditionRatio = Clamp01(cargoState.CargoCondition);
+                        var revenue = baseRevenue * conditionRatio;
                         _profit += revenue;
 
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
@@ -1969,7 +2341,12 @@ namespace IndustryLogisticV
                             _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
                         }
 
-                        ShowStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
+                        ShowStatus(string.Format(
+                            "Unloaded {0:0.0}t {1}. Profit +${2:0} | Condition {3:0}%",
+                            accepted,
+                            commodity,
+                            revenue,
+                            conditionRatio * 100f));
                     }
                     finally
                     {
