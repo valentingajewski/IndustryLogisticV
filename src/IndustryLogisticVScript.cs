@@ -955,6 +955,15 @@ namespace IndustryLogisticV
             var conditionRatio = Clamp01(cargoState.CargoCondition);
             var quantityColor = ResolveCargoOverviewAccent(cargoState.CargoType);
             var conditionColor = ResolveCargoConditionColor(conditionRatio);
+                var contentX = x + 8f;
+                var titleY = y + 5f;
+                var commodityY = y + (height * 0.22f);
+                var quantityTextY = y + (height * 0.43f);
+                var quantityBarY = y + (height * 0.60f);
+                var conditionTextY = y + (height * 0.72f);
+                var conditionBarY = y + (height * 0.86f);
+                var barWidth = width - 16f;
+                var barHeight = Math.Max(4f, height * 0.08f);
 
             DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(92, 0, 0, 0));
             DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
@@ -962,8 +971,8 @@ namespace IndustryLogisticV
 
             new TextElement(
                     "CARGO",
-                    ToScriptTextCoords(resolution, x + 8f, y + 5f),
-                    0.24f,
+                    ToScriptTextCoords(resolution, contentX, titleY),
+                    0.30f,
                     Color.FromArgb(248, 239, 247, 255),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
@@ -973,8 +982,8 @@ namespace IndustryLogisticV
 
             new TextElement(
                     cargoState.Commodity,
-                    ToScriptTextCoords(resolution, x + 8f, y + 17f),
-                    0.205f,
+                    ToScriptTextCoords(resolution, contentX, commodityY),
+                    0.19f,
                     Color.FromArgb(232, 220, 229, 239),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
@@ -984,7 +993,7 @@ namespace IndustryLogisticV
 
             new TextElement(
                     string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons),
-                    ToScriptTextCoords(resolution, x + 8f, y + 29f),
+                    ToScriptTextCoords(resolution, contentX, quantityTextY),
                     0.18f,
                     Color.FromArgb(224, 214, 223, 233),
                     GTA.UI.Font.ChaletLondon,
@@ -993,11 +1002,11 @@ namespace IndustryLogisticV
                     false)
                 .Draw();
 
-            DrawCompactLoadingBar(resolution, x + 8f, y + 39f, width - 16f, 5f, quantityRatio, quantityColor);
+            DrawCompactLoadingBar(resolution, contentX, quantityBarY, barWidth, barHeight, quantityRatio, quantityColor);
 
             new TextElement(
                     string.Format("Cond {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f),
-                    ToScriptTextCoords(resolution, x + 8f, y + 48f),
+                    ToScriptTextCoords(resolution, contentX, conditionTextY),
                     0.18f,
                     conditionColor,
                     GTA.UI.Font.ChaletLondon,
@@ -1006,8 +1015,23 @@ namespace IndustryLogisticV
                     false)
                 .Draw();
 
-            DrawCompactLoadingBar(resolution, x + 8f, y + 58f, width - 16f, 5f, conditionRatio, conditionColor);
+            DrawCompactLoadingBar(resolution, contentX, conditionBarY, barWidth, barHeight, conditionRatio, conditionColor);
 
+        }
+
+        private static void DrawCompactLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color fillColor)
+        {
+            ratio = Clamp01(ratio);
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(165, 6, 10, 15));
+
+            var innerHeight = Math.Max(2f, height - 2f);
+            var innerWidth = Math.Max(0f, (width - 2f) * ratio);
+            if (innerWidth <= 0f)
+            {
+                return;
+            }
+
+            DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, innerWidth, innerHeight, fillColor);
         }
 
         private static float GetActiveRigBodyHealth(Vehicle driverVehicle, Vehicle cargoVehicle)
