@@ -19,6 +19,12 @@ namespace IndustryLogisticV
 {
     public sealed class IndustryLogisticVScript : Script
     {
+        private enum OverviewDetailReturnMenu
+        {
+            Industry = 0,
+            Store = 1,
+        }
+
         private const string MessagePrefix = "~y~[IndustryLogisticV]~s~ ";
         private const float IndustryMarkerDrawDistance = 180f;
         private const float IndustryInteractionDistance = 4.8f;
@@ -58,6 +64,7 @@ namespace IndustryLogisticV
         private readonly LemonMenu _difficultyMenu;
         private readonly SimpleMenu _networkOverviewMenu;
         private readonly SimpleMenu _industryOverviewMenu;
+        private readonly SimpleMenu _storeOverviewMenu;
         private readonly SimpleMenu _industryDetailMenu;
         private readonly SimpleMenu _gasStationOverviewMenu;
         private readonly IndustryTabletUi _industryTablet;
@@ -84,6 +91,7 @@ namespace IndustryLogisticV
         private Industry _nearestIndustry;
         private Industry _menuIndustry;
         private Industry _inspectedIndustry;
+        private OverviewDetailReturnMenu _industryDetailReturnMenu;
 
         private int _workerIndex;
         private int _industryDetailStatsScrollIndex;
@@ -105,6 +113,7 @@ namespace IndustryLogisticV
         private bool _showContext;
         private bool _modMechanicsEnabled;
         private bool _industryPersistenceEnabled;
+        private bool _cargoDamageDifficultyEnabled;
         private bool _vehicleFuelDifficultyEnabled;
 
         private PendingTransfer _pendingTransfer;
@@ -147,7 +156,7 @@ namespace IndustryLogisticV
             };
             _networkOverviewMenu = new SimpleMenu("Network Overview")
             {
-                Subtitle = "Inspect industries and gas stations",
+                Subtitle = "Inspect industries, stores, and gas stations",
                 Theme = SimpleMenuTheme.Tablet,
                 TabletWidthScale = 0.72f,
                 TabletAlignRight = false,
@@ -162,6 +171,19 @@ namespace IndustryLogisticV
                 Subtitle = "Select an industry to inspect storage and production",
                 Theme = SimpleMenuTheme.Tablet,
                 TabletWidthScale = 0.98f,
+                TabletAlignRight = false,
+                TabletCaptionScale = 0.46f,
+                TabletDetailScale = 0.285f,
+                TabletCaptionOffsetY = 18f,
+                TabletDetailOffsetY = 49f,
+                TabletMinRowHeight = 68f,
+                MaxVisibleItems = 6,
+            };
+            _storeOverviewMenu = new SimpleMenu("Stores Overview")
+            {
+                Subtitle = "Select a store to inspect storage and demand",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.92f,
                 TabletAlignRight = false,
                 TabletCaptionScale = 0.46f,
                 TabletDetailScale = 0.285f,
@@ -216,6 +238,7 @@ namespace IndustryLogisticV
             _profit = 20000f;
             _modMechanicsEnabled = false;
             _industryPersistenceEnabled = true;
+            _cargoDamageDifficultyEnabled = true;
             _vehicleFuelDifficultyEnabled = false;
 
             if (_industryPersistenceEnabled)
@@ -247,6 +270,7 @@ namespace IndustryLogisticV
                     || _difficultyMenu.IsOpen
                     || _networkOverviewMenu.IsOpen
                     || _industryOverviewMenu.IsOpen
+                    || _storeOverviewMenu.IsOpen
                     || _industryDetailMenu.IsOpen
                     || _gasStationOverviewMenu.IsOpen
                     || _industryTablet.IsOpen;
@@ -473,7 +497,7 @@ namespace IndustryLogisticV
             {
                 if (IsBackMenuKey(key) || key == _controls.MenuSelect)
                 {
-                    OpenIndustryOverviewMenu();
+                    ReopenOverviewMenuFromDetail();
                     return true;
                 }
 
@@ -501,6 +525,18 @@ namespace IndustryLogisticV
                 }
 
                 _industryOverviewMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_storeOverviewMenu.IsOpen)
+            {
+                if (IsBackMenuKey(key))
+                {
+                    OpenNetworkOverviewMenu();
+                    return true;
+                }
+
+                _storeOverviewMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -563,6 +599,12 @@ namespace IndustryLogisticV
             if (_industryOverviewMenu.IsOpen)
             {
                 _industryOverviewMenu.Draw();
+                return;
+            }
+
+            if (_storeOverviewMenu.IsOpen)
+            {
+                _storeOverviewMenu.Draw();
                 return;
             }
 
@@ -819,7 +861,15 @@ namespace IndustryLogisticV
                 return;
             }
 
-            UpdateCargoDamageAndLoss(cargoVehicle, driverVehicle, cargoState, now);
+            if (_cargoDamageDifficultyEnabled)
+            {
+                UpdateCargoDamageAndLoss(cargoVehicle, driverVehicle, cargoState, now);
+            }
+            else
+            {
+                SyncCargoDamageTracking(cargoVehicle, driverVehicle, cargoState);
+            }
+
             if (cargoState.IsEmpty)
             {
                 return;
@@ -847,6 +897,25 @@ namespace IndustryLogisticV
 
             cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
             return cargoState != null && !cargoState.IsEmpty;
+        }
+
+        private void SyncCargoDamageTracking(Vehicle cargoVehicle, Vehicle driverVehicle, VehicleCargoState cargoState)
+        {
+            if (cargoVehicle == null || !cargoVehicle.Exists() || cargoState == null || cargoState.IsEmpty)
+            {
+                return;
+            }
+
+            var currentRigHealth = GetActiveRigBodyHealth(driverVehicle, cargoVehicle);
+            if (currentRigHealth <= 0.001f)
+            {
+                cargoState.LastTrackedRigHealth = 0f;
+                cargoState.LastTrackedRigSpeed = 0f;
+                return;
+            }
+
+            cargoState.LastTrackedRigHealth = currentRigHealth;
+            cargoState.LastTrackedRigSpeed = GetActiveRigSpeed(driverVehicle, cargoVehicle);
         }
 
         private void UpdateCargoDamageAndLoss(Vehicle cargoVehicle, Vehicle driverVehicle, VehicleCargoState cargoState, int now)
@@ -1286,10 +1355,17 @@ namespace IndustryLogisticV
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = CurrentVehicleFuelSettingCaption,
-                    OnLeft = ToggleVehicleFuelSetting,
-                    OnRight = ToggleVehicleFuelSetting,
+                    CaptionFactory = () => "Vehicle fuel",
+                    DetailFactory = () => "Enable vehicle fuel usage for cargo operations.",
+                    CheckboxStateFactory = () => _vehicleFuelDifficultyEnabled,
                     OnActivate = ToggleVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Cargo damage",
+                    DetailFactory = () => "Enable cargo loss and condition damage from collisions.",
+                    CheckboxStateFactory = () => _cargoDamageDifficultyEnabled,
+                    OnActivate = ToggleCargoDamageSetting,
                 },
                 new OfficeMenuItem
                 {
@@ -1313,7 +1389,7 @@ namespace IndustryLogisticV
 
         private bool AnyOverviewMenuOpen
         {
-            get { return _networkOverviewMenu.IsOpen || _industryOverviewMenu.IsOpen || _industryDetailMenu.IsOpen || _gasStationOverviewMenu.IsOpen; }
+            get { return _networkOverviewMenu.IsOpen || _industryOverviewMenu.IsOpen || _storeOverviewMenu.IsOpen || _industryDetailMenu.IsOpen || _gasStationOverviewMenu.IsOpen; }
         }
 
         private void ToggleOverviewMenu()
@@ -1342,6 +1418,13 @@ namespace IndustryLogisticV
             _industryOverviewMenu.Open();
         }
 
+        private void OpenStoreOverviewMenu()
+        {
+            CloseOverviewMenus();
+            RebuildStoreOverviewMenuItems();
+            _storeOverviewMenu.Open();
+        }
+
         private void OpenGasStationOverviewMenu()
         {
             CloseOverviewMenus();
@@ -1351,21 +1434,40 @@ namespace IndustryLogisticV
 
         private void OpenIndustryDetailMenu(Industry industry)
         {
+            OpenIndustryDetailMenu(industry, OverviewDetailReturnMenu.Industry);
+        }
+
+        private void OpenIndustryDetailMenu(Industry industry, OverviewDetailReturnMenu returnMenu)
+        {
             if (industry == null)
             {
                 return;
             }
 
             _inspectedIndustry = industry;
+            _industryDetailReturnMenu = returnMenu;
             _industryDetailStatsScrollIndex = 0;
             CloseOverviewMenus();
             _industryDetailMenu.Open();
         }
 
+        private void ReopenOverviewMenuFromDetail()
+        {
+            switch (_industryDetailReturnMenu)
+            {
+                case OverviewDetailReturnMenu.Store:
+                    OpenStoreOverviewMenu();
+                    break;
+                default:
+                    OpenIndustryOverviewMenu();
+                    break;
+            }
+        }
+
         private void RebuildNetworkOverviewMenuItems()
         {
             _networkOverviewMenu.Title = "Network Overview";
-            _networkOverviewMenu.Subtitle = "Inspect industries and gas stations";
+            _networkOverviewMenu.Subtitle = "Inspect industries, stores, and gas stations";
             _networkOverviewMenu.SetItems(new[]
             {
                 new OfficeMenuItem
@@ -1375,6 +1477,14 @@ namespace IndustryLogisticV
                     IdleBackgroundColor = Color.FromArgb(170, 46, 66, 50),
                     SelectedBackgroundColor = Color.FromArgb(205, 85, 124, 94),
                     OnActivate = OpenIndustryOverviewMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "STORES OVERVIEW",
+                    DetailFactory = () => string.Format("{0} retail delivery locations", GetStoresForOverview().Count),
+                    IdleBackgroundColor = Color.FromArgb(170, 63, 58, 42),
+                    SelectedBackgroundColor = Color.FromArgb(206, 132, 120, 86),
+                    OnActivate = OpenStoreOverviewMenu,
                 },
                 new OfficeMenuItem
                 {
@@ -1431,6 +1541,42 @@ namespace IndustryLogisticV
             _industryOverviewMenu.SetItems(items);
         }
 
+        private void RebuildStoreOverviewMenuItems()
+        {
+            var stores = GetStoresForOverview();
+            var items = new List<OfficeMenuItem>();
+
+            for (int i = 0; i < stores.Count; i++)
+            {
+                var store = stores[i];
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => store.Name,
+                    DetailFactory = () => GetStoreOverviewDetail(store),
+                    OnActivate = () => OpenIndustryDetailMenu(store, OverviewDetailReturnMenu.Store),
+                });
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No stores available",
+                    DetailFactory = () => "No retail store delivery targets are currently configured.",
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = OpenNetworkOverviewMenu,
+            });
+
+            _storeOverviewMenu.Title = "Stores Overview";
+            _storeOverviewMenu.Subtitle = "Select a store to inspect storage and demand";
+            _storeOverviewMenu.SetItems(items);
+        }
+
         private void RebuildGasStationOverviewMenuItems()
         {
             var stations = GetGasStationsForOverview();
@@ -1469,7 +1615,15 @@ namespace IndustryLogisticV
         private List<Industry> GetIndustriesForOverview()
         {
             return _industryManager.Industries
-                .Where(x => x != null && !IsPetrolServiceStation(x))
+                .Where(x => x != null && !IsStoreLocation(x) && !IsPetrolServiceStation(x))
+                .OrderBy(x => x.Name)
+                .ToList();
+        }
+
+        private List<Industry> GetStoresForOverview()
+        {
+            return _industryManager.Industries
+                .Where(IsStoreLocation)
                 .OrderBy(x => x.Name)
                 .ToList();
         }
@@ -1503,6 +1657,18 @@ namespace IndustryLogisticV
             return detail;
         }
 
+        private string GetStoreOverviewDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            var storage = industry.GetInputStockTotal();
+            var fillPercent = Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
+            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillPercent);
+        }
+
         private string GetGasStationOverviewDetail(Industry industry)
         {
             if (industry == null)
@@ -1524,6 +1690,7 @@ namespace IndustryLogisticV
         {
             _networkOverviewMenu.Close();
             _industryOverviewMenu.Close();
+            _storeOverviewMenu.Close();
             _industryDetailMenu.Close();
             _gasStationOverviewMenu.Close();
         }
@@ -1543,11 +1710,6 @@ namespace IndustryLogisticV
             return string.Format("Industry persistence: {0}", _industryPersistenceEnabled ? "~g~On~s~" : "~r~Off~s~");
         }
 
-        private string CurrentVehicleFuelSettingCaption()
-        {
-            return string.Format("Vehicle fuel: {0}", _vehicleFuelDifficultyEnabled ? "~g~On~s~" : "~r~Off~s~");
-        }
-
         private void ToggleMechanicsFromMenu()
         {
             SetModMechanicsEnabled(!_modMechanicsEnabled, true);
@@ -1563,6 +1725,11 @@ namespace IndustryLogisticV
         private void ToggleVehicleFuelSetting()
         {
             _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
+        }
+
+        private void ToggleCargoDamageSetting()
+        {
+            _cargoDamageDifficultyEnabled = !_cargoDamageDifficultyEnabled;
         }
 
         private void ToggleIndustryPersistenceFromMenu()
@@ -3635,6 +3802,23 @@ namespace IndustryLogisticV
             }
 
             return industry.IsSink && industry.Inputs.Count == 1 && industry.Inputs.Contains("Fuel");
+        }
+
+        private static bool IsStoreLocation(Industry industry)
+        {
+            if (industry == null || !industry.IsSink || IsPetrolServiceStation(industry))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(industry.Id) && industry.Id.StartsWith("Store", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var name = industry.Name ?? string.Empty;
+            return name.IndexOf("Store", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Mall", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static float Clamp01(float value)
