@@ -292,13 +292,6 @@ namespace IndustryLogisticV.Config
                 ini.GetString("Controls", "MenuBack", "Backspace"),
                 controls.MenuBack);
 
-            controls.DashboardPageUp = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "DashboardPageUp", controls.DashboardPageUp.ToString()),
-                controls.DashboardPageUp);
-            controls.DashboardPageDown = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "DashboardPageDown", controls.DashboardPageDown.ToString()),
-                controls.DashboardPageDown);
-
             return controls;
         }
 

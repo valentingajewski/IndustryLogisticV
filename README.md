@@ -24,9 +24,9 @@ Build profit by moving commodities through the logistics network:
 ## 3. Default Controls
 
 - `F7`: Open Game Mod Control menu (Activate, Industry persistence, mode, difficulty)
+- `F8`: Open overview menu (industries and gas stations)
 - `E`: Interact with office/industry terminal
 - `E` (GateInteract): Open nearby gates/barriers
-- `F8`: Dashboard overview
 - `F6`: Context panel
 - Menu navigation: `Up/Down/Left/Right`, `Enter`, `Backspace`
 
@@ -68,8 +68,6 @@ Tip: if cargo type and vehicle type do not match, loading options will be limite
 - **Terminal**: accepts multiple commodities (bulk sink)
 - **Petrol Stations**: accept Fuel and continuously drain stock over time (repeat demand)
 
-Use `F8` dashboard to identify who needs what, and to monitor fill levels.
-
 ## 7. Industry Chain Examples
 
 ### Electronics Retail Chain
@@ -107,7 +105,7 @@ Focus early upgrades on bottleneck processors (Refinery, Smelting, Processor, Co
 ## 9. Practical Tips
 
 - Start with short routes first (one producer -> one processor).
-- Keep an eye on `F8` to avoid delivering to full destinations.
+- Use `F8` to inspect industry storage, omega values, and gas station fill levels.
 - Use `F6` when near an industry to inspect local stock and omega values.
 - Keep mod mechanics **On** in F7, otherwise production/interaction systems stay disabled.
 

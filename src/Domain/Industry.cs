@@ -456,6 +456,68 @@ namespace IndustryLogisticV.Domain
             HasOmegaBoost = OmegaStorage > 0.0001f;
         }
 
+        public string GetPrimaryConversionDescription()
+        {
+            if (_recipes.Count == 0)
+            {
+                return "No production recipe.";
+            }
+
+            var recipe = _recipes[0];
+            return string.Format(
+                "{0} -> {1} | {2:0.0} cyc/h",
+                FormatCommodityFlow(recipe.InputsTons, "Passive source"),
+                FormatCommodityFlow(recipe.OutputsTons, "No output"),
+                ProductionRate);
+        }
+
+        public string GetProductionWarning()
+        {
+            if (_recipes.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            ProductionRecipe blockingRecipe = null;
+            List<string> blockingInputs = null;
+
+            for (int i = 0; i < _recipes.Count; i++)
+            {
+                var recipe = _recipes[i];
+                if (recipe == null || GetMaxCyclesFromOutputCapacity(recipe) <= 0.0001f)
+                {
+                    continue;
+                }
+
+                var missingInputs = recipe.InputsTons
+                    .Where(x => x.Value > 0f && GetStock(x.Key) + 0.0001f < x.Value)
+                    .Select(x => CommodityCatalog.Normalize(x.Key))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (missingInputs.Count == 0)
+                {
+                    return string.Empty;
+                }
+
+                if (blockingRecipe == null || blockingInputs == null || missingInputs.Count < blockingInputs.Count)
+                {
+                    blockingRecipe = recipe;
+                    blockingInputs = missingInputs;
+                }
+            }
+
+            if (blockingRecipe == null || blockingInputs == null || blockingInputs.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            return string.Format(
+                "Missing {0} to produce {1}",
+                FormatCommodityNames(blockingInputs),
+                FormatCommodityNames(blockingRecipe.OutputsTons.Keys));
+        }
+
         public void ApplyPersistentState(
             Dictionary<string, float> bufferStorage,
             float omegaStorage,
@@ -524,6 +586,42 @@ namespace IndustryLogisticV.Domain
             }
 
             return max;
+        }
+
+        private static string FormatCommodityFlow(Dictionary<string, float> tonsByCommodity, string emptyLabel)
+        {
+            if (tonsByCommodity == null || tonsByCommodity.Count == 0)
+            {
+                return emptyLabel;
+            }
+
+            return string.Join(
+                " + ",
+                tonsByCommodity
+                    .OrderBy(x => CommodityCatalog.Normalize(x.Key))
+                    .Select(x => string.Format("{0:0.#} {1}", x.Value, CommodityCatalog.Normalize(x.Key))));
+        }
+
+        private static string FormatCommodityNames(IEnumerable<string> commodities)
+        {
+            if (commodities == null)
+            {
+                return "resource";
+            }
+
+            var names = commodities
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(CommodityCatalog.Normalize)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x)
+                .ToList();
+
+            if (names.Count == 0)
+            {
+                return "resource";
+            }
+
+            return string.Join("/", names);
         }
 
         private float GetCommodityCapacityTons(string commodity)

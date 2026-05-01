@@ -19,9 +19,6 @@ namespace IndustryLogisticV.Config
         public WinForms.Keys MenuSelect { get; set; } = WinForms.Keys.Enter;
         public WinForms.Keys MenuBack { get; set; } = WinForms.Keys.Back;
 
-        public WinForms.Keys DashboardPageUp { get; set; } = WinForms.Keys.Up;
-        public WinForms.Keys DashboardPageDown { get; set; } = WinForms.Keys.Down;
-
         public static WinForms.Keys ParseOrDefault(string raw, WinForms.Keys fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))

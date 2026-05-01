@@ -17,24 +17,38 @@ namespace IndustryLogisticV.UI
     public sealed class MenuItem
     {
         public Func<string> CaptionFactory { get; set; }
+        public Func<string> DetailFactory { get; set; }
+        public Func<float?> ProgressRatioFactory { get; set; }
         public Action OnActivate { get; set; }
         public Action OnLeft { get; set; }
         public Action OnRight { get; set; }
+        public Color? IdleBackgroundColor { get; set; }
+        public Color? SelectedBackgroundColor { get; set; }
+        public Color? ProgressBarColor { get; set; }
     }
 
     public sealed class SimpleMenu
     {
         private readonly List<MenuItem> _items;
+        private int _firstVisibleIndex;
 
         public SimpleMenu(string title)
         {
             Title = title;
             Subtitle = string.Empty;
             _items = new List<MenuItem>();
+            _firstVisibleIndex = 0;
             SelectedIndex = 0;
             Theme = SimpleMenuTheme.Classic;
             TabletWidthScale = 1f;
             TabletAlignRight = false;
+            TabletCaptionScale = 0.305f;
+            TabletDetailScale = 0.235f;
+            TabletCaptionOffsetY = 8f;
+            TabletDetailOffsetY = 31f;
+            TabletMinRowHeight = 0f;
+            TabletMinProgressRowHeight = 0f;
+            MaxVisibleItems = 0;
         }
 
         public string Title { get; set; }
@@ -42,6 +56,13 @@ namespace IndustryLogisticV.UI
         public SimpleMenuTheme Theme { get; set; }
         public float TabletWidthScale { get; set; }
         public bool TabletAlignRight { get; set; }
+        public float TabletCaptionScale { get; set; }
+        public float TabletDetailScale { get; set; }
+        public float TabletCaptionOffsetY { get; set; }
+        public float TabletDetailOffsetY { get; set; }
+        public float TabletMinRowHeight { get; set; }
+        public float TabletMinProgressRowHeight { get; set; }
+        public int MaxVisibleItems { get; set; }
         public bool IsOpen { get; private set; }
         public int SelectedIndex { get; private set; }
 
@@ -53,6 +74,8 @@ namespace IndustryLogisticV.UI
             {
                 SelectedIndex = Math.Max(0, _items.Count - 1);
             }
+
+            EnsureSelectionVisible();
         }
 
         public void Open()
@@ -80,12 +103,14 @@ namespace IndustryLogisticV.UI
             if (key == controls.MenuUp)
             {
                 SelectedIndex = SelectedIndex <= 0 ? _items.Count - 1 : SelectedIndex - 1;
+                EnsureSelectionVisible();
                 return;
             }
 
             if (key == controls.MenuDown)
             {
                 SelectedIndex = (SelectedIndex + 1) % _items.Count;
+                EnsureSelectionVisible();
                 return;
             }
 
@@ -137,7 +162,8 @@ namespace IndustryLogisticV.UI
             var y = resolution.Height * 0.15f;
             var width = resolution.Width * 0.38f;
             var lineHeight = resolution.Height * 0.038f;
-            var contentHeight = lineHeight * Math.Max(1, _items.Count);
+            var visibleItems = GetVisibleItems();
+            var contentHeight = ComputeContentHeight(lineHeight, visibleItems);
             var headerHeight = lineHeight * 1.55f;
             var footerHeight = lineHeight * 0.86f;
             var height = contentHeight + headerHeight + footerHeight + 10f;
@@ -172,23 +198,30 @@ namespace IndustryLogisticV.UI
                     .Draw();
             }
 
-            for (int i = 0; i < _items.Count; i++)
+            var rowY = y + headerHeight;
+            for (int i = 0; i < visibleItems.Count; i++)
             {
-                var rowY = y + headerHeight + (lineHeight * i);
-                if (i % 2 == 0)
+                var itemIndex = _firstVisibleIndex + i;
+                var item = visibleItems[i];
+                var detail = GetDetailText(item);
+                var hasProgressBar = HasProgressBar(item);
+                var rowHeight = GetRowHeight(lineHeight, detail, hasProgressBar);
+                var idleRowColor = item.IdleBackgroundColor ?? (itemIndex % 2 == 0 ? Color.FromArgb(34, 255, 255, 255) : Color.Empty);
+                if (idleRowColor != Color.Empty)
                 {
-                    DrawRect(resolution.Width, resolution.Height, x, rowY, width, lineHeight, Color.FromArgb(34, 255, 255, 255));
+                    DrawRect(resolution.Width, resolution.Height, x, rowY, width, rowHeight, idleRowColor);
                 }
 
-                if (i == SelectedIndex)
+                if (itemIndex == SelectedIndex)
                 {
-                    DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, width - 4f, lineHeight - 4f, Color.FromArgb(220, 212, 164, 72));
-                    DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, 5f, lineHeight - 4f, Color.FromArgb(240, 252, 246, 220));
+                    var selectedRowColor = item.SelectedBackgroundColor ?? Color.FromArgb(220, 212, 164, 72);
+                    DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, width - 4f, rowHeight - 4f, selectedRowColor);
+                    DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, 5f, rowHeight - 4f, Color.FromArgb(240, 252, 246, 220));
                 }
 
-                var captionFactory = _items[i].CaptionFactory;
+                var captionFactory = item.CaptionFactory;
                 var caption = captionFactory != null ? captionFactory() : string.Empty;
-                var color = i == SelectedIndex ? Color.White : Color.FromArgb(235, 220, 230, 240);
+                var color = itemIndex == SelectedIndex ? Color.White : Color.FromArgb(235, 220, 230, 240);
                 new TextElement(
                         caption,
                         ToScriptTextCoords(resolution, x + 11f, rowY + 6f),
@@ -199,12 +232,41 @@ namespace IndustryLogisticV.UI
                         true,
                         false)
                     .Draw();
+
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    var detailColor = itemIndex == SelectedIndex
+                        ? Color.FromArgb(232, 244, 248, 252)
+                        : Color.FromArgb(214, 205, 216, 228);
+                    new TextElement(
+                            detail,
+                            ToScriptTextCoords(resolution, x + 11f, rowY + 28f),
+                            0.225f,
+                            detailColor,
+                            GTA.UI.Font.ChaletLondon,
+                            Alignment.Left,
+                            true,
+                            false)
+                        .Draw();
+                }
+
+                DrawProgressBarIfNeeded(
+                    resolution,
+                    item,
+                    x + 11f,
+                    rowY + rowHeight - 11f,
+                    width - 22f,
+                    6f,
+                    itemIndex == SelectedIndex);
+
+                rowY += rowHeight;
             }
 
             var footerY = y + headerHeight + contentHeight;
             DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, Color.FromArgb(185, 14, 20, 28));
+            var footerText = BuildFooterText("Navigate | Edit | Select | Close");
             new TextElement(
-                    "Navigate | Edit | Select | Close",
+                    footerText,
                     ToScriptTextCoords(resolution, x + 12f, footerY + 4f),
                     0.255f,
                     Color.FromArgb(228, 214, 223, 233),
@@ -226,7 +288,8 @@ namespace IndustryLogisticV.UI
                 ? resolution.Width - width - sideMargin
                 : (resolution.Width - width) * 0.5f;
             var lineHeight = resolution.Height * 0.043f;
-            var contentHeight = lineHeight * Math.Max(1, _items.Count);
+            var visibleItems = GetVisibleItems();
+            var contentHeight = ComputeContentHeight(lineHeight, visibleItems);
             var headerHeight = lineHeight * 1.62f;
             var footerHeight = lineHeight * 0.82f;
             var height = contentHeight + headerHeight + footerHeight + 12f;
@@ -260,42 +323,84 @@ namespace IndustryLogisticV.UI
                     .Draw();
             }
 
-            for (int i = 0; i < _items.Count; i++)
+            var rowY = y + headerHeight;
+            for (int i = 0; i < visibleItems.Count; i++)
             {
-                var rowY = y + headerHeight + (lineHeight * i);
-                var selected = i == SelectedIndex;
-                var idleColor = Color.FromArgb(160, 46, 60, 76);
-                var activeColor = Color.FromArgb(210, 92, 126, 158);
+                var itemIndex = _firstVisibleIndex + i;
+                var item = visibleItems[i];
+                var detail = GetDetailText(item);
+                var hasProgressBar = HasProgressBar(item);
+                var rowHeight = GetRowHeight(lineHeight, detail, hasProgressBar);
+                if (TabletMinRowHeight > 0f)
+                {
+                    var minimumRowHeight = hasProgressBar && TabletMinProgressRowHeight > 0f
+                        ? TabletMinProgressRowHeight
+                        : TabletMinRowHeight;
+                    rowHeight = Math.Max(rowHeight, minimumRowHeight);
+                }
+
+                var selected = itemIndex == SelectedIndex;
+                var idleColor = item.IdleBackgroundColor ?? Color.FromArgb(160, 46, 60, 76);
+                var activeColor = item.SelectedBackgroundColor ?? Color.FromArgb(210, 92, 126, 158);
                 DrawRect(
                     resolution.Width,
                     resolution.Height,
                     x + 12f,
                     rowY + 3f,
                     width - 24f,
-                    lineHeight - 6f,
+                    rowHeight - 6f,
                     selected ? activeColor : idleColor);
 
-                var captionFactory = _items[i].CaptionFactory;
+                var captionFactory = item.CaptionFactory;
                 var caption = captionFactory != null ? captionFactory() : string.Empty;
                 var color = selected
                     ? Color.FromArgb(238, 245, 249, 255)
                     : Color.FromArgb(220, 222, 231, 240);
                 new TextElement(
                         caption,
-                        ToScriptTextCoords(resolution, x + 28f, rowY + 8f),
-                        0.305f,
+                    ToScriptTextCoords(resolution, x + 28f, rowY + TabletCaptionOffsetY),
+                    TabletCaptionScale,
                         color,
                         GTA.UI.Font.ChaletComprimeCologne,
                         Alignment.Left,
                         true,
                         false)
                     .Draw();
+
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    var detailColor = selected
+                        ? Color.FromArgb(225, 241, 247, 252)
+                        : Color.FromArgb(205, 204, 216, 228);
+                    new TextElement(
+                            detail,
+                            ToScriptTextCoords(resolution, x + 28f, rowY + TabletDetailOffsetY),
+                            TabletDetailScale,
+                            detailColor,
+                            GTA.UI.Font.ChaletLondon,
+                            Alignment.Left,
+                            true,
+                            false)
+                        .Draw();
+                }
+
+                DrawProgressBarIfNeeded(
+                    resolution,
+                    item,
+                    x + 28f,
+                    rowY + rowHeight - 12f,
+                    width - 56f,
+                    7f,
+                    selected);
+
+                rowY += rowHeight;
             }
 
             var footerY = y + headerHeight + contentHeight;
             DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, Color.FromArgb(148, 16, 24, 34));
+            var footerText = BuildFooterText("Arrow Up/Down to navigate | Enter to select | Backspace/Esc to close");
             new TextElement(
-                    "Arrow Up/Down to navigate | Left/Right to edit | Enter to select | Backspace/Esc to close",
+                    footerText,
                     ToScriptTextCoords(resolution, x + 14f, footerY + 5f),
                     0.245f,
                     Color.FromArgb(214, 195, 206, 218),
@@ -304,6 +409,139 @@ namespace IndustryLogisticV.UI
                     true,
                     false)
                 .Draw();
+        }
+
+        private float ComputeContentHeight(float lineHeight, List<MenuItem> items)
+        {
+            if (items == null || items.Count == 0)
+            {
+                return lineHeight;
+            }
+
+            float total = 0f;
+            for (int i = 0; i < items.Count; i++)
+            {
+                total += GetRowHeight(lineHeight, GetDetailText(items[i]), HasProgressBar(items[i]));
+            }
+
+            return total;
+        }
+
+        private List<MenuItem> GetVisibleItems()
+        {
+            if (_items.Count == 0)
+            {
+                return new List<MenuItem>();
+            }
+
+            if (MaxVisibleItems <= 0 || _items.Count <= MaxVisibleItems)
+            {
+                _firstVisibleIndex = 0;
+                return new List<MenuItem>(_items);
+            }
+
+            var visibleCount = Math.Max(1, MaxVisibleItems);
+            var maxFirst = Math.Max(0, _items.Count - visibleCount);
+            if (_firstVisibleIndex > maxFirst)
+            {
+                _firstVisibleIndex = maxFirst;
+            }
+
+            return _items.GetRange(_firstVisibleIndex, Math.Min(visibleCount, _items.Count - _firstVisibleIndex));
+        }
+
+        private void EnsureSelectionVisible()
+        {
+            if (MaxVisibleItems <= 0 || _items.Count <= MaxVisibleItems)
+            {
+                _firstVisibleIndex = 0;
+                return;
+            }
+
+            var visibleCount = Math.Max(1, MaxVisibleItems);
+            if (SelectedIndex < _firstVisibleIndex)
+            {
+                _firstVisibleIndex = SelectedIndex;
+                return;
+            }
+
+            var lastVisibleIndex = _firstVisibleIndex + visibleCount - 1;
+            if (SelectedIndex > lastVisibleIndex)
+            {
+                _firstVisibleIndex = SelectedIndex - visibleCount + 1;
+            }
+        }
+
+        private string BuildFooterText(string baseText)
+        {
+            if (MaxVisibleItems <= 0 || _items.Count <= MaxVisibleItems)
+            {
+                return baseText;
+            }
+
+            var start = _firstVisibleIndex + 1;
+            var end = Math.Min(_items.Count, _firstVisibleIndex + Math.Max(1, MaxVisibleItems));
+            return string.Format("{0} | {1}-{2}/{3}", baseText, start, end, _items.Count);
+        }
+
+        private static float GetRowHeight(float baseLineHeight, string detail, bool hasProgressBar)
+        {
+            if (!string.IsNullOrWhiteSpace(detail) && hasProgressBar)
+            {
+                return baseLineHeight * 2.28f;
+            }
+
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                return baseLineHeight * 1.88f;
+            }
+
+            if (hasProgressBar)
+            {
+                return baseLineHeight * 1.55f;
+            }
+
+            return baseLineHeight;
+        }
+
+        private static string GetDetailText(MenuItem item)
+        {
+            if (item == null || item.DetailFactory == null)
+            {
+                return string.Empty;
+            }
+
+            return item.DetailFactory() ?? string.Empty;
+        }
+
+        private static bool HasProgressBar(MenuItem item)
+        {
+            return item != null && item.ProgressRatioFactory != null;
+        }
+
+        private static float GetProgressRatio(MenuItem item)
+        {
+            if (item == null || item.ProgressRatioFactory == null)
+            {
+                return 0f;
+            }
+
+            var ratio = item.ProgressRatioFactory() ?? 0f;
+            return Math.Max(0f, Math.Min(1f, ratio));
+        }
+
+        private static void DrawProgressBarIfNeeded(Size resolution, MenuItem item, float x, float y, float width, float height, bool selected)
+        {
+            if (!HasProgressBar(item))
+            {
+                return;
+            }
+
+            var ratio = GetProgressRatio(item);
+            var fillColor = item.ProgressBarColor ?? (selected ? Color.FromArgb(228, 244, 200, 96) : Color.FromArgb(218, 88, 156, 220));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(158, 11, 17, 24));
+            DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, Math.Max(0f, (width - 2f) * ratio), Math.Max(1f, height - 2f), fillColor);
+            DrawRect(resolution.Width, resolution.Height, x, y, width, 1f, Color.FromArgb(192, 255, 255, 255));
         }
 
         private static PointF ToScriptTextCoords(Size resolution, float x, float y)
