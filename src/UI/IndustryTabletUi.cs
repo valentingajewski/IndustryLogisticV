@@ -639,37 +639,12 @@ namespace IndustryLogisticV.UI
                 HideUpgradeModuleButtons();
                 _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
 
-                DrawText(
-                    "INDUSTRY STATISTICS",
-                    _frameX + 80f,
-                    _frameY + 116f,
-                    0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    0f);
-
-                DrawText(
-                    "Input and output stock by commodity",
-                    _frameX + 82f,
-                    _frameY + 143f,
-                    0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-
-                DrawIndustryStatistics(stockpile, totalCapacity, stockRatio, utilizationRatio, omegaRatio);
-
-                DrawText(
-                    "Arrow Up/Down to scroll | Enter or Backspace or Esc to return",
-                    _frameX + 80f,
-                    _frameY + 515f,
-                    0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
+                IndustryStatisticsPanelRenderer.DrawPageContent(
+                    _industry,
+                    _statsScrollIndex,
+                    _frameX,
+                    _frameY,
+                    "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
             }
             else
             {
@@ -915,10 +890,7 @@ namespace IndustryLogisticV.UI
 
         private void MoveStatsSelection(int delta)
         {
-            var entries = BuildCommodityStatsEntries();
-            const int visibleRows = 6;
-            var maxScroll = Math.Max(0, entries.Count - visibleRows);
-            _statsScrollIndex = Math.Max(0, Math.Min(maxScroll, _statsScrollIndex + delta));
+            _statsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_industry, _statsScrollIndex, delta);
         }
 
         private void DrawIndustryStatistics(float stockpile, float totalCapacity, float stockRatio, float utilizationRatio, float omegaRatio)

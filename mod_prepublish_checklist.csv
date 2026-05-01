@@ -49,7 +49,7 @@ M047,Economy,Global market response,Deliver TV/Computer repeatedly,Market behavi
 M048,GateSystem,Nearby gate prompt,Stand near supported barrier/gate,Prompt shows GateInteract key,High,OK,
 M049,GateSystem,Animated sliding gate open,Use supported sliding gate models,Door system animation opens gate naturally,High,OK,
 M050,GateSystem,Non-animated barrier fallback,Use arm barrier models,Fallback opening behavior works reliably,Medium,Pending,
-M051,Lifecycle,Disable mechanics cleanup,Set Activate to Off during gameplay,Transfers/UI/dashboard/context are safely stopped,Critical,OK,
+M051,Lifecycle,Disable mechanics cleanup,Set Activate to Off during gameplay,Transfers/UI/context are safely stopped,Critical,OK,
 M052,Lifecycle,Abort cleanup safety,Reload scripts or force abort,Events and temporary entities clean up correctly,High,OK,
 M053,Build,Release compilation,Run dotnet build -c Release,Build succeeds with zero errors,Critical,OK,
 M054,Packaging,Runtime file package completeness,Prepare release package and verify file list,"Package includes DLL, INI, README, required dependencies note",Critical,OK,
