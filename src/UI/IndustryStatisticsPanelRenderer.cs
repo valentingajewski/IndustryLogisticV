@@ -9,15 +9,6 @@ namespace IndustryLogisticV.UI
 {
     internal static class IndustryStatisticsPanelRenderer
     {
-        private struct CommodityStatEntry
-        {
-            public string Commodity;
-            public float Stock;
-            public float Capacity;
-            public float Ratio;
-            public bool IsInput;
-        }
-
         private const float UiFallbackWidth = 1280f;
         private const float UiFallbackHeight = 720f;
         private const float MenuBackgroundWidth = 784f;

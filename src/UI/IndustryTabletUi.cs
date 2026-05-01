@@ -12,15 +12,6 @@ namespace IndustryLogisticV.UI
 {
     public sealed class IndustryTabletUi
     {
-        private struct CommodityStatEntry
-        {
-            public string Commodity;
-            public float Stock;
-            public float Capacity;
-            public float Ratio;
-            public bool IsInput;
-        }
-
         private enum TabletPage
         {
             Main = 0,
@@ -33,295 +24,319 @@ namespace IndustryLogisticV.UI
         private const float UiFallbackWidth = 1280f;
         private const float UiFallbackHeight = 720f;
         private const float MenuBackgroundWidth = 784f;
-        private const float MenuBackgroundHeight = 536f;
-
-        private readonly ScaledRectangle _menuBackground;
-        private readonly ScaledRectangle _loadButton;
-        private readonly ScaledRectangle _unloadButton;
-        private readonly ScaledRectangle _statsButton;
-        private readonly ScaledRectangle _upgradeButton;
-        private readonly ScaledRectangle _statsPanel;
-        private readonly List<ScaledRectangle> _upgradeModuleButtons;
-        private readonly List<string> _loadOptions;
-        private readonly Dictionary<string, string> _loadOptionSubtitles;
-
-        private Industry _industry;
-        private float _frameX;
-        private float _frameY;
-        private float _profitBalance;
-        private int _selectedMainIndex;
-        private int _selectedUpgradeIndex;
-        private int _selectedLoadOptionIndex;
-        private int _selectedUnloadOptionIndex;
-        private int _statsScrollIndex;
-        private TabletPage _currentPage;
-
-        public IndustryTabletUi()
-        {
+            DrawPageHeader(industryName);
             _menuBackground = new ScaledRectangle(new PointF(0f, 0f), new SizeF(MenuBackgroundWidth, MenuBackgroundHeight))
             {
                 Color = Color.FromArgb(230, 8, 12, 18),
-            };
-
-            _loadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
-            _unloadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
-            _statsButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
-            _upgradeButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
-            _statsPanel = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 88f));
-
-            _upgradeModuleButtons = new List<ScaledRectangle>();
-            for (int i = 0; i < 5; i++)
-            {
-                var moduleButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 58f))
-                {
-                    Color = Color.FromArgb(0, 0, 0, 0),
-                };
-
-                _upgradeModuleButtons.Add(moduleButton);
-            }
-
-            _selectedMainIndex = 0;
-            _selectedUpgradeIndex = 0;
-            _selectedLoadOptionIndex = 0;
-            _selectedUnloadOptionIndex = 0;
-            _statsScrollIndex = 0;
-            _currentPage = TabletPage.Main;
-            _loadOptions = new List<string>();
-            _loadOptionSubtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            UpdateLayout();
-        }
-
-        public bool IsOpen { get; private set; }
-
-        public Industry ActiveIndustry
-        {
-            get { return _industry; }
-        }
-
-        public event Action<Industry> LoadRequested;
-
-        public event Action<Industry, string> LoadCommodityRequested;
-
-        public event Action<Industry> UnloadRequested;
-
-        public event Action<Industry, bool> UnloadModeRequested;
-
-        public event Action<Industry, IndustryUpgradeModule> UpgradeModuleRequested;
-
-        public void SetLoadOptions(List<string> loadOptions, Dictionary<string, string> loadOptionSubtitles = null)
-        {
-            _loadOptions.Clear();
-            _loadOptionSubtitles.Clear();
-            if (loadOptions != null)
-            {
-                for (int i = 0; i < loadOptions.Count; i++)
-                {
-                    var entry = loadOptions[i];
-                    if (string.IsNullOrWhiteSpace(entry))
-                    {
+                RenderMainPage(industryName);
                         continue;
                     }
 
-                    _loadOptions.Add(entry.Trim());
-                }
-            }
-
-            if (loadOptionSubtitles != null)
-            {
-                foreach (var entry in loadOptionSubtitles)
-                {
-                    if (string.IsNullOrWhiteSpace(entry.Key) || string.IsNullOrWhiteSpace(entry.Value))
-                    {
-                        continue;
-                    }
-
-                    _loadOptionSubtitles[entry.Key.Trim()] = entry.Value.Trim();
-                }
-            }
-
-            var maxIndex = Math.Max(0, _loadOptions.Count);
-            if (_selectedLoadOptionIndex > maxIndex)
-            {
-                _selectedLoadOptionIndex = maxIndex;
-            }
-        }
-
-        public void UpdateProfitBalance(float profitBalance)
-        {
-            _profitBalance = Math.Max(0f, profitBalance);
-        }
-
-        public bool HandleKey(WinForms.Keys key, ControlBindings controls)
-        {
-            if (!IsOpen || _industry == null)
-            {
-                return false;
-            }
-
-            if (controls == null)
-            {
-                controls = new ControlBindings();
-            }
-
-            if (key == controls.Interact)
-            {
-                return false;
-            }
-
-            if (key == controls.MenuBack || key == WinForms.Keys.Escape)
-            {
-                if (_currentPage == TabletPage.Upgrades)
-                {
-                    _currentPage = TabletPage.Main;
-                    _selectedMainIndex = 3;
+                RenderLoadSelectionPage();
                     return true;
                 }
 
-                if (_currentPage == TabletPage.LoadSelection)
-                {
-                    _currentPage = TabletPage.Main;
-                    _selectedMainIndex = 0;
-                    return true;
-                }
-
-                if (_currentPage == TabletPage.UnloadSelection)
-                {
-                    _currentPage = TabletPage.Main;
-                    _selectedMainIndex = 1;
-                    return true;
-                }
-
-                if (_currentPage == TabletPage.Statistics)
-                {
-                    _currentPage = TabletPage.Main;
-                    _selectedMainIndex = 2;
-                    return true;
-                }
-
-                return false;
-            }
-
-            if (key == controls.MenuUp)
-            {
-                MoveSelection(-1);
-                return true;
-            }
-
-            if (key == controls.MenuDown)
-            {
-                MoveSelection(1);
-                return true;
-            }
-
-            if (key == controls.MenuSelect)
-            {
-                ActivateSelection();
-                return true;
-            }
-
-            if (key == controls.MenuLeft || key == controls.MenuRight)
-            {
-                return true;
-            }
-
-            return true;
-        }
-
-        private void MoveSelection(int delta)
-        {
-            if (_currentPage == TabletPage.Main)
-            {
-                const int count = 4;
-                _selectedMainIndex = (_selectedMainIndex + delta + count) % count;
+                RenderUnloadSelectionPage();
                 return;
             }
 
-            if (_currentPage == TabletPage.Upgrades)
-            {
-                var upgradeCount = GetUpgradeSelectionCount();
-                _selectedUpgradeIndex = (_selectedUpgradeIndex + delta + upgradeCount) % upgradeCount;
-                return;
-            }
-
-            if (_currentPage == TabletPage.LoadSelection)
-            {
-                var loadChoiceCount = Math.Max(1, _loadOptions.Count + 1);
-                _selectedLoadOptionIndex = (_selectedLoadOptionIndex + delta + loadChoiceCount) % loadChoiceCount;
-                return;
-            }
-
-            if (_currentPage == TabletPage.UnloadSelection)
-            {
-                const int unloadChoiceCount = 3;
+                RenderStatisticsPage();
                 _selectedUnloadOptionIndex = (_selectedUnloadOptionIndex + delta + unloadChoiceCount) % unloadChoiceCount;
                 return;
             }
-
-            MoveStatsSelection(delta);
-        }
-
-        private void ActivateSelection()
-        {
-            if (_industry == null)
-            {
-                return;
-            }
-
-            if (_currentPage == TabletPage.Main)
-            {
-                if (_selectedMainIndex == 0)
-                {
-                    if (_loadOptions.Count > 1)
-                    {
-                        _currentPage = TabletPage.LoadSelection;
-                        _selectedLoadOptionIndex = 0;
-                        return;
-                    }
-
-                    if (_loadOptions.Count == 1)
-                    {
-                        LoadCommodityRequested?.Invoke(_industry, _loadOptions[0]);
-                        return;
-                    }
-
-                    LoadRequested?.Invoke(_industry);
-                    return;
-                }
-
-                if (_selectedMainIndex == 1)
-                {
-                    var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost
-                        && _industry.Inputs != null
-                        && _industry.Inputs.Count > 1;
-                    if (canChooseOmegaUnloadMode)
-                    {
-                        _currentPage = TabletPage.UnloadSelection;
-                        _selectedUnloadOptionIndex = 0;
-                        return;
-                    }
-
-                    UnloadRequested?.Invoke(_industry);
-                    return;
-                }
-
-                if (_selectedMainIndex == 2)
-                {
-                    _currentPage = TabletPage.Statistics;
-                    _statsScrollIndex = 0;
-                    return;
-                }
-
-                if (_selectedMainIndex == 3)
-                {
-                    _currentPage = TabletPage.Upgrades;
-                    _selectedUpgradeIndex = 0;
-                }
-
-                return;
-            }
-
+                RenderUpgradesPage();
             if (_currentPage == TabletPage.LoadSelection)
             {
+
+        private void DrawPageHeader(string industryName)
+        {
+            DrawText(
+                string.Format("{0} MENU", industryName),
+                _frameX + 78f,
+                _frameY + 62f,
+                0.53f,
+                Color.FromArgb(236, 242, 246, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                "Industry Operations Interface",
+                _frameX + 80f,
+                _frameY + 88f,
+                0.31f,
+                Color.FromArgb(222, 214, 225, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderMainPage(string industryName)
+        {
+            HideUpgradeModuleButtons();
+
+            var hasMultipleInputs = _industry.Inputs != null && _industry.Inputs.Count > 1;
+            var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost && hasMultipleInputs;
+            var isOmegaOnlyUnload = _industry.SupportsOmegaBoost && !hasMultipleInputs;
+            var unloadTitle = isOmegaOnlyUnload ? "UNLOAD OMEGA FLUID" : "UNLOAD CARGO";
+            var unloadSubtitle = canChooseOmegaUnloadMode
+                ? "Choose Omega or truck cargo in-tablet"
+                : (isOmegaOnlyUnload
+                    ? "Deliver Omega boost fluid from your tanker"
+                    : "Deliver current truck cargo to this industry");
+            var loadSubtitle = _loadOptions.Count > 1
+                ? "Choose resource in-tablet after pressing load"
+                : "Initiate cargo load from local production stockpile";
+
+            DrawButton(
+                _loadButton,
+                "LOAD CARGO TRUCK",
+                loadSubtitle,
+                Color.FromArgb(170, 45, 62, 74),
+                Color.FromArgb(206, 88, 125, 150),
+                _selectedMainIndex == 0);
+
+            DrawButton(
+                _unloadButton,
+                unloadTitle,
+                unloadSubtitle,
+                Color.FromArgb(170, 56, 45, 61),
+                Color.FromArgb(210, 132, 86, 158),
+                _selectedMainIndex == 1);
+
+            DrawButton(
+                _statsButton,
+                string.Format("VIEW {0} STATISTICS", industryName),
+                "Open statistics page with input/output loading bars",
+                Color.FromArgb(170, 46, 66, 50),
+                Color.FromArgb(205, 85, 124, 94),
+                _selectedMainIndex == 2);
+
+            DrawButton(
+                _upgradeButton,
+                "OPEN UPGRADES",
+                "Switch to module upgrades in this industry",
+                Color.FromArgb(170, 58, 51, 86),
+                Color.FromArgb(212, 124, 104, 178),
+                _selectedMainIndex == 3);
+
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to select | E or Backspace or Esc to close",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderLoadSelectionPage()
+        {
+            HideMainButtons();
+            HideUpgradeModuleButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            DrawText(
+                "SELECT LOAD RESOURCE",
+                _frameX + 80f,
+                _frameY + 116f,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                _loadOptions.Count > 0
+                    ? "Choose the product to load into your truck"
+                    : "No loadable product available right now",
+                _frameX + 82f,
+                _frameY + 143f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            for (int i = 0; i < _upgradeModuleButtons.Count; i++)
+            {
+                if (i < _loadOptions.Count)
+                {
+                    DrawUpgradeModuleButton(
+                        i,
+                        string.Format("LOAD {0}", _loadOptions[i].ToUpperInvariant()),
+                        GetLoadOptionSubtitle(_loadOptions[i]),
+                        _selectedLoadOptionIndex == i);
+                }
+                else if (i == _loadOptions.Count)
+                {
+                    DrawUpgradeModuleButton(
+                        i,
+                        "BACK TO OPERATIONS",
+                        "Return to load/unload controls",
+                        _selectedLoadOptionIndex == i);
+                }
+                else
+                {
+                    _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
+                }
+            }
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderUnloadSelectionPage()
+        {
+            HideMainButtons();
+            HideUpgradeModuleButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            DrawText(
+                "SELECT UNLOAD MODE",
+                _frameX + 80f,
+                _frameY + 116f,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                "Choose whether to unload truck cargo or Omega only",
+                _frameX + 82f,
+                _frameY + 143f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            DrawUpgradeModuleButton(
+                0,
+                "UNLOAD TRUCK CARGO",
+                "Deliver your current tanker commodity",
+                _selectedUnloadOptionIndex == 0);
+
+            DrawUpgradeModuleButton(
+                1,
+                "UNLOAD OMEGA",
+                "Only unload if your tanker carries Omega",
+                _selectedUnloadOptionIndex == 1);
+
+            DrawUpgradeModuleButton(
+                2,
+                "BACK TO OPERATIONS",
+                "Return to load/unload controls",
+                _selectedUnloadOptionIndex == 2);
+
+            for (int i = 3; i < _upgradeModuleButtons.Count; i++)
+            {
+                _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
+            }
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderStatisticsPage()
+        {
+            HideMainButtons();
+            HideUpgradeModuleButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            IndustryStatisticsPanelRenderer.DrawPageContent(
+                _industry,
+                _statsScrollIndex,
+                _frameX,
+                _frameY,
+                "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
+        }
+
+        private void RenderUpgradesPage()
+        {
+            HideMainButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            var availableModules = GetAvailableUpgradeModules();
+            var selectionCount = Math.Max(1, availableModules.Count + 1);
+            if (_selectedUpgradeIndex >= selectionCount)
+            {
+                _selectedUpgradeIndex = selectionCount - 1;
+            }
+
+            DrawText(
+                "UPGRADE MODULES",
+                _frameX + 80f,
+                _frameY + 116f,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                string.Format("Profit Balance: ${0:0}", _profitBalance),
+                _frameX + 82f,
+                _frameY + 143f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            for (int i = 0; i < _upgradeModuleButtons.Count; i++)
+            {
+                if (i < availableModules.Count)
+                {
+                    var module = availableModules[i];
+                    DrawUpgradeModuleButton(
+                        i,
+                        GetUpgradeModuleTitle(module),
+                        GetUpgradeModuleSubtitle(module),
+                        _selectedUpgradeIndex == i);
+                }
+                else if (i == availableModules.Count)
+                {
+                    DrawUpgradeModuleButton(
+                        i,
+                        "BACK TO OPERATIONS",
+                        "Return to load/unload controls",
+                        _selectedUpgradeIndex == i);
+                }
+                else
+                {
+                    _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
+                }
+            }
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to buy | Backspace or Esc to return",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
                 if (_selectedLoadOptionIndex >= _loadOptions.Count)
                 {
                     _currentPage = TabletPage.Main;
@@ -425,12 +440,32 @@ namespace IndustryLogisticV.UI
             _menuBackground.Draw();
 
             var industryName = BuildIndustryLabel(_industry.Name);
-            var stockpile = _industry.GetInputStockTotal() + _industry.GetOutputStockTotal();
-            var totalCapacity = Math.Max(1f, _industry.InputCapacityTons + _industry.OutputCapacityTons);
-            var stockRatio = Clamp01(stockpile / totalCapacity);
-            var utilizationRatio = Clamp01(_industry.LastUtilizationPercent / 100f);
-            var omegaRatio = Clamp01(_industry.OmegaStorage / Math.Max(1f, _industry.OmegaCapacityTons));
+            DrawPageHeader(industryName);
 
+            if (_currentPage == TabletPage.Main)
+            {
+                RenderMainPage(industryName);
+            }
+            else if (_currentPage == TabletPage.LoadSelection)
+            {
+                RenderLoadSelectionPage();
+            }
+            else if (_currentPage == TabletPage.UnloadSelection)
+            {
+                RenderUnloadSelectionPage();
+            }
+            else if (_currentPage == TabletPage.Statistics)
+            {
+                RenderStatisticsPage();
+            }
+            else
+            {
+                RenderUpgradesPage();
+            }
+        }
+
+        private void DrawPageHeader(string industryName)
+        {
             DrawText(
                 string.Format("{0} MENU", industryName),
                 _frameX + 78f,
@@ -450,269 +485,273 @@ namespace IndustryLogisticV.UI
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
+        }
 
-            if (_currentPage == TabletPage.Main)
+        private void RenderMainPage(string industryName)
+        {
+            HideUpgradeModuleButtons();
+
+            var hasMultipleInputs = _industry.Inputs != null && _industry.Inputs.Count > 1;
+            var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost && hasMultipleInputs;
+            var isOmegaOnlyUnload = _industry.SupportsOmegaBoost && !hasMultipleInputs;
+            var unloadTitle = isOmegaOnlyUnload ? "UNLOAD OMEGA FLUID" : "UNLOAD CARGO";
+            var unloadSubtitle = canChooseOmegaUnloadMode
+                ? "Choose Omega or truck cargo in-tablet"
+                : (isOmegaOnlyUnload
+                    ? "Deliver Omega boost fluid from your tanker"
+                    : "Deliver current truck cargo to this industry");
+            var loadSubtitle = _loadOptions.Count > 1
+                ? "Choose resource in-tablet after pressing load"
+                : "Initiate cargo load from local production stockpile";
+
+            DrawButton(
+                _loadButton,
+                "LOAD CARGO TRUCK",
+                loadSubtitle,
+                Color.FromArgb(170, 45, 62, 74),
+                Color.FromArgb(206, 88, 125, 150),
+                _selectedMainIndex == 0);
+
+            DrawButton(
+                _unloadButton,
+                unloadTitle,
+                unloadSubtitle,
+                Color.FromArgb(170, 56, 45, 61),
+                Color.FromArgb(210, 132, 86, 158),
+                _selectedMainIndex == 1);
+
+            DrawButton(
+                _statsButton,
+                string.Format("VIEW {0} STATISTICS", industryName),
+                "Open statistics page with input/output loading bars",
+                Color.FromArgb(170, 46, 66, 50),
+                Color.FromArgb(205, 85, 124, 94),
+                _selectedMainIndex == 2);
+
+            DrawButton(
+                _upgradeButton,
+                "OPEN UPGRADES",
+                "Switch to module upgrades in this industry",
+                Color.FromArgb(170, 58, 51, 86),
+                Color.FromArgb(212, 124, 104, 178),
+                _selectedMainIndex == 3);
+
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to select | E or Backspace or Esc to close",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderLoadSelectionPage()
+        {
+            HideMainButtons();
+            HideUpgradeModuleButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            DrawText(
+                "SELECT LOAD RESOURCE",
+                _frameX + 80f,
+                _frameY + 116f,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                _loadOptions.Count > 0
+                    ? "Choose the product to load into your truck"
+                    : "No loadable product available right now",
+                _frameX + 82f,
+                _frameY + 143f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            for (int i = 0; i < _upgradeModuleButtons.Count; i++)
             {
-                HideUpgradeModuleButtons();
-
-                var hasMultipleInputs = _industry.Inputs != null && _industry.Inputs.Count > 1;
-                var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost && hasMultipleInputs;
-                var isOmegaOnlyUnload = _industry.SupportsOmegaBoost && !hasMultipleInputs;
-                var unloadTitle = isOmegaOnlyUnload ? "UNLOAD OMEGA FLUID" : "UNLOAD CARGO";
-                var unloadSubtitle = canChooseOmegaUnloadMode
-                    ? "Choose Omega or truck cargo in-tablet"
-                    : (isOmegaOnlyUnload
-                        ? "Deliver Omega boost fluid from your tanker"
-                        : "Deliver current truck cargo to this industry");
-                var loadSubtitle = _loadOptions.Count > 1
-                    ? "Choose resource in-tablet after pressing load"
-                    : "Initiate cargo load from local production stockpile";
-
-                DrawButton(
-                    _loadButton,
-                    "LOAD CARGO TRUCK",
-                    loadSubtitle,
-                    Color.FromArgb(170, 45, 62, 74),
-                    Color.FromArgb(206, 88, 125, 150),
-                    _selectedMainIndex == 0);
-
-                DrawButton(
-                    _unloadButton,
-                    unloadTitle,
-                    unloadSubtitle,
-                    Color.FromArgb(170, 56, 45, 61),
-                    Color.FromArgb(210, 132, 86, 158),
-                    _selectedMainIndex == 1);
-
-                DrawButton(
-                    _statsButton,
-                    string.Format("VIEW {0} STATISTICS", industryName),
-                    "Open statistics page with input/output loading bars",
-                    Color.FromArgb(170, 46, 66, 50),
-                    Color.FromArgb(205, 85, 124, 94),
-                    _selectedMainIndex == 2);
-
-                DrawButton(
-                    _upgradeButton,
-                    "OPEN UPGRADES",
-                    "Switch to module upgrades in this industry",
-                    Color.FromArgb(170, 58, 51, 86),
-                    Color.FromArgb(212, 124, 104, 178),
-                    _selectedMainIndex == 3);
-
-                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
-
-                DrawText(
-                    "Arrow Up/Down to navigate | Enter to select | E or Backspace or Esc to close",
-                    _frameX + 80f,
-                    _frameY + 515f,
-                    0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-            }
-            else if (_currentPage == TabletPage.LoadSelection)
-            {
-                HideMainButtons();
-                HideUpgradeModuleButtons();
-                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
-
-                DrawText(
-                    "SELECT LOAD RESOURCE",
-                    _frameX + 80f,
-                    _frameY + 116f,
-                    0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    0f);
-
-                DrawText(
-                    _loadOptions.Count > 0
-                        ? "Choose the product to load into your truck"
-                        : "No loadable product available right now",
-                    _frameX + 82f,
-                    _frameY + 143f,
-                    0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-
-                for (int i = 0; i < _upgradeModuleButtons.Count; i++)
+                if (i < _loadOptions.Count)
                 {
-                    if (i < _loadOptions.Count)
-                    {
-                        DrawUpgradeModuleButton(
-                            i,
-                            string.Format("LOAD {0}", _loadOptions[i].ToUpperInvariant()),
-                            GetLoadOptionSubtitle(_loadOptions[i]),
-                            _selectedLoadOptionIndex == i);
-                    }
-                    else if (i == _loadOptions.Count)
-                    {
-                        DrawUpgradeModuleButton(
-                            i,
-                            "BACK TO OPERATIONS",
-                            "Return to load/unload controls",
-                            _selectedLoadOptionIndex == i);
-                    }
-                    else
-                    {
-                        _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
-                    }
+                    DrawUpgradeModuleButton(
+                        i,
+                        string.Format("LOAD {0}", _loadOptions[i].ToUpperInvariant()),
+                        GetLoadOptionSubtitle(_loadOptions[i]),
+                        _selectedLoadOptionIndex == i);
                 }
-
-                DrawText(
-                    "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
-                    _frameX + 80f,
-                    _frameY + 515f,
-                    0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-            }
-            else if (_currentPage == TabletPage.UnloadSelection)
-            {
-                HideMainButtons();
-                HideUpgradeModuleButtons();
-                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
-
-                DrawText(
-                    "SELECT UNLOAD MODE",
-                    _frameX + 80f,
-                    _frameY + 116f,
-                    0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    0f);
-
-                DrawText(
-                    "Choose whether to unload truck cargo or Omega only",
-                    _frameX + 82f,
-                    _frameY + 143f,
-                    0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-
-                DrawUpgradeModuleButton(
-                    0,
-                    "UNLOAD TRUCK CARGO",
-                    "Deliver your current tanker commodity",
-                    _selectedUnloadOptionIndex == 0);
-
-                DrawUpgradeModuleButton(
-                    1,
-                    "UNLOAD OMEGA",
-                    "Only unload if your tanker carries Omega",
-                    _selectedUnloadOptionIndex == 1);
-
-                DrawUpgradeModuleButton(
-                    2,
-                    "BACK TO OPERATIONS",
-                    "Return to load/unload controls",
-                    _selectedUnloadOptionIndex == 2);
-
-                for (int i = 3; i < _upgradeModuleButtons.Count; i++)
+                else if (i == _loadOptions.Count)
+                {
+                    DrawUpgradeModuleButton(
+                        i,
+                        "BACK TO OPERATIONS",
+                        "Return to load/unload controls",
+                        _selectedLoadOptionIndex == i);
+                }
+                else
                 {
                     _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
                 }
-
-                DrawText(
-                    "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
-                    _frameX + 80f,
-                    _frameY + 515f,
-                    0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
             }
-            else if (_currentPage == TabletPage.Statistics)
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderUnloadSelectionPage()
+        {
+            HideMainButtons();
+            HideUpgradeModuleButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            DrawText(
+                "SELECT UNLOAD MODE",
+                _frameX + 80f,
+                _frameY + 116f,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                "Choose whether to unload truck cargo or Omega only",
+                _frameX + 82f,
+                _frameY + 143f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            DrawUpgradeModuleButton(
+                0,
+                "UNLOAD TRUCK CARGO",
+                "Deliver your current tanker commodity",
+                _selectedUnloadOptionIndex == 0);
+
+            DrawUpgradeModuleButton(
+                1,
+                "UNLOAD OMEGA",
+                "Only unload if your tanker carries Omega",
+                _selectedUnloadOptionIndex == 1);
+
+            DrawUpgradeModuleButton(
+                2,
+                "BACK TO OPERATIONS",
+                "Return to load/unload controls",
+                _selectedUnloadOptionIndex == 2);
+
+            for (int i = 3; i < _upgradeModuleButtons.Count; i++)
             {
-                HideMainButtons();
-                HideUpgradeModuleButtons();
-                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
-
-                IndustryStatisticsPanelRenderer.DrawPageContent(
-                    _industry,
-                    _statsScrollIndex,
-                    _frameX,
-                    _frameY,
-                    "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
+                _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
             }
-            else
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to select | Backspace or Esc to return",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+        }
+
+        private void RenderStatisticsPage()
+        {
+            HideMainButtons();
+            HideUpgradeModuleButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            IndustryStatisticsPanelRenderer.DrawPageContent(
+                _industry,
+                _statsScrollIndex,
+                _frameX,
+                _frameY,
+                "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
+        }
+
+        private void RenderUpgradesPage()
+        {
+            HideMainButtons();
+            _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
+
+            var availableModules = GetAvailableUpgradeModules();
+            var selectionCount = Math.Max(1, availableModules.Count + 1);
+            if (_selectedUpgradeIndex >= selectionCount)
             {
-                HideMainButtons();
-                _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
-
-                var availableModules = GetAvailableUpgradeModules();
-                var selectionCount = Math.Max(1, availableModules.Count + 1);
-                if (_selectedUpgradeIndex >= selectionCount)
-                {
-                    _selectedUpgradeIndex = selectionCount - 1;
-                }
-
-                DrawText(
-                    "UPGRADE MODULES",
-                    _frameX + 80f,
-                    _frameY + 116f,
-                    0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    0f);
-
-                DrawText(
-                    string.Format("Profit Balance: ${0:0}", _profitBalance),
-                    _frameX + 82f,
-                    _frameY + 143f,
-                    0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-
-                for (int i = 0; i < _upgradeModuleButtons.Count; i++)
-                {
-                    if (i < availableModules.Count)
-                    {
-                        var module = availableModules[i];
-                        DrawUpgradeModuleButton(
-                            i,
-                            GetUpgradeModuleTitle(module),
-                            GetUpgradeModuleSubtitle(module),
-                            _selectedUpgradeIndex == i);
-                    }
-                    else if (i == availableModules.Count)
-                    {
-                        DrawUpgradeModuleButton(
-                            i,
-                            "BACK TO OPERATIONS",
-                            "Return to load/unload controls",
-                            _selectedUpgradeIndex == i);
-                    }
-                    else
-                    {
-                        _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
-                    }
-                }
-
-                DrawText(
-                    "Arrow Up/Down to navigate | Enter to buy | Backspace or Esc to return",
-                    _frameX + 80f,
-                    _frameY + 515f,
-                    0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
+                _selectedUpgradeIndex = selectionCount - 1;
             }
+
+            DrawText(
+                "UPGRADE MODULES",
+                _frameX + 80f,
+                _frameY + 116f,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                string.Format("Profit Balance: ${0:0}", _profitBalance),
+                _frameX + 82f,
+                _frameY + 143f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            for (int i = 0; i < _upgradeModuleButtons.Count; i++)
+            {
+                if (i < availableModules.Count)
+                {
+                    var module = availableModules[i];
+                    DrawUpgradeModuleButton(
+                        i,
+                        GetUpgradeModuleTitle(module),
+                        GetUpgradeModuleSubtitle(module),
+                        _selectedUpgradeIndex == i);
+                }
+                else if (i == availableModules.Count)
+                {
+                    DrawUpgradeModuleButton(
+                        i,
+                        "BACK TO OPERATIONS",
+                        "Return to load/unload controls",
+                        _selectedUpgradeIndex == i);
+                }
+                else
+                {
+                    _upgradeModuleButtons[i].Color = Color.FromArgb(0, 0, 0, 0);
+                }
+            }
+
+            DrawText(
+                "Arrow Up/Down to navigate | Enter to buy | Backspace or Esc to return",
+                _frameX + 80f,
+                _frameY + 515f,
+                0.28f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
         }
 
         private string GetUpgradeModuleSubtitle(IndustryUpgradeModule module)
