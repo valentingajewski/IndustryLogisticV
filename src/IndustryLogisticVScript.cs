@@ -51,11 +51,11 @@ namespace IndustryLogisticV
         private readonly FleetManager _fleetManager;
         private readonly GlobalMarketManager _globalMarket;
 
-        private readonly SimpleMenu _officeMenu;
+        private readonly LemonMenu _officeMenu;
         private readonly SimpleMenu _industryMenu;
         private readonly SimpleMenu _upgradeMenu;
-        private readonly SimpleMenu _modControlMenu;
-        private readonly SimpleMenu _difficultyMenu;
+        private readonly LemonMenu _modControlMenu;
+        private readonly LemonMenu _difficultyMenu;
         private readonly SimpleMenu _networkOverviewMenu;
         private readonly SimpleMenu _industryOverviewMenu;
         private readonly SimpleMenu _industryDetailMenu;
@@ -122,12 +122,10 @@ namespace IndustryLogisticV
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
             _vehicleSpawnMarkerSeed = _config.VehicleSpawnPosition;
 
-            _officeMenu = new SimpleMenu("Industrial Logistics Office")
+            _officeMenu = new LemonMenu("Office")
             {
                 Subtitle = "Manage workers and fleet deployment",
-                Theme = SimpleMenuTheme.Tablet,
-                TabletWidthScale = 0.6f,
-                TabletAlignRight = true,
+                AlignRight = true,
             };
             _industryMenu = new SimpleMenu("Industry Transfer")
             {
@@ -137,19 +135,15 @@ namespace IndustryLogisticV
             {
                 Subtitle = "Invest profits into modules",
             };
-            _modControlMenu = new SimpleMenu("Game Mod Control")
+            _modControlMenu = new LemonMenu("Game Mod Control")
             {
                 Subtitle = "Activate mechanics and configure gameplay",
-                Theme = SimpleMenuTheme.Tablet,
-                TabletWidthScale = 0.4f,
-                TabletAlignRight = true,
+                AlignRight = true,
             };
-            _difficultyMenu = new SimpleMenu("Difficulty Settings")
+            _difficultyMenu = new LemonMenu("Difficulty Settings")
             {
                 Subtitle = "Enable or disable challenge options",
-                Theme = SimpleMenuTheme.Tablet,
-                TabletWidthScale = 0.4f,
-                TabletAlignRight = true,
+                AlignRight = true,
             };
             _networkOverviewMenu = new SimpleMenu("Network Overview")
             {
@@ -553,6 +547,10 @@ namespace IndustryLogisticV
 
         private void DrawOpenMenus()
         {
+            _modControlMenu.Draw();
+            _difficultyMenu.Draw();
+            _officeMenu.Draw();
+
             if (_industryDetailMenu.IsOpen)
             {
                 IndustryStatisticsPanelRenderer.DrawStandalone(
@@ -580,21 +578,8 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_modControlMenu.IsOpen)
+            if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen)
             {
-                _modControlMenu.Draw();
-                return;
-            }
-
-            if (_difficultyMenu.IsOpen)
-            {
-                _difficultyMenu.Draw();
-                return;
-            }
-
-            if (_officeMenu.IsOpen)
-            {
-                _officeMenu.Draw();
                 return;
             }
 
@@ -955,6 +940,15 @@ namespace IndustryLogisticV
             var conditionRatio = Clamp01(cargoState.CargoCondition);
             var quantityColor = ResolveCargoOverviewAccent(cargoState.CargoType);
             var conditionColor = ResolveCargoConditionColor(conditionRatio);
+                var contentX = x + 8f;
+                var titleY = y + 5f;
+                var commodityY = y + (height * 0.22f);
+                var quantityTextY = y + (height * 0.43f);
+                var quantityBarY = y + (height * 0.60f);
+                var conditionTextY = y + (height * 0.72f);
+                var conditionBarY = y + (height * 0.86f);
+                var barWidth = width - 16f;
+                var barHeight = Math.Max(4f, height * 0.08f);
 
             DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(92, 0, 0, 0));
             DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
@@ -962,8 +956,8 @@ namespace IndustryLogisticV
 
             new TextElement(
                     "CARGO",
-                    ToScriptTextCoords(resolution, x + 8f, y + 5f),
-                    0.24f,
+                    ToScriptTextCoords(resolution, contentX, titleY),
+                    0.30f,
                     Color.FromArgb(248, 239, 247, 255),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
@@ -973,8 +967,8 @@ namespace IndustryLogisticV
 
             new TextElement(
                     cargoState.Commodity,
-                    ToScriptTextCoords(resolution, x + 8f, y + 17f),
-                    0.205f,
+                    ToScriptTextCoords(resolution, contentX, commodityY),
+                    0.19f,
                     Color.FromArgb(232, 220, 229, 239),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
@@ -984,7 +978,7 @@ namespace IndustryLogisticV
 
             new TextElement(
                     string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons),
-                    ToScriptTextCoords(resolution, x + 8f, y + 29f),
+                    ToScriptTextCoords(resolution, contentX, quantityTextY),
                     0.18f,
                     Color.FromArgb(224, 214, 223, 233),
                     GTA.UI.Font.ChaletLondon,
@@ -993,11 +987,11 @@ namespace IndustryLogisticV
                     false)
                 .Draw();
 
-            DrawCompactLoadingBar(resolution, x + 8f, y + 39f, width - 16f, 5f, quantityRatio, quantityColor);
+            DrawCompactLoadingBar(resolution, contentX, quantityBarY, barWidth, barHeight, quantityRatio, quantityColor);
 
             new TextElement(
                     string.Format("Cond {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f),
-                    ToScriptTextCoords(resolution, x + 8f, y + 48f),
+                    ToScriptTextCoords(resolution, contentX, conditionTextY),
                     0.18f,
                     conditionColor,
                     GTA.UI.Font.ChaletLondon,
@@ -1006,8 +1000,23 @@ namespace IndustryLogisticV
                     false)
                 .Draw();
 
-            DrawCompactLoadingBar(resolution, x + 8f, y + 58f, width - 16f, 5f, conditionRatio, conditionColor);
+            DrawCompactLoadingBar(resolution, contentX, conditionBarY, barWidth, barHeight, conditionRatio, conditionColor);
 
+        }
+
+        private static void DrawCompactLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color fillColor)
+        {
+            ratio = Clamp01(ratio);
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(165, 6, 10, 15));
+
+            var innerHeight = Math.Max(2f, height - 2f);
+            var innerWidth = Math.Max(0f, (width - 2f) * ratio);
+            if (innerWidth <= 0f)
+            {
+                return;
+            }
+
+            DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, innerWidth, innerHeight, fillColor);
         }
 
         private static float GetActiveRigBodyHealth(Vehicle driverVehicle, Vehicle cargoVehicle)
@@ -1521,26 +1530,22 @@ namespace IndustryLogisticV
 
         private string CurrentActivationCaption()
         {
-            return _modMechanicsEnabled
-                ? "Activate: [~g~On~s~] [Off]"
-                : "Activate: [On] [~r~Off~s~]";
+            return string.Format("Activate: {0}", _modMechanicsEnabled ? "~g~On~s~" : "~r~Off~s~");
         }
 
         private string CurrentGameModeCaption()
         {
-            return string.Format("Game mod: < {0} >", _gameModMode == GameModMode.Fun ? "Fun" : "Career");
+            return string.Format("Game mod: {0}", _gameModMode == GameModMode.Fun ? "Fun" : "Career");
         }
 
         private string CurrentIndustryPersistenceCaption()
         {
-            return _industryPersistenceEnabled
-                ? "Industry persistence: [~g~On~s~] [Off]"
-                : "Industry persistence: [On] [~r~Off~s~]";
+            return string.Format("Industry persistence: {0}", _industryPersistenceEnabled ? "~g~On~s~" : "~r~Off~s~");
         }
 
         private string CurrentVehicleFuelSettingCaption()
         {
-            return string.Format("Vehicle fuel: < {0} >", _vehicleFuelDifficultyEnabled ? "Enable" : "Disable");
+            return string.Format("Vehicle fuel: {0}", _vehicleFuelDifficultyEnabled ? "~g~On~s~" : "~r~Off~s~");
         }
 
         private void ToggleMechanicsFromMenu()
@@ -1668,14 +1673,14 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Worker Model: < {0} >", GetWorkerDisplayName(_config.WorkerModels[_workerIndex])),
+                    CaptionFactory = () => string.Format("Worker Model: {0}", GetWorkerDisplayName(_config.WorkerModels[_workerIndex])),
                     OnLeft = () => ChangeWorkerIndex(-1),
                     OnRight = () => ChangeWorkerIndex(1),
                     OnActivate = ApplyWorkerModel,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Cargo Filter: < {0} >", _selectedFilter),
+                    CaptionFactory = () => string.Format("Cargo Filter: {0}", _selectedFilter),
                     OnLeft = () => ChangeFilter(-1),
                     OnRight = () => ChangeFilter(1),
                     OnActivate = RefreshFilteredVehicles,
@@ -1809,30 +1814,30 @@ namespace IndustryLogisticV
         {
             if (_filteredVehicles.Count == 0)
             {
-                return "Vehicle: < none for this cargo filter >";
+                return "Vehicle: none for this cargo filter";
             }
 
-            return string.Format("Vehicle: < {0} >", _filteredVehicles[_selectedVehicleIndex]);
+            return string.Format("Vehicle: {0}", _filteredVehicles[_selectedVehicleIndex]);
         }
 
         private string CurrentTractorCaption()
         {
             if (_filteredVehicles.Count == 0)
             {
-                return "Trailer Truck: < n/a >";
+                return "Trailer Truck: n/a";
             }
 
             if (!_filteredVehicles[_selectedVehicleIndex].IsTrailer)
             {
-                return "Trailer Truck: < auto (not needed) >";
+                return "Trailer Truck: auto (not needed)";
             }
 
             if (_tractorVehicles.Count == 0)
             {
-                return "Trailer Truck: < unavailable >";
+                return "Trailer Truck: unavailable";
             }
 
-            return string.Format("Trailer Truck: < {0} >", _tractorVehicles[_selectedTractorIndex].ModelName);
+            return string.Format("Trailer Truck: {0}", _tractorVehicles[_selectedTractorIndex].ModelName);
         }
 
         private void SpawnSelectedVehicle()
