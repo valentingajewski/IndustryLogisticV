@@ -50,36 +50,14 @@ Install steps:
 4. Place config.ini where the script can find it:
    - Preferred: GTA5/scripts/config.ini
    - Also supported by this script: GTA5/config.ini
-5. Place tablet fallback image (recommended path):
-   - GTA5/scripts/tablet_images/tablet_template.png
 
-
-4) Important Background/Image Note
-----------------------------------
-The tablet visuals can come from two sources:
-
-A) Streamed texture dictionary
-- Name expected by code: industry_tablet
-- Textures expected: tablet_frame, tablet_background
-
-B) PNG fallback image
-- File expected: tablet_template.png
-- Searched in these locations:
-  - GTA5/tablet_images/tablet_template.png
-  - GTA5/scripts/tablet_images/tablet_template.png
-  - scripts folder next to the DLL and nearby parent folders
-
-If you do not have a valid industry_tablet texture dictionary available,
-keep tablet_template.png in GTA5/scripts/tablet_images/.
-
-
-5) Controls (from config.ini)
+4) Controls (from config.ini)
 -----------------------------
 [Controls]
 - ToggleDashboard = F8
 - ToggleContext = F6
 - Interact = E
-- OpenUpgrade = U (legacy key; tablet now includes upgrades page)
+- OpenUpgrade = U (legacy key: tablet now includes upgrades page)
 - MenuUp = Up
 - MenuDown = Down
 - MenuLeft = Left
@@ -88,7 +66,7 @@ keep tablet_template.png in GTA5/scripts/tablet_images/.
 - MenuBack = Backspace
 
 
-6) Config Highlights
+5) Config Highlights
 --------------------
 [General]
 - OmegaMultiplier
@@ -101,7 +79,7 @@ keep tablet_template.png in GTA5/scripts/tablet_images/.
 Industry sections define coordinates, inputs/outputs, and capacities.
 
 
-7) Troubleshooting
+6) Troubleshooting
 ------------------
 Tablet background not visible:
 1. Verify IndustryLogisticV.dll is loaded from GTA5/scripts.
@@ -109,7 +87,7 @@ Tablet background not visible:
 3. Ensure LemonUI.SHVDN3.dll exists in GTA5/scripts.
 
 Industry Menu does not open:
-1. Ensure Interact key in config.ini matches your intended key.
+1. Ensure Interact key in IndustryLogisticV.ini matches your intended key.
 2. Move close to an industry marker and be on foot.
 
 Upgrades unavailable:
