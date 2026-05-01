@@ -11,16 +11,24 @@ namespace IndustryLogisticV.UI
 {
     public sealed class OverviewMenuController
     {
+        private enum OverviewDetailReturnMenu
+        {
+            Industry = 0,
+            Store = 1,
+        }
+
         private readonly ControlBindings _controls;
         private readonly IndustryManager _industryManager;
         private readonly Action _closeAllMenus;
         private readonly SimpleMenu _networkOverviewMenu;
         private readonly SimpleMenu _industryOverviewMenu;
+        private readonly SimpleMenu _storeOverviewMenu;
         private readonly SimpleMenu _industryDetailMenu;
         private readonly SimpleMenu _gasStationOverviewMenu;
 
         private Industry _inspectedIndustry;
         private int _industryDetailStatsScrollIndex;
+        private OverviewDetailReturnMenu _detailReturnMenu;
 
         public OverviewMenuController(ControlBindings controls, IndustryManager industryManager, Action closeAllMenus)
         {
@@ -30,7 +38,7 @@ namespace IndustryLogisticV.UI
 
             _networkOverviewMenu = new SimpleMenu("Network Overview")
             {
-                Subtitle = "Inspect industries and gas stations",
+                Subtitle = "Inspect industries, stores, and gas stations",
                 Theme = SimpleMenuTheme.Tablet,
                 TabletWidthScale = 0.72f,
                 TabletAlignRight = false,
@@ -45,6 +53,19 @@ namespace IndustryLogisticV.UI
                 Subtitle = "Select an industry to inspect storage and production",
                 Theme = SimpleMenuTheme.Tablet,
                 TabletWidthScale = 0.98f,
+                TabletAlignRight = false,
+                TabletCaptionScale = 0.46f,
+                TabletDetailScale = 0.285f,
+                TabletCaptionOffsetY = 18f,
+                TabletDetailOffsetY = 49f,
+                TabletMinRowHeight = 68f,
+                MaxVisibleItems = 6,
+            };
+            _storeOverviewMenu = new SimpleMenu("Stores Overview")
+            {
+                Subtitle = "Select a store to inspect storage and demand",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.92f,
                 TabletAlignRight = false,
                 TabletCaptionScale = 0.46f,
                 TabletDetailScale = 0.285f,
@@ -78,7 +99,7 @@ namespace IndustryLogisticV.UI
 
         public bool AnyMenuOpen
         {
-            get { return _networkOverviewMenu.IsOpen || _industryOverviewMenu.IsOpen || _industryDetailMenu.IsOpen || _gasStationOverviewMenu.IsOpen; }
+            get { return _networkOverviewMenu.IsOpen || _industryOverviewMenu.IsOpen || _storeOverviewMenu.IsOpen || _industryDetailMenu.IsOpen || _gasStationOverviewMenu.IsOpen; }
         }
 
         public void Toggle()
@@ -97,6 +118,7 @@ namespace IndustryLogisticV.UI
         {
             _networkOverviewMenu.Close();
             _industryOverviewMenu.Close();
+            _storeOverviewMenu.Close();
             _industryDetailMenu.Close();
             _gasStationOverviewMenu.Close();
         }
@@ -107,7 +129,7 @@ namespace IndustryLogisticV.UI
             {
                 if (IsBackMenuKey(key) || key == _controls.MenuSelect)
                 {
-                    OpenIndustryOverviewMenu();
+                    ReopenOverviewMenuFromDetail();
                     return true;
                 }
 
@@ -135,6 +157,18 @@ namespace IndustryLogisticV.UI
                 }
 
                 _industryOverviewMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_storeOverviewMenu.IsOpen)
+            {
+                if (IsBackMenuKey(key))
+                {
+                    OpenNetworkOverviewMenu();
+                    return true;
+                }
+
+                _storeOverviewMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -176,6 +210,12 @@ namespace IndustryLogisticV.UI
                 return;
             }
 
+            if (_storeOverviewMenu.IsOpen)
+            {
+                _storeOverviewMenu.Draw();
+                return;
+            }
+
             if (_gasStationOverviewMenu.IsOpen)
             {
                 _gasStationOverviewMenu.Draw();
@@ -202,6 +242,13 @@ namespace IndustryLogisticV.UI
             _industryOverviewMenu.Open();
         }
 
+        private void OpenStoreOverviewMenu()
+        {
+            Close();
+            RebuildStoreOverviewMenuItems();
+            _storeOverviewMenu.Open();
+        }
+
         private void OpenGasStationOverviewMenu()
         {
             Close();
@@ -211,21 +258,40 @@ namespace IndustryLogisticV.UI
 
         private void OpenIndustryDetailMenu(Industry industry)
         {
+            OpenIndustryDetailMenu(industry, OverviewDetailReturnMenu.Industry);
+        }
+
+        private void OpenIndustryDetailMenu(Industry industry, OverviewDetailReturnMenu returnMenu)
+        {
             if (industry == null)
             {
                 return;
             }
 
             _inspectedIndustry = industry;
+            _detailReturnMenu = returnMenu;
             _industryDetailStatsScrollIndex = 0;
             Close();
             _industryDetailMenu.Open();
         }
 
+        private void ReopenOverviewMenuFromDetail()
+        {
+            switch (_detailReturnMenu)
+            {
+                case OverviewDetailReturnMenu.Store:
+                    OpenStoreOverviewMenu();
+                    break;
+                default:
+                    OpenIndustryOverviewMenu();
+                    break;
+            }
+        }
+
         private void RebuildNetworkOverviewMenuItems()
         {
             _networkOverviewMenu.Title = "Network Overview";
-            _networkOverviewMenu.Subtitle = "Inspect industries and gas stations";
+            _networkOverviewMenu.Subtitle = "Inspect industries, stores, and gas stations";
             _networkOverviewMenu.SetItems(new[]
             {
                 new MenuItem
@@ -235,6 +301,14 @@ namespace IndustryLogisticV.UI
                     IdleBackgroundColor = Color.FromArgb(170, 46, 66, 50),
                     SelectedBackgroundColor = Color.FromArgb(205, 85, 124, 94),
                     OnActivate = OpenIndustryOverviewMenu,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "STORES OVERVIEW",
+                    DetailFactory = () => string.Format("{0} retail delivery locations", GetStoresForOverview().Count),
+                    IdleBackgroundColor = Color.FromArgb(170, 63, 58, 42),
+                    SelectedBackgroundColor = Color.FromArgb(206, 132, 120, 86),
+                    OnActivate = OpenStoreOverviewMenu,
                 },
                 new MenuItem
                 {
@@ -291,6 +365,42 @@ namespace IndustryLogisticV.UI
             _industryOverviewMenu.SetItems(items);
         }
 
+        private void RebuildStoreOverviewMenuItems()
+        {
+            var stores = GetStoresForOverview();
+            var items = new List<MenuItem>();
+
+            for (int i = 0; i < stores.Count; i++)
+            {
+                var store = stores[i];
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => store.Name,
+                    DetailFactory = () => GetStoreOverviewDetail(store),
+                    OnActivate = () => OpenIndustryDetailMenu(store, OverviewDetailReturnMenu.Store),
+                });
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => "No stores available",
+                    DetailFactory = () => "No retail store delivery targets are currently configured.",
+                });
+            }
+
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = OpenNetworkOverviewMenu,
+            });
+
+            _storeOverviewMenu.Title = "Stores Overview";
+            _storeOverviewMenu.Subtitle = "Select a store to inspect storage and demand";
+            _storeOverviewMenu.SetItems(items);
+        }
+
         private void RebuildGasStationOverviewMenuItems()
         {
             var stations = GetGasStationsForOverview();
@@ -329,7 +439,15 @@ namespace IndustryLogisticV.UI
         private List<Industry> GetIndustriesForOverview()
         {
             return _industryManager.Industries
-                .Where(x => x != null && !IsPetrolServiceStation(x))
+                .Where(x => x != null && !IsStoreLocation(x) && !IsPetrolServiceStation(x))
+                .OrderBy(x => x.Name)
+                .ToList();
+        }
+
+        private List<Industry> GetStoresForOverview()
+        {
+            return _industryManager.Industries
+                .Where(IsStoreLocation)
                 .OrderBy(x => x.Name)
                 .ToList();
         }
@@ -363,6 +481,18 @@ namespace IndustryLogisticV.UI
             return detail;
         }
 
+        private static string GetStoreOverviewDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            var storage = industry.GetInputStockTotal();
+            var fillPercent = Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
+            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillPercent);
+        }
+
         private static string GetGasStationOverviewDetail(Industry industry)
         {
             if (industry == null)
@@ -393,6 +523,23 @@ namespace IndustryLogisticV.UI
             }
 
             return industry.IsSink && industry.Inputs.Count == 1 && industry.Inputs.Contains("Fuel");
+        }
+
+        private static bool IsStoreLocation(Industry industry)
+        {
+            if (industry == null || !industry.IsSink || IsPetrolServiceStation(industry))
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(industry.Id) && industry.Id.StartsWith("Store", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var name = industry.Name ?? string.Empty;
+            return name.IndexOf("Store", StringComparison.OrdinalIgnoreCase) >= 0
+                || name.IndexOf("Mall", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static float Clamp01(float value)
