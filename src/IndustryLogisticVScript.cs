@@ -75,6 +75,7 @@ namespace IndustryLogisticV
         private bool _showContext;
         private bool _modMechanicsEnabled;
         private bool _industryPersistenceEnabled;
+        private bool _cargoDamageDifficultyEnabled;
         private bool _vehicleFuelDifficultyEnabled;
 
         public IndustryLogisticVScript()
@@ -154,6 +155,7 @@ namespace IndustryLogisticV
             _profit = 20000f;
             _modMechanicsEnabled = false;
             _industryPersistenceEnabled = true;
+            _cargoDamageDifficultyEnabled = true;
             _vehicleFuelDifficultyEnabled = false;
 
             if (_industryPersistenceEnabled)
@@ -591,7 +593,15 @@ namespace IndustryLogisticV
                 return;
             }
 
-            UpdateCargoDamageAndLoss(cargoVehicle, driverVehicle, cargoState, now);
+            if (_cargoDamageDifficultyEnabled)
+            {
+                UpdateCargoDamageAndLoss(cargoVehicle, driverVehicle, cargoState, now);
+            }
+            else
+            {
+                SyncCargoDamageTracking(cargoVehicle, driverVehicle, cargoState);
+            }
+
             if (cargoState.IsEmpty)
             {
                 return;
@@ -619,6 +629,25 @@ namespace IndustryLogisticV
 
             cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
             return cargoState != null && !cargoState.IsEmpty;
+        }
+
+        private void SyncCargoDamageTracking(Vehicle cargoVehicle, Vehicle driverVehicle, VehicleCargoState cargoState)
+        {
+            if (cargoVehicle == null || !cargoVehicle.Exists() || cargoState == null || cargoState.IsEmpty)
+            {
+                return;
+            }
+
+            var currentRigHealth = GetActiveRigBodyHealth(driverVehicle, cargoVehicle);
+            if (currentRigHealth <= 0.001f)
+            {
+                cargoState.LastTrackedRigHealth = 0f;
+                cargoState.LastTrackedRigSpeed = 0f;
+                return;
+            }
+
+            cargoState.LastTrackedRigHealth = currentRigHealth;
+            cargoState.LastTrackedRigSpeed = GetActiveRigSpeed(driverVehicle, cargoVehicle);
         }
 
         private void UpdateCargoDamageAndLoss(Vehicle cargoVehicle, Vehicle driverVehicle, VehicleCargoState cargoState, int now)
@@ -1058,10 +1087,17 @@ namespace IndustryLogisticV
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = CurrentVehicleFuelSettingCaption,
-                    OnLeft = ToggleVehicleFuelSetting,
-                    OnRight = ToggleVehicleFuelSetting,
+                    CaptionFactory = () => "Vehicle fuel",
+                    DetailFactory = () => "Enable vehicle fuel usage for cargo operations.",
+                    CheckboxStateFactory = () => _vehicleFuelDifficultyEnabled,
                     OnActivate = ToggleVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Cargo damage",
+                    DetailFactory = () => "Enable cargo loss and condition damage from collisions.",
+                    CheckboxStateFactory = () => _cargoDamageDifficultyEnabled,
+                    OnActivate = ToggleCargoDamageSetting,
                 },
                 new OfficeMenuItem
                 {
@@ -1128,6 +1164,11 @@ namespace IndustryLogisticV
         private void ToggleVehicleFuelSetting()
         {
             _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
+        }
+
+        private void ToggleCargoDamageSetting()
+        {
+            _cargoDamageDifficultyEnabled = !_cargoDamageDifficultyEnabled;
         }
 
         private void ToggleIndustryPersistenceFromMenu()

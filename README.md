@@ -25,7 +25,7 @@ Build profit by moving commodities through the logistics network:
 ## 3. Default Controls
 
 - `F7`: Open Game Mod Control menu (Activate, Industry persistence, mode, difficulty)
-- `F8`: Open overview menu (industries and gas stations)
+- `F8`: Open overview menu (industries, stores, and gas stations)
 - `E`: Interact with office/industry terminal
 - `E` (GateInteract): Open nearby gates/barriers
 - `F6`: Context panel
@@ -106,7 +106,7 @@ Focus early upgrades on bottleneck processors (Refinery, Smelting, Processor, Co
 ## 9. Practical Tips
 
 - Start with short routes first (one producer -> one processor).
-- Use `F8` to inspect industry storage, omega values, and gas station fill levels.
+- Use `F8` to inspect industry storage, store stock, omega values, and gas station fill levels.
 - Use `F6` when near an industry to inspect local stock and omega values.
 - The cargo overview HUD appears next to the minimap whenever your truck or trailer carries a resource.
 - Heavy vehicle damage reduces cargo condition and can destroy part of the load, so rough driving directly lowers final payout.
