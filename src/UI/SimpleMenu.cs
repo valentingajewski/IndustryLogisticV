@@ -19,7 +19,6 @@ namespace IndustryLogisticV.UI
         public Func<string> CaptionFactory { get; set; }
         public Func<string> DetailFactory { get; set; }
         public Func<float?> ProgressRatioFactory { get; set; }
-        public Func<bool> CheckboxStateFactory { get; set; }
         public Action OnActivate { get; set; }
         public Action OnLeft { get; set; }
         public Action OnRight { get; set; }

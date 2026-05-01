@@ -249,9 +249,7 @@ namespace IndustryLogisticV.UI
             public LemonMenuEntry(MenuItem source)
             {
                 _source = source ?? new MenuItem();
-                Item = _source.CheckboxStateFactory != null
-                    ? new NativeCheckboxItem(string.Empty, false)
-                    : new NativeItem(string.Empty, string.Empty);
+                Item = new NativeItem(string.Empty, string.Empty);
                 Item.Tag = this;
             }
 
@@ -262,13 +260,6 @@ namespace IndustryLogisticV.UI
                 Item.Title = InvokeString(_source.CaptionFactory);
                 Item.Description = ResolveDescription();
                 Item.AltTitle = ResolveAltTitle();
-
-                var checkboxItem = Item as NativeCheckboxItem;
-                if (checkboxItem != null && _source.CheckboxStateFactory != null)
-                {
-                    checkboxItem.Checked = InvokeBool(_source.CheckboxStateFactory);
-                }
-
                 Item.Enabled = _source.OnActivate != null || _source.OnLeft != null || _source.OnRight != null;
             }
 
@@ -313,11 +304,6 @@ namespace IndustryLogisticV.UI
                     return detail;
                 }
 
-                if (_source.CheckboxStateFactory != null)
-                {
-                    return _source.OnActivate != null ? "Press Enter to toggle." : string.Empty;
-                }
-
                 var hasLeftRight = _source.OnLeft != null || _source.OnRight != null;
                 if (hasLeftRight && _source.OnActivate != null)
                 {
@@ -345,11 +331,6 @@ namespace IndustryLogisticV.UI
             private static string InvokeString(Func<string> factory)
             {
                 return factory == null ? string.Empty : factory() ?? string.Empty;
-            }
-
-            private static bool InvokeBool(Func<bool> factory)
-            {
-                return factory != null && factory();
             }
         }
     }
