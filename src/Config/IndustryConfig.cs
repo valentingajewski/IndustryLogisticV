@@ -6,6 +6,7 @@ namespace IndustryLogisticV.Config
     public sealed class IndustryConfig
     {
         public string Id { get; set; }
+        public ExternalLocationKind LocationKind { get; set; }
         public string Name { get; set; }
         public Vector3 Position { get; set; }
         public HashSet<string> Inputs { get; set; }
