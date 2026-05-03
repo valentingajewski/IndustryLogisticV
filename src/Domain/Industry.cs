@@ -223,6 +223,37 @@ namespace IndustryLogisticV.Domain
             return removed;
         }
 
+        public float ClearInputs()
+        {
+            float removed = 0f;
+            foreach (var input in Inputs)
+            {
+                removed += GetStock(input);
+                BufferStorage[input] = 0f;
+            }
+
+            if (_supportsOmegaBoost)
+            {
+                removed += OmegaStorage;
+                OmegaStorage = 0f;
+                HasOmegaBoost = false;
+            }
+
+            return removed;
+        }
+
+        public float ClearOutputs()
+        {
+            float removed = 0f;
+            foreach (var output in Outputs)
+            {
+                removed += GetStock(output);
+                BufferStorage[output] = 0f;
+            }
+
+            return removed;
+        }
+
         public void SeedOutput(string commodity, float tons)
         {
             AddOutput(commodity, tons);
@@ -424,6 +455,11 @@ namespace IndustryLogisticV.Domain
         {
             string ignored;
             return TryUpgradeModule(IndustryUpgradeModule.Production, ref profit, out cost, out ignored);
+        }
+
+        public void SetProductionRate(float productionRate)
+        {
+            ProductionRate = Math.Max(1f, productionRate);
         }
 
         public float GetMaxTransferTonsForCommodity(string commodity)

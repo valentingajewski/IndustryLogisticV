@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using GTA;
 using GTA.Math;
 using GTA.Native;
@@ -27,6 +28,12 @@ namespace IndustryLogisticV
         private const float CargoDamageGraceHealth = 40f;
         private const float CargoConditionLossPerDamageRatio = 0.75f;
         private const float CargoLossPerDamageRatio = 0.35f;
+        private const int VkRControl = 0xA3;
+        private const float DebugFillTons = 1000000f;
+        private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
+
+        [DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
 
         private readonly ModConfig _config;
         private readonly string _configPath;
@@ -42,6 +49,7 @@ namespace IndustryLogisticV
         private readonly SimpleMenu _upgradeMenu;
         private readonly LemonMenu _modControlMenu;
         private readonly LemonMenu _difficultyMenu;
+        private readonly LemonMenu _debugMenu;
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
@@ -61,6 +69,8 @@ namespace IndustryLogisticV
         private Industry _nearestIndustry;
         private Industry _menuIndustry;
 
+    private int _selectedDebugResourceIndex;
+    private int _selectedDebugResourceAmountIndex;
         private int _selectedIndustryProductIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
@@ -157,6 +167,12 @@ namespace IndustryLogisticV
                 Subtitle = "Enable or disable challenge options",
                 AlignRight = true,
             };
+            _debugMenu = new LemonMenu("Debug")
+            {
+                Subtitle = "Runtime industry and vehicle tools",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
             _overviewMenuController = new OverviewMenuController(_controls, _industryManager, CloseAllMenus);
             _industryTabletController = new IndustryTabletController(
                 _fleetManager,
@@ -189,6 +205,7 @@ namespace IndustryLogisticV
             RebuildOfficeMenuItems();
             RebuildModControlMenuItems();
             RebuildDifficultyMenuItems();
+            RebuildDebugMenuItems();
 
             Tick += OnTick;
             KeyDown += OnKeyDown;
@@ -208,6 +225,7 @@ namespace IndustryLogisticV
                     || _upgradeMenu.IsOpen
                     || _modControlMenu.IsOpen
                     || _difficultyMenu.IsOpen
+                    || _debugMenu.IsOpen
                     || _overviewMenuController.AnyMenuOpen
                     || _industryTabletController.IsOpen;
             }
@@ -285,6 +303,17 @@ namespace IndustryLogisticV
             }
 
             _heldKeys.Add(e.KeyCode);
+
+            if (IsDebugMenuHotkey(e))
+            {
+                if (!CanHandleKeyPress(e.KeyCode))
+                {
+                    return;
+                }
+
+                ToggleDebugMenu();
+                return;
+            }
 
             if (!CanHandleKeyPress(e.KeyCode))
             {
@@ -371,6 +400,18 @@ namespace IndustryLogisticV
             _heldKeys.Remove(e.KeyCode);
         }
 
+        private static bool IsDebugMenuHotkey(WinForms.KeyEventArgs e)
+        {
+            return e != null
+                && e.KeyCode == WinForms.Keys.W
+                && e.Alt;
+        }
+
+        private static bool IsVirtualKeyDown(int vKey)
+        {
+            return (GetAsyncKeyState(vKey) & 0x8000) != 0;
+        }
+
         private bool HandleTabletKey(WinForms.Keys key)
         {
             if (!_industryTabletController.IsOpen)
@@ -394,6 +435,12 @@ namespace IndustryLogisticV
 
         private bool HandleMenuKey(WinForms.Keys key)
         {
+            if (_debugMenu.IsOpen)
+            {
+                _debugMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_modControlMenu.IsOpen)
             {
                 _modControlMenu.HandleKey(key, _controls);
@@ -470,6 +517,7 @@ namespace IndustryLogisticV
             _difficultyMenu.Draw();
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
+            _debugMenu.Draw();
 
             _overviewMenuController.Draw();
             if (_overviewMenuController.AnyMenuOpen)
@@ -477,7 +525,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen)
+            if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
             {
                 return;
             }
@@ -1082,6 +1130,7 @@ namespace IndustryLogisticV
             _upgradeMenu.Close();
             _modControlMenu.Close();
             _difficultyMenu.Close();
+            _debugMenu.Close();
             CloseIndustryTablet();
         }
 
@@ -1090,6 +1139,7 @@ namespace IndustryLogisticV
             CloseOverviewMenus();
             _modControlMenu.Close();
             _difficultyMenu.Close();
+            _debugMenu.Close();
             _officeMenu.Close();
             _vehicleCargoMenu.Close();
             _industryMenu.Close();
@@ -1176,6 +1226,19 @@ namespace IndustryLogisticV
             _modControlMenu.Close();
             RebuildDifficultyMenuItems();
             _difficultyMenu.Open();
+        }
+
+        private void ToggleDebugMenu()
+        {
+            if (_debugMenu.IsOpen)
+            {
+                _debugMenu.Close();
+                return;
+            }
+
+            CloseAllMenus();
+            RebuildDebugMenuItems();
+            _debugMenu.Open();
         }
 
         private void ToggleOverviewMenu()
@@ -1316,6 +1379,7 @@ namespace IndustryLogisticV
             _industryMenu.Close();
             _upgradeMenu.Close();
             _difficultyMenu.Close();
+            _debugMenu.Close();
             CloseIndustryTablet();
             DestroyMapBlips();
             _lastIndustryTickMs = Game.GameTime;
@@ -1326,6 +1390,148 @@ namespace IndustryLogisticV
             }
 
             ShowStatus("Mod mechanics disabled.");
+        }
+
+        private void RebuildDebugMenuItems()
+        {
+            _debugMenu.Title = "Debug";
+            _debugMenu.Subtitle = "ALT + RCTRL + C";
+
+            _debugMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentDebugIndustryCaption,
+                    DetailFactory = CurrentDebugIndustryDetail,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentDebugResourceCaption,
+                    DetailFactory = CurrentDebugResourceDetail,
+                    OnLeft = () => ChangeDebugResourceSelection(-1),
+                    OnRight = () => ChangeDebugResourceSelection(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentDebugResourceAmountCaption,
+                    DetailFactory = () => "Used by the add-resource action.",
+                    OnLeft = () => ChangeDebugResourceAmountSelection(-1),
+                    OnRight = () => ChangeDebugResourceAmountSelection(1),
+                },
+                new OfficeMenuItem
+                {
+                    IsSeparator = true,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Add selected resource",
+                    DetailFactory = () => "Adds the selected tonnage to the highlighted nearby industry resource.",
+                    OnActivate = AddSelectedDebugResourceToNearbyIndustry,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Delete vehicle cargo",
+                    DetailFactory = () => "Clears cargo and visuals from your current or nearest cargo vehicle.",
+                    OnActivate = DeleteResolvedVehicleCargo,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Delete current vehicle",
+                    DetailFactory = () => "Deletes your current vehicle and its attached trailer if present.",
+                    OnActivate = DeleteCurrentVehicle,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Fill all inputs",
+                    DetailFactory = () => "Fills every accepted input buffer for the nearby industry.",
+                    OnActivate = FillNearbyIndustryInputs,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Empty all inputs",
+                    DetailFactory = () => "Clears every accepted input buffer for the nearby industry.",
+                    OnActivate = EmptyNearbyIndustryInputs,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Fill all outputs",
+                    DetailFactory = () => "Fills every output buffer for the nearby industry.",
+                    OnActivate = FillNearbyIndustryOutputs,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Empty all outputs",
+                    DetailFactory = () => "Clears every output buffer for the nearby industry.",
+                    OnActivate = EmptyNearbyIndustryOutputs,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Boost production x1000",
+                    DetailFactory = () => "Multiplies the nearby industry's production rate by 1000.",
+                    OnActivate = MultiplyNearbyIndustryProductionRate,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _debugMenu.Close(),
+                },
+            });
+        }
+
+        private string CurrentDebugIndustryCaption()
+        {
+            var industry = GetDebugNearbyIndustry();
+            return industry == null
+                ? "Nearby Industry: none"
+                : string.Format("Nearby Industry: {0}", industry.Name);
+        }
+
+        private string CurrentDebugIndustryDetail()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                return "Move within an industry marker to target it.";
+            }
+
+            return string.Format(
+                "Rate {0:0.0} cyc/h | Inputs {1} | Outputs {2}",
+                industry.ProductionRate,
+                industry.Inputs.Count,
+                industry.Outputs.Count);
+        }
+
+        private string CurrentDebugResourceCaption()
+        {
+            var resource = GetSelectedDebugResource(GetDebugNearbyIndustry());
+            return string.IsNullOrWhiteSpace(resource)
+                ? "Resource: < none >"
+                : string.Format("Resource: < {0} >", resource);
+        }
+
+        private string CurrentDebugResourceDetail()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                return "Move next to an industry to change the resource target.";
+            }
+
+            var resource = GetSelectedDebugResource(industry);
+            if (string.IsNullOrWhiteSpace(resource))
+            {
+                return "No input or output resource is available for this industry.";
+            }
+
+            var currentStock = resource.Equals("Omega", StringComparison.OrdinalIgnoreCase)
+                ? industry.OmegaStorage
+                : industry.GetStock(resource);
+            return string.Format("Current stock: {0:0.0}t", currentStock);
+        }
+
+        private string CurrentDebugResourceAmountCaption()
+        {
+            return string.Format("Amount: < {0:0.0}t >", GetSelectedDebugResourceAmountTons());
         }
 
         private void RebuildOfficeMenuItems()
@@ -1450,6 +1656,221 @@ namespace IndustryLogisticV
             {
                 RebuildOfficeMenuItems();
             }
+        }
+
+        private void ChangeDebugResourceSelection(int delta)
+        {
+            var resourceOptions = GetDebugResourceOptions(GetDebugNearbyIndustry());
+            if (resourceOptions.Count == 0)
+            {
+                _selectedDebugResourceIndex = 0;
+                return;
+            }
+
+            _selectedDebugResourceIndex = (_selectedDebugResourceIndex + delta + resourceOptions.Count) % resourceOptions.Count;
+        }
+
+        private void ChangeDebugResourceAmountSelection(int delta)
+        {
+            _selectedDebugResourceAmountIndex = (_selectedDebugResourceAmountIndex + delta + DebugResourceAmountOptionsTons.Length) % DebugResourceAmountOptionsTons.Length;
+        }
+
+        private void AddSelectedDebugResourceToNearbyIndustry()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                ShowStatus("Move next to an industry to add resources.");
+                return;
+            }
+
+            var resource = GetSelectedDebugResource(industry);
+            if (string.IsNullOrWhiteSpace(resource))
+            {
+                ShowStatus("No resource available for this industry.");
+                return;
+            }
+
+            var added = AddDebugResource(industry, resource, GetSelectedDebugResourceAmountTons());
+            if (added <= 0.001f)
+            {
+                ShowStatus(string.Format("Could not add {0}; storage is full or unsupported.", resource));
+                return;
+            }
+
+            ShowStatus(string.Format("Added {0:0.0}t {1} to {2}.", added, resource, industry.Name));
+        }
+
+        private void DeleteResolvedVehicleCargo()
+        {
+            CancelPendingTransferForDebug();
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return;
+            }
+
+            Vehicle driverVehicle;
+            var cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                ShowStatus("No cargo vehicle found nearby.");
+                return;
+            }
+
+            var cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+            ShowStatus(string.Format("Cleared cargo from {0}.", cargoVehicle.DisplayName));
+        }
+
+        private void DeleteCurrentVehicle()
+        {
+            CancelPendingTransferForDebug();
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return;
+            }
+
+            var currentVehicle = player.CurrentVehicle;
+            if (currentVehicle == null || !currentVehicle.Exists())
+            {
+                ShowStatus("Enter a vehicle to delete it.");
+                return;
+            }
+
+            var attachedTrailer = currentVehicle.TowedVehicle;
+            var hadAttachedTrailer = attachedTrailer != null && attachedTrailer.Exists();
+            if (attachedTrailer != null && attachedTrailer.Exists())
+            {
+                var trailerState = _fleetManager.GetOrCreateCargoState(attachedTrailer);
+                ClearCargoStateAndVisuals(attachedTrailer, trailerState);
+                attachedTrailer.Delete();
+            }
+
+            var currentCargoState = _fleetManager.GetOrCreateCargoState(currentVehicle);
+            ClearCargoStateAndVisuals(currentVehicle, currentCargoState);
+            currentVehicle.Delete();
+
+            ShowStatus(hadAttachedTrailer
+                ? "Deleted current vehicle and its trailer."
+                : "Deleted current vehicle.");
+        }
+
+        private void FillNearbyIndustryInputs()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                ShowStatus("Move next to an industry to fill its inputs.");
+                return;
+            }
+
+            var inputCommodities = industry.GetSortedInputs();
+            if (industry.SupportsOmegaBoost && !inputCommodities.Any(x => x.Equals("Omega", StringComparison.OrdinalIgnoreCase)))
+            {
+                inputCommodities.Add("Omega");
+            }
+
+            if (inputCommodities.Count == 0)
+            {
+                ShowStatus("This industry has no input buffers.");
+                return;
+            }
+
+            float totalAdded = 0f;
+            for (int i = 0; i < inputCommodities.Count; i++)
+            {
+                totalAdded += industry.AddInput(inputCommodities[i], DebugFillTons);
+            }
+
+            ShowStatus(totalAdded <= 0.001f
+                ? "Nearby industry inputs are already full."
+                : string.Format("Filled {0} input buffers on {1}.", inputCommodities.Count, industry.Name));
+        }
+
+        private void FillNearbyIndustryOutputs()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                ShowStatus("Move next to an industry to fill its outputs.");
+                return;
+            }
+
+            var outputCommodities = industry.GetSortedOutputs();
+            if (outputCommodities.Count == 0)
+            {
+                ShowStatus("This industry has no output buffers.");
+                return;
+            }
+
+            float totalAdded = 0f;
+            for (int i = 0; i < outputCommodities.Count; i++)
+            {
+                totalAdded += industry.AddOutput(outputCommodities[i], DebugFillTons);
+            }
+
+            ShowStatus(totalAdded <= 0.001f
+                ? "Nearby industry outputs are already full."
+                : string.Format("Filled {0} output buffers on {1}.", outputCommodities.Count, industry.Name));
+        }
+
+        private void EmptyNearbyIndustryInputs()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                ShowStatus("Move next to an industry to empty its inputs.");
+                return;
+            }
+
+            if (industry.Inputs.Count == 0 && !industry.SupportsOmegaBoost)
+            {
+                ShowStatus("This industry has no input buffers.");
+                return;
+            }
+
+            var removed = industry.ClearInputs();
+            ShowStatus(removed <= 0.001f
+                ? "Nearby industry inputs are already empty."
+                : string.Format("Emptied {0:0.0}t from input buffers on {1}.", removed, industry.Name));
+        }
+
+        private void EmptyNearbyIndustryOutputs()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                ShowStatus("Move next to an industry to empty its outputs.");
+                return;
+            }
+
+            if (industry.Outputs.Count == 0)
+            {
+                ShowStatus("This industry has no output buffers.");
+                return;
+            }
+
+            var removed = industry.ClearOutputs();
+            ShowStatus(removed <= 0.001f
+                ? "Nearby industry outputs are already empty."
+                : string.Format("Emptied {0:0.0}t from output buffers on {1}.", removed, industry.Name));
+        }
+
+        private void MultiplyNearbyIndustryProductionRate()
+        {
+            var industry = GetDebugNearbyIndustry();
+            if (industry == null)
+            {
+                ShowStatus("Move next to an industry to change its production rate.");
+                return;
+            }
+
+            industry.SetProductionRate(industry.ProductionRate * 1000f);
+            ShowStatus(string.Format("{0} production rate is now {1:0.0} cyc/h.", industry.Name, industry.ProductionRate));
         }
 
         private void SpawnSelectedVehicle()
@@ -2359,6 +2780,109 @@ namespace IndustryLogisticV
         private static Vector3 GetGroundPosition(Vector3 input)
         {
             return input;
+        }
+
+        private Industry GetDebugNearbyIndustry()
+        {
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return null;
+            }
+
+            var nearbyIndustry = GetIndustryInInteractionRange(player.Position);
+            if (nearbyIndustry != null)
+            {
+                _nearestIndustry = nearbyIndustry;
+            }
+
+            return nearbyIndustry;
+        }
+
+        private List<string> GetDebugResourceOptions(Industry industry)
+        {
+            var resources = new List<string>();
+            if (industry == null)
+            {
+                return resources;
+            }
+
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var inputs = industry.GetSortedInputs();
+            for (int i = 0; i < inputs.Count; i++)
+            {
+                if (seen.Add(inputs[i]))
+                {
+                    resources.Add(inputs[i]);
+                }
+            }
+
+            if (industry.SupportsOmegaBoost && seen.Add("Omega"))
+            {
+                resources.Add("Omega");
+            }
+
+            var outputs = industry.GetSortedOutputs();
+            for (int i = 0; i < outputs.Count; i++)
+            {
+                if (seen.Add(outputs[i]))
+                {
+                    resources.Add(outputs[i]);
+                }
+            }
+
+            return resources;
+        }
+
+        private string GetSelectedDebugResource(Industry industry)
+        {
+            var resourceOptions = GetDebugResourceOptions(industry);
+            if (resourceOptions.Count == 0)
+            {
+                _selectedDebugResourceIndex = 0;
+                return string.Empty;
+            }
+
+            if (_selectedDebugResourceIndex >= resourceOptions.Count)
+            {
+                _selectedDebugResourceIndex = resourceOptions.Count - 1;
+            }
+            else if (_selectedDebugResourceIndex < 0)
+            {
+                _selectedDebugResourceIndex = 0;
+            }
+
+            return resourceOptions[_selectedDebugResourceIndex];
+        }
+
+        private float GetSelectedDebugResourceAmountTons()
+        {
+            if (_selectedDebugResourceAmountIndex < 0 || _selectedDebugResourceAmountIndex >= DebugResourceAmountOptionsTons.Length)
+            {
+                _selectedDebugResourceAmountIndex = 0;
+            }
+
+            return DebugResourceAmountOptionsTons[_selectedDebugResourceAmountIndex];
+        }
+
+        private void CancelPendingTransferForDebug()
+        {
+            if (_cargoTransferController.HasPendingTransfer)
+            {
+                _cargoTransferController.ClearState();
+            }
+        }
+
+        private static float AddDebugResource(Industry industry, string resource, float tons)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(resource) || tons <= 0f)
+            {
+                return 0f;
+            }
+
+            return industry.Outputs.Contains(resource)
+                ? industry.AddOutput(resource, tons)
+                : industry.AddInput(resource, tons);
         }
 
         private string ResolveConfigPath()
