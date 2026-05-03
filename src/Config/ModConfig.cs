@@ -113,6 +113,9 @@ namespace IndustryLogisticV.Config
                     ProductionRate = ResolveProductionRate(legacyIni, location),
                     StartingTankRatio = location.StartingTankRatio,
                     Density = location.Density,
+                    IndustryPrice = Math.Max(0f, legacyIni.GetFloat(location.Id, "IndustryPrice", location.IndustryPrice)),
+                    IndustryOwnerCut = Math.Max(0f, Math.Min(1f, legacyIni.GetFloat(location.Id, "IndustryOwnerCut", location.IndustryOwnerCut))),
+                    IsOwned = location.IndustryPrice <= 0f,
                 };
             }
         }
@@ -154,6 +157,8 @@ namespace IndustryLogisticV.Config
                 var outputCapTons = outputCapRaw / 1000f;
                 var startingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f)));
                 var density = ini.GetString(section, "Density", "medium");
+                var industryPrice = Math.Max(0f, ini.GetFloat(section, "IndustryPrice", 0f));
+                var industryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "IndustryOwnerCut", 0.5f)));
 
                 var productionRate = ResolveConfiguredProductionRate(ini, section, 30f);
 
@@ -176,6 +181,9 @@ namespace IndustryLogisticV.Config
                     ProductionRate = productionRate,
                     StartingTankRatio = startingTankRatio,
                     Density = density,
+                    IndustryPrice = industryPrice,
+                    IndustryOwnerCut = industryOwnerCut,
+                    IsOwned = industryPrice <= 0f,
                 };
             }
         }
@@ -214,6 +222,9 @@ namespace IndustryLogisticV.Config
                     ProductionRate = productionRate,
                     StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "StartingTank", location.StartingTankRatio))),
                     Density = ini.GetString(location.Id, "Density", location.Density ?? "medium"),
+                    IndustryPrice = Math.Max(0f, ini.GetFloat(location.Id, "IndustryPrice", location.IndustryPrice)),
+                    IndustryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "IndustryOwnerCut", location.IndustryOwnerCut))),
+                    IsOwned = location.IndustryPrice <= 0f,
                 };
             }
         }

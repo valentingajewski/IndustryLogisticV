@@ -18,5 +18,8 @@ namespace IndustryLogisticV.Config
         public float ProductionRate { get; set; }
         public float StartingTankRatio { get; set; }
         public string Density { get; set; }
+        public float IndustryPrice { get; set; }
+        public float IndustryOwnerCut { get; set; }
+        public bool IsOwned { get; set; }
     }
 }

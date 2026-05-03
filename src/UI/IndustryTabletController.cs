@@ -53,6 +53,12 @@ namespace IndustryLogisticV.UI
             remove { _industryTablet.UnloadModeRequested -= value; }
         }
 
+        public event Action<Industry> IndustryPurchaseRequested
+        {
+            add { _industryTablet.IndustryPurchaseRequested += value; }
+            remove { _industryTablet.IndustryPurchaseRequested -= value; }
+        }
+
         public event Action<Industry, IndustryUpgradeModule> UpgradeModuleRequested
         {
             add { _industryTablet.UpgradeModuleRequested += value; }
@@ -127,6 +133,11 @@ namespace IndustryLogisticV.UI
 
             _industryTablet.UpdateProfitBalance(profitBalance);
             UpdateLoadOptions(player, industry, fallbackCargoType);
+            _industryTablet.UpdateOwnershipState(
+                _industryManager.IsIndustryOwnedForGameplay(industry),
+                _industryManager.RequiresIndustryPurchase(industry),
+                industry.IndustryPrice,
+                industry.IndustryOwnerCut);
             _industryTablet.DrawAndHandleInput();
         }
 

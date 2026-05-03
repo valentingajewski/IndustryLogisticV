@@ -339,7 +339,7 @@ namespace IndustryLogisticV.UI
                 var industry = industries[i];
                 items.Add(new MenuItem
                 {
-                    CaptionFactory = () => industry.Name,
+                    CaptionFactory = () => GetIndustryCaption(industry),
                     DetailFactory = () => GetIndustryOverviewDetail(industry),
                     OnActivate = () => OpenIndustryDetailMenu(industry),
                 });
@@ -375,7 +375,7 @@ namespace IndustryLogisticV.UI
                 var store = stores[i];
                 items.Add(new MenuItem
                 {
-                    CaptionFactory = () => store.Name,
+                    CaptionFactory = () => GetIndustryCaption(store),
                     DetailFactory = () => GetStoreOverviewDetail(store),
                     OnActivate = () => OpenIndustryDetailMenu(store, OverviewDetailReturnMenu.Store),
                 });
@@ -411,7 +411,7 @@ namespace IndustryLogisticV.UI
                 var station = stations[i];
                 items.Add(new MenuItem
                 {
-                    CaptionFactory = () => station.Name,
+                    CaptionFactory = () => GetIndustryCaption(station),
                     DetailFactory = () => GetGasStationOverviewDetail(station),
                 });
             }
@@ -479,6 +479,20 @@ namespace IndustryLogisticV.UI
             }
 
             return detail;
+        }
+
+        private string GetIndustryCaption(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            var ownershipTag = _industryManager.IsIndustryOwnedForGameplay(industry)
+                ? "~g~[OWNED]~s~"
+                : "~r~[NOT OWNED]~s~";
+
+            return string.Format("{0} {1}", industry.Name, ownershipTag);
         }
 
         private static string GetStoreOverviewDetail(Industry industry)

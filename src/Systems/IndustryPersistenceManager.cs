@@ -54,6 +54,7 @@ namespace IndustryLogisticV.Systems
                 var inputStorageModuleLevel = ParseInt(ini.GetString(section, "InputStorageModuleLevel", industry.InputStorageModuleLevel.ToString(CultureInfo.InvariantCulture)), industry.InputStorageModuleLevel);
                 var outputStorageModuleLevel = ParseInt(ini.GetString(section, "OutputStorageModuleLevel", industry.OutputStorageModuleLevel.ToString(CultureInfo.InvariantCulture)), industry.OutputStorageModuleLevel);
                 var omegaStorageModuleLevel = ParseInt(ini.GetString(section, "OmegaStorageModuleLevel", industry.OmegaStorageModuleLevel.ToString(CultureInfo.InvariantCulture)), industry.OmegaStorageModuleLevel);
+                var isOwned = ini.GetBool(section, "IsOwned", industry.IsOwned);
 
                 var bufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
                 var block = ini.GetSection(section);
@@ -84,7 +85,8 @@ namespace IndustryLogisticV.Systems
                     productionModuleLevel,
                     inputStorageModuleLevel,
                     outputStorageModuleLevel,
-                    omegaStorageModuleLevel);
+                    omegaStorageModuleLevel,
+                    isOwned);
 
                 restoredCount += 1;
             }
@@ -122,6 +124,7 @@ namespace IndustryLogisticV.Systems
                     writer.WriteLine("StartingBalance={0}", FormatFloat(metadata.StartingBalance));
                     writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
                 }
                 writer.WriteLine();
@@ -144,6 +147,7 @@ namespace IndustryLogisticV.Systems
                     writer.WriteLine("InputStorageModuleLevel={0}", industry.InputStorageModuleLevel);
                     writer.WriteLine("OutputStorageModuleLevel={0}", industry.OutputStorageModuleLevel);
                     writer.WriteLine("OmegaStorageModuleLevel={0}", industry.OmegaStorageModuleLevel);
+                    writer.WriteLine("IsOwned={0}", industry.IsOwned ? "true" : "false");
 
                     foreach (var stock in industry.BufferStorage.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
                     {
@@ -174,12 +178,14 @@ namespace IndustryLogisticV.Systems
                 ini.HasKey("Meta", "StartingBalance") ||
                 ini.HasKey("Meta", "VehicleFuelDifficultyEnabled") ||
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
+                ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
                 ini.HasKey("Meta", "DifficultySettingsLocked");
 
             metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
             metadata.Profit = ini.GetFloat("Meta", "Profit", metadata.StartingBalance);
             metadata.VehicleFuelDifficultyEnabled = ini.GetBool("Meta", "VehicleFuelDifficultyEnabled", false);
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
+            metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             return metadata;
         }
@@ -250,6 +256,7 @@ namespace IndustryLogisticV.Systems
         public float StartingBalance { get; set; }
         public bool VehicleFuelDifficultyEnabled { get; set; }
         public bool CargoDamageDifficultyEnabled { get; set; }
+        public bool IndustryPricingDifficultyEnabled { get; set; }
         public bool DifficultySettingsLocked { get; set; }
     }
 }

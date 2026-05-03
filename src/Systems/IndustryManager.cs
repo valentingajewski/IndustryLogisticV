@@ -13,6 +13,7 @@ namespace IndustryLogisticV.Systems
         private readonly Dictionary<string, IndustryConfig> _defaultIndustryConfigs;
         private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
         private readonly float _industryOmegaCapacityMultiplier;
+        private bool _industryPricingDifficultyEnabled;
 
         public IndustryManager(ModConfig config)
         {
@@ -38,6 +39,9 @@ namespace IndustryLogisticV.Systems
                     ProductionRate = industryConfig.ProductionRate,
                     StartingTankRatio = industryConfig.StartingTankRatio,
                     Density = industryConfig.Density,
+                    IndustryPrice = industryConfig.IndustryPrice,
+                    IndustryOwnerCut = industryConfig.IndustryOwnerCut,
+                    IsOwned = industryConfig.IsOwned,
                 };
                 _defaultIndustryConfigs[runtimeConfig.Id] = CloneIndustryConfig(runtimeConfig);
 
@@ -59,6 +63,31 @@ namespace IndustryLogisticV.Systems
         public IReadOnlyList<Industry> Industries
         {
             get { return _industries; }
+        }
+
+        public bool IndustryPricingDifficultyEnabled
+        {
+            get { return _industryPricingDifficultyEnabled; }
+        }
+
+        public void SetIndustryPricingDifficultyEnabled(bool enabled)
+        {
+            _industryPricingDifficultyEnabled = enabled;
+        }
+
+        public bool IsIndustryOwnedForGameplay(Industry industry)
+        {
+            if (industry == null)
+            {
+                return false;
+            }
+
+            return !_industryPricingDifficultyEnabled || !industry.RequiresPurchase || industry.IsOwned;
+        }
+
+        public bool RequiresIndustryPurchase(Industry industry)
+        {
+            return industry != null && _industryPricingDifficultyEnabled && industry.RequiresPurchase && !industry.IsOwned;
         }
 
         public void ResetIndustriesToDefaults()
@@ -99,7 +128,8 @@ namespace IndustryLogisticV.Systems
                     0,
                     0,
                     0,
-                    0);
+                    0,
+                    defaultConfig.IsOwned);
 
                 SeedInitialOutput(industry);
                 SeedStartingTank(industry, defaultConfig);
@@ -263,6 +293,7 @@ namespace IndustryLogisticV.Systems
             }
 
             var unitPrice = market.GetUnitPrice(commodity);
+            float payout;
             if (industry.IsSink)
             {
                 if (commodity.Equals("TV", StringComparison.OrdinalIgnoreCase) ||
@@ -271,10 +302,19 @@ namespace IndustryLogisticV.Systems
                     market.RegisterDelivery(gameTimeMs);
                 }
 
-                return deliveredTons * unitPrice;
+                payout = deliveredTons * unitPrice;
+            }
+            else
+            {
+                payout = deliveredTons * unitPrice * 0.15f;
             }
 
-            return deliveredTons * unitPrice * 0.15f;
+            if (RequiresIndustryPurchase(industry))
+            {
+                payout *= Math.Max(0f, 1f - Math.Max(0f, Math.Min(1f, industry.IndustryOwnerCut)));
+            }
+
+            return payout;
         }
 
         private static bool ShouldUseOmegaBoost(IndustryConfig config)
@@ -390,6 +430,9 @@ namespace IndustryLogisticV.Systems
                 ProductionRate = source.ProductionRate,
                 StartingTankRatio = source.StartingTankRatio,
                 Density = source.Density,
+                IndustryPrice = source.IndustryPrice,
+                IndustryOwnerCut = source.IndustryOwnerCut,
+                IsOwned = source.IsOwned,
             };
         }
 

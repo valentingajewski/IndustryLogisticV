@@ -120,6 +120,8 @@ namespace IndustryLogisticV.Config
                     Outputs = GetCommoditySet(ini.GetStringList(section, "Outputs")),
                     Density = ini.GetString(section, "Density", "medium"),
                     StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f))),
+                    IndustryPrice = Math.Max(0f, ini.GetFloat(section, "IndustryPrice", 0f)),
+                    IndustryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "IndustryOwnerCut", 0.5f))),
                     SpawnedVehicleModel = ini.GetString(section, "SpawnedVehicleModel", string.Empty),
                     SpawnedVehiclePosition = GetOptionalVector3(ini, section, "SpawnedVehicleCoordinates"),
                     SpawnedVehicleHeading = GetOptionalFloat(ini, section, "SpawnedVehicleHeading"),
@@ -317,6 +319,8 @@ namespace IndustryLogisticV.Config
         public HashSet<string> Outputs { get; set; }
         public string Density { get; set; }
         public float StartingTankRatio { get; set; }
+        public float IndustryPrice { get; set; }
+        public float IndustryOwnerCut { get; set; }
         public string SpawnedVehicleModel { get; set; }
         public Vector3? SpawnedVehiclePosition { get; set; }
         public float? SpawnedVehicleHeading { get; set; }

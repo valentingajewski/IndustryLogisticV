@@ -1,11 +1,9 @@
 - Fuel system
 - 
 
-In the F7 menu Add a new button:
-- Add a "Saving Options" button. In this button, add 2 buttons:
-    -In this button, Add a "Create new save". By selecting this button, it must open a input text where the player can write the name of the mod savegame. It must work like the .state.ini but it must be saved in a folder called IndustrialLogisticVSaves and the name of the savegame must me [name of the input text].state.ini
-        - When created a new game and after the input text window, bring the difficulty settings window where the player can choose which settings it want to enabled. Add a "Starting balance" at the top of the selection choices from -5,000$ to 100,000$
-    - Add a "Load save". This is straightforward as it must give the player to choose between all the savegame it has
-    - Add a "Delete save". This button allow the player to delete any of the savegame it created before
-    - Add a "Save game". This button will save the values of the current mod game   
-- Add a new restricitive policy where difficulty settings are sealed when a new save has been created. The player cannot change difficulty settings during the game anymore. If he wants to change them he needs to create a new save which new settings
+- Add a new Industry price mechanic:
+    - The price of each industry can be found in the IndustrialLogisticV.ini under "IndustryPrice" variable for each industry.
+    - Add a new upgrades policy when upgrade are only unlocked when the industry has been purchased by the player. It means that the "Open upgrades" button inside thee industry menu should change to "Buy industry" while it has not been purchased. If the player select the "Buy Industry" button, a new window must open with 2 buttons ("Yes" and "No") and ask if the player really want to buy this industry. Pressing Yes deduct the Indutrsyprice to the player's balance and unlocks upgrades. pressing no come back to the previous page.
+    - Delivering cargo to a non-owned industry adds a owner cut. The value can be found in the IndustrialLogisticV.ini under IndustryOwnerCut. 0.5 means 50% cut. So while the industry is not owned by the player, each load is deducted by the OwnerCut until the industry has been purchased by the player
+    - Add a "[NOT OWNED]" in red" and a "[OWNED] in green alongside the Indsutry name in the F8 menu and in the Industry menu (when pressing E)
+    - Add the Indsutry price mechanic as a difficulty options. If enabled Industry price mechanics are enabled. If disabled Industry price mechanics are disabled. 

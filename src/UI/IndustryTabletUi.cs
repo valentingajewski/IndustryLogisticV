@@ -50,12 +50,16 @@ namespace IndustryLogisticV.UI
         private float _frameX;
         private float _frameY;
         private float _profitBalance;
+        private float _industryPrice;
+        private float _industryOwnerCut;
         private int _selectedMainIndex;
         private int _selectedUpgradeIndex;
         private int _selectedLoadOptionIndex;
         private int _selectedUnloadOptionIndex;
         private int _statsScrollIndex;
         private TabletPage _currentPage;
+        private bool _isIndustryOwnedForGameplay;
+        private bool _requiresIndustryPurchase;
 
         public IndustryTabletUi()
         {
@@ -108,6 +112,8 @@ namespace IndustryLogisticV.UI
 
         public event Action<Industry, bool> UnloadModeRequested;
 
+        public event Action<Industry> IndustryPurchaseRequested;
+
         public event Action<Industry, IndustryUpgradeModule> UpgradeModuleRequested;
 
         public event Action<Industry> VehicleSpawnerRequested;
@@ -153,6 +159,14 @@ namespace IndustryLogisticV.UI
         public void UpdateProfitBalance(float profitBalance)
         {
             _profitBalance = Math.Max(0f, profitBalance);
+        }
+
+        public void UpdateOwnershipState(bool isIndustryOwnedForGameplay, bool requiresIndustryPurchase, float industryPrice, float industryOwnerCut)
+        {
+            _isIndustryOwnedForGameplay = isIndustryOwnedForGameplay;
+            _requiresIndustryPurchase = requiresIndustryPurchase;
+            _industryPrice = Math.Max(0f, industryPrice);
+            _industryOwnerCut = Clamp01(industryOwnerCut);
         }
 
         public bool HandleKey(WinForms.Keys key, ControlBindings controls)
@@ -323,6 +337,12 @@ namespace IndustryLogisticV.UI
 
                 if (_selectedMainIndex == 4)
                 {
+                    if (_requiresIndustryPurchase)
+                    {
+                        IndustryPurchaseRequested?.Invoke(_industry);
+                        return;
+                    }
+
                     _currentPage = TabletPage.Upgrades;
                     _selectedUpgradeIndex = 0;
                 }
@@ -378,7 +398,7 @@ namespace IndustryLogisticV.UI
             if (_selectedUpgradeIndex >= availableModules.Count)
             {
                 _currentPage = TabletPage.Main;
-                _selectedMainIndex = 3;
+                _selectedMainIndex = 4;
                 return;
             }
 
@@ -435,6 +455,10 @@ namespace IndustryLogisticV.UI
             _menuBackground.Draw();
 
             var industryName = BuildIndustryLabel(_industry.Name);
+            var ownershipLabel = _isIndustryOwnedForGameplay ? "[OWNED]" : "[NOT OWNED]";
+            var ownershipColor = _isIndustryOwnedForGameplay
+                ? Color.FromArgb(232, 102, 214, 146)
+                : Color.FromArgb(232, 222, 92, 92);
             var stockpile = _industry.GetInputStockTotal() + _industry.GetOutputStockTotal();
             var totalCapacity = Math.Max(1f, _industry.InputCapacityTons + _industry.OutputCapacityTons);
             var stockRatio = Clamp01(stockpile / totalCapacity);
@@ -452,7 +476,17 @@ namespace IndustryLogisticV.UI
                 0f);
 
             DrawText(
-                "Industry Operations Interface",
+                ownershipLabel,
+                ResolveOwnershipLabelX(industryName),
+                _frameY + 67f,
+                0.30f,
+                ownershipColor,
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawText(
+                BuildIndustrySubtitle(),
                 _frameX + 80f,
                 _frameY + 88f,
                 0.31f,
@@ -512,8 +546,8 @@ namespace IndustryLogisticV.UI
 
                 DrawButton(
                     _upgradeButton,
-                    "OPEN UPGRADES",
-                    "Switch to module upgrades in this industry",
+                    GetUpgradeActionTitle(),
+                    GetUpgradeActionSubtitle(),
                     Color.FromArgb(170, 58, 51, 86),
                     Color.FromArgb(212, 124, 104, 178),
                     _selectedMainIndex == 4);
@@ -828,6 +862,34 @@ namespace IndustryLogisticV.UI
             }
 
             return "Start loading this resource";
+        }
+
+        private string BuildIndustrySubtitle()
+        {
+            if (_requiresIndustryPurchase)
+            {
+                return string.Format(
+                    "Purchase for {0} to unlock upgrades and remove the {1:0}% owner cut",
+                    FormatMoney(_industryPrice),
+                    _industryOwnerCut * 100f);
+            }
+
+            return "Industry Operations Interface";
+        }
+
+        private string GetUpgradeActionTitle()
+        {
+            return _requiresIndustryPurchase ? "BUY INDUSTRY" : "OPEN UPGRADES";
+        }
+
+        private string GetUpgradeActionSubtitle()
+        {
+            if (_requiresIndustryPurchase)
+            {
+                return string.Format("Price {0} | Unlock upgrades at this site", FormatMoney(_industryPrice));
+            }
+
+            return "Switch to module upgrades in this industry";
         }
 
         private void DrawUpgradeModuleButton(int index, string title, string subtitle, bool selected)
@@ -1163,6 +1225,18 @@ namespace IndustryLogisticV.UI
             }
 
             return label.Substring(0, 24);
+        }
+
+        private float ResolveOwnershipLabelX(string industryName)
+        {
+            var nameLength = string.IsNullOrWhiteSpace(industryName) ? 0 : industryName.Length;
+            return Math.Min(_frameX + 628f, _frameX + 92f + (nameLength * 13.5f));
+        }
+
+        private static string FormatMoney(float amount)
+        {
+            var absolute = Math.Abs(amount).ToString("0,0");
+            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
         }
 
         private static void DrawText(string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float wrap)

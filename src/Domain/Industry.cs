@@ -26,6 +26,9 @@ namespace IndustryLogisticV.Domain
             InputCapacityTons = Math.Max(1f, config.InputCapacityTons);
             OutputCapacityTons = Math.Max(1f, config.OutputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, InputCapacityTons * Math.Max(0.01f, omegaCapacityMultiplier));
+            IndustryPrice = Math.Max(0f, config.IndustryPrice);
+            IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
+            IsOwned = config.IsOwned || IndustryPrice <= 0f;
 
             _recipes = recipes ?? new List<ProductionRecipe>();
             _supportsOmegaBoost = supportsOmegaBoost;
@@ -62,6 +65,9 @@ namespace IndustryLogisticV.Domain
         public float InputCapacityTons { get; private set; }
         public float OutputCapacityTons { get; private set; }
         public float OmegaCapacityTons { get; private set; }
+        public float IndustryPrice { get; }
+        public float IndustryOwnerCut { get; }
+        public bool IsOwned { get; private set; }
         public float LastUtilizationPercent { get; private set; }
         public float CurrentOutputPerHourTons { get; private set; }
         public int ProductionModuleLevel { get; private set; }
@@ -95,6 +101,11 @@ namespace IndustryLogisticV.Domain
         public bool SupportsOmegaBoost
         {
             get { return _supportsOmegaBoost; }
+        }
+
+        public bool RequiresPurchase
+        {
+            get { return IndustryPrice > 0f; }
         }
 
         public float GetStock(string commodity)
@@ -403,6 +414,13 @@ namespace IndustryLogisticV.Domain
         public bool TryUpgradeModule(IndustryUpgradeModule module, ref float profit, out float cost, out string result)
         {
             result = string.Empty;
+            if (RequiresPurchase && !IsOwned)
+            {
+                cost = IndustryPrice;
+                result = string.Format("Purchase {0} before buying upgrade modules.", Name);
+                return false;
+            }
+
             cost = GetUpgradeCost(module);
             if (cost <= 0f)
             {
@@ -459,6 +477,41 @@ namespace IndustryLogisticV.Domain
         {
             string ignored;
             return TryUpgradeModule(IndustryUpgradeModule.Production, ref profit, out cost, out ignored);
+        }
+
+        public bool TryPurchase(ref float profit, out float cost, out string result)
+        {
+            cost = IndustryPrice;
+            result = string.Empty;
+
+            if (!RequiresPurchase)
+            {
+                SetOwned(true);
+                result = "This industry does not require purchase.";
+                return true;
+            }
+
+            if (IsOwned)
+            {
+                result = "This industry is already owned.";
+                return false;
+            }
+
+            if (profit < cost)
+            {
+                result = string.Format("Not enough profit. Cost: ${0:0}", cost);
+                return false;
+            }
+
+            profit -= cost;
+            SetOwned(true);
+            result = string.Format("Purchased {0} for ${1:0}.", Name, cost);
+            return true;
+        }
+
+        public void SetOwned(bool isOwned)
+        {
+            IsOwned = isOwned || !RequiresPurchase;
         }
 
         public void SetProductionRate(float productionRate)
@@ -580,7 +633,8 @@ namespace IndustryLogisticV.Domain
             int productionModuleLevel,
             int inputStorageModuleLevel,
             int outputStorageModuleLevel,
-            int omegaStorageModuleLevel)
+            int omegaStorageModuleLevel,
+            bool isOwned = false)
         {
             if (bufferStorage != null)
             {
@@ -607,6 +661,7 @@ namespace IndustryLogisticV.Domain
             OmegaStorageModuleLevel = Math.Max(0, omegaStorageModuleLevel);
 
             OmegaStorage = Math.Max(0f, omegaStorage);
+            SetOwned(isOwned);
             ClampBuffersToCapacity();
             LastUtilizationPercent = 0f;
             CurrentOutputPerHourTons = 0f;

@@ -55,6 +55,7 @@ namespace IndustryLogisticV
         private readonly LemonMenu _savingOptionsMenu;
         private readonly LemonMenu _newSaveSetupMenu;
         private readonly LemonMenu _saveSlotsMenu;
+        private readonly LemonMenu _industryPurchaseMenu;
         private readonly LemonMenu _difficultyMenu;
         private readonly LemonMenu _debugMenu;
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
@@ -74,6 +75,7 @@ namespace IndustryLogisticV
         private string _industryStatePath;
         private Industry _nearestIndustry;
         private Industry _menuIndustry;
+        private Industry _pendingIndustryPurchaseIndustry;
         private VehicleCargoMenuContext _vehicleCargoMenuContext;
 
         private int _selectedDebugResourceIndex;
@@ -90,6 +92,7 @@ namespace IndustryLogisticV
         private float _profit;
         private float _currentStartingBalance;
         private GameModMode _gameModMode;
+        private IndustryPurchaseMenuReturnTarget _industryPurchaseMenuReturnTarget;
         private SaveSlotMenuAction _saveSlotMenuAction;
 
         private bool _showContext;
@@ -98,6 +101,8 @@ namespace IndustryLogisticV
         private bool _difficultySettingsLocked;
         private bool _cargoDamageDifficultyEnabled;
         private bool _pendingCargoDamageDifficultyEnabled;
+        private bool _industryPricingDifficultyEnabled;
+        private bool _pendingIndustryPricingDifficultyEnabled;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
 
@@ -187,6 +192,11 @@ namespace IndustryLogisticV
                 Subtitle = "Choose a saved game profile",
                 AlignRight = true,
             };
+            _industryPurchaseMenu = new LemonMenu("Buy Industry")
+            {
+                Subtitle = "Confirm the industry purchase",
+                AlignRight = true,
+            };
             _difficultyMenu = new LemonMenu("Difficulty Settings")
             {
                 Subtitle = "Enable or disable challenge options",
@@ -208,6 +218,7 @@ namespace IndustryLogisticV
             _industryTabletController.LoadCommodityRequested += HandleTabletLoadCommodityRequested;
             _industryTabletController.UnloadRequested += HandleTabletUnloadRequested;
             _industryTabletController.UnloadModeRequested += HandleTabletUnloadModeRequested;
+            _industryTabletController.IndustryPurchaseRequested += HandleTabletIndustryPurchaseRequested;
             _industryTabletController.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
             _industryTabletController.VehicleSpawnerRequested += HandleTabletVehicleSpawnerRequested;
 
@@ -222,12 +233,16 @@ namespace IndustryLogisticV
             _industryPersistenceEnabled = true;
             _difficultySettingsLocked = false;
             _cargoDamageDifficultyEnabled = true;
+            _industryPricingDifficultyEnabled = false;
             _vehicleFuelDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingSaveName = string.Empty;
+            _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
             _saveSlotMenuAction = SaveSlotMenuAction.Load;
+            _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
 
             if (_industryPersistenceEnabled)
             {
@@ -258,6 +273,7 @@ namespace IndustryLogisticV
                     || _savingOptionsMenu.IsOpen
                     || _newSaveSetupMenu.IsOpen
                     || _saveSlotsMenu.IsOpen
+                    || _industryPurchaseMenu.IsOpen
                     || _difficultyMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _overviewMenuController.AnyMenuOpen
@@ -469,6 +485,18 @@ namespace IndustryLogisticV
 
         private bool HandleMenuKey(WinForms.Keys key)
         {
+            if (_industryPurchaseMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    CancelIndustryPurchase();
+                    return true;
+                }
+
+                _industryPurchaseMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_saveSlotsMenu.IsOpen)
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
@@ -581,6 +609,7 @@ namespace IndustryLogisticV
             _savingOptionsMenu.Draw();
             _newSaveSetupMenu.Draw();
             _saveSlotsMenu.Draw();
+            _industryPurchaseMenu.Draw();
             _difficultyMenu.Draw();
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
@@ -592,7 +621,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
             {
                 return;
             }
@@ -1192,6 +1221,7 @@ namespace IndustryLogisticV
             _savingOptionsMenu.Close();
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
+            _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
             _debugMenu.Close();
             CloseIndustryTablet();
@@ -1204,6 +1234,7 @@ namespace IndustryLogisticV
             _savingOptionsMenu.Close();
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
+            _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
             _debugMenu.Close();
             _officeMenu.Close();
@@ -1313,6 +1344,13 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "Industry price mechanic",
+                    DetailFactory = () => "Require industry purchases and apply owner cut until bought.",
+                    CheckboxStateFactory = () => _pendingIndustryPricingDifficultyEnabled,
+                    OnActivate = TogglePendingIndustryPricingSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => "Create save",
                     DetailFactory = () => string.Format("Starts a fresh game as {0}.state.ini", _pendingSaveName),
                     OnActivate = FinalizeNewSave,
@@ -1407,6 +1445,160 @@ namespace IndustryLogisticV
             ReturnToSavingOptionsMenu();
         }
 
+        private void RebuildIndustryPurchaseMenuItems()
+        {
+            var industry = _pendingIndustryPurchaseIndustry;
+            if (industry == null)
+            {
+                _industryPurchaseMenu.Title = "Buy Industry";
+                _industryPurchaseMenu.Subtitle = "No industry selected";
+                _industryPurchaseMenu.SetItems(new[]
+                {
+                    new OfficeMenuItem
+                    {
+                        CaptionFactory = () => "Close",
+                        OnActivate = CancelIndustryPurchase,
+                    },
+                });
+                return;
+            }
+
+            _industryPurchaseMenu.Title = "Buy Industry";
+            _industryPurchaseMenu.Subtitle = string.Format("Buy {0} for {1}?", industry.Name, FormatMoney(industry.IndustryPrice));
+            _industryPurchaseMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Yes",
+                    DetailFactory = () => GetIndustryPurchasePromptDetail(industry),
+                    OnActivate = ConfirmIndustryPurchase,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No",
+                    DetailFactory = () => "Return to the previous page.",
+                    OnActivate = CancelIndustryPurchase,
+                },
+            });
+        }
+
+        private string GetIndustryPurchasePromptDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            var detail = string.Format("Deduct {0} and unlock upgrades.", FormatMoney(industry.IndustryPrice));
+            if (industry.IndustryOwnerCut > 0f)
+            {
+                detail += string.Format(" Removes the {0:0}% owner cut.", industry.IndustryOwnerCut * 100f);
+            }
+
+            if (_profit < industry.IndustryPrice)
+            {
+                detail += string.Format(" Need {0} more.", FormatMoney(industry.IndustryPrice - _profit));
+            }
+
+            return detail;
+        }
+
+        private void OpenIndustryPurchaseMenu(Industry industry, IndustryPurchaseMenuReturnTarget returnTarget)
+        {
+            if (industry == null)
+            {
+                ShowStatus("No industry selected.");
+                return;
+            }
+
+            if (!_industryManager.RequiresIndustryPurchase(industry))
+            {
+                ShowStatus(_industryManager.IsIndustryOwnedForGameplay(industry)
+                    ? string.Format("{0} is already owned.", industry.Name)
+                    : "Industry pricing is disabled for this save.");
+                return;
+            }
+
+            _pendingIndustryPurchaseIndustry = industry;
+            _industryPurchaseMenuReturnTarget = returnTarget;
+            _upgradeMenu.Close();
+            CloseIndustryTablet();
+            RebuildIndustryPurchaseMenuItems();
+            _industryPurchaseMenu.Open();
+        }
+
+        private void ConfirmIndustryPurchase()
+        {
+            var industry = _pendingIndustryPurchaseIndustry;
+            if (industry == null)
+            {
+                CancelIndustryPurchase();
+                return;
+            }
+
+            float cost;
+            string result;
+            if (!industry.TryPurchase(ref _profit, out cost, out result))
+            {
+                ShowStatus(result);
+                RebuildIndustryPurchaseMenuItems();
+                return;
+            }
+
+            ShowStatus(result, 4000);
+            ReturnFromIndustryPurchaseMenu();
+        }
+
+        private void CancelIndustryPurchase()
+        {
+            ReturnFromIndustryPurchaseMenu();
+        }
+
+        private void ReturnFromIndustryPurchaseMenu()
+        {
+            var returnTarget = _industryPurchaseMenuReturnTarget;
+            var industry = _pendingIndustryPurchaseIndustry;
+
+            _industryPurchaseMenu.Close();
+            _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
+            _pendingIndustryPurchaseIndustry = null;
+
+            if (industry == null)
+            {
+                return;
+            }
+
+            if (returnTarget == IndustryPurchaseMenuReturnTarget.Tablet)
+            {
+                TryReopenIndustryTablet(industry);
+                return;
+            }
+
+            if (returnTarget == IndustryPurchaseMenuReturnTarget.UpgradeMenu)
+            {
+                _menuIndustry = industry;
+                RebuildUpgradeMenuItems();
+                _upgradeMenu.Open();
+            }
+        }
+
+        private bool TryReopenIndustryTablet(Industry industry)
+        {
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists() || industry == null)
+            {
+                return false;
+            }
+
+            _menuIndustry = industry;
+            return _industryTabletController.TryOpen(
+                player,
+                industry,
+                IndustryInteractionDistance,
+                () => { },
+                message => ShowStatus(message));
+        }
+
         private void RebuildDifficultyMenuItems()
         {
             _difficultyMenu.Title = "Difficulty Settings";
@@ -1429,6 +1621,13 @@ namespace IndustryLogisticV
                     DetailFactory = () => "Enable cargo loss and condition damage from collisions.",
                     CheckboxStateFactory = () => _cargoDamageDifficultyEnabled,
                     OnActivate = ToggleCargoDamageSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Industry price mechanic",
+                    DetailFactory = () => "Require industry purchases and owner-cut payouts until bought.",
+                    CheckboxStateFactory = () => _industryPricingDifficultyEnabled,
+                    OnActivate = ToggleIndustryPricingSetting,
                 },
                 new OfficeMenuItem
                 {
@@ -1487,7 +1686,7 @@ namespace IndustryLogisticV
         {
             return _difficultySettingsLocked
                 ? "Locked by the active save. Create a new save to change these settings."
-                : "Change vehicle fuel and cargo damage settings.";
+                : "Change vehicle fuel, cargo damage, and industry pricing settings.";
         }
 
         private string CurrentSaveGameDetail()
@@ -1544,6 +1743,11 @@ namespace IndustryLogisticV
             _pendingCargoDamageDifficultyEnabled = !_pendingCargoDamageDifficultyEnabled;
         }
 
+        private void TogglePendingIndustryPricingSetting()
+        {
+            _pendingIndustryPricingDifficultyEnabled = !_pendingIndustryPricingDifficultyEnabled;
+        }
+
         private void ToggleVehicleFuelSetting()
         {
             if (_difficultySettingsLocked)
@@ -1564,6 +1768,18 @@ namespace IndustryLogisticV
             }
 
             _cargoDamageDifficultyEnabled = !_cargoDamageDifficultyEnabled;
+        }
+
+        private void ToggleIndustryPricingSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _industryPricingDifficultyEnabled = !_industryPricingDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
         }
 
         private void ShowDifficultySettingsLockedStatus()
@@ -1617,6 +1833,7 @@ namespace IndustryLogisticV
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
 
             _savingOptionsMenu.Close();
             RebuildNewSaveSetupMenuItems();
@@ -1644,8 +1861,10 @@ namespace IndustryLogisticV
             _currentStartingBalance = _profit;
             _vehicleFuelDifficultyEnabled = _pendingVehicleFuelDifficultyEnabled;
             _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
+            _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
+            ApplyDifficultySettingsToSystems();
 
             if (!TrySaveIndustryPersistenceToPath(filePath))
             {
@@ -1657,6 +1876,7 @@ namespace IndustryLogisticV
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             ReturnToSavingOptionsMenu();
             ShowStatus(string.Format("Created save '{0}'.", createdSaveName), 4000);
         }
@@ -1725,12 +1945,15 @@ namespace IndustryLogisticV
                     _currentStartingBalance = DefaultStartingBalance;
                     _vehicleFuelDifficultyEnabled = false;
                     _cargoDamageDifficultyEnabled = true;
+                    _industryPricingDifficultyEnabled = false;
                     _difficultySettingsLocked = false;
+                    ApplyDifficultySettingsToSystems();
                 }
 
                 _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
                 _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
                 _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+                _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             }
 
             RebuildSaveSlotsMenuItems();
@@ -1848,6 +2071,7 @@ namespace IndustryLogisticV
                 StartingBalance = _currentStartingBalance,
                 VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
+                IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
                 DifficultySettingsLocked = _difficultySettingsLocked,
             };
         }
@@ -1860,19 +2084,33 @@ namespace IndustryLogisticV
                 _currentStartingBalance = metadata.StartingBalance;
                 _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
+                _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
                 _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
             }
             else
             {
+                _industryPricingDifficultyEnabled = false;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
             RebuildModControlMenuItems();
             RebuildSavingOptionsMenuItems();
             RebuildDifficultyMenuItems();
+        }
+
+        private void ApplyDifficultySettingsToSystems()
+        {
+            _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
+
+            if (_upgradeMenu.IsOpen)
+            {
+                RebuildUpgradeMenuItems();
+            }
         }
 
         private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)
@@ -1900,6 +2138,7 @@ namespace IndustryLogisticV
             _officeMenu.Close();
             _upgradeMenu.Close();
             _difficultyMenu.Close();
+            _industryPurchaseMenu.Close();
             _debugMenu.Close();
             CloseIndustryTablet();
             DestroyMapBlips();
@@ -2762,6 +3001,12 @@ namespace IndustryLogisticV
                 return;
             }
 
+            if (_industryManager.RequiresIndustryPurchase(industry))
+            {
+                OpenIndustryPurchaseMenu(industry, IndustryPurchaseMenuReturnTarget.Tablet);
+                return;
+            }
+
             float cost;
             string result;
             if (!industry.TryUpgradeModule(module, ref _profit, out cost, out result))
@@ -2777,6 +3022,11 @@ namespace IndustryLogisticV
             {
                 RebuildUpgradeMenuItems();
             }
+        }
+
+        private void HandleTabletIndustryPurchaseRequested(Industry industry)
+        {
+            OpenIndustryPurchaseMenu(industry, IndustryPurchaseMenuReturnTarget.Tablet);
         }
 
         private void HandleTabletVehicleSpawnerRequested(Industry industry)
@@ -2867,6 +3117,13 @@ namespace IndustryLogisticV
             }
 
             _menuIndustry = _nearestIndustry;
+
+            if (_industryManager.RequiresIndustryPurchase(_menuIndustry))
+            {
+                OpenIndustryPurchaseMenu(_menuIndustry, IndustryPurchaseMenuReturnTarget.UpgradeMenu);
+                return;
+            }
+
             CloseIndustryTablet();
             _officeMenu.Close();
             RebuildUpgradeMenuItems();
@@ -2895,6 +3152,25 @@ namespace IndustryLogisticV
                     CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
                 },
             };
+
+            if (_industryManager.RequiresIndustryPurchase(_menuIndustry))
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => string.Format("Buy industry: {0}", FormatMoney(_menuIndustry.IndustryPrice)),
+                    DetailFactory = () => "Purchase this site to unlock its upgrade modules.",
+                    OnActivate = () => OpenIndustryPurchaseMenu(_menuIndustry, IndustryPurchaseMenuReturnTarget.UpgradeMenu),
+                });
+
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _upgradeMenu.Close(),
+                });
+
+                _upgradeMenu.SetItems(items);
+                return;
+            }
 
             AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.Production, "Production Module");
             AddUpgradeMenuItemIfAvailable(items, _menuIndustry, IndustryUpgradeModule.InputStorage, "Input Storage Module");
@@ -2954,6 +3230,12 @@ namespace IndustryLogisticV
             if (_menuIndustry == null)
             {
                 ShowStatus("No industry selected.");
+                return;
+            }
+
+            if (_industryManager.RequiresIndustryPurchase(_menuIndustry))
+            {
+                OpenIndustryPurchaseMenu(_menuIndustry, IndustryPurchaseMenuReturnTarget.UpgradeMenu);
                 return;
             }
 
@@ -3527,6 +3809,7 @@ namespace IndustryLogisticV
             _industryTabletController.LoadCommodityRequested -= HandleTabletLoadCommodityRequested;
             _industryTabletController.UnloadRequested -= HandleTabletUnloadRequested;
             _industryTabletController.UnloadModeRequested -= HandleTabletUnloadModeRequested;
+            _industryTabletController.IndustryPurchaseRequested -= HandleTabletIndustryPurchaseRequested;
             _industryTabletController.UpgradeModuleRequested -= HandleTabletUpgradeModuleRequested;
             _industryTabletController.VehicleSpawnerRequested -= HandleTabletVehicleSpawnerRequested;
             _heldKeys.Clear();
@@ -3548,6 +3831,13 @@ namespace IndustryLogisticV
         {
             Load = 0,
             Delete = 1,
+        }
+
+        private enum IndustryPurchaseMenuReturnTarget
+        {
+            None = 0,
+            Tablet = 1,
+            UpgradeMenu = 2,
         }
 
         private sealed class NamedSaveEntry
