@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.IO;
 using GTA.Math;
 using IndustryLogisticV.Domain;
 
@@ -32,12 +33,19 @@ namespace IndustryLogisticV.Config
         public ControlBindings Controls { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
+        public List<VehicleCargoType> CargoTypes { get; private set; }
         public Dictionary<string, List<string>> ObjectModels { get; private set; }
         public List<string> WorkerModels { get; private set; }
 
         public static ModConfig Load(string path)
         {
             var ini = IniFile.Load(path);
+            var configDirectory = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, "configs");
+            var externalCatalog = ExternalConfigCatalog.Load(configDirectory);
+            CommodityCatalog.Configure(
+                externalCatalog.ResourceGroups.SelectMany(group =>
+                    group.Commodities.Select(commodity => new KeyValuePair<string, VehicleCargoType>(commodity, group.CargoType))));
+
             var config = new ModConfig
             {
                 OmegaMultiplier = Math.Max(1f, ini.GetFloat("General", "OmegaMultiplier", 2f)),
@@ -50,14 +58,27 @@ namespace IndustryLogisticV.Config
                 Controls = ParseControls(ini),
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
+                CargoTypes = new List<VehicleCargoType>(),
                 ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
                 WorkerModels = new List<string>(),
             };
 
             ParseIndustries(ini, config);
+            MergeExternalLocations(ini, externalCatalog, config);
             ParseVehicles(ini, config);
             ParseObjects(ini, config);
+            MergeExternalObjects(externalCatalog, config);
             ParseWorkers(ini, config);
+
+            if (externalCatalog.CargoTypesInOrder.Count > 0)
+            {
+                config.CargoTypes.AddRange(externalCatalog.CargoTypesInOrder);
+            }
+
+            if (config.CargoTypes.Count == 0)
+            {
+                config.CargoTypes.AddRange(BuildFallbackCargoTypes(config));
+            }
 
             return config;
         }
@@ -100,36 +121,7 @@ namespace IndustryLogisticV.Config
                 var startingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f)));
                 var density = ini.GetString(section, "Density", "medium");
 
-                float productionRate = ini.GetFloat(section, "ProductionRate", float.NaN);
-                if (float.IsNaN(productionRate))
-                {
-                    var block = ini.GetSection(section);
-                    foreach (var pair in block)
-                    {
-                        if (!pair.Key.EndsWith("ProductionRate", StringComparison.OrdinalIgnoreCase))
-                        {
-                            continue;
-                        }
-
-                        float parsed;
-                        if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) && parsed > 0f)
-                        {
-                            productionRate = parsed;
-                            break;
-                        }
-
-                        if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.CurrentCulture, out parsed) && parsed > 0f)
-                        {
-                            productionRate = parsed;
-                            break;
-                        }
-                    }
-                }
-
-                if (float.IsNaN(productionRate) || productionRate <= 0f)
-                {
-                    productionRate = 30f;
-                }
+                var productionRate = ResolveConfiguredProductionRate(ini, section, 30f);
 
                 config.IndustryConfigs[section] = new IndustryConfig
                 {
@@ -145,6 +137,105 @@ namespace IndustryLogisticV.Config
                     Density = density,
                 };
             }
+        }
+
+        private static void MergeExternalLocations(IniFile ini, ExternalConfigCatalog externalCatalog, ModConfig config)
+        {
+            if (ini == null || externalCatalog == null || config == null)
+            {
+                return;
+            }
+
+            foreach (var pair in externalCatalog.Locations)
+            {
+                var location = pair.Value;
+                if (location == null || !location.Enabled)
+                {
+                    continue;
+                }
+
+                var inputCapacityTons = ResolveLocationInputCapacityTons(ini, location);
+                var outputCapacityTons = ResolveLocationOutputCapacityTons(ini, location, inputCapacityTons);
+                var productionRate = location.Kind == ExternalLocationKind.Industry
+                    ? ResolveConfiguredProductionRate(ini, location.Id, 30f)
+                    : 30f;
+
+                config.IndustryConfigs[location.Id] = new IndustryConfig
+                {
+                    Id = location.Id,
+                    Name = ini.GetString(location.Id, "Name", location.Name),
+                    Position = location.Position,
+                    Inputs = new HashSet<string>(location.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                    Outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                    InputCapacityTons = inputCapacityTons,
+                    OutputCapacityTons = outputCapacityTons,
+                    ProductionRate = productionRate,
+                    StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "StartingTank", location.StartingTankRatio))),
+                    Density = ini.GetString(location.Id, "Density", location.Density ?? "medium"),
+                };
+            }
+        }
+
+        private static float ResolveLocationInputCapacityTons(IniFile ini, ExternalLocationConfig location)
+        {
+            var defaultRaw = 50000f;
+            if (location.Kind == ExternalLocationKind.Store)
+            {
+                return Math.Max(10f, ini.GetFloat(location.Id, "StoreInputCapacity", defaultRaw) / 1000f);
+            }
+
+            var raw = ini.GetFloat(
+                location.Id,
+                "IndustryInputCapacity",
+                ini.GetFloat(location.Id, "StoreInputCapacity", defaultRaw));
+
+            return Math.Max(10f, raw / 1000f);
+        }
+
+        private static float ResolveLocationOutputCapacityTons(IniFile ini, ExternalLocationConfig location, float inputCapacityTons)
+        {
+            if (location.Kind != ExternalLocationKind.Industry)
+            {
+                return inputCapacityTons;
+            }
+
+            return Math.Max(10f, ini.GetFloat(location.Id, "IndustryOutputCapacity", 50000f) / 1000f);
+        }
+
+        private static float ResolveConfiguredProductionRate(IniFile ini, string section, float defaultRate)
+        {
+            var productionRate = ini.GetFloat(section, "ProductionRate", float.NaN);
+            if (float.IsNaN(productionRate))
+            {
+                var block = ini.GetSection(section);
+                foreach (var pair in block)
+                {
+                    if (!pair.Key.EndsWith("ProductionRate", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    float parsed;
+                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) && parsed > 0f)
+                    {
+                        productionRate = parsed;
+                        break;
+                    }
+
+                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.CurrentCulture, out parsed) && parsed > 0f)
+                    {
+                        productionRate = parsed;
+                        break;
+                    }
+                }
+            }
+
+            if (float.IsNaN(productionRate) || productionRate <= 0f)
+            {
+                return defaultRate;
+            }
+
+            return productionRate;
         }
 
         private static void ParseVehicles(IniFile ini, ModConfig config)
@@ -163,55 +254,93 @@ namespace IndustryLogisticV.Config
                 }
 
                 var rawModels = ini.GetStringList(section, "ModelName");
-                var cargoType = ParseCargoType(ini.GetString(section, "VehicleCargoType", "Unknown"));
+                var configuredCargoType = ParseCargoType(ini.GetString(section, "VehicleCargoType", "Unknown"));
                 var capacityRaw = ini.GetFloat(section, "VehicleCapacity", 10000f);
                 var capacityTons = capacityRaw / 1000f;
                 var isTrailerSection = section.IndexOf("Trailer", StringComparison.OrdinalIgnoreCase) >= 0;
 
                 for (int i = 0; i < rawModels.Count; i++)
                 {
+                    var modelName = rawModels[i];
+                    var cargoType = NormalizeVehicleCargoType(section, modelName, configuredCargoType);
+                    var isTractor = IsTractorDefinition(section, modelName, cargoType);
                     config.VehicleDefinitions.Add(new VehicleDefinition
                     {
                         SectionName = section,
-                        ModelName = rawModels[i],
+                        ModelName = modelName,
                         CargoType = cargoType,
                         CapacityTons = Math.Max(0f, capacityTons),
                         IsEnabled = true,
-                        IsTrailer = isTrailerSection || cargoType == VehicleCargoType.Trailer,
+                        IsTrailer = isTrailerSection && !isTractor,
+                        IsTractor = isTractor,
                     });
                 }
             }
 
-            EnsureDefaultSolidTrailer(config);
+            EnsureDefaultOpenHullTrailer(config);
         }
 
-        private static void EnsureDefaultSolidTrailer(ModConfig config)
+        private static void EnsureDefaultOpenHullTrailer(ModConfig config)
         {
             if (config == null)
             {
                 return;
             }
 
-            var hasSolidTrailer = config.VehicleDefinitions.Any(x =>
+            var hasOpenHullTrailer = config.VehicleDefinitions.Any(x =>
                 x != null &&
                 x.IsEnabled &&
                 x.IsTrailer &&
-                x.CargoType == VehicleCargoType.Solid);
+                x.CargoType == VehicleCargoType.OpenHull);
 
-            if (hasSolidTrailer)
+            if (hasOpenHullTrailer)
             {
                 return;
             }
 
             config.VehicleDefinitions.Add(new VehicleDefinition
             {
-                SectionName = "SolidTrailers",
+                SectionName = "OpenHullTrailers",
                 ModelName = "trflat",
-                CargoType = VehicleCargoType.Solid,
+                CargoType = VehicleCargoType.OpenHull,
                 CapacityTons = 30f,
                 IsEnabled = true,
                 IsTrailer = true,
+                IsTractor = false,
             });
+        }
+
+        private static VehicleCargoType NormalizeVehicleCargoType(string section, string modelName, VehicleCargoType cargoType)
+        {
+            if (string.Equals(modelName, "trailerlogs", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(section, "LogsTrailer", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Wood;
+            }
+
+            return cargoType;
+        }
+
+        private static bool IsTractorDefinition(string section, string modelName, VehicleCargoType cargoType)
+        {
+            if (string.Equals(modelName, "trailerlogs", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(section, "LogsTrailer", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return cargoType == VehicleCargoType.Trailer ||
+                section.Equals("Trucks", StringComparison.OrdinalIgnoreCase) ||
+                section.IndexOf("Tractor", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static List<VehicleCargoType> BuildFallbackCargoTypes(ModConfig config)
+        {
+            return config.VehicleDefinitions
+                .Select(x => x.CargoType)
+                .Where(x => x != VehicleCargoType.Unknown && x != VehicleCargoType.Trailer)
+                .Distinct()
+                .ToList();
         }
 
         private static void ParseObjects(IniFile ini, ModConfig config)
@@ -234,6 +363,24 @@ namespace IndustryLogisticV.Config
             if (!config.ObjectModels.ContainsKey("Box"))
             {
                 config.ObjectModels["Box"] = new List<string> { "prop_boxpile_05a" };
+            }
+        }
+
+        private static void MergeExternalObjects(ExternalConfigCatalog externalCatalog, ModConfig config)
+        {
+            if (externalCatalog == null || config == null)
+            {
+                return;
+            }
+
+            foreach (var pair in externalCatalog.ObjectModels)
+            {
+                if (pair.Value == null || pair.Value.Count == 0)
+                {
+                    continue;
+                }
+
+                config.ObjectModels[pair.Key] = new List<string>(pair.Value);
             }
         }
 
@@ -297,34 +444,66 @@ namespace IndustryLogisticV.Config
 
         private static VehicleCargoType ParseCargoType(string raw)
         {
-            if (string.IsNullOrWhiteSpace(raw))
+            var normalized = (raw ?? string.Empty).Trim().Replace(" ", string.Empty);
+            if (normalized.Length == 0)
             {
                 return VehicleCargoType.Unknown;
             }
 
-            if (raw.Equals("Loose", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("Aggregates", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Loose", StringComparison.OrdinalIgnoreCase))
             {
-                return VehicleCargoType.Loose;
+                return VehicleCargoType.Aggregates;
             }
 
-            if (raw.Equals("Crate", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("OpenHull", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Solid", StringComparison.OrdinalIgnoreCase))
             {
-                return VehicleCargoType.Crate;
+                return VehicleCargoType.OpenHull;
             }
 
-            if (raw.Equals("Fluid", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("Wood", StringComparison.OrdinalIgnoreCase))
             {
-                return VehicleCargoType.Fluid;
+                return VehicleCargoType.Wood;
             }
 
-            if (raw.Equals("Trailer", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("CraftedGoods", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Crate", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.CraftedGoods;
+            }
+
+            if (normalized.Equals("Liquid", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Fluid", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Liquid;
+            }
+
+            if (normalized.Equals("DryBulk", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.DryBulk;
+            }
+
+            if (normalized.Equals("Refrigeration", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Refrigeration;
+            }
+
+            if (normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Recyclable;
+            }
+
+            if (normalized.Equals("Vehicles", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Vehicle", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Vehicles;
+            }
+
+            if (normalized.Equals("Trailer", StringComparison.OrdinalIgnoreCase))
             {
                 return VehicleCargoType.Trailer;
-            }
-
-            if (raw.Equals("Solid", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Solid;
             }
 
             return VehicleCargoType.Unknown;

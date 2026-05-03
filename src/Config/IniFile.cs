@@ -22,16 +22,32 @@ namespace IndustryLogisticV.Config
 
         public static IniFile Load(string path)
         {
-            var data = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
             if (!File.Exists(path))
             {
-                return new IniFile(data);
+                return new IniFile(new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase));
             }
 
+            return LoadFromLines(File.ReadAllLines(path));
+        }
+
+        public static IniFile LoadFromString(string content)
+        {
+            if (string.IsNullOrEmpty(content))
+            {
+                return new IniFile(new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase));
+            }
+
+            var lines = content.Replace("\r\n", "\n").Replace('\r', '\n').Split('\n');
+            return LoadFromLines(lines);
+        }
+
+        private static IniFile LoadFromLines(IEnumerable<string> lines)
+        {
+            var data = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
             string currentSection = "Global";
             data[currentSection] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var rawLine in File.ReadAllLines(path))
+            foreach (var rawLine in lines)
             {
                 if (rawLine == null)
                 {

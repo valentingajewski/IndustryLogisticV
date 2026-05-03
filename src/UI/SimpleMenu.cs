@@ -23,6 +23,7 @@ namespace IndustryLogisticV.UI
         public Action OnActivate { get; set; }
         public Action OnLeft { get; set; }
         public Action OnRight { get; set; }
+        public bool IsSeparator { get; set; }
         public Color? IdleBackgroundColor { get; set; }
         public Color? SelectedBackgroundColor { get; set; }
         public Color? ProgressBarColor { get; set; }

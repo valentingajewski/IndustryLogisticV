@@ -1,0 +1,4 @@
+- Oversized transport (machines, house, vehicles,...)
+    - resource needs to be unloaded to the indsutry to produce these kind of cargo
+- Player can choose which vehicle can be build in the vehicle assembly (impacts input resources)
+- Flatbed jobs

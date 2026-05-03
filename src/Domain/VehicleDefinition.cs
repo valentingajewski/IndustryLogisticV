@@ -10,12 +10,13 @@ namespace IndustryLogisticV.Domain
         public float CapacityTons { get; set; }
         public bool IsEnabled { get; set; }
         public bool IsTrailer { get; set; }
+        public bool IsTractor { get; set; }
 
         public Model Model => new Model(ModelName);
 
         public override string ToString()
         {
-            return string.Format("{0} ({1}, {2:0.0}t)", ModelName, CargoType, CapacityTons);
+            return string.Format("{0} ({1}, {2:0.0}t)", ModelName, CargoType.ToDisplayName(), CapacityTons);
         }
     }
 }

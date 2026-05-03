@@ -32,8 +32,24 @@ namespace IndustryLogisticV.Systems
             _filterOrder = filterOrder == null
                 ? new List<VehicleCargoType>()
                 : new List<VehicleCargoType>(filterOrder);
+
+            if (_filterOrder.Count == 0)
+            {
+                _filterOrder = _fleetManager.Definitions
+                    .Where(x => x != null && x.IsEnabled)
+                    .Select(x => x.CargoType)
+                    .Where(x => x != VehicleCargoType.Unknown && x != VehicleCargoType.Trailer)
+                    .Distinct()
+                    .ToList();
+            }
+
             _tractorVehicles = _fleetManager.GetTractorDefinitions();
             _filteredVehicles = new List<VehicleDefinition>();
+            if (_filterOrder.Count > 0 && !_filterOrder.Contains(defaultFilter))
+            {
+                defaultFilter = _filterOrder[0];
+            }
+
             SelectedFilter = defaultFilter;
             RefreshFilteredVehicles();
         }
@@ -46,10 +62,10 @@ namespace IndustryLogisticV.Systems
             {
                 if (_filteredVehicles.Count == 0)
                 {
-                    return "Vehicle: none for this cargo filter";
+                    return "None for this cargo filter";
                 }
 
-                return string.Format("Vehicle: {0}", _filteredVehicles[_selectedVehicleIndex]);
+                return string.Format("{0}", _filteredVehicles[_selectedVehicleIndex]);
             }
         }
 
@@ -59,25 +75,30 @@ namespace IndustryLogisticV.Systems
             {
                 if (_filteredVehicles.Count == 0)
                 {
-                    return "Trailer Truck: n/a";
+                    return "n/a";
                 }
 
                 if (!_filteredVehicles[_selectedVehicleIndex].IsTrailer)
                 {
-                    return "Trailer Truck: auto (not needed)";
+                    return "auto (not needed)";
                 }
 
                 if (_tractorVehicles.Count == 0)
                 {
-                    return "Trailer Truck: unavailable";
+                    return "unavailable";
                 }
 
-                return string.Format("Trailer Truck: {0}", _tractorVehicles[_selectedTractorIndex].ModelName);
+                return string.Format("{0}", _tractorVehicles[_selectedTractorIndex].ModelName);
             }
         }
 
         public void ChangeFilter(int delta)
         {
+            if (_filterOrder.Count == 0)
+            {
+                return;
+            }
+
             var index = _filterOrder.IndexOf(SelectedFilter);
             if (index < 0)
             {

@@ -37,6 +37,7 @@ namespace IndustryLogisticV
         private readonly GlobalMarketManager _globalMarket;
 
         private readonly LemonMenu _officeMenu;
+        private readonly LemonMenu _vehicleCargoMenu;
         private readonly SimpleMenu _industryMenu;
         private readonly SimpleMenu _upgradeMenu;
         private readonly LemonMenu _modControlMenu;
@@ -103,17 +104,31 @@ namespace IndustryLogisticV
                 _industryManager,
                 _globalMarket,
                 message => ShowStatus(message));
+            var cargoFilterOrder = _config.CargoTypes != null && _config.CargoTypes.Count > 0
+                ? _config.CargoTypes
+                : new List<VehicleCargoType>
+                {
+                    VehicleCargoType.Aggregates,
+                    VehicleCargoType.CraftedGoods,
+                    VehicleCargoType.OpenHull,
+                    VehicleCargoType.Liquid,
+                };
             _vehicleSpawnController = new VehicleSpawnController(
                 _fleetManager,
                 _vehicleSpawnMarkerSeed,
                 _config.VehicleSpawnHeading,
-                new[] { VehicleCargoType.Loose, VehicleCargoType.Crate, VehicleCargoType.Solid, VehicleCargoType.Fluid },
-                VehicleCargoType.Crate);
+                cargoFilterOrder,
+                cargoFilterOrder.Count > 0 ? cargoFilterOrder[0] : VehicleCargoType.Aggregates);
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
 
             _officeMenu = new LemonMenu("Office")
             {
                 Subtitle = "Manage workers and fleet deployment",
+                AlignRight = true,
+            };
+            _vehicleCargoMenu = new LemonMenu("Vehicle & Cargo Type")
+            {
+                Subtitle = "Choose cargo filter, vehicle, and spawn",
                 AlignRight = true,
             };
             _industryMenu = new SimpleMenu("Industry Transfer")
@@ -180,6 +195,7 @@ namespace IndustryLogisticV
             get
             {
                 return _officeMenu.IsOpen
+                    || _vehicleCargoMenu.IsOpen
                     || _industryMenu.IsOpen
                     || _upgradeMenu.IsOpen
                     || _modControlMenu.IsOpen
@@ -388,6 +404,18 @@ namespace IndustryLogisticV
                 return true;
             }
 
+            if (_vehicleCargoMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToOfficeMenu();
+                    return true;
+                }
+
+                _vehicleCargoMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_industryMenu.IsOpen)
             {
                 _industryMenu.HandleKey(key, _controls);
@@ -433,6 +461,7 @@ namespace IndustryLogisticV
             _modControlMenu.Draw();
             _difficultyMenu.Draw();
             _officeMenu.Draw();
+            _vehicleCargoMenu.Draw();
 
             _overviewMenuController.Draw();
             if (_overviewMenuController.AnyMenuOpen)
@@ -440,7 +469,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen)
+            if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen)
             {
                 return;
             }
@@ -554,7 +583,7 @@ namespace IndustryLogisticV
             {
                 var state = _fleetManager.GetOrCreateCargoState(cargoVehicle);
                 lines.Add(string.Format("Vehicle: {0}", cargoVehicle.DisplayName));
-                lines.Add(string.Format("Cargo type: {0}", state.CargoType));
+                lines.Add(string.Format("Cargo type: {0}", state.CargoType.ToDisplayName()));
                 lines.Add(string.Format("Current cargo: {0}", state.IsEmpty ? "Empty" : state.Commodity));
                 lines.Add(string.Format("Weight: {0:0.0}/{1:0.0}t", state.WeightTons, state.CapacityTons));
             }
@@ -719,7 +748,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (cargoState.CargoType == VehicleCargoType.Crate || cargoState.CargoType == VehicleCargoType.Solid)
+            if (cargoState.CargoType == VehicleCargoType.Crate || cargoState.CargoType == VehicleCargoType.Solid || cargoState.CargoType == VehicleCargoType.Wood)
             {
                 _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
             }
@@ -1020,6 +1049,7 @@ namespace IndustryLogisticV
         private void CloseNonOfficeMenus()
         {
             CloseOverviewMenus();
+            _vehicleCargoMenu.Close();
             _industryMenu.Close();
             _upgradeMenu.Close();
             _modControlMenu.Close();
@@ -1033,6 +1063,7 @@ namespace IndustryLogisticV
             _modControlMenu.Close();
             _difficultyMenu.Close();
             _officeMenu.Close();
+            _vehicleCargoMenu.Close();
             _industryMenu.Close();
             _upgradeMenu.Close();
             CloseIndustryTablet();
@@ -1279,41 +1310,71 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Worker Model: {0}", _workerSpawnController.SelectedWorkerDisplayName),
+                    CaptionFactory = () => string.Format("Worker Model: < {0} >", _workerSpawnController.SelectedWorkerDisplayName),
                     OnLeft = () => ChangeWorkerIndex(-1),
                     OnRight = () => ChangeWorkerIndex(1),
                     OnActivate = ApplyWorkerModel,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Cargo Filter: {0}", _vehicleSpawnController.SelectedFilter),
+                    CaptionFactory = () => "Vehicle & Cargo Type",
+                    DetailFactory = () => string.Format(
+                        "{0} | {1}",
+                        _vehicleSpawnController.SelectedFilter.ToDisplayName(),
+                        _vehicleSpawnController.CurrentVehicleCaption),
+                    OnActivate = OpenVehicleCargoMenu,
+                },
+            });
+        }
+
+        private void RebuildVehicleCargoMenuItems()
+        {
+            _vehicleCargoMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => string.Format("Cargo Filter: < {0} >", _vehicleSpawnController.SelectedFilter.ToDisplayName()),
                     OnLeft = () => ChangeFilter(-1),
                     OnRight = () => ChangeFilter(1),
                     OnActivate = RefreshFilteredVehicles,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => _vehicleSpawnController.CurrentVehicleCaption,
+                    CaptionFactory = () => string.Format("Vehicle: < {0} >", _vehicleSpawnController.CurrentVehicleCaption),
                     OnLeft = () => ChangeVehicleSelection(-1),
                     OnRight = () => ChangeVehicleSelection(1),
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => _vehicleSpawnController.CurrentTractorCaption,
+                    CaptionFactory = () => string.Format("Truck: < {0} >", _vehicleSpawnController.CurrentTractorCaption),
                     OnLeft = () => ChangeTractorSelection(-1),
                     OnRight = () => ChangeTractorSelection(1),
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Spawn Vehicle"),
-                    OnActivate = SpawnSelectedVehicle,
+                    IsSeparator = true,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Close",
-                    OnActivate = () => _officeMenu.Close(),
+                    CaptionFactory = () => "~b~Spawn Vehicle~s~",
+                    DetailFactory = () => "Spawn the selected fleet vehicle at the office lot.",
+                    OnActivate = SpawnSelectedVehicle,
                 },
             });
+        }
+
+        private void OpenVehicleCargoMenu()
+        {
+            _officeMenu.Close();
+            RebuildVehicleCargoMenuItems();
+            _vehicleCargoMenu.Open();
+        }
+
+        private void ReturnToOfficeMenu()
+        {
+            _vehicleCargoMenu.Close();
+            RebuildOfficeMenuItems();
+            _officeMenu.Open();
         }
 
         private void ChangeWorkerIndex(int delta)
@@ -1329,23 +1390,38 @@ namespace IndustryLogisticV
         private void ChangeFilter(int delta)
         {
             _vehicleSpawnController.ChangeFilter(delta);
-            RebuildOfficeMenuItems();
+            RefreshVehicleSelectionMenus();
         }
 
         private void RefreshFilteredVehicles()
         {
             _vehicleSpawnController.RefreshFilteredVehicles();
+            RefreshVehicleSelectionMenus();
         }
 
         private void ChangeVehicleSelection(int delta)
         {
             _vehicleSpawnController.ChangeVehicleSelection(delta);
-            RebuildOfficeMenuItems();
+            RefreshVehicleSelectionMenus();
         }
 
         private void ChangeTractorSelection(int delta)
         {
             _vehicleSpawnController.ChangeTractorSelection(delta);
+            RefreshVehicleSelectionMenus();
+        }
+
+        private void RefreshVehicleSelectionMenus()
+        {
+            if (_vehicleCargoMenu != null && _vehicleCargoMenu.IsOpen)
+            {
+                RebuildVehicleCargoMenuItems();
+            }
+
+            if (_officeMenu != null)
+            {
+                RebuildOfficeMenuItems();
+            }
         }
 
         private void SpawnSelectedVehicle()
@@ -1357,12 +1433,6 @@ namespace IndustryLogisticV
             {
                 ShowStatus(message);
                 return;
-            }
-
-            var player = Game.Player.Character;
-            if (player != null && player.Exists())
-            {
-                player.SetIntoVehicle(truck, VehicleSeat.Driver);
             }
 
             ShowStatus(message);
@@ -1957,7 +2027,7 @@ namespace IndustryLogisticV
 
                 if (!industry.AcceptsCommodity(cargoState.Commodity))
                 {
-                    ShowStatus(string.Format("Can't unload {0} in this industry", cargoState.CargoType));
+                    ShowStatus(string.Format("Can't unload {0} in this industry", cargoState.CargoType.ToDisplayName()));
                     return;
                 }
 
@@ -2236,29 +2306,7 @@ namespace IndustryLogisticV
                 return Vector3.Zero;
             }
 
-            if (ShouldUseConfiguredZForMarker(industry.Name))
-            {
-                return new Vector3(industry.Position.X, industry.Position.Y, industry.Position.Z + 0.05f);
-            }
-
-            return GetGroundPosition(industry.Position);
-        }
-
-        private static bool ShouldUseConfiguredZForMarker(string markerName)
-        {
-            if (string.IsNullOrWhiteSpace(markerName))
-            {
-                return false;
-            }
-
-            var normalized = markerName.Trim();
-            if (MarkerConstants.PreserveConfiguredZMarkerNames.Contains(normalized))
-            {
-                return true;
-            }
-
-            return normalized.IndexOf("Marina Dr", StringComparison.OrdinalIgnoreCase) >= 0
-                || normalized.IndexOf("Marina Drive", StringComparison.OrdinalIgnoreCase) >= 0;
+            return industry.Position;
         }
 
         private static PointF ToScriptTextCoords(Size resolution, float x, float y)
@@ -2282,23 +2330,7 @@ namespace IndustryLogisticV
 
         private static Vector3 GetGroundPosition(Vector3 input)
         {
-            float z;
-            if (World.GetGroundHeight(new Vector3(input.X, input.Y, 1000f), out z, GetGroundHeightMode.ConsiderWaterAsGroundNoWaves))
-            {
-                return new Vector3(input.X, input.Y, z + 0.05f);
-            }
-
-            if (World.GetGroundHeight(new Vector3(input.X, input.Y, 1000f), out z, GetGroundHeightMode.ConsiderWaterAsGround))
-            {
-                return new Vector3(input.X, input.Y, z + 0.05f);
-            }
-
-            if (World.GetGroundHeight(new Vector3(input.X, input.Y, input.Z + 50f), out z, GetGroundHeightMode.Normal))
-            {
-                return new Vector3(input.X, input.Y, z + 0.05f);
-            }
-
-            return new Vector3(input.X, input.Y, input.Z + 0.05f);
+            return input;
         }
 
         private string ResolveConfigPath()
