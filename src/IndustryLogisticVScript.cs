@@ -109,16 +109,24 @@ namespace IndustryLogisticV
                 : new List<VehicleCargoType>
                 {
                     VehicleCargoType.Aggregates,
-                    VehicleCargoType.CraftedGoods,
                     VehicleCargoType.OpenHull,
+                    VehicleCargoType.Wood,
+                    VehicleCargoType.CraftedGoods,
                     VehicleCargoType.Liquid,
+                    VehicleCargoType.DryBulk,
+                    VehicleCargoType.Refrigeration,
+                    VehicleCargoType.Recyclable,
+                    VehicleCargoType.Vehicles,
                 };
+            var defaultCargoFilter = cargoFilterOrder.Contains(VehicleCargoType.CraftedGoods)
+                ? VehicleCargoType.CraftedGoods
+                : (cargoFilterOrder.Count > 0 ? cargoFilterOrder[0] : VehicleCargoType.Aggregates);
             _vehicleSpawnController = new VehicleSpawnController(
                 _fleetManager,
                 _vehicleSpawnMarkerSeed,
                 _config.VehicleSpawnHeading,
                 cargoFilterOrder,
-                cargoFilterOrder.Count > 0 ? cargoFilterOrder[0] : VehicleCargoType.Aggregates);
+                defaultCargoFilter);
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
 
             _officeMenu = new LemonMenu("Office")
@@ -748,7 +756,8 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (cargoState.CargoType == VehicleCargoType.Crate || cargoState.CargoType == VehicleCargoType.Solid || cargoState.CargoType == VehicleCargoType.Wood)
+            if (CommodityCatalog.UsesAttachedPropVisual(cargoState.CargoType) ||
+                CommodityCatalog.UsesAttachedPropVisual(cargoState.Commodity))
             {
                 _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
             }
@@ -950,14 +959,23 @@ namespace IndustryLogisticV
         {
             switch (cargoType)
             {
-                case VehicleCargoType.Fluid:
+                case VehicleCargoType.Liquid:
                     return 1.25f;
-                case VehicleCargoType.Loose:
+                case VehicleCargoType.Aggregates:
                     return 0.95f;
-                case VehicleCargoType.Crate:
+                case VehicleCargoType.DryBulk:
+                case VehicleCargoType.Recyclable:
+                    return 0.85f;
+                case VehicleCargoType.CraftedGoods:
                     return 0.6f;
-                case VehicleCargoType.Solid:
+                case VehicleCargoType.Refrigeration:
+                    return 0.55f;
+                case VehicleCargoType.OpenHull:
                     return 0.45f;
+                case VehicleCargoType.Wood:
+                    return 0.5f;
+                case VehicleCargoType.Vehicles:
+                    return 0.35f;
                 default:
                     return 0.8f;
             }
@@ -1012,13 +1030,23 @@ namespace IndustryLogisticV
         {
             switch (cargoType)
             {
-                case VehicleCargoType.Fluid:
+                case VehicleCargoType.Liquid:
                     return Color.FromArgb(228, 88, 150, 214);
-                case VehicleCargoType.Loose:
+                case VehicleCargoType.Aggregates:
                     return Color.FromArgb(228, 168, 144, 92);
-                case VehicleCargoType.Crate:
+                case VehicleCargoType.CraftedGoods:
                     return Color.FromArgb(228, 118, 188, 138);
-                case VehicleCargoType.Solid:
+                case VehicleCargoType.OpenHull:
+                    return Color.FromArgb(228, 188, 176, 98);
+                case VehicleCargoType.Wood:
+                    return Color.FromArgb(228, 152, 118, 76);
+                case VehicleCargoType.DryBulk:
+                    return Color.FromArgb(228, 197, 152, 82);
+                case VehicleCargoType.Refrigeration:
+                    return Color.FromArgb(228, 104, 194, 224);
+                case VehicleCargoType.Recyclable:
+                    return Color.FromArgb(228, 102, 180, 166);
+                case VehicleCargoType.Vehicles:
                     return Color.FromArgb(228, 188, 176, 98);
                 default:
                     return Color.FromArgb(228, 138, 154, 196);
@@ -2418,17 +2446,7 @@ namespace IndustryLogisticV
 
         private static bool IsPetrolServiceStation(Industry industry)
         {
-            if (industry == null)
-            {
-                return false;
-            }
-
-            if (!string.IsNullOrWhiteSpace(industry.Id) && industry.Id.IndexOf("Petrol Station", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return true;
-            }
-
-            return industry.IsSink && industry.Inputs.Count == 1 && industry.Inputs.Contains("Fuel");
+            return industry != null && industry.IsGasStation;
         }
 
         private static float Clamp01(float value)

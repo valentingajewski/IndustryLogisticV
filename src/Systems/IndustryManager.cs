@@ -22,6 +22,7 @@ namespace IndustryLogisticV.Systems
                 var runtimeConfig = new IndustryConfig
                 {
                     Id = industryConfig.Id,
+                    LocationKind = industryConfig.LocationKind,
                     Name = industryConfig.Name,
                     Position = industryConfig.Position,
                     Inputs = new HashSet<string>(industryConfig.Inputs, StringComparer.OrdinalIgnoreCase),

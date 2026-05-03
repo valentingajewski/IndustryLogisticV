@@ -15,7 +15,6 @@ namespace IndustryLogisticV.Systems
         private const string AlloySolidPropModel = "prop_pipes_01b";
         private const string MetalSolidPropModel = "prop_pipes_04a";
         private const string DefaultWoodPropModel = "prop_woodpile_01b";
-
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
@@ -276,40 +275,9 @@ namespace IndustryLogisticV.Systems
 
             List<string> modelNames;
             int count;
-            if (cargoState.CargoType == VehicleCargoType.Crate)
+            bool forceCenteredPlacement;
+            if (!TryResolveCargoPropLayout(cargoVehicle, cargoState, out modelNames, out count, out forceCenteredPlacement))
             {
-                if (!_objectModels.TryGetValue("Box", out modelNames) || modelNames.Count == 0)
-                {
-                    return;
-                }
-
-                count = ResolveCratePropCount(cargoVehicle, cargoState);
-            }
-            else if (cargoState.CargoType == VehicleCargoType.Wood)
-            {
-                var woodModel = ResolveWoodPropModel();
-                if (string.IsNullOrWhiteSpace(woodModel))
-                {
-                    return;
-                }
-
-                modelNames = new List<string> { woodModel };
-                count = 1;
-            }
-            else if (cargoState.CargoType == VehicleCargoType.Solid)
-            {
-                var solidModel = ResolveSolidPropModel(cargoState.Commodity);
-                if (string.IsNullOrWhiteSpace(solidModel))
-                {
-                    return;
-                }
-
-                modelNames = new List<string> { solidModel };
-                count = 1;
-            }
-            else
-            {
-                // Loose cargo is rendered as a marker overlay during loading ticks.
                 return;
             }
 
@@ -328,8 +296,6 @@ namespace IndustryLogisticV.Systems
 
             var columns = ResolveCrateColumnCount(count);
             var rows = (int)Math.Ceiling((float)count / columns);
-
-            var forceCenteredPlacement = cargoState.CargoType == VehicleCargoType.Solid || cargoState.CargoType == VehicleCargoType.Wood;
             for (int i = 0; i < count; i++)
             {
                 var modelName = modelNames[i % modelNames.Count];
@@ -436,6 +402,66 @@ namespace IndustryLogisticV.Systems
 
             var count = (int)Math.Ceiling(cargoState.WeightTons / 2f);
             return Math.Max(1, Math.Min(6, count));
+        }
+
+        private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, out List<string> modelNames, out int count, out bool forceCenteredPlacement)
+        {
+            modelNames = null;
+            count = 0;
+            forceCenteredPlacement = false;
+
+            var cargoType = CommodityCatalog.ResolveCargoType(cargoState.CargoType, cargoState.Commodity);
+            if (!CommodityCatalog.UsesAttachedPropVisual(cargoType))
+            {
+                return false;
+            }
+
+            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType);
+            if (modelNames == null || modelNames.Count == 0)
+            {
+                return false;
+            }
+
+            forceCenteredPlacement = CommodityCatalog.UsesCenteredPropVisual(cargoType);
+            count = forceCenteredPlacement ? 1 : ResolveCratePropCount(cargoVehicle, cargoState);
+            return count > 0;
+        }
+
+        private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType)
+        {
+            var normalized = CommodityCatalog.Normalize(commodity);
+            List<string> modelNames;
+            if (_objectModels.TryGetValue(normalized, out modelNames) && modelNames.Count > 0)
+            {
+                return modelNames;
+            }
+
+            if (cargoType == VehicleCargoType.Wood)
+            {
+                var woodModel = ResolveWoodPropModel();
+                if (!string.IsNullOrWhiteSpace(woodModel))
+                {
+                    return new List<string> { woodModel };
+                }
+            }
+
+            if (cargoType == VehicleCargoType.OpenHull)
+            {
+                var solidModel = ResolveSolidPropModel(commodity);
+                if (!string.IsNullOrWhiteSpace(solidModel))
+                {
+                    return new List<string> { solidModel };
+                }
+            }
+
+            if ((cargoType == VehicleCargoType.CraftedGoods || cargoType == VehicleCargoType.Refrigeration) &&
+                _objectModels.TryGetValue("Box", out modelNames) &&
+                modelNames.Count > 0)
+            {
+                return modelNames;
+            }
+
+            return null;
         }
 
         private static string ResolveSolidPropModel(string commodity)
