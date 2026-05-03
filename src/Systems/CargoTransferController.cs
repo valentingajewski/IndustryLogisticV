@@ -97,13 +97,11 @@ namespace IndustryLogisticV.Systems
                 return;
             }
 
-            var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
-            var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
+            var productCargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+            var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(productCargoType);
+            var usesLooseVisual = CommodityCatalog.UsesLooseVisual(productCargoType);
 
-            if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
-            {
-                cargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
-            }
+            cargoType = CommodityCatalog.ResolveCargoType(cargoType, selectedProduct);
 
             if (shouldAnimateCrateDoors)
             {
@@ -192,8 +190,8 @@ namespace IndustryLogisticV.Systems
 
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
-            var shouldAnimateCrateDoors = cargoState.CargoType == VehicleCargoType.Crate
-                || CommodityCatalog.GetCargoTypeForCommodity(commodity) == VehicleCargoType.Crate;
+            var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(cargoState.CargoType)
+                || CommodityCatalog.UsesDoorAnimation(commodity);
 
             if (shouldAnimateCrateDoors)
             {
@@ -263,12 +261,10 @@ namespace IndustryLogisticV.Systems
             }
 
             var cargoType = cargoState.CargoType;
-            var shouldAnimateCrateDoors = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct) == VehicleCargoType.Crate;
-            var usesLooseVisual = IsLooseVisualCommodity(selectedProduct);
-            if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
-            {
-                cargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
-            }
+            var productCargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+            var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(productCargoType);
+            var usesLooseVisual = CommodityCatalog.UsesLooseVisual(productCargoType);
+            cargoType = CommodityCatalog.ResolveCargoType(cargoType, selectedProduct);
 
             if (shouldAnimateCrateDoors)
             {
@@ -335,7 +331,8 @@ namespace IndustryLogisticV.Systems
         {
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
-            var shouldAnimateCrateDoors = cargoState.CargoType == VehicleCargoType.Crate;
+            var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(cargoState.CargoType)
+                || CommodityCatalog.UsesDoorAnimation(commodity);
 
             if (shouldAnimateCrateDoors)
             {
@@ -432,15 +429,6 @@ namespace IndustryLogisticV.Systems
                 OnComplete = complete,
                 OnProgress = onProgress,
             };
-        }
-
-        private static bool IsLooseVisualCommodity(string commodity)
-        {
-            var normalized = CommodityCatalog.Normalize(commodity);
-            return normalized.Equals("Ore", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Coal", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
-                   normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase);
         }
 
         private static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)

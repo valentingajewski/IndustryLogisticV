@@ -14,6 +14,7 @@ namespace IndustryLogisticV.Domain
         public Industry(IndustryConfig config, List<ProductionRecipe> recipes, bool supportsOmegaBoost, float omegaCapacityMultiplier)
         {
             Id = config.Id;
+            LocationKind = config.LocationKind;
             Name = config.Name;
             Position = config.Position;
             Inputs = new HashSet<string>(config.Inputs, StringComparer.OrdinalIgnoreCase);
@@ -45,6 +46,7 @@ namespace IndustryLogisticV.Domain
         }
 
         public string Id { get; }
+    public ExternalLocationKind LocationKind { get; }
         public string Name { get; }
         public Vector3 Position { get; }
         public HashSet<string> Inputs { get; }
@@ -74,6 +76,16 @@ namespace IndustryLogisticV.Domain
         public bool IsSink
         {
             get { return Outputs.Count == 0; }
+        }
+
+        public bool IsStore
+        {
+            get { return LocationKind == ExternalLocationKind.Store; }
+        }
+
+        public bool IsGasStation
+        {
+            get { return LocationKind == ExternalLocationKind.GasStation; }
         }
 
         public bool SupportsOmegaBoost

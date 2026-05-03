@@ -439,7 +439,7 @@ namespace IndustryLogisticV.UI
         private List<Industry> GetIndustriesForOverview()
         {
             return _industryManager.Industries
-                .Where(x => x != null && !IsStoreLocation(x) && !IsPetrolServiceStation(x))
+                .Where(x => x != null && x.LocationKind == ExternalLocationKind.Industry)
                 .OrderBy(x => x.Name)
                 .ToList();
         }
@@ -447,7 +447,7 @@ namespace IndustryLogisticV.UI
         private List<Industry> GetStoresForOverview()
         {
             return _industryManager.Industries
-                .Where(IsStoreLocation)
+                .Where(x => x != null && x.LocationKind == ExternalLocationKind.Store)
                 .OrderBy(x => x.Name)
                 .ToList();
         }
@@ -455,7 +455,7 @@ namespace IndustryLogisticV.UI
         private List<Industry> GetGasStationsForOverview()
         {
             return _industryManager.Industries
-                .Where(IsPetrolServiceStation)
+                .Where(x => x != null && x.LocationKind == ExternalLocationKind.GasStation)
                 .OrderBy(x => x.Name)
                 .ToList();
         }
@@ -512,34 +512,12 @@ namespace IndustryLogisticV.UI
 
         private static bool IsPetrolServiceStation(Industry industry)
         {
-            if (industry == null)
-            {
-                return false;
-            }
-
-            if (!string.IsNullOrWhiteSpace(industry.Id) && industry.Id.IndexOf("Petrol Station", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return true;
-            }
-
-            return industry.IsSink && industry.Inputs.Count == 1 && industry.Inputs.Contains("Fuel");
+            return industry != null && industry.IsGasStation;
         }
 
         private static bool IsStoreLocation(Industry industry)
         {
-            if (industry == null || !industry.IsSink || IsPetrolServiceStation(industry))
-            {
-                return false;
-            }
-
-            if (!string.IsNullOrWhiteSpace(industry.Id) && industry.Id.StartsWith("Store", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            var name = industry.Name ?? string.Empty;
-            return name.IndexOf("Store", StringComparison.OrdinalIgnoreCase) >= 0
-                || name.IndexOf("Mall", StringComparison.OrdinalIgnoreCase) >= 0;
+            return industry != null && industry.IsStore;
         }
 
         private static float Clamp01(float value)

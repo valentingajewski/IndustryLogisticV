@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using GTA.Math;
 using IndustryLogisticV.Domain;
@@ -32,12 +33,18 @@ namespace IndustryLogisticV.Config
         public ControlBindings Controls { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
+        public ExternalConfigCatalog ExternalCatalog { get; private set; }
+        public List<VehicleCargoType> CargoTypes { get; private set; }
         public Dictionary<string, List<string>> ObjectModels { get; private set; }
         public List<string> WorkerModels { get; private set; }
 
         public static ModConfig Load(string path)
         {
             var ini = IniFile.Load(path);
+            var configDirectory = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, "configs");
+            var externalCatalog = ExternalConfigCatalog.Load(configDirectory);
+            CommodityCatalog.Configure(externalCatalog.ResourceGroups);
+
             var config = new ModConfig
             {
                 OmegaMultiplier = Math.Max(1f, ini.GetFloat("General", "OmegaMultiplier", 2f)),
@@ -48,18 +55,56 @@ namespace IndustryLogisticV.Config
                 VehicleSpawnPosition = ini.GetVector3("VehicleSpawn", "Coordinates", new Vector3(-360.04f, -2763.21f, 6f)),
                 VehicleSpawnHeading = ini.GetFloat("VehicleSpawn", "VehicleSpawnHeading", ini.GetFloat("VehicleSpawn", "Heading", 230f)),
                 Controls = ParseControls(ini),
+                ExternalCatalog = externalCatalog,
+                CargoTypes = ResolveCargoTypeOrder(externalCatalog),
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
                 ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
                 WorkerModels = new List<string>(),
             };
 
-            ParseIndustries(ini, config);
+            if (externalCatalog.Locations.Count > 0)
+            {
+                ParseIndustries(ini, externalCatalog, config);
+            }
+            else
+            {
+                ParseIndustries(ini, config);
+            }
+
             ParseVehicles(ini, config);
             ParseObjects(ini, config);
+            MergeExternalObjectModels(externalCatalog, config);
             ParseWorkers(ini, config);
 
             return config;
+        }
+
+        private static void ParseIndustries(IniFile legacyIni, ExternalConfigCatalog externalCatalog, ModConfig config)
+        {
+            foreach (var pair in externalCatalog.Locations)
+            {
+                var location = pair.Value;
+                if (location == null || !location.Enabled)
+                {
+                    continue;
+                }
+
+                config.IndustryConfigs[pair.Key] = new IndustryConfig
+                {
+                    Id = location.Id,
+                    LocationKind = location.Kind,
+                    Name = location.Name,
+                    Position = location.Position,
+                    Inputs = new HashSet<string>(location.Inputs, StringComparer.OrdinalIgnoreCase),
+                    Outputs = new HashSet<string>(location.Outputs, StringComparer.OrdinalIgnoreCase),
+                    InputCapacityTons = Math.Max(10f, ResolveInputCapacityTons(legacyIni, location)),
+                    OutputCapacityTons = Math.Max(10f, ResolveOutputCapacityTons(legacyIni, location)),
+                    ProductionRate = ResolveProductionRate(legacyIni, location),
+                    StartingTankRatio = location.StartingTankRatio,
+                    Density = location.Density,
+                };
+            }
         }
 
         private static void ParseIndustries(IniFile ini, ModConfig config)
@@ -134,6 +179,7 @@ namespace IndustryLogisticV.Config
                 config.IndustryConfigs[section] = new IndustryConfig
                 {
                     Id = section,
+                    LocationKind = InferLocationKind(section, inputs, outputs),
                     Name = name,
                     Position = position,
                     Inputs = inputs,
@@ -182,32 +228,32 @@ namespace IndustryLogisticV.Config
                 }
             }
 
-            EnsureDefaultSolidTrailer(config);
+            EnsureDefaultOpenHullTrailer(config);
         }
 
-        private static void EnsureDefaultSolidTrailer(ModConfig config)
+        private static void EnsureDefaultOpenHullTrailer(ModConfig config)
         {
             if (config == null)
             {
                 return;
             }
 
-            var hasSolidTrailer = config.VehicleDefinitions.Any(x =>
+            var hasOpenHullTrailer = config.VehicleDefinitions.Any(x =>
                 x != null &&
                 x.IsEnabled &&
                 x.IsTrailer &&
-                x.CargoType == VehicleCargoType.Solid);
+                x.CargoType == VehicleCargoType.OpenHull);
 
-            if (hasSolidTrailer)
+            if (hasOpenHullTrailer)
             {
                 return;
             }
 
             config.VehicleDefinitions.Add(new VehicleDefinition
             {
-                SectionName = "SolidTrailers",
+                SectionName = "OpenHullTrailers",
                 ModelName = "trflat",
-                CargoType = VehicleCargoType.Solid,
+                CargoType = VehicleCargoType.OpenHull,
                 CapacityTons = 30f,
                 IsEnabled = true,
                 IsTrailer = true,
@@ -229,6 +275,29 @@ namespace IndustryLogisticV.Config
                 {
                     config.ObjectModels[pair.Key] = list;
                 }
+            }
+
+            if (!config.ObjectModels.ContainsKey("Box"))
+            {
+                config.ObjectModels["Box"] = new List<string> { "prop_boxpile_05a" };
+            }
+        }
+
+        private static void MergeExternalObjectModels(ExternalConfigCatalog externalCatalog, ModConfig config)
+        {
+            if (externalCatalog == null)
+            {
+                return;
+            }
+
+            foreach (var pair in externalCatalog.ObjectModels)
+            {
+                if (pair.Value == null || pair.Value.Count == 0)
+                {
+                    continue;
+                }
+
+                config.ObjectModels[pair.Key] = new List<string>(pair.Value);
             }
 
             if (!config.ObjectModels.ContainsKey("Box"))
@@ -297,37 +366,237 @@ namespace IndustryLogisticV.Config
 
         private static VehicleCargoType ParseCargoType(string raw)
         {
-            if (string.IsNullOrWhiteSpace(raw))
+            var normalized = (raw ?? string.Empty).Trim().Replace(" ", string.Empty);
+            if (normalized.Length == 0)
             {
                 return VehicleCargoType.Unknown;
             }
 
-            if (raw.Equals("Loose", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("Aggregates", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Loose", StringComparison.OrdinalIgnoreCase))
             {
-                return VehicleCargoType.Loose;
+                return VehicleCargoType.Aggregates;
             }
 
-            if (raw.Equals("Crate", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("OpenHull", StringComparison.OrdinalIgnoreCase))
             {
-                return VehicleCargoType.Crate;
+                return VehicleCargoType.OpenHull;
             }
 
-            if (raw.Equals("Fluid", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("Wood", StringComparison.OrdinalIgnoreCase))
             {
-                return VehicleCargoType.Fluid;
+                return VehicleCargoType.Wood;
             }
 
-            if (raw.Equals("Trailer", StringComparison.OrdinalIgnoreCase))
+            if (normalized.Equals("CraftedGoods", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Crate", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.CraftedGoods;
+            }
+
+            if (normalized.Equals("Liquid", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Fluid", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Liquid;
+            }
+
+            if (normalized.Equals("DryBulk", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.DryBulk;
+            }
+
+            if (normalized.Equals("Refrigeration", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Refrigeration;
+            }
+
+            if (normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Recyclable;
+            }
+
+            if (normalized.Equals("Vehicles", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Vehicle", StringComparison.OrdinalIgnoreCase))
+            {
+                return VehicleCargoType.Vehicles;
+            }
+
+            if (normalized.Equals("Trailer", StringComparison.OrdinalIgnoreCase))
             {
                 return VehicleCargoType.Trailer;
             }
 
-            if (raw.Equals("Solid", StringComparison.OrdinalIgnoreCase))
+            return VehicleCargoType.Unknown;
+        }
+
+        private static float ResolveInputCapacityTons(IniFile legacyIni, ExternalLocationConfig location)
+        {
+            float rawCapacity;
+            switch (location.Kind)
             {
-                return VehicleCargoType.Solid;
+                case ExternalLocationKind.Industry:
+                    rawCapacity = legacyIni.GetFloat(location.Id, "IndustryInputCapacity", 50000f);
+                    break;
+                case ExternalLocationKind.Store:
+                    rawCapacity = legacyIni.GetFloat(
+                        location.Id,
+                        "StoreInputCapacity",
+                        ResolveDensityProfileCapacityRaw(legacyIni, "StoreDensityProfiles", location.Density, 60000f));
+                    break;
+                case ExternalLocationKind.GasStation:
+                    rawCapacity = ResolveDensityProfileCapacityRaw(legacyIni, "GasStationDensityProfiles", location.Density, 60000f);
+                    break;
+                default:
+                    rawCapacity = 50000f;
+                    break;
             }
 
-            return VehicleCargoType.Unknown;
+            return rawCapacity / 1000f;
+        }
+
+        private static float ResolveOutputCapacityTons(IniFile legacyIni, ExternalLocationConfig location)
+        {
+            if (location.Kind != ExternalLocationKind.Industry || location.Outputs.Count == 0)
+            {
+                return 10f;
+            }
+
+            return legacyIni.GetFloat(location.Id, "IndustryOutputCapacity", 50000f) / 1000f;
+        }
+
+        private static float ResolveProductionRate(IniFile legacyIni, ExternalLocationConfig location)
+        {
+            var productionRate = legacyIni.GetFloat(location.Id, "ProductionRate", float.NaN);
+            if (float.IsNaN(productionRate))
+            {
+                productionRate = legacyIni.GetFloat(location.Id, "IndustryProductionRate", float.NaN);
+            }
+
+            if (float.IsNaN(productionRate))
+            {
+                var block = legacyIni.GetSection(location.Id);
+                foreach (var pair in block)
+                {
+                    if (!pair.Key.EndsWith("ProductionRate", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    float parsed;
+                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) && parsed > 0f)
+                    {
+                        productionRate = parsed;
+                        break;
+                    }
+
+                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.CurrentCulture, out parsed) && parsed > 0f)
+                    {
+                        productionRate = parsed;
+                        break;
+                    }
+                }
+            }
+
+            if (float.IsNaN(productionRate) || productionRate <= 0f)
+            {
+                productionRate = 30f;
+            }
+
+            var ratio = location.Kind == ExternalLocationKind.Industry
+                ? Math.Max(0.1f, location.FactoryProductionRatio)
+                : 1f;
+
+            return Math.Max(1f, productionRate * ratio);
+        }
+
+        private static float ResolveDensityProfileCapacityRaw(IniFile legacyIni, string section, string density, float defaultCapacity)
+        {
+            var densityKey = NormalizeDensityKey(density);
+            return legacyIni.GetFloat(section, densityKey + "Capacity", defaultCapacity);
+        }
+
+        private static string NormalizeDensityKey(string density)
+        {
+            var normalized = (density ?? string.Empty).Trim().Replace(" ", string.Empty).ToLowerInvariant();
+            if (normalized == "verylow")
+            {
+                return "VeryLow";
+            }
+
+            if (normalized == "low")
+            {
+                return "Low";
+            }
+
+            if (normalized == "high")
+            {
+                return "High";
+            }
+
+            if (normalized == "veryhigh")
+            {
+                return "VeryHigh";
+            }
+
+            return "Medium";
+        }
+
+        private static ExternalLocationKind InferLocationKind(string section, HashSet<string> inputs, HashSet<string> outputs)
+        {
+            if (!string.IsNullOrWhiteSpace(section) && section.IndexOf("Petrol Station", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return ExternalLocationKind.GasStation;
+            }
+
+            var hasFuelOnlyInput = inputs != null && inputs.Count == 1 && inputs.Contains("Fuel");
+            if ((outputs == null || outputs.Count == 0) && hasFuelOnlyInput)
+            {
+                return ExternalLocationKind.GasStation;
+            }
+
+            if (!string.IsNullOrWhiteSpace(section) && section.StartsWith("Store", StringComparison.OrdinalIgnoreCase))
+            {
+                return ExternalLocationKind.Store;
+            }
+
+            if ((outputs == null || outputs.Count == 0) && inputs != null && inputs.Count > 0)
+            {
+                return ExternalLocationKind.Store;
+            }
+
+            return ExternalLocationKind.Industry;
+        }
+
+        private static List<VehicleCargoType> ResolveCargoTypeOrder(ExternalConfigCatalog externalCatalog)
+        {
+            var preferredOrder = new[]
+            {
+                VehicleCargoType.Aggregates,
+                VehicleCargoType.OpenHull,
+                VehicleCargoType.Wood,
+                VehicleCargoType.CraftedGoods,
+                VehicleCargoType.Liquid,
+                VehicleCargoType.DryBulk,
+                VehicleCargoType.Refrigeration,
+                VehicleCargoType.Recyclable,
+                VehicleCargoType.Vehicles,
+            };
+
+            var available = externalCatalog != null && externalCatalog.CargoTypesInOrder.Count > 0
+                ? new HashSet<VehicleCargoType>(externalCatalog.CargoTypesInOrder)
+                : new HashSet<VehicleCargoType>(preferredOrder);
+
+            var result = new List<VehicleCargoType>();
+            for (int i = 0; i < preferredOrder.Length; i++)
+            {
+                if (available.Contains(preferredOrder[i]))
+                {
+                    result.Add(preferredOrder[i]);
+                }
+            }
+
+            return result;
         }
     }
 }

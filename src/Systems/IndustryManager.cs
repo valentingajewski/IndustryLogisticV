@@ -24,6 +24,7 @@ namespace IndustryLogisticV.Systems
                 var groundedConfig = new IndustryConfig
                 {
                     Id = industryConfig.Id,
+                    LocationKind = industryConfig.LocationKind,
                     Name = industryConfig.Name,
                     Position = useConfiguredZ
                         ? industryConfig.Position
