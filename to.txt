@@ -1,0 +1,11 @@
+- Fuel system
+- 
+
+In the F7 menu Add a new button:
+- Add a "Saving Options" button. In this button, add 2 buttons:
+    -In this button, Add a "Create new save". By selecting this button, it must open a input text where the player can write the name of the mod savegame. It must work like the .state.ini but it must be saved in a folder called IndustrialLogisticVSaves and the name of the savegame must me [name of the input text].state.ini
+        - When created a new game and after the input text window, bring the difficulty settings window where the player can choose which settings it want to enabled. Add a "Starting balance" at the top of the selection choices from -5,000$ to 100,000$
+    - Add a "Load save". This is straightforward as it must give the player to choose between all the savegame it has
+    - Add a "Delete save". This button allow the player to delete any of the savegame it created before
+    - Add a "Save game". This button will save the values of the current mod game   
+- Add a new restricitive policy where difficulty settings are sealed when a new save has been created. The player cannot change difficulty settings during the game anymore. If he wants to change them he needs to create a new save which new settings

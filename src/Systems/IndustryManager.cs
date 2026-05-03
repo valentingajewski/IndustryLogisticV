@@ -10,12 +10,16 @@ namespace IndustryLogisticV.Systems
     public sealed class IndustryManager
     {
         private readonly List<Industry> _industries;
+        private readonly Dictionary<string, IndustryConfig> _defaultIndustryConfigs;
         private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
+        private readonly float _industryOmegaCapacityMultiplier;
 
         public IndustryManager(ModConfig config)
         {
             _industries = new List<Industry>();
+            _defaultIndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase);
             _petrolStationDrainRatePerMinuteByIndustryId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            _industryOmegaCapacityMultiplier = config == null ? 0.2f : config.IndustryOmegaCapacityMultiplier;
             foreach (var pair in config.IndustryConfigs)
             {
                 var industryConfig = pair.Value;
@@ -35,6 +39,7 @@ namespace IndustryLogisticV.Systems
                     StartingTankRatio = industryConfig.StartingTankRatio,
                     Density = industryConfig.Density,
                 };
+                _defaultIndustryConfigs[runtimeConfig.Id] = CloneIndustryConfig(runtimeConfig);
 
                 var supportsOmegaBoost = ShouldUseOmegaBoost(runtimeConfig);
                 var recipes = RecipeRegistry.BuildRecipes(runtimeConfig, supportsOmegaBoost);
@@ -54,6 +59,51 @@ namespace IndustryLogisticV.Systems
         public IReadOnlyList<Industry> Industries
         {
             get { return _industries; }
+        }
+
+        public void ResetIndustriesToDefaults()
+        {
+            for (int i = 0; i < _industries.Count; i++)
+            {
+                var industry = _industries[i];
+                if (industry == null || string.IsNullOrWhiteSpace(industry.Id))
+                {
+                    continue;
+                }
+
+                IndustryConfig defaultConfig;
+                if (!_defaultIndustryConfigs.TryGetValue(industry.Id, out defaultConfig) || defaultConfig == null)
+                {
+                    continue;
+                }
+
+                var emptyBuffers = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                foreach (var input in industry.Inputs)
+                {
+                    emptyBuffers[input] = 0f;
+                }
+
+                foreach (var output in industry.Outputs)
+                {
+                    emptyBuffers[output] = 0f;
+                }
+
+                var omegaCapacityTons = Math.Max(1f, defaultConfig.InputCapacityTons * Math.Max(0.01f, _industryOmegaCapacityMultiplier));
+                industry.ApplyPersistentState(
+                    emptyBuffers,
+                    0f,
+                    defaultConfig.ProductionRate,
+                    defaultConfig.InputCapacityTons,
+                    defaultConfig.OutputCapacityTons,
+                    omegaCapacityTons,
+                    0,
+                    0,
+                    0,
+                    0);
+
+                SeedInitialOutput(industry);
+                SeedStartingTank(industry, defaultConfig);
+            }
         }
 
         public void Update(float deltaMinutes, float omegaMultiplier)
@@ -316,6 +366,31 @@ namespace IndustryLogisticV.Systems
 
             drainRatePerMinute = litersPerSecond * litersPerSecondToTonsPerMinute;
             return drainRatePerMinute > 0f;
+        }
+
+        private static IndustryConfig CloneIndustryConfig(IndustryConfig source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new IndustryConfig
+            {
+                Id = source.Id,
+                LocationKind = source.LocationKind,
+                Name = source.Name,
+                Position = source.Position,
+                VehicleSpawnPosition = source.VehicleSpawnPosition,
+                VehicleSpawnHeading = source.VehicleSpawnHeading,
+                Inputs = new HashSet<string>(source.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                Outputs = new HashSet<string>(source.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                InputCapacityTons = source.InputCapacityTons,
+                OutputCapacityTons = source.OutputCapacityTons,
+                ProductionRate = source.ProductionRate,
+                StartingTankRatio = source.StartingTankRatio,
+                Density = source.Density,
+            };
         }
 
         private static void DrainPetrolStationFuel(Industry industry, float deltaMinutes, float drainRatePerMinute)

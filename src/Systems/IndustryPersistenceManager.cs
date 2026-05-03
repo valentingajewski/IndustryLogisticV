@@ -12,12 +12,23 @@ namespace IndustryLogisticV.Systems
     {
         public static int Load(string filePath, IEnumerable<Industry> industries)
         {
+            return LoadWithMetadata(filePath, industries).RestoredCount;
+        }
+
+        public static IndustryPersistenceLoadResult LoadWithMetadata(string filePath, IEnumerable<Industry> industries)
+        {
+            var result = new IndustryPersistenceLoadResult
+            {
+                Metadata = new IndustryPersistenceMetadata(),
+            };
+
             if (string.IsNullOrWhiteSpace(filePath) || industries == null || !File.Exists(filePath))
             {
-                return 0;
+                return result;
             }
 
             var ini = IniFile.Load(filePath);
+            result.Metadata = ReadMetadata(ini);
             var restoredCount = 0;
 
             foreach (var industry in industries)
@@ -78,10 +89,16 @@ namespace IndustryLogisticV.Systems
                 restoredCount += 1;
             }
 
-            return restoredCount;
+            result.RestoredCount = restoredCount;
+            return result;
         }
 
         public static void Save(string filePath, IEnumerable<Industry> industries)
+        {
+            Save(filePath, industries, null);
+        }
+
+        public static void Save(string filePath, IEnumerable<Industry> industries, IndustryPersistenceMetadata metadata)
         {
             if (string.IsNullOrWhiteSpace(filePath) || industries == null)
             {
@@ -97,8 +114,16 @@ namespace IndustryLogisticV.Systems
             using (var writer = new StreamWriter(filePath, false))
             {
                 writer.WriteLine("[Meta]");
-                writer.WriteLine("Version=1");
+                writer.WriteLine("Version={0}", metadata != null ? 2 : 1);
                 writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+                if (metadata != null)
+                {
+                    writer.WriteLine("Profit={0}", FormatFloat(metadata.Profit));
+                    writer.WriteLine("StartingBalance={0}", FormatFloat(metadata.StartingBalance));
+                    writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
+                }
                 writer.WriteLine();
 
                 foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
@@ -134,6 +159,29 @@ namespace IndustryLogisticV.Systems
                     writer.WriteLine();
                 }
             }
+        }
+
+        private static IndustryPersistenceMetadata ReadMetadata(IniFile ini)
+        {
+            var metadata = new IndustryPersistenceMetadata();
+            if (ini == null || !ini.HasSection("Meta"))
+            {
+                return metadata;
+            }
+
+            metadata.HasGameplayMetadata =
+                ini.HasKey("Meta", "Profit") ||
+                ini.HasKey("Meta", "StartingBalance") ||
+                ini.HasKey("Meta", "VehicleFuelDifficultyEnabled") ||
+                ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
+                ini.HasKey("Meta", "DifficultySettingsLocked");
+
+            metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
+            metadata.Profit = ini.GetFloat("Meta", "Profit", metadata.StartingBalance);
+            metadata.VehicleFuelDifficultyEnabled = ini.GetBool("Meta", "VehicleFuelDifficultyEnabled", false);
+            metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
+            metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
+            return metadata;
         }
 
         private static string BuildIndustrySectionName(string industryId)
@@ -187,5 +235,21 @@ namespace IndustryLogisticV.Systems
 
             return fallback;
         }
+    }
+
+    public sealed class IndustryPersistenceLoadResult
+    {
+        public int RestoredCount { get; set; }
+        public IndustryPersistenceMetadata Metadata { get; set; }
+    }
+
+    public sealed class IndustryPersistenceMetadata
+    {
+        public bool HasGameplayMetadata { get; set; }
+        public float Profit { get; set; }
+        public float StartingBalance { get; set; }
+        public bool VehicleFuelDifficultyEnabled { get; set; }
+        public bool CargoDamageDifficultyEnabled { get; set; }
+        public bool DifficultySettingsLocked { get; set; }
     }
 }

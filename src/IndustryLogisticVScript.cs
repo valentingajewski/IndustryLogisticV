@@ -30,14 +30,19 @@ namespace IndustryLogisticV
         private const float CargoLossPerDamageRatio = 0.35f;
         private const int VkRControl = 0xA3;
         private const float DebugFillTons = 1000000f;
+        private const string SavegamesDirectoryName = "IndustrialLogisticVSaves";
+        private const int MaxSaveNameLength = 40;
+        private const float DefaultStartingBalance = 20000f;
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
+        private static readonly float[] StartingBalanceOptions = BuildStartingBalanceOptions();
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
 
         private readonly ModConfig _config;
         private readonly string _configPath;
-        private readonly string _industryStatePath;
+        private readonly string _defaultIndustryStatePath;
+        private readonly string _savegamesDirectoryPath;
         private readonly ControlBindings _controls;
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
@@ -47,6 +52,9 @@ namespace IndustryLogisticV
         private readonly LemonMenu _vehicleCargoMenu;
         private readonly SimpleMenu _upgradeMenu;
         private readonly LemonMenu _modControlMenu;
+        private readonly LemonMenu _savingOptionsMenu;
+        private readonly LemonMenu _newSaveSetupMenu;
+        private readonly LemonMenu _saveSlotsMenu;
         private readonly LemonMenu _difficultyMenu;
         private readonly LemonMenu _debugMenu;
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
@@ -63,32 +71,42 @@ namespace IndustryLogisticV
         private readonly Vector3 _mainOfficeMarkerSeed;
         private readonly Vector3 _vehicleSpawnMarkerSeed;
 
+        private string _industryStatePath;
         private Industry _nearestIndustry;
         private Industry _menuIndustry;
         private VehicleCargoMenuContext _vehicleCargoMenuContext;
 
         private int _selectedDebugResourceIndex;
         private int _selectedDebugResourceAmountIndex;
+        private int _selectedStartingBalanceIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
         private int _lastBlipRefreshMs;
         private int _statusMessageUntil;
 
+        private string _pendingSaveName;
         private string _statusMessage;
 
         private float _profit;
+        private float _currentStartingBalance;
         private GameModMode _gameModMode;
+        private SaveSlotMenuAction _saveSlotMenuAction;
 
         private bool _showContext;
         private bool _modMechanicsEnabled;
         private bool _industryPersistenceEnabled;
+        private bool _difficultySettingsLocked;
         private bool _cargoDamageDifficultyEnabled;
+        private bool _pendingCargoDamageDifficultyEnabled;
         private bool _vehicleFuelDifficultyEnabled;
+        private bool _pendingVehicleFuelDifficultyEnabled;
 
         public IndustryLogisticVScript()
         {
             _configPath = ResolveConfigPath();
-            _industryStatePath = ResolveIndustryStatePath(_configPath);
+            _defaultIndustryStatePath = ResolveIndustryStatePath(_configPath);
+            _savegamesDirectoryPath = ResolveSavegamesDirectoryPath(_configPath);
+            _industryStatePath = _defaultIndustryStatePath;
             _config = ModConfig.Load(_configPath);
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
@@ -154,6 +172,21 @@ namespace IndustryLogisticV
                 Subtitle = "Activate mechanics and configure gameplay",
                 AlignRight = true,
             };
+            _savingOptionsMenu = new LemonMenu("Saving Options")
+            {
+                Subtitle = "Create, load, delete, and save named games",
+                AlignRight = true,
+            };
+            _newSaveSetupMenu = new LemonMenu("Difficulty Settings")
+            {
+                Subtitle = "Configure a new save before starting",
+                AlignRight = true,
+            };
+            _saveSlotsMenu = new LemonMenu("Save Slots")
+            {
+                Subtitle = "Choose a saved game profile",
+                AlignRight = true,
+            };
             _difficultyMenu = new LemonMenu("Difficulty Settings")
             {
                 Subtitle = "Enable or disable challenge options",
@@ -183,11 +216,18 @@ namespace IndustryLogisticV
 
             _gameModMode = GameModMode.Fun;
             _vehicleCargoMenuContext = VehicleCargoMenuContext.Office;
-            _profit = 20000f;
+            _profit = DefaultStartingBalance;
+            _currentStartingBalance = DefaultStartingBalance;
             _modMechanicsEnabled = false;
             _industryPersistenceEnabled = true;
+            _difficultySettingsLocked = false;
             _cargoDamageDifficultyEnabled = true;
             _vehicleFuelDifficultyEnabled = false;
+            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
+            _pendingSaveName = string.Empty;
+            _saveSlotMenuAction = SaveSlotMenuAction.Load;
 
             if (_industryPersistenceEnabled)
             {
@@ -215,6 +255,9 @@ namespace IndustryLogisticV
                     || _vehicleCargoMenu.IsOpen
                     || _upgradeMenu.IsOpen
                     || _modControlMenu.IsOpen
+                    || _savingOptionsMenu.IsOpen
+                    || _newSaveSetupMenu.IsOpen
+                    || _saveSlotsMenu.IsOpen
                     || _difficultyMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _overviewMenuController.AnyMenuOpen
@@ -426,6 +469,42 @@ namespace IndustryLogisticV
 
         private bool HandleMenuKey(WinForms.Keys key)
         {
+            if (_saveSlotsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToSavingOptionsMenu();
+                    return true;
+                }
+
+                _saveSlotsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_newSaveSetupMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    CancelNewSaveSetup();
+                    return true;
+                }
+
+                _newSaveSetupMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_savingOptionsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToModControlMenu();
+                    return true;
+                }
+
+                _savingOptionsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_debugMenu.IsOpen)
             {
                 _debugMenu.HandleKey(key, _controls);
@@ -499,6 +578,9 @@ namespace IndustryLogisticV
         private void DrawOpenMenus()
         {
             _modControlMenu.Draw();
+            _savingOptionsMenu.Draw();
+            _newSaveSetupMenu.Draw();
+            _saveSlotsMenu.Draw();
             _difficultyMenu.Draw();
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
@@ -510,7 +592,7 @@ namespace IndustryLogisticV
                 return;
             }
 
-            if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
             {
                 return;
             }
@@ -1107,6 +1189,9 @@ namespace IndustryLogisticV
             _vehicleCargoMenu.Close();
             _upgradeMenu.Close();
             _modControlMenu.Close();
+            _savingOptionsMenu.Close();
+            _newSaveSetupMenu.Close();
+            _saveSlotsMenu.Close();
             _difficultyMenu.Close();
             _debugMenu.Close();
             CloseIndustryTablet();
@@ -1116,6 +1201,9 @@ namespace IndustryLogisticV
         {
             CloseOverviewMenus();
             _modControlMenu.Close();
+            _savingOptionsMenu.Close();
+            _newSaveSetupMenu.Close();
+            _saveSlotsMenu.Close();
             _difficultyMenu.Close();
             _debugMenu.Close();
             _officeMenu.Close();
@@ -1140,20 +1228,14 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = CurrentIndustryPersistenceCaption,
-                    OnLeft = ToggleIndustryPersistenceFromMenu,
-                    OnRight = ToggleIndustryPersistenceFromMenu,
-                    OnActivate = ToggleIndustryPersistenceFromMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentGameModeCaption,
-                    OnLeft = () => ChangeGameModMode(-1),
-                    OnRight = () => ChangeGameModMode(1),
+                    CaptionFactory = () => "Saving Options",
+                    DetailFactory = CurrentSavingOptionsDetail,
+                    OnActivate = OpenSavingOptionsMenu,
                 },
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Difficulty settings",
+                    DetailFactory = CurrentDifficultySettingsDetail,
                     OnActivate = OpenDifficultyMenu,
                 },
                 new OfficeMenuItem
@@ -1164,10 +1246,173 @@ namespace IndustryLogisticV
             });
         }
 
+        private void RebuildSavingOptionsMenuItems()
+        {
+            _savingOptionsMenu.Title = "Saving Options";
+            _savingOptionsMenu.Subtitle = string.Format("Active save: {0}", GetCurrentSaveLabel());
+            _savingOptionsMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Create new save",
+                    DetailFactory = () => string.Format("Creates {0}.state.ini in {1}", "<name>", SavegamesDirectoryName),
+                    OnActivate = PromptForNewSave,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Load save",
+                    DetailFactory = () => "Choose from all created savegames.",
+                    OnActivate = () => OpenSaveSlotsMenu(SaveSlotMenuAction.Load),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Delete save",
+                    DetailFactory = () => "Delete one of your created savegames.",
+                    OnActivate = () => OpenSaveSlotsMenu(SaveSlotMenuAction.Delete),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Save game",
+                    DetailFactory = CurrentSaveGameDetail,
+                    OnActivate = SaveCurrentNamedGame,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    OnActivate = ReturnToModControlMenu,
+                },
+            });
+        }
+
+        private void RebuildNewSaveSetupMenuItems()
+        {
+            _newSaveSetupMenu.Title = "Difficulty Settings";
+            _newSaveSetupMenu.Subtitle = string.Format("Configure '{0}' before starting", _pendingSaveName);
+            _newSaveSetupMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentStartingBalanceCaption,
+                    DetailFactory = () => "Choose the opening balance for the new save.",
+                    OnLeft = () => ChangeStartingBalanceSelection(-1),
+                    OnRight = () => ChangeStartingBalanceSelection(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Vehicle fuel",
+                    DetailFactory = () => "Enable vehicle fuel usage for this save.",
+                    CheckboxStateFactory = () => _pendingVehicleFuelDifficultyEnabled,
+                    OnActivate = TogglePendingVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Cargo damage",
+                    DetailFactory = () => "Enable cargo loss and condition damage for this save.",
+                    CheckboxStateFactory = () => _pendingCargoDamageDifficultyEnabled,
+                    OnActivate = TogglePendingCargoDamageSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Create save",
+                    DetailFactory = () => string.Format("Starts a fresh game as {0}.state.ini", _pendingSaveName),
+                    OnActivate = FinalizeNewSave,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    OnActivate = CancelNewSaveSetup,
+                },
+            });
+        }
+
+        private void RebuildSaveSlotsMenuItems()
+        {
+            var entries = GetAvailableNamedSaves();
+            var items = new List<OfficeMenuItem>();
+
+            _saveSlotsMenu.Title = _saveSlotMenuAction == SaveSlotMenuAction.Load ? "Load save" : "Delete save";
+            _saveSlotsMenu.Subtitle = entries.Count == 1 ? "1 savegame found" : string.Format("{0} savegames found", entries.Count);
+
+            if (entries.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No saves found",
+                    DetailFactory = () => string.Format("Create a save in {0} first.", SavegamesDirectoryName),
+                });
+            }
+            else
+            {
+                for (int i = 0; i < entries.Count; i++)
+                {
+                    var entry = entries[i];
+                    var detail = BuildSaveSlotDetail(entry);
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => entry.DisplayName,
+                        DetailFactory = () => detail,
+                        OnActivate = _saveSlotMenuAction == SaveSlotMenuAction.Load
+                            ? (Action)(() => LoadNamedSave(entry))
+                            : (() => DeleteNamedSave(entry)),
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = ReturnToSavingOptionsMenu,
+            });
+
+            _saveSlotsMenu.SetItems(items);
+        }
+
+        private void OpenSavingOptionsMenu()
+        {
+            _modControlMenu.Close();
+            RebuildSavingOptionsMenuItems();
+            _savingOptionsMenu.Open();
+        }
+
+        private void OpenSaveSlotsMenu(SaveSlotMenuAction action)
+        {
+            _saveSlotMenuAction = action;
+            _savingOptionsMenu.Close();
+            RebuildSaveSlotsMenuItems();
+            _saveSlotsMenu.Open();
+        }
+
+        private void ReturnToModControlMenu()
+        {
+            _difficultyMenu.Close();
+            _savingOptionsMenu.Close();
+            _newSaveSetupMenu.Close();
+            _saveSlotsMenu.Close();
+            RebuildModControlMenuItems();
+            _modControlMenu.Open();
+        }
+
+        private void ReturnToSavingOptionsMenu()
+        {
+            _newSaveSetupMenu.Close();
+            _saveSlotsMenu.Close();
+            RebuildModControlMenuItems();
+            RebuildSavingOptionsMenuItems();
+            _savingOptionsMenu.Open();
+        }
+
+        private void CancelNewSaveSetup()
+        {
+            _pendingSaveName = string.Empty;
+            ReturnToSavingOptionsMenu();
+        }
+
         private void RebuildDifficultyMenuItems()
         {
             _difficultyMenu.Title = "Difficulty Settings";
-            _difficultyMenu.Subtitle = "Enable or disable challenge options";
+            _difficultyMenu.Subtitle = _difficultySettingsLocked
+                ? "Locked by the active save"
+                : "Enable or disable challenge options";
 
             _difficultyMenu.SetItems(new[]
             {
@@ -1188,18 +1433,19 @@ namespace IndustryLogisticV
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Back",
-                    OnActivate = () =>
-                    {
-                        _difficultyMenu.Close();
-                        RebuildModControlMenuItems();
-                        _modControlMenu.Open();
-                    },
+                    OnActivate = ReturnToModControlMenu,
                 },
             });
         }
 
         private void OpenDifficultyMenu()
         {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
             _modControlMenu.Close();
             RebuildDifficultyMenuItems();
             _difficultyMenu.Open();
@@ -1232,15 +1478,32 @@ namespace IndustryLogisticV
         {
             return string.Format("Activate: {0}", _modMechanicsEnabled ? "~g~On~s~" : "~r~Off~s~");
         }
-
-        private string CurrentGameModeCaption()
+        private string CurrentSavingOptionsDetail()
         {
-            return string.Format("Game mod: {0}", _gameModMode == GameModMode.Fun ? "Fun" : "Career");
+            return string.Format("Create, load, delete, or save named games. Active: {0}.", GetCurrentSaveLabel());
         }
 
-        private string CurrentIndustryPersistenceCaption()
+        private string CurrentDifficultySettingsDetail()
         {
-            return string.Format("Industry persistence: {0}", _industryPersistenceEnabled ? "~g~On~s~" : "~r~Off~s~");
+            return _difficultySettingsLocked
+                ? "Locked by the active save. Create a new save to change these settings."
+                : "Change vehicle fuel and cargo damage settings.";
+        }
+
+        private string CurrentSaveGameDetail()
+        {
+            NamedSaveEntry activeSave;
+            if (!TryGetActiveNamedSave(out activeSave))
+            {
+                return "Create or load a named save first.";
+            }
+
+            return string.Format("Writes current progress to {0}.state.ini.", activeSave.DisplayName);
+        }
+
+        private string CurrentStartingBalanceCaption()
+        {
+            return string.Format("Starting balance: {0}", FormatMoney(GetSelectedStartingBalance()));
         }
 
         private string CurrentVehicleFuelSettingCaption()
@@ -1260,14 +1523,52 @@ namespace IndustryLogisticV
             _gameModMode = (GameModMode)next;
         }
 
+        private void ChangeStartingBalanceSelection(int delta)
+        {
+            if (StartingBalanceOptions.Length == 0)
+            {
+                return;
+            }
+
+            var count = StartingBalanceOptions.Length;
+            _selectedStartingBalanceIndex = (_selectedStartingBalanceIndex + delta + count) % count;
+        }
+
+        private void TogglePendingVehicleFuelSetting()
+        {
+            _pendingVehicleFuelDifficultyEnabled = !_pendingVehicleFuelDifficultyEnabled;
+        }
+
+        private void TogglePendingCargoDamageSetting()
+        {
+            _pendingCargoDamageDifficultyEnabled = !_pendingCargoDamageDifficultyEnabled;
+        }
+
         private void ToggleVehicleFuelSetting()
         {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
             _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
         }
 
         private void ToggleCargoDamageSetting()
         {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
             _cargoDamageDifficultyEnabled = !_cargoDamageDifficultyEnabled;
+        }
+
+        private void ShowDifficultySettingsLockedStatus()
+        {
+            ShowStatus("Difficulty settings are sealed for this save. Create a new save to change them.");
         }
 
         private void ToggleIndustryPersistenceFromMenu()
@@ -1289,14 +1590,214 @@ namespace IndustryLogisticV
             RebuildModControlMenuItems();
         }
 
-        private bool TryLoadIndustryPersistence(bool notifyWhenNoData)
+        private void PromptForNewSave()
         {
+            var rawName = Game.GetUserInput(WindowTitle.EnterMessage60, string.Empty, MaxSaveNameLength);
+            if (string.IsNullOrWhiteSpace(rawName))
+            {
+                ShowStatus("Save creation cancelled.");
+                return;
+            }
+
+            var saveName = SanitizeSaveName(rawName);
+            if (string.IsNullOrWhiteSpace(saveName))
+            {
+                ShowStatus("Enter a valid save name.");
+                return;
+            }
+
+            var filePath = BuildNamedSavePath(saveName);
+            if (File.Exists(filePath))
+            {
+                ShowStatus("A save with that name already exists.");
+                return;
+            }
+
+            _pendingSaveName = saveName;
+            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
+            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+
+            _savingOptionsMenu.Close();
+            RebuildNewSaveSetupMenuItems();
+            _newSaveSetupMenu.Open();
+        }
+
+        private void FinalizeNewSave()
+        {
+            if (string.IsNullOrWhiteSpace(_pendingSaveName))
+            {
+                ShowStatus("No save name selected.");
+                return;
+            }
+
+            var filePath = BuildNamedSavePath(_pendingSaveName);
+            if (File.Exists(filePath))
+            {
+                ShowStatus("A save with that name already exists.");
+                return;
+            }
+
+            _industryManager.ResetIndustriesToDefaults();
+            _cargoTransferController.ClearState();
+            _profit = GetSelectedStartingBalance();
+            _currentStartingBalance = _profit;
+            _vehicleFuelDifficultyEnabled = _pendingVehicleFuelDifficultyEnabled;
+            _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
+            _difficultySettingsLocked = true;
+            _industryStatePath = filePath;
+
+            if (!TrySaveIndustryPersistenceToPath(filePath))
+            {
+                return;
+            }
+
+            var createdSaveName = _pendingSaveName;
+            _pendingSaveName = string.Empty;
+            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
+            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            ReturnToSavingOptionsMenu();
+            ShowStatus(string.Format("Created save '{0}'.", createdSaveName), 4000);
+        }
+
+        private void LoadNamedSave(NamedSaveEntry entry)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
+            {
+                ShowStatus("Selected save was not found.");
+                RebuildSaveSlotsMenuItems();
+                return;
+            }
+
+            if (_industryPersistenceEnabled)
+            {
+                TrySaveIndustryPersistence();
+            }
+
+            IndustryPersistenceLoadResult loadResult;
+            if (!TryLoadIndustryPersistenceFromPath(entry.FilePath, true, out loadResult))
+            {
+                return;
+            }
+
+            _industryStatePath = entry.FilePath;
+            ApplyLoadedPersistenceMetadata(loadResult.Metadata, true);
+            ReturnToSavingOptionsMenu();
+            ShowStatus(string.Format("Loaded save '{0}'.", entry.DisplayName), 4000);
+        }
+
+        private void DeleteNamedSave(NamedSaveEntry entry)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
+            {
+                ShowStatus("Selected save was not found.");
+                RebuildSaveSlotsMenuItems();
+                return;
+            }
+
+            var deletedActiveSave = PathsEqual(_industryStatePath, entry.FilePath);
+
             try
             {
-                var restoredCount = IndustryPersistenceManager.Load(_industryStatePath, _industryManager.Industries);
-                if (restoredCount > 0)
+                File.Delete(entry.FilePath);
+            }
+            catch (Exception)
+            {
+                ShowStatus("Failed to delete the selected save.");
+                return;
+            }
+
+            if (deletedActiveSave)
+            {
+                _industryStatePath = _defaultIndustryStatePath;
+
+                IndustryPersistenceLoadResult loadResult;
+                if (TryLoadIndustryPersistenceFromPath(_defaultIndustryStatePath, false, out loadResult))
                 {
-                    ShowStatus(string.Format("Loaded saved industry state for {0} nodes.", restoredCount), 4000);
+                    ApplyLoadedPersistenceMetadata(loadResult.Metadata, false);
+                }
+                else
+                {
+                    _industryManager.ResetIndustriesToDefaults();
+                    _cargoTransferController.ClearState();
+                    _profit = DefaultStartingBalance;
+                    _currentStartingBalance = DefaultStartingBalance;
+                    _vehicleFuelDifficultyEnabled = false;
+                    _cargoDamageDifficultyEnabled = true;
+                    _difficultySettingsLocked = false;
+                }
+
+                _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
+                _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+                _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            }
+
+            RebuildSaveSlotsMenuItems();
+            RebuildSavingOptionsMenuItems();
+            RebuildModControlMenuItems();
+            ShowStatus(string.Format("Deleted save '{0}'.", entry.DisplayName), 4000);
+        }
+
+        private void SaveCurrentNamedGame()
+        {
+            NamedSaveEntry activeSave;
+            if (!TryGetActiveNamedSave(out activeSave))
+            {
+                ShowStatus("Create or load a named save first.");
+                return;
+            }
+
+            if (!TrySaveIndustryPersistenceToPath(activeSave.FilePath))
+            {
+                return;
+            }
+
+            RebuildSavingOptionsMenuItems();
+            ShowStatus(string.Format("Saved '{0}'.", activeSave.DisplayName), 4000);
+        }
+
+        private bool TryLoadIndustryPersistence(bool notifyWhenNoData)
+        {
+            IndustryPersistenceLoadResult loadResult;
+            if (!TryLoadIndustryPersistenceFromPath(_industryStatePath, notifyWhenNoData, out loadResult))
+            {
+                return false;
+            }
+
+            ApplyLoadedPersistenceMetadata(loadResult.Metadata, IsNamedSavePath(_industryStatePath));
+
+            if (loadResult.RestoredCount > 0)
+            {
+                ShowStatus(string.Format("Loaded saved industry state for {0} nodes.", loadResult.RestoredCount), 4000);
+            }
+            else
+            {
+                ShowStatus("Loaded saved game settings.", 4000);
+            }
+
+            return true;
+        }
+
+        private void TrySaveIndustryPersistence()
+        {
+            if (!_industryPersistenceEnabled)
+            {
+                return;
+            }
+
+            TrySaveIndustryPersistenceToPath(_industryStatePath);
+        }
+
+        private bool TryLoadIndustryPersistenceFromPath(string filePath, bool notifyWhenNoData, out IndustryPersistenceLoadResult loadResult)
+        {
+            loadResult = null;
+
+            try
+            {
+                loadResult = IndustryPersistenceManager.LoadWithMetadata(filePath, _industryManager.Industries);
+                if (loadResult.RestoredCount > 0 || (loadResult.Metadata != null && loadResult.Metadata.HasGameplayMetadata))
+                {
                     return true;
                 }
 
@@ -1313,21 +1814,65 @@ namespace IndustryLogisticV
             return false;
         }
 
-        private void TrySaveIndustryPersistence()
+        private bool TrySaveIndustryPersistenceToPath(string filePath)
         {
-            if (!_industryPersistenceEnabled)
+            if (string.IsNullOrWhiteSpace(filePath))
             {
-                return;
+                ShowStatus("No save path is available.");
+                return false;
             }
 
             try
             {
-                IndustryPersistenceManager.Save(_industryStatePath, _industryManager.Industries);
+                var directoryPath = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrWhiteSpace(directoryPath))
+                {
+                    Directory.CreateDirectory(directoryPath);
+                }
+
+                IndustryPersistenceManager.Save(filePath, _industryManager.Industries, BuildCurrentPersistenceMetadata());
+                return true;
             }
             catch (Exception)
             {
                 ShowStatus("Failed to save industry persistence data.");
+                return false;
             }
+        }
+
+        private IndustryPersistenceMetadata BuildCurrentPersistenceMetadata()
+        {
+            return new IndustryPersistenceMetadata
+            {
+                Profit = _profit,
+                StartingBalance = _currentStartingBalance,
+                VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
+                CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
+                DifficultySettingsLocked = _difficultySettingsLocked,
+            };
+        }
+
+        private void ApplyLoadedPersistenceMetadata(IndustryPersistenceMetadata metadata, bool lockDifficultySettings)
+        {
+            if (metadata != null && metadata.HasGameplayMetadata)
+            {
+                _profit = metadata.Profit;
+                _currentStartingBalance = metadata.StartingBalance;
+                _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
+                _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
+                _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
+            }
+            else
+            {
+                _difficultySettingsLocked = lockDifficultySettings;
+            }
+
+            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
+            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
+            RebuildModControlMenuItems();
+            RebuildSavingOptionsMenuItems();
+            RebuildDifficultyMenuItems();
         }
 
         private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)
@@ -2709,6 +3254,200 @@ namespace IndustryLogisticV
             return Path.Combine(BaseDirectory, "IndustryLogisticV.state.ini");
         }
 
+        private string ResolveSavegamesDirectoryPath(string configPath)
+        {
+            var configDirectory = string.IsNullOrWhiteSpace(configPath)
+                ? string.Empty
+                : Path.GetDirectoryName(configPath) ?? string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(configDirectory))
+            {
+                return Path.Combine(configDirectory, SavegamesDirectoryName);
+            }
+
+            return Path.Combine(BaseDirectory, SavegamesDirectoryName);
+        }
+
+        private List<NamedSaveEntry> GetAvailableNamedSaves()
+        {
+            if (!Directory.Exists(_savegamesDirectoryPath))
+            {
+                return new List<NamedSaveEntry>();
+            }
+
+            return Directory
+                .GetFiles(_savegamesDirectoryPath, "*.state.ini")
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .Select(path => new NamedSaveEntry(ExtractSaveDisplayName(path), path))
+                .ToList();
+        }
+
+        private string BuildSaveSlotDetail(NamedSaveEntry entry)
+        {
+            var action = _saveSlotMenuAction == SaveSlotMenuAction.Load
+                ? "Load this saved game."
+                : "Delete this saved game.";
+
+            if (entry == null)
+            {
+                return action;
+            }
+
+            if (PathsEqual(entry.FilePath, _industryStatePath))
+            {
+                action = "Currently active save. " + action;
+            }
+
+            try
+            {
+                var lastWriteTime = File.GetLastWriteTime(entry.FilePath);
+                return string.Format("{0} Last updated {1:yyyy-MM-dd HH:mm}.", action, lastWriteTime);
+            }
+            catch
+            {
+                return action;
+            }
+        }
+
+        private bool TryGetActiveNamedSave(out NamedSaveEntry activeSave)
+        {
+            activeSave = null;
+            if (!IsNamedSavePath(_industryStatePath))
+            {
+                return false;
+            }
+
+            activeSave = new NamedSaveEntry(ExtractSaveDisplayName(_industryStatePath), _industryStatePath);
+            return true;
+        }
+
+        private string GetCurrentSaveLabel()
+        {
+            NamedSaveEntry activeSave;
+            return TryGetActiveNamedSave(out activeSave) ? activeSave.DisplayName : "Default autosave";
+        }
+
+        private float GetSelectedStartingBalance()
+        {
+            if (StartingBalanceOptions.Length == 0)
+            {
+                return DefaultStartingBalance;
+            }
+
+            if (_selectedStartingBalanceIndex < 0 || _selectedStartingBalanceIndex >= StartingBalanceOptions.Length)
+            {
+                _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(DefaultStartingBalance);
+            }
+
+            return StartingBalanceOptions[_selectedStartingBalanceIndex];
+        }
+
+        private int GetNearestStartingBalanceIndex(float value)
+        {
+            if (StartingBalanceOptions.Length == 0)
+            {
+                return 0;
+            }
+
+            var bestIndex = 0;
+            var bestDistance = Math.Abs(StartingBalanceOptions[0] - value);
+            for (int i = 1; i < StartingBalanceOptions.Length; i++)
+            {
+                var distance = Math.Abs(StartingBalanceOptions[i] - value);
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestIndex = i;
+                }
+            }
+
+            return bestIndex;
+        }
+
+        private string BuildNamedSavePath(string saveName)
+        {
+            return Path.Combine(_savegamesDirectoryPath, saveName + ".state.ini");
+        }
+
+        private bool IsNamedSavePath(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || PathsEqual(filePath, _defaultIndustryStatePath))
+            {
+                return false;
+            }
+
+            var directory = Path.GetDirectoryName(filePath) ?? string.Empty;
+            return filePath.EndsWith(".state.ini", StringComparison.OrdinalIgnoreCase)
+                && PathsEqual(directory, _savegamesDirectoryPath);
+        }
+
+        private static string ExtractSaveDisplayName(string filePath)
+        {
+            var fileName = Path.GetFileName(filePath) ?? string.Empty;
+            const string stateSuffix = ".state.ini";
+            if (fileName.EndsWith(stateSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return fileName.Substring(0, fileName.Length - stateSuffix.Length);
+            }
+
+            return Path.GetFileNameWithoutExtension(fileName);
+        }
+
+        private static string SanitizeSaveName(string rawName)
+        {
+            if (string.IsNullOrWhiteSpace(rawName))
+            {
+                return string.Empty;
+            }
+
+            var invalidCharacters = Path.GetInvalidFileNameChars();
+            var filteredCharacters = rawName
+                .Trim()
+                .Where(character => !invalidCharacters.Contains(character))
+                .ToArray();
+            var sanitized = new string(filteredCharacters).Trim().Trim('.');
+
+            const string stateSuffix = ".state";
+            if (sanitized.EndsWith(stateSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                sanitized = sanitized.Substring(0, sanitized.Length - stateSuffix.Length).Trim();
+            }
+
+            return sanitized;
+        }
+
+        private static bool PathsEqual(string left, string right)
+        {
+            return string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string NormalizePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+
+        private static float[] BuildStartingBalanceOptions()
+        {
+            var values = new List<float>();
+            for (int amount = -5000; amount <= 100000; amount += 5000)
+            {
+                values.Add(amount);
+            }
+
+            return values.ToArray();
+        }
+
+        private static string FormatMoney(float amount)
+        {
+            var absolute = Math.Abs(amount).ToString("0,0");
+            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
+        }
+
         private void ShowStatus(string message, int durationMs = 3000)
         {
             var prefixed = PrefixMessage(message);
@@ -2803,6 +3542,25 @@ namespace IndustryLogisticV
         {
             Fun = 0,
             Career = 1,
+        }
+
+        private enum SaveSlotMenuAction
+        {
+            Load = 0,
+            Delete = 1,
+        }
+
+        private sealed class NamedSaveEntry
+        {
+            public NamedSaveEntry(string displayName, string filePath)
+            {
+                DisplayName = displayName;
+                FilePath = filePath;
+            }
+
+            public string DisplayName { get; private set; }
+
+            public string FilePath { get; private set; }
         }
 
     }
