@@ -9,6 +9,8 @@ namespace IndustryLogisticV.Config
         public ExternalLocationKind LocationKind { get; set; }
         public string Name { get; set; }
         public Vector3 Position { get; set; }
+        public Vector3? VehicleSpawnPosition { get; set; }
+        public float? VehicleSpawnHeading { get; set; }
         public HashSet<string> Inputs { get; set; }
         public HashSet<string> Outputs { get; set; }
         public float InputCapacityTons { get; set; }

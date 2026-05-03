@@ -138,6 +138,11 @@ namespace IndustryLogisticV.Systems
 
         public bool SpawnSelectedVehicle(Func<Vector3, Vector3> getGroundPosition, out Vehicle truck, out Vehicle cargoVehicle, out string message)
         {
+            return SpawnSelectedVehicle(getGroundPosition, _vehicleSpawnMarkerSeed, _vehicleSpawnHeading, out truck, out cargoVehicle, out message);
+        }
+
+        public bool SpawnSelectedVehicle(Func<Vector3, Vector3> getGroundPosition, Vector3 spawnPosition, float spawnHeading, out Vehicle truck, out Vehicle cargoVehicle, out string message)
+        {
             truck = null;
             cargoVehicle = null;
             if (_filteredVehicles.Count == 0)
@@ -156,8 +161,8 @@ namespace IndustryLogisticV.Systems
             return _fleetManager.SpawnSelectedVehicle(
                 selected,
                 tractor,
-                getGroundPosition(_vehicleSpawnMarkerSeed),
-                _vehicleSpawnHeading,
+                getGroundPosition(spawnPosition),
+                spawnHeading,
                 out truck,
                 out cargoVehicle,
                 out message);

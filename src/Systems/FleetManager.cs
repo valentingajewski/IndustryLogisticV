@@ -217,24 +217,8 @@ namespace IndustryLogisticV.Systems
                     return false;
                 }
 
-                if (!TrySpawnVehicle(tractor, spawnPosition, heading, out truck))
+                if (!TrySpawnTrailerCombination(tractor, selected, spawnPosition, heading, out truck, out cargoVehicle))
                 {
-                    message = "Failed to spawn truck.";
-                    return false;
-                }
-
-                var trailerOffset = HeadingToDirection(heading) * -13f;
-                if (!TrySpawnVehicle(selected, spawnPosition + trailerOffset, heading, out cargoVehicle))
-                {
-                    truck.Delete();
-                    message = "Failed to spawn trailer.";
-                    return false;
-                }
-
-                if (!TryAttachTruckToTrailer(truck, cargoVehicle, heading))
-                {
-                    cargoVehicle.Delete();
-                    truck.Delete();
                     message = "Failed to connect trailer.";
                     return false;
                 }
@@ -260,6 +244,114 @@ namespace IndustryLogisticV.Systems
 
             message = string.Format("Spawned {0}.", truck.DisplayName);
             return true;
+        }
+
+        private bool TrySpawnTrailerCombination(
+            VehicleDefinition tractor,
+            VehicleDefinition trailerDefinition,
+            Vector3 spawnPosition,
+            float heading,
+            out Vehicle truck,
+            out Vehicle cargoVehicle)
+        {
+            truck = null;
+            cargoVehicle = null;
+
+            if (tractor == null || trailerDefinition == null)
+            {
+                return false;
+            }
+
+            var anchorCandidates = BuildTrailerSpawnAnchorCandidates(spawnPosition, heading);
+            for (int anchorIndex = 0; anchorIndex < anchorCandidates.Length; anchorIndex++)
+            {
+                if (TrySpawnTrailerCombinationAtAnchor(tractor, trailerDefinition, anchorCandidates[anchorIndex], heading, out truck, out cargoVehicle))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool TrySpawnTrailerCombinationAtAnchor(
+            VehicleDefinition tractor,
+            VehicleDefinition trailerDefinition,
+            Vector3 anchorPosition,
+            float heading,
+            out Vehicle truck,
+            out Vehicle cargoVehicle)
+        {
+            truck = null;
+            cargoVehicle = null;
+
+            if (!TrySpawnVehicle(tractor, anchorPosition, heading, out truck))
+            {
+                return false;
+            }
+
+            var direction = HeadingToDirection(heading);
+            var trailerDistances = new[] { 18f, 22f };
+            for (int distanceIndex = 0; distanceIndex < trailerDistances.Length; distanceIndex++)
+            {
+                var trailerPosition = anchorPosition - (direction * trailerDistances[distanceIndex]);
+                if (!TrySpawnVehicle(trailerDefinition, trailerPosition, heading, out cargoVehicle))
+                {
+                    continue;
+                }
+
+                if (TryAttachTrailerAfterSpawn(truck, cargoVehicle, heading))
+                {
+                    return true;
+                }
+
+                cargoVehicle.Delete();
+                cargoVehicle = null;
+            }
+
+            truck.Delete();
+            truck = null;
+            return false;
+        }
+
+        private bool TryAttachTrailerAfterSpawn(Vehicle truck, Vehicle trailer, float heading)
+        {
+            if (TryAttachTruckToTrailer(truck, trailer, heading))
+            {
+                return true;
+            }
+
+            var direction = HeadingToDirection(heading);
+            var originalTruckPosition = truck.Position;
+            var forwardOffsets = new[] { 6f, 10f, 14f };
+
+            for (int i = 0; i < forwardOffsets.Length; i++)
+            {
+                truck.Position = originalTruckPosition + (direction * forwardOffsets[i]);
+                truck.Heading = heading;
+                PlaceVehicleOnGround(truck);
+
+                if (TryAttachTruckToTrailer(truck, trailer, heading))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static Vector3[] BuildTrailerSpawnAnchorCandidates(Vector3 spawnPosition, float heading)
+        {
+            var direction = HeadingToDirection(heading);
+            var right = new Vector3(direction.Y, -direction.X, 0f);
+            return new[]
+            {
+                spawnPosition,
+                spawnPosition + (direction * 8f),
+                spawnPosition - (direction * 6f),
+                spawnPosition + (right * 4f),
+                spawnPosition - (right * 4f),
+            };
         }
 
         public void ApplyCargoVisuals(Vehicle cargoVehicle, VehicleCargoState cargoState)
@@ -863,7 +955,25 @@ namespace IndustryLogisticV.Systems
 
             vehicle = World.CreateVehicle(model, position, heading);
             model.MarkAsNoLongerNeeded();
+            PlaceVehicleOnGround(vehicle);
             return vehicle != null && vehicle.Exists();
+        }
+
+        private static void PlaceVehicleOnGround(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return;
+            }
+
+            try
+            {
+                Function.Call(Hash.SET_VEHICLE_ON_GROUND_PROPERLY, vehicle.Handle);
+            }
+            catch
+            {
+                // Ground placement is a best effort step; spawning should continue if the native call fails.
+            }
         }
 
         private static bool TryAttachTruckToTrailer(Vehicle truck, Vehicle trailer, float heading)
@@ -873,11 +983,17 @@ namespace IndustryLogisticV.Systems
                 return false;
             }
 
-            if (TryAttachTruckToTrailerWithinRange(truck, trailer, 15f) || TryAttachTruckToTrailerWithinRange(truck, trailer, 20f))
+            truck.Heading = heading;
+            trailer.Heading = heading;
+            PlaceVehicleOnGround(truck);
+            PlaceVehicleOnGround(trailer);
+
+            if (TryAttachTruckToTrailerNow(truck, trailer))
             {
                 return true;
             }
 
+            var truckPosition = truck.Position;
             var trailerPosition = trailer.Position;
             var direction = HeadingToDirection(heading);
             var baseSpacing = ResolveTrailerSpacing(truck, trailer);
@@ -887,28 +1003,77 @@ namespace IndustryLogisticV.Systems
                 baseSpacing + 2f,
                 Math.Max(12f, baseSpacing - 1.5f),
                 baseSpacing + 4f,
+                baseSpacing + 8f,
             };
+            var candidateHeights = BuildTrailerAttachHeightCandidates(truckPosition.Z, trailerPosition.Z);
 
-            for (int i = 0; i < candidateSpacings.Length; i++)
+            for (int heightIndex = 0; heightIndex < candidateHeights.Length; heightIndex++)
             {
-                var targetPosition = truck.Position - (direction * candidateSpacings[i]);
-                trailer.Position = new Vector3(targetPosition.X, targetPosition.Y, trailerPosition.Z);
-                trailer.Heading = heading;
-
-                if (TryAttachTruckToTrailerWithinRange(truck, trailer, candidateSpacings[i] + 2f) ||
-                    TryAttachTruckToTrailerWithinRange(truck, trailer, candidateSpacings[i] + 6f))
+                for (int i = 0; i < candidateSpacings.Length; i++)
                 {
-                    return true;
+                    var targetPosition = truckPosition - (direction * candidateSpacings[i]);
+                    trailer.Position = new Vector3(targetPosition.X, targetPosition.Y, candidateHeights[heightIndex]);
+                    trailer.Heading = heading;
+                    PlaceVehicleOnGround(trailer);
+
+                    if (TryAttachTruckToTrailerNow(truck, trailer))
+                    {
+                        return true;
+                    }
                 }
             }
 
             return false;
         }
 
-        private static bool TryAttachTruckToTrailerWithinRange(Vehicle truck, Vehicle trailer, float attachRange)
+        private static float[] BuildTrailerAttachHeightCandidates(float truckZ, float trailerZ)
         {
-            truck.AttachToTrailer(trailer, attachRange);
-            return truck.TowedVehicle != null && truck.TowedVehicle.Exists();
+            if (Math.Abs(truckZ - trailerZ) < 0.25f)
+            {
+                return new[]
+                {
+                    trailerZ,
+                    trailerZ + 0.35f,
+                    trailerZ - 0.35f,
+                };
+            }
+
+            return new[]
+            {
+                truckZ,
+                trailerZ,
+                truckZ + 0.35f,
+                trailerZ + 0.35f,
+                Math.Min(truckZ, trailerZ) - 0.35f,
+            };
+        }
+
+        private static bool TryAttachTruckToTrailerNow(Vehicle truck, Vehicle trailer)
+        {
+            if (truck == null || !truck.Exists() || trailer == null || !trailer.Exists())
+            {
+                return false;
+            }
+
+            try
+            {
+                Function.Call(Hash.DETACH_VEHICLE_FROM_TRAILER, truck.Handle);
+            }
+            catch
+            {
+                // Ignore detach failures and still attempt a fresh attach.
+            }
+
+            truck.AttachToTrailer(trailer, 1f);
+
+            var towedVehicle = truck.TowedVehicle;
+            if (towedVehicle != null && towedVehicle.Exists() && towedVehicle.Handle == trailer.Handle)
+            {
+                return true;
+            }
+
+            var attachedTrailer = ResolveAttachedTrailer(truck);
+            return attachedTrailer != null && attachedTrailer.Exists() && attachedTrailer.Handle == trailer.Handle;
         }
 
         private static float ResolveTrailerSpacing(Vehicle truck, Vehicle trailer)

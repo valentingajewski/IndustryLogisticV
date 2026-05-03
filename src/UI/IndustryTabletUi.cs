@@ -39,6 +39,7 @@ namespace IndustryLogisticV.UI
         private readonly ScaledRectangle _loadButton;
         private readonly ScaledRectangle _unloadButton;
         private readonly ScaledRectangle _statsButton;
+        private readonly ScaledRectangle _vehicleSpawnerButton;
         private readonly ScaledRectangle _upgradeButton;
         private readonly ScaledRectangle _statsPanel;
         private readonly List<ScaledRectangle> _upgradeModuleButtons;
@@ -66,6 +67,7 @@ namespace IndustryLogisticV.UI
             _loadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
             _unloadButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
             _statsButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
+            _vehicleSpawnerButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
             _upgradeButton = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 68f));
             _statsPanel = new ScaledRectangle(new PointF(0f, 0f), new SizeF(640f, 88f));
 
@@ -107,6 +109,8 @@ namespace IndustryLogisticV.UI
         public event Action<Industry, bool> UnloadModeRequested;
 
         public event Action<Industry, IndustryUpgradeModule> UpgradeModuleRequested;
+
+        public event Action<Industry> VehicleSpawnerRequested;
 
         public void SetLoadOptions(List<string> loadOptions, Dictionary<string, string> loadOptionSubtitles = null)
         {
@@ -173,7 +177,7 @@ namespace IndustryLogisticV.UI
                 if (_currentPage == TabletPage.Upgrades)
                 {
                     _currentPage = TabletPage.Main;
-                    _selectedMainIndex = 3;
+                    _selectedMainIndex = 4;
                     return true;
                 }
 
@@ -231,7 +235,7 @@ namespace IndustryLogisticV.UI
         {
             if (_currentPage == TabletPage.Main)
             {
-                const int count = 4;
+                const int count = 5;
                 _selectedMainIndex = (_selectedMainIndex + delta + count) % count;
                 return;
             }
@@ -312,6 +316,12 @@ namespace IndustryLogisticV.UI
                 }
 
                 if (_selectedMainIndex == 3)
+                {
+                    VehicleSpawnerRequested?.Invoke(_industry);
+                    return;
+                }
+
+                if (_selectedMainIndex == 4)
                 {
                     _currentPage = TabletPage.Upgrades;
                     _selectedUpgradeIndex = 0;
@@ -493,12 +503,20 @@ namespace IndustryLogisticV.UI
                     _selectedMainIndex == 2);
 
                 DrawButton(
+                    _vehicleSpawnerButton,
+                    "VEHICLE SPAWNER",
+                    "Open fleet selection at this industry's spawn pad",
+                    Color.FromArgb(170, 52, 60, 44),
+                    Color.FromArgb(210, 120, 152, 102),
+                    _selectedMainIndex == 3);
+
+                DrawButton(
                     _upgradeButton,
                     "OPEN UPGRADES",
                     "Switch to module upgrades in this industry",
                     Color.FromArgb(170, 58, 51, 86),
                     Color.FromArgb(212, 124, 104, 178),
-                    _selectedMainIndex == 3);
+                    _selectedMainIndex == 4);
 
                 _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
 
@@ -877,6 +895,7 @@ namespace IndustryLogisticV.UI
             _loadButton.Color = Color.FromArgb(0, 0, 0, 0);
             _unloadButton.Color = Color.FromArgb(0, 0, 0, 0);
             _statsButton.Color = Color.FromArgb(0, 0, 0, 0);
+            _vehicleSpawnerButton.Color = Color.FromArgb(0, 0, 0, 0);
             _upgradeButton.Color = Color.FromArgb(0, 0, 0, 0);
         }
 
@@ -1210,7 +1229,7 @@ namespace IndustryLogisticV.UI
 
             const float buttonsCenterX = 0f;
             const float buttonsCenterY = 0f;
-            var mainButtonsHeight = _loadButton.Size.Height + (buttonSpacing * 3f);
+            var mainButtonsHeight = _loadButton.Size.Height + (buttonSpacing * 4f);
             var buttonX = (uiWidth * 0.5f) + buttonsCenterX - (_loadButton.Size.Width * 0.5f);
             var buttonTopY = (uiHeight * 0.5f) + buttonsCenterY - (mainButtonsHeight * 0.5f);
 
@@ -1222,7 +1241,8 @@ namespace IndustryLogisticV.UI
             _loadButton.Position = new PointF(buttonX, buttonTopY);
             _unloadButton.Position = new PointF(buttonX, buttonTopY + buttonSpacing);
             _statsButton.Position = new PointF(buttonX, buttonTopY + (buttonSpacing * 2f));
-            _upgradeButton.Position = new PointF(buttonX, buttonTopY + (buttonSpacing * 3f));
+            _vehicleSpawnerButton.Position = new PointF(buttonX, buttonTopY + (buttonSpacing * 3f));
+            _upgradeButton.Position = new PointF(buttonX, buttonTopY + (buttonSpacing * 4f));
 
             _statsPanel.Position = new PointF(buttonX, buttonTopY + 296f);
 

@@ -1,0 +1,119 @@
+Good Career vs Fun differences
+
+Starting state.
+Fun: start with a healthy profit balance, all industries active, and easy access to vehicles.
+Career: start nearly broke, with only one small truck and a few reachable industries unlocked.
+
+Vehicle access.
+Fun: any configured vehicle can be spawned for free.
+Career: vehicles have an upfront purchase cost, or at least a spawn fee / deposit / rental fee.
+In-game effect: choosing a truck becomes a business decision instead of just convenience.
+
+Upgrade pressure.
+Fun: upgrades stay cheap and are mostly there for experimentation.
+Career: upgrade costs matter and become the main long-term sink for profit.
+In-game effect: the player chooses between buying capacity, production, or a better vehicle.
+
+Cargo penalties.
+Fun: cargo damage and loss are disabled or heavily softened.
+Career: cargo condition directly reduces payout, and severe damage can void the job.
+In-game effect: driving carefully matters.
+
+Fuel and operating costs.
+Fun: no fuel cost or only cosmetic fuel.
+Career: each delivery subtracts fuel and maintenance from revenue.
+In-game effect: long routes and heavy vehicles have tradeoffs.
+
+Industry progression.
+Fun: all industries can operate from the start.
+Career: some industries require a minimum company level, a capital threshold, or a previous-node supply contract before they become worthwhile.
+In-game effect: the map opens in stages.
+
+Delivery profitability.
+Fun: prices are stable and generous.
+Career: prices fluctuate more, and low-demand deliveries can become barely profitable.
+In-game effect: the player watches the network and picks smarter routes.
+
+Failure state.
+Fun: no real punishment beyond wasted time.
+Career: bankruptcy risk, repossession of spawned vehicles, or temporary loss of access to upgrades if profit drops below zero.
+In-game effect: mistakes matter without making the game unfair.
+
+Time pressure.
+Fun: production and loading are fast.
+Career: normal production rates, normal transfer times, and maybe demand windows for some consumers.
+In-game effect: planning the next stop matters.
+
+Persistence consequences.
+Fun: persistence can be optional and forgiving.
+Career: industry state, cargo state, and money should always persist.
+In-game effect: the player is building an ongoing business, not just a session toy.
+
+Ideas that fit your current systems well
+
+Career delivery contracts.
+Instead of freeform hauling, stores or industries offer simple contracts like deliver 12t fuel to this station for a bonus.
+This uses your existing load/unload flow but gives the player short-term goals.
+
+Company level / reputation.
+Gain reputation from successful deliveries and lose some from failed or damaged cargo.
+Use reputation to unlock better trucks, new industries, and lower vehicle spawn fees.
+
+Vehicle ownership tiers.
+Fun can keep the current spawn menu.
+Career can mark vehicles as:
+Starter fleet
+Rentable
+Purchasable
+Premium unlock
+That gives the office menu a real progression role.
+
+Soft difficulty bundles.
+Instead of one abstract mode switch, Career can automatically enable:
+fuel
+cargo damage
+industry persistence
+spawn cost
+upgrade cost scaling
+Fun can automatically disable most of that.
+
+Industry startup costs.
+In Career, a newly discovered industry could require an activation payment before it joins your network.
+That makes expansion feel intentional.
+
+Warehouse or depot role.
+Career could add one central depot that acts as a buffer for overflow cargo.
+Fun would not need it.
+This gives late-game players a logistics hub instead of only direct point-to-point hauling.
+
+Debt and leasing.
+If the player lacks cash, let them lease a vehicle with a daily payment or profit percentage cut.
+That is more interesting than just blocking access.
+
+Low-risk implementation plan
+
+Make Fun and Career only change constants first.
+Fun: free vehicle spawn, cheap upgrades, no penalties.
+Career: spawn fees, higher upgrade costs, damage/fuel enabled, lower starting profit.
+This gives immediate differentiation with little UI work.
+
+Add one progression mechanic next.
+Best option: vehicle purchase or rental cost.
+That creates a money loop quickly.
+
+Add one strategic mechanic after that.
+Best option: contracts or industry unlock thresholds.
+That gives Career a reason to exist beyond “harder numbers.”
+
+If you want the cleanest identity
+Use this rule:
+Fun = sandbox logistics.
+Career = trucking company simulation.
+
+That framing keeps design decisions consistent.
+
+A compact version you could ship first:
+
+Fun: high starting cash, free vehicle spawn, cheap upgrades, no fuel, no cargo damage.
+Career: low starting cash, vehicle spawn fee, upgrade costs unchanged or higher, fuel and cargo damage enabled, persistence always on.
+Career phase 2: add contracts and unlockable vehicles.

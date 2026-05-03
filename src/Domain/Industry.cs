@@ -17,6 +17,8 @@ namespace IndustryLogisticV.Domain
             LocationKind = config.LocationKind;
             Name = config.Name;
             Position = config.Position;
+            VehicleSpawnPosition = config.VehicleSpawnPosition;
+            VehicleSpawnHeading = config.VehicleSpawnHeading;
             Inputs = new HashSet<string>(config.Inputs, StringComparer.OrdinalIgnoreCase);
             Outputs = new HashSet<string>(config.Outputs, StringComparer.OrdinalIgnoreCase);
             BufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
@@ -49,6 +51,8 @@ namespace IndustryLogisticV.Domain
     public ExternalLocationKind LocationKind { get; }
         public string Name { get; }
         public Vector3 Position { get; }
+        public Vector3? VehicleSpawnPosition { get; }
+        public float? VehicleSpawnHeading { get; }
         public HashSet<string> Inputs { get; }
         public HashSet<string> Outputs { get; }
         public Dictionary<string, float> BufferStorage { get; }

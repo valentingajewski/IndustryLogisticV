@@ -45,7 +45,6 @@ namespace IndustryLogisticV
 
         private readonly LemonMenu _officeMenu;
         private readonly LemonMenu _vehicleCargoMenu;
-        private readonly SimpleMenu _industryMenu;
         private readonly SimpleMenu _upgradeMenu;
         private readonly LemonMenu _modControlMenu;
         private readonly LemonMenu _difficultyMenu;
@@ -64,14 +63,12 @@ namespace IndustryLogisticV
         private readonly Vector3 _mainOfficeMarkerSeed;
         private readonly Vector3 _vehicleSpawnMarkerSeed;
 
-        private List<string> _industryTransferProducts;
-
         private Industry _nearestIndustry;
         private Industry _menuIndustry;
+        private VehicleCargoMenuContext _vehicleCargoMenuContext;
 
-    private int _selectedDebugResourceIndex;
-    private int _selectedDebugResourceAmountIndex;
-        private int _selectedIndustryProductIndex;
+        private int _selectedDebugResourceIndex;
+        private int _selectedDebugResourceAmountIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
         private int _lastBlipRefreshMs;
@@ -81,7 +78,6 @@ namespace IndustryLogisticV
 
         private float _profit;
         private GameModMode _gameModMode;
-        private IndustryTransferMode _industryTransferMode;
 
         private bool _showContext;
         private bool _modMechanicsEnabled;
@@ -149,10 +145,6 @@ namespace IndustryLogisticV
                 Subtitle = "Choose cargo filter, vehicle, and spawn",
                 AlignRight = true,
             };
-            _industryMenu = new SimpleMenu("Industry Transfer")
-            {
-                Subtitle = "Load and unload cargo",
-            };
             _upgradeMenu = new SimpleMenu("Industry Upgrades")
             {
                 Subtitle = "Invest profits into modules",
@@ -184,13 +176,13 @@ namespace IndustryLogisticV
             _industryTabletController.UnloadRequested += HandleTabletUnloadRequested;
             _industryTabletController.UnloadModeRequested += HandleTabletUnloadModeRequested;
             _industryTabletController.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
+            _industryTabletController.VehicleSpawnerRequested += HandleTabletVehicleSpawnerRequested;
 
             _keyCooldownUntil = new Dictionary<WinForms.Keys, int>();
             _heldKeys = new HashSet<WinForms.Keys>();
 
-            _industryTransferProducts = new List<string>();
             _gameModMode = GameModMode.Fun;
-            _industryTransferMode = IndustryTransferMode.Load;
+            _vehicleCargoMenuContext = VehicleCargoMenuContext.Office;
             _profit = 20000f;
             _modMechanicsEnabled = false;
             _industryPersistenceEnabled = true;
@@ -221,7 +213,6 @@ namespace IndustryLogisticV
             {
                 return _officeMenu.IsOpen
                     || _vehicleCargoMenu.IsOpen
-                    || _industryMenu.IsOpen
                     || _upgradeMenu.IsOpen
                     || _modControlMenu.IsOpen
                     || _difficultyMenu.IsOpen
@@ -463,17 +454,11 @@ namespace IndustryLogisticV
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
                 {
-                    ReturnToOfficeMenu();
+                    ReturnFromVehicleCargoMenu();
                     return true;
                 }
 
                 _vehicleCargoMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_industryMenu.IsOpen)
-            {
-                _industryMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -527,12 +512,6 @@ namespace IndustryLogisticV
 
             if (_modControlMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
             {
-                return;
-            }
-
-            if (_industryMenu.IsOpen)
-            {
-                _industryMenu.Draw();
                 return;
             }
 
@@ -614,7 +593,7 @@ namespace IndustryLogisticV
                 if (canShowPrompts && _nearestIndustry == industry && playerPos.DistanceTo(markerPos) <= IndustryInteractionDistance)
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
-                        "Press {0} for opening the industry menu.",
+                        "Press {0} to open the industry tablet.",
                         KeyName(_controls.Interact))));
                     promptShown = true;
                 }
@@ -1126,7 +1105,6 @@ namespace IndustryLogisticV
         {
             CloseOverviewMenus();
             _vehicleCargoMenu.Close();
-            _industryMenu.Close();
             _upgradeMenu.Close();
             _modControlMenu.Close();
             _difficultyMenu.Close();
@@ -1142,7 +1120,6 @@ namespace IndustryLogisticV
             _debugMenu.Close();
             _officeMenu.Close();
             _vehicleCargoMenu.Close();
-            _industryMenu.Close();
             _upgradeMenu.Close();
             CloseIndustryTablet();
         }
@@ -1376,7 +1353,6 @@ namespace IndustryLogisticV
             _showContext = false;
             CloseOverviewMenus();
             _officeMenu.Close();
-            _industryMenu.Close();
             _upgradeMenu.Close();
             _difficultyMenu.Close();
             _debugMenu.Close();
@@ -1552,10 +1528,7 @@ namespace IndustryLogisticV
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Vehicle & Cargo Type",
-                    DetailFactory = () => string.Format(
-                        "{0} | {1}",
-                        _vehicleSpawnController.SelectedFilter.ToDisplayName(),
-                        _vehicleSpawnController.CurrentVehicleCaption),
+                    DetailFactory = CurrentVehicleSpawnerSelectionDetail,
                     OnActivate = OpenVehicleCargoMenu,
                 },
             });
@@ -1591,7 +1564,7 @@ namespace IndustryLogisticV
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "~b~Spawn Vehicle~s~",
-                    DetailFactory = () => "Spawn the selected fleet vehicle at the office lot.",
+                    DetailFactory = CurrentVehicleSpawnerActionDetail,
                     OnActivate = SpawnSelectedVehicle,
                 },
             });
@@ -1599,7 +1572,26 @@ namespace IndustryLogisticV
 
         private void OpenVehicleCargoMenu()
         {
-            _officeMenu.Close();
+            OpenVehicleCargoMenu(VehicleCargoMenuContext.Office);
+        }
+
+        private void OpenIndustryVehicleSpawnerMenu()
+        {
+            OpenVehicleCargoMenu(VehicleCargoMenuContext.Industry);
+        }
+
+        private void OpenVehicleCargoMenu(VehicleCargoMenuContext context)
+        {
+            _vehicleCargoMenuContext = context;
+            if (context == VehicleCargoMenuContext.Industry)
+            {
+                CloseIndustryTablet();
+            }
+            else
+            {
+                _officeMenu.Close();
+            }
+
             RebuildVehicleCargoMenuItems();
             _vehicleCargoMenu.Open();
         }
@@ -1609,6 +1601,68 @@ namespace IndustryLogisticV
             _vehicleCargoMenu.Close();
             RebuildOfficeMenuItems();
             _officeMenu.Open();
+        }
+
+        private void ReturnFromVehicleCargoMenu()
+        {
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
+            {
+                ReturnToIndustryTablet();
+                return;
+            }
+
+            ReturnToOfficeMenu();
+        }
+
+        private void ReturnToIndustryTablet()
+        {
+            _vehicleCargoMenu.Close();
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists() || _menuIndustry == null)
+            {
+                return;
+            }
+
+            _industryTabletController.TryOpen(
+                player,
+                _menuIndustry,
+                IndustryInteractionDistance,
+                () => { },
+                message => ShowStatus(message));
+        }
+
+        private string CurrentVehicleSpawnerSelectionDetail()
+        {
+            return string.Format(
+                "{0} | {1}",
+                _vehicleSpawnController.SelectedFilter.ToDisplayName(),
+                _vehicleSpawnController.CurrentVehicleCaption);
+        }
+
+        private string CurrentVehicleSpawnerActionDetail()
+        {
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
+            {
+                return "Spawn the selected fleet vehicle at this industry pad.";
+            }
+
+            return "Spawn the selected fleet vehicle at the office lot.";
+        }
+
+        private string CurrentIndustryVehicleSpawnerDetail()
+        {
+            if (_menuIndustry == null)
+            {
+                return "No target industry selected.";
+            }
+
+            if (!_menuIndustry.VehicleSpawnPosition.HasValue)
+            {
+                return "No vehicle spawn configured for this industry.";
+            }
+
+            return CurrentVehicleSpawnerSelectionDetail();
         }
 
         private void ChangeWorkerIndex(int delta)
@@ -1875,10 +1929,19 @@ namespace IndustryLogisticV
 
         private void SpawnSelectedVehicle()
         {
+            Vector3 spawnPosition;
+            float spawnHeading;
+            string error;
+            if (!TryGetCurrentVehicleSpawnParameters(out spawnPosition, out spawnHeading, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
             Vehicle truck;
             Vehicle cargoVehicle;
             string message;
-            if (!_vehicleSpawnController.SpawnSelectedVehicle(GetGroundPosition, out truck, out cargoVehicle, out message))
+            if (!_vehicleSpawnController.SpawnSelectedVehicle(GetGroundPosition, spawnPosition, spawnHeading, out truck, out cargoVehicle, out message))
             {
                 ShowStatus(message);
                 return;
@@ -1909,119 +1972,9 @@ namespace IndustryLogisticV
                 {
                     _menuIndustry = _nearestIndustry;
                     _officeMenu.Close();
-                    _industryMenu.Close();
                     _upgradeMenu.Close();
                 },
                 message => ShowStatus(message));
-        }
-
-        private void TryOpenIndustryTransferMenu()
-        {
-            if (_cargoTransferController.HasPendingTransfer)
-            {
-                ShowStatus("Transfer already in progress.");
-                return;
-            }
-
-            var player = Game.Player.Character;
-            if (player == null || !player.Exists())
-            {
-                return;
-            }
-
-            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
-            {
-                ShowStatus("Exit your vehicle to open the industry terminal.");
-                return;
-            }
-
-            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
-            {
-                ShowStatus("No industry marker in range.");
-                return;
-            }
-
-            _menuIndustry = _nearestIndustry;
-            _industryTransferMode = DetermineDefaultTransferMode();
-            _selectedIndustryProductIndex = 0;
-
-            _officeMenu.Close();
-            _upgradeMenu.Close();
-            RebuildIndustryMenuItems();
-            _industryMenu.Open();
-        }
-
-        private IndustryTransferMode DetermineDefaultTransferMode()
-        {
-            Vehicle driverVehicle;
-            var cargoVehicle = _fleetManager.ResolveCargoVehicle(Game.Player.Character, out driverVehicle);
-            if (cargoVehicle == null || !cargoVehicle.Exists())
-            {
-                return IndustryTransferMode.Load;
-            }
-
-            var state = _fleetManager.GetOrCreateCargoState(cargoVehicle);
-            if (state == null || state.IsEmpty)
-            {
-                return IndustryTransferMode.Load;
-            }
-
-            if (_menuIndustry != null && _menuIndustry.AcceptsCommodity(state.Commodity))
-            {
-                return IndustryTransferMode.Unload;
-            }
-
-            return IndustryTransferMode.Load;
-        }
-
-        private bool TryGetIndustryMenuContext(out Industry industry, out Vehicle cargoVehicle, out VehicleCargoState cargoState, out string error)
-        {
-            industry = _menuIndustry;
-            cargoVehicle = null;
-            cargoState = null;
-            error = string.Empty;
-
-            if (industry == null)
-            {
-                error = "No target industry.";
-                return false;
-            }
-
-            var player = Game.Player.Character;
-            if (player == null || !player.Exists())
-            {
-                error = "Player unavailable.";
-                return false;
-            }
-
-            if (player.CurrentVehicle != null && player.CurrentVehicle.Exists())
-            {
-                error = "Exit your vehicle to use the terminal.";
-                return false;
-            }
-
-            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
-            {
-                error = "Move closer to the industry marker.";
-                return false;
-            }
-
-            Vehicle driverVehicle;
-            cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
-            if (cargoVehicle == null || !cargoVehicle.Exists())
-            {
-                error = "Bring a vehicle close to the industry.";
-                return false;
-            }
-
-            cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
-            if (cargoState == null)
-            {
-                error = "Unable to initialize cargo state.";
-                return false;
-            }
-
-            return true;
         }
 
         private bool TryGetIndustryTabletContext(Industry industry, out Vehicle cargoVehicle, out VehicleCargoState cargoState, out string error)
@@ -2226,7 +2179,6 @@ namespace IndustryLogisticV
                 selectedProduct,
                 () =>
                 {
-                    _industryMenu.Close();
                     CloseIndustryTablet();
                 });
         }
@@ -2240,7 +2192,6 @@ namespace IndustryLogisticV
                 omegaOnly,
                 () =>
                 {
-                    _industryMenu.Close();
                     CloseIndustryTablet();
                 },
                 amount => _profit += amount);
@@ -2283,6 +2234,30 @@ namespace IndustryLogisticV
             }
         }
 
+        private void HandleTabletVehicleSpawnerRequested(Industry industry)
+        {
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return;
+            }
+
+            if (industry == null)
+            {
+                ShowStatus("No industry selected.");
+                return;
+            }
+
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 2.4f)
+            {
+                ShowStatus("Move closer to an industry to open the vehicle spawner.");
+                return;
+            }
+
+            _menuIndustry = industry;
+            OpenIndustryVehicleSpawnerMenu();
+        }
+
         private static string GetPreferredOreCommodity(List<string> products)
         {
             for (int i = 0; i < products.Count; i++)
@@ -2296,219 +2271,34 @@ namespace IndustryLogisticV
             return products[0];
         }
 
-        private void RebuildIndustryMenuItems()
+        private bool TryGetCurrentVehicleSpawnParameters(out Vector3 spawnPosition, out float spawnHeading, out string error)
         {
-            Industry industry;
-            Vehicle cargoVehicle;
-            VehicleCargoState cargoState;
-            string error;
-            if (!TryGetIndustryMenuContext(out industry, out cargoVehicle, out cargoState, out error))
+            spawnPosition = Vector3.Zero;
+            spawnHeading = 0f;
+            error = string.Empty;
+
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
             {
-                _industryMenu.Title = "Industry Transfer";
-                _industryMenu.Subtitle = error;
-                _industryMenu.SetItems(new[]
+                if (_menuIndustry == null)
                 {
-                    new OfficeMenuItem { CaptionFactory = () => "Close", OnActivate = () => _industryMenu.Close() },
-                });
-                return;
-            }
-
-            RefreshIndustryTransferProducts(industry, cargoState);
-
-            _industryMenu.Title = "Industry Transfer";
-            _industryMenu.Subtitle = string.Format("{0} | Vehicle: {1}", industry.Name, cargoVehicle.DisplayName);
-            _industryMenu.SetItems(new[]
-            {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => string.Format("Cargo: {0}", cargoState.IsEmpty ? "Empty" : string.Format("{0:0.0}t {1}", cargoState.WeightTons, cargoState.Commodity)),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentIndustryActionCaption,
-                    OnLeft = () => ChangeIndustryTransferMode(-1),
-                    OnRight = () => ChangeIndustryTransferMode(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentIndustryProductCaption,
-                    OnLeft = () => ChangeIndustryProductSelection(-1),
-                    OnRight = () => ChangeIndustryProductSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentIndustryTransferPreviewCaption,
-                    OnActivate = ExecuteIndustryTransferFromMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Close",
-                    OnActivate = () => _industryMenu.Close(),
-                },
-            });
-        }
-
-        private string CurrentIndustryActionCaption()
-        {
-            return string.Format("Action: {0}", _industryTransferMode == IndustryTransferMode.Load ? "Load" : "Unload");
-        }
-
-        private string CurrentIndustryProductCaption()
-        {
-            if (_industryTransferProducts.Count == 0)
-            {
-                return "Product: none available";
-            }
-
-            return string.Format("Product: {0}", _industryTransferProducts[_selectedIndustryProductIndex]);
-        }
-
-        private string CurrentIndustryTransferPreviewCaption()
-        {
-            Industry industry;
-            Vehicle cargoVehicle;
-            VehicleCargoState cargoState;
-            string error;
-            if (!TryGetIndustryMenuContext(out industry, out cargoVehicle, out cargoState, out error))
-            {
-                return "Transfer unavailable";
-            }
-
-            if (_industryTransferMode == IndustryTransferMode.Unload)
-            {
-                if (cargoState.IsEmpty)
-                {
-                    return "Unload: vehicle empty";
+                    error = "No target industry selected.";
+                    return false;
                 }
 
-                return string.Format("Confirm Unload ({0:0.0}t)", cargoState.WeightTons);
-            }
-
-            if (_industryTransferProducts.Count == 0)
-            {
-                return "Load: no compatible product";
-            }
-
-            var requested = Math.Max(0.5f, cargoState.FreeCapacityTons);
-            return string.Format("Confirm Load ({0:0.0}t max)", requested);
-        }
-
-        private void ChangeIndustryTransferMode(int delta)
-        {
-            _industryTransferMode = _industryTransferMode == IndustryTransferMode.Load
-                ? IndustryTransferMode.Unload
-                : IndustryTransferMode.Load;
-
-            _selectedIndustryProductIndex = 0;
-            RebuildIndustryMenuItems();
-        }
-
-        private void ChangeIndustryProductSelection(int delta)
-        {
-            if (_industryTransferProducts.Count == 0)
-            {
-                return;
-            }
-
-            _selectedIndustryProductIndex = (_selectedIndustryProductIndex + delta + _industryTransferProducts.Count) % _industryTransferProducts.Count;
-        }
-
-        private void RefreshIndustryTransferProducts(Industry industry, VehicleCargoState cargoState)
-        {
-            _industryTransferProducts.Clear();
-
-            if (_industryTransferMode == IndustryTransferMode.Load)
-            {
-                if (!cargoState.IsEmpty)
+                if (!_menuIndustry.VehicleSpawnPosition.HasValue)
                 {
-                    _selectedIndustryProductIndex = 0;
-                    return;
+                    error = "No vehicle spawn configured for this industry.";
+                    return false;
                 }
 
-                var cargoType = cargoState.CargoType;
-                if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
-                {
-                    cargoType = _vehicleSpawnController.SelectedFilter;
-                }
-
-                _industryTransferProducts = _industryManager.GetLoadableOutputs(industry, cargoType);
-            }
-            else
-            {
-                if (!cargoState.IsEmpty && industry.AcceptsCommodity(cargoState.Commodity))
-                {
-                    _industryTransferProducts.Add(cargoState.Commodity);
-                }
+                spawnPosition = _menuIndustry.VehicleSpawnPosition.Value;
+                spawnHeading = _menuIndustry.VehicleSpawnHeading ?? _config.VehicleSpawnHeading;
+                return true;
             }
 
-            if (_selectedIndustryProductIndex >= _industryTransferProducts.Count)
-            {
-                _selectedIndustryProductIndex = Math.Max(0, _industryTransferProducts.Count - 1);
-            }
-        }
-
-        private void ExecuteIndustryTransferFromMenu()
-        {
-            if (_cargoTransferController.HasPendingTransfer)
-            {
-                ShowStatus("Transfer already in progress.");
-                return;
-            }
-
-            Industry industry;
-            Vehicle cargoVehicle;
-            VehicleCargoState cargoState;
-            string error;
-            if (!TryGetIndustryMenuContext(out industry, out cargoVehicle, out cargoState, out error))
-            {
-                ShowStatus(error);
-                RebuildIndustryMenuItems();
-                return;
-            }
-
-            if (_industryTransferMode == IndustryTransferMode.Unload)
-            {
-                if (cargoState.IsEmpty)
-                {
-                    ShowStatus("Vehicle is empty.");
-                    return;
-                }
-
-                if (!industry.AcceptsCommodity(cargoState.Commodity))
-                {
-                    ShowStatus(string.Format("Can't unload {0} in this industry", cargoState.CargoType.ToDisplayName()));
-                    return;
-                }
-
-                _cargoTransferController.StartMenuUnloadTransfer(
-                    industry,
-                    cargoVehicle,
-                    cargoState,
-                    () => _industryMenu.Close(),
-                    amount => _profit += amount);
-
-                return;
-            }
-
-            if (!cargoState.IsEmpty)
-            {
-                ShowStatus("Vehicle already carries cargo. Unload first.");
-                return;
-            }
-
-            if (_industryTransferProducts.Count == 0)
-            {
-                ShowStatus("No compatible product available to load.");
-                return;
-            }
-
-            var selectedProduct = _industryTransferProducts[_selectedIndustryProductIndex];
-            _cargoTransferController.StartMenuLoadTransfer(
-                industry,
-                cargoVehicle,
-                cargoState,
-                selectedProduct,
-                () => _industryMenu.Close());
+            spawnPosition = _config.VehicleSpawnPosition;
+            spawnHeading = _config.VehicleSpawnHeading;
+            return true;
         }
 
         private void TryOpenUpgradeMenu()
@@ -2534,7 +2324,6 @@ namespace IndustryLogisticV
             _menuIndustry = _nearestIndustry;
             CloseIndustryTablet();
             _officeMenu.Close();
-            _industryMenu.Close();
             RebuildUpgradeMenuItems();
             _upgradeMenu.Open();
         }
@@ -3000,13 +2789,14 @@ namespace IndustryLogisticV
             _industryTabletController.UnloadRequested -= HandleTabletUnloadRequested;
             _industryTabletController.UnloadModeRequested -= HandleTabletUnloadModeRequested;
             _industryTabletController.UpgradeModuleRequested -= HandleTabletUpgradeModuleRequested;
+            _industryTabletController.VehicleSpawnerRequested -= HandleTabletVehicleSpawnerRequested;
             _heldKeys.Clear();
         }
 
-        private enum IndustryTransferMode
+        private enum VehicleCargoMenuContext
         {
-            Load = 0,
-            Unload = 1,
+            Office = 0,
+            Industry = 1,
         }
 
         private enum GameModMode

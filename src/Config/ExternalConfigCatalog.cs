@@ -9,15 +9,6 @@ namespace IndustryLogisticV.Config
 {
     public sealed class ExternalConfigCatalog
     {
-        private static readonly string[] RequiredConfigFiles =
-        {
-            "Industries.ini",
-            "Stores.ini",
-            "GasStations.ini",
-            "Resources.ini",
-            "Objects.ini",
-        };
-
         public ExternalConfigCatalog()
         {
             Locations = new Dictionary<string, ExternalLocationConfig>(StringComparer.OrdinalIgnoreCase);
@@ -53,84 +44,35 @@ namespace IndustryLogisticV.Config
 
         public static ExternalConfigCatalog Load(string configDirectory)
         {
-            ExternalConfigCatalog catalog;
-            if (TryLoadEmbedded(out catalog))
-            {
-                return catalog;
-            }
+            var catalog = new ExternalConfigCatalog();
 
-            catalog = new ExternalConfigCatalog();
-            if (!HasAllConfigFiles(configDirectory))
-            {
-                return catalog;
-            }
-
-            ParseLocations(IniFile.Load(Path.Combine(configDirectory, "Industries.ini")), ExternalLocationKind.Industry, "Industries.ini", catalog);
-            ParseLocations(IniFile.Load(Path.Combine(configDirectory, "Stores.ini")), ExternalLocationKind.Store, "Stores.ini", catalog);
-            ParseLocations(IniFile.Load(Path.Combine(configDirectory, "GasStations.ini")), ExternalLocationKind.GasStation, "GasStations.ini", catalog);
-            ParseResources(IniFile.Load(Path.Combine(configDirectory, "Resources.ini")), catalog);
-            ParseObjects(IniFile.Load(Path.Combine(configDirectory, "Objects.ini")), catalog);
+            ParseLocations(LoadConfigIni(configDirectory, "Industries.ini"), ExternalLocationKind.Industry, "Industries.ini", catalog);
+            ParseLocations(LoadConfigIni(configDirectory, "Stores.ini"), ExternalLocationKind.Store, "Stores.ini", catalog);
+            ParseLocations(LoadConfigIni(configDirectory, "GasStations.ini"), ExternalLocationKind.GasStation, "GasStations.ini", catalog);
+            ParseResources(LoadConfigIni(configDirectory, "Resources.ini"), catalog);
+            ParseObjects(LoadConfigIni(configDirectory, "Objects.ini"), catalog);
 
             return catalog;
         }
 
-        private static bool TryLoadEmbedded(out ExternalConfigCatalog catalog)
+        private static IniFile LoadConfigIni(string configDirectory, string fileName)
         {
-            catalog = new ExternalConfigCatalog();
-            var files = new[]
+            if (!string.IsNullOrWhiteSpace(configDirectory))
             {
-                new { Name = "Industries.ini", Kind = (ExternalLocationKind?)ExternalLocationKind.Industry },
-                new { Name = "Stores.ini", Kind = (ExternalLocationKind?)ExternalLocationKind.Store },
-                new { Name = "GasStations.ini", Kind = (ExternalLocationKind?)ExternalLocationKind.GasStation },
-                new { Name = "Resources.ini", Kind = (ExternalLocationKind?)null },
-                new { Name = "Objects.ini", Kind = (ExternalLocationKind?)null },
-            };
-
-            for (int i = 0; i < files.Length; i++)
-            {
-                string content;
-                if (!TryReadEmbeddedConfig(files[i].Name, out content))
+                var filePath = Path.Combine(configDirectory, fileName);
+                if (File.Exists(filePath))
                 {
-                    catalog = null;
-                    return false;
-                }
-
-                var ini = IniFile.LoadFromString(content);
-                if (files[i].Kind.HasValue)
-                {
-                    ParseLocations(ini, files[i].Kind.Value, files[i].Name, catalog);
-                    continue;
-                }
-
-                if (files[i].Name.Equals("Resources.ini", StringComparison.OrdinalIgnoreCase))
-                {
-                    ParseResources(ini, catalog);
-                }
-                else
-                {
-                    ParseObjects(ini, catalog);
+                    return IniFile.Load(filePath);
                 }
             }
 
-            return true;
-        }
-
-        private static bool HasAllConfigFiles(string configDirectory)
-        {
-            if (string.IsNullOrWhiteSpace(configDirectory) || !Directory.Exists(configDirectory))
+            string content;
+            if (TryReadEmbeddedConfig(fileName, out content))
             {
-                return false;
+                return IniFile.LoadFromString(content);
             }
 
-            for (int i = 0; i < RequiredConfigFiles.Length; i++)
-            {
-                if (!File.Exists(Path.Combine(configDirectory, RequiredConfigFiles[i])))
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return IniFile.LoadFromString(string.Empty);
         }
 
         private static bool TryReadEmbeddedConfig(string fileName, out string content)

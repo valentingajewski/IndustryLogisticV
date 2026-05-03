@@ -163,6 +163,12 @@ namespace IndustryLogisticV.Config
                     LocationKind = InferLocationKind(section, inputs, outputs),
                     Name = name,
                     Position = position,
+                    VehicleSpawnPosition = ini.HasKey(section, "VehicleSpawningCoordinates")
+                        ? (Vector3?)ini.GetVector3(section, "VehicleSpawningCoordinates", Vector3.Zero)
+                        : null,
+                    VehicleSpawnHeading = ini.HasKey(section, "VehicleSpawningHeading")
+                        ? (float?)ini.GetFloat(section, "VehicleSpawningHeading", 0f)
+                        : null,
                     Inputs = inputs,
                     Outputs = outputs,
                     InputCapacityTons = Math.Max(10f, inputCapTons),
@@ -199,6 +205,8 @@ namespace IndustryLogisticV.Config
                     LocationKind = location.Kind,
                     Name = ini.GetString(location.Id, "Name", location.Name),
                     Position = location.Position,
+                    VehicleSpawnPosition = location.VehicleSpawnPosition,
+                    VehicleSpawnHeading = location.VehicleSpawnHeading,
                     Inputs = new HashSet<string>(location.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                     Outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                     InputCapacityTons = inputCapacityTons,

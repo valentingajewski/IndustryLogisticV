@@ -25,6 +25,8 @@ namespace IndustryLogisticV.Systems
                     LocationKind = industryConfig.LocationKind,
                     Name = industryConfig.Name,
                     Position = industryConfig.Position,
+                    VehicleSpawnPosition = industryConfig.VehicleSpawnPosition,
+                    VehicleSpawnHeading = industryConfig.VehicleSpawnHeading,
                     Inputs = new HashSet<string>(industryConfig.Inputs, StringComparer.OrdinalIgnoreCase),
                     Outputs = new HashSet<string>(industryConfig.Outputs, StringComparer.OrdinalIgnoreCase),
                     InputCapacityTons = industryConfig.InputCapacityTons,

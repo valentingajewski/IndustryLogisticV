@@ -59,6 +59,12 @@ namespace IndustryLogisticV.UI
             remove { _industryTablet.UpgradeModuleRequested -= value; }
         }
 
+        public event Action<Industry> VehicleSpawnerRequested
+        {
+            add { _industryTablet.VehicleSpawnerRequested += value; }
+            remove { _industryTablet.VehicleSpawnerRequested -= value; }
+        }
+
         public bool IsOpen
         {
             get { return _industryTablet.IsOpen; }
