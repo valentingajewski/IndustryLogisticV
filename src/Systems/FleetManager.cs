@@ -15,6 +15,7 @@ namespace IndustryLogisticV.Systems
         private const string AlloySolidPropModel = "prop_pipes_01b";
         private const string MetalSolidPropModel = "prop_pipes_04a";
         private const string DefaultWoodPropModel = "prop_woodpile_01b";
+        private const string DefaultLittleBoxPropModel = "prop_boxpile_07d";
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
@@ -416,7 +417,8 @@ namespace IndustryLogisticV.Systems
                 return false;
             }
 
-            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType);
+            var definition = FindDefinition(cargoVehicle.Model);
+            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType, definition);
             if (modelNames == null || modelNames.Count == 0)
             {
                 return false;
@@ -427,8 +429,13 @@ namespace IndustryLogisticV.Systems
             return count > 0;
         }
 
-        private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType)
+        private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType, VehicleDefinition definition)
         {
+            if (UsesCompactBoxProp(definition))
+            {
+                return ResolveCompactBoxPropModels();
+            }
+
             var normalized = CommodityCatalog.Normalize(commodity);
             List<string> modelNames;
             if (_objectModels.TryGetValue(normalized, out modelNames) && modelNames.Count > 0)
@@ -462,6 +469,28 @@ namespace IndustryLogisticV.Systems
             }
 
             return null;
+        }
+
+        private static bool UsesCompactBoxProp(VehicleDefinition definition)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.SectionName))
+            {
+                return false;
+            }
+
+            return definition.SectionName.Equals("CommercialVans", StringComparison.OrdinalIgnoreCase)
+                || definition.SectionName.Equals("CommercialBigVans", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private List<string> ResolveCompactBoxPropModels()
+        {
+            List<string> modelNames;
+            if (_objectModels.TryGetValue("LittleBox", out modelNames) && modelNames.Count > 0)
+            {
+                return modelNames;
+            }
+
+            return new List<string> { DefaultLittleBoxPropModel };
         }
 
         private static string ResolveSolidPropModel(string commodity)
