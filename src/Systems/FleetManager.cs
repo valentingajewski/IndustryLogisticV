@@ -16,6 +16,7 @@ namespace IndustryLogisticV.Systems
         private const string MetalSolidPropModel = "prop_pipes_04a";
         private const string DefaultWoodPropModel = "prop_woodpile_01b";
         private const string DefaultLittleBoxPropModel = "prop_boxpile_07d";
+        private const string DefaultTinyBoxPropModel = "prop_rub_boxpile_02";
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
@@ -306,6 +307,9 @@ namespace IndustryLogisticV.Systems
                     continue;
                 }
 
+                var attachmentRotation = ResolveAttachedPropRotation(modelName);
+                var attachmentOffset = ResolveAttachedPropOffset(modelName);
+
                 Vector3 crateModelMin;
                 Vector3 crateModelMax;
                 model.GetDimensions(out crateModelMin, out crateModelMax);
@@ -339,7 +343,10 @@ namespace IndustryLogisticV.Systems
                     continue;
                 }
 
-                var spawnPosition = cargoVehicle.GetOffsetPosition(new Vector3(placementX, placementY, floorLocalZ + 0.35f));
+                var spawnPosition = cargoVehicle.GetOffsetPosition(new Vector3(
+                    placementX + attachmentOffset.X,
+                    placementY + attachmentOffset.Y,
+                    floorLocalZ + 0.35f + attachmentOffset.Z));
                 var prop = World.CreateProp(model, spawnPosition, true, false);
                 model.MarkAsNoLongerNeeded();
 
@@ -371,15 +378,21 @@ namespace IndustryLogisticV.Systems
                     floorLocalZ = fallbackFloorLocalZ;
                     placementX = localSlot.X - centerOffsetX;
                     placementY = localSlot.Y - centerOffsetY;
-                    prop.Position = cargoVehicle.GetOffsetPosition(new Vector3(placementX, placementY, floorLocalZ + 0.35f));
+                    prop.Position = cargoVehicle.GetOffsetPosition(new Vector3(
+                        placementX + attachmentOffset.X,
+                        placementY + attachmentOffset.Y,
+                        floorLocalZ + 0.35f + attachmentOffset.Z));
                 }
 
                 Vector3 crateMin;
                 Vector3 crateMax;
                 prop.Model.GetDimensions(out crateMin, out crateMax);
 
-                var offset = new Vector3(placementX, placementY, floorLocalZ - crateMin.Z + 0.01f);
-                prop.AttachTo(cargoVehicle, offset, Vector3.Zero);
+                var offset = new Vector3(
+                    placementX + attachmentOffset.X,
+                    placementY + attachmentOffset.Y,
+                    floorLocalZ - crateMin.Z + 0.01f + attachmentOffset.Z);
+                prop.AttachTo(cargoVehicle, offset, attachmentRotation);
                 cargoState.AttachedProps.Add(prop);
             }
         }
@@ -431,9 +444,10 @@ namespace IndustryLogisticV.Systems
 
         private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType, VehicleDefinition definition)
         {
-            if (UsesCompactBoxProp(definition))
+            var vehicleSpecificModels = ResolveVehicleSpecificPropModels(definition);
+            if (vehicleSpecificModels != null)
             {
-                return ResolveCompactBoxPropModels();
+                return vehicleSpecificModels;
             }
 
             var normalized = CommodityCatalog.Normalize(commodity);
@@ -471,26 +485,57 @@ namespace IndustryLogisticV.Systems
             return null;
         }
 
-        private static bool UsesCompactBoxProp(VehicleDefinition definition)
+        private List<string> ResolveVehicleSpecificPropModels(VehicleDefinition definition)
         {
             if (definition == null || string.IsNullOrWhiteSpace(definition.SectionName))
             {
-                return false;
+                return null;
             }
 
-            return definition.SectionName.Equals("CommercialVans", StringComparison.OrdinalIgnoreCase)
-                || definition.SectionName.Equals("CommercialBigVans", StringComparison.OrdinalIgnoreCase);
+            if (definition.SectionName.Equals("CommercialBigVans", StringComparison.OrdinalIgnoreCase))
+            {
+                return ResolveNamedPropModels("LittleBox", DefaultLittleBoxPropModel);
+            }
+
+            if (definition.SectionName.Equals("CommercialVans", StringComparison.OrdinalIgnoreCase))
+            {
+                return ResolveNamedPropModels("TinyBox", DefaultTinyBoxPropModel);
+            }
+
+            return null;
         }
 
-        private List<string> ResolveCompactBoxPropModels()
+        private List<string> ResolveNamedPropModels(string objectKey, string fallbackModelName)
         {
             List<string> modelNames;
-            if (_objectModels.TryGetValue("LittleBox", out modelNames) && modelNames.Count > 0)
+            if (_objectModels.TryGetValue(objectKey, out modelNames) && modelNames.Count > 0)
             {
                 return modelNames;
             }
 
-            return new List<string> { DefaultLittleBoxPropModel };
+            return new List<string> { fallbackModelName };
+        }
+
+        private static Vector3 ResolveAttachedPropRotation(string modelName)
+        {
+            return string.Equals(modelName, DefaultLittleBoxPropModel, StringComparison.OrdinalIgnoreCase)
+                ? new Vector3(0f, 0f, 90f)
+                : Vector3.Zero;
+        }
+
+        private static Vector3 ResolveAttachedPropOffset(string modelName)
+        {
+            if (string.Equals(modelName, DefaultLittleBoxPropModel, StringComparison.OrdinalIgnoreCase))
+            {
+                return new Vector3(0f, 0.4f, 0.05f);
+            }
+
+            if (string.Equals(modelName, DefaultTinyBoxPropModel, StringComparison.OrdinalIgnoreCase))
+            {
+                return new Vector3(-0.2f, 0f, 0.5f);
+            }
+
+            return Vector3.Zero;
         }
 
         private static string ResolveSolidPropModel(string commodity)
