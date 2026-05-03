@@ -135,7 +135,7 @@ namespace IndustryLogisticV.Systems
                 return BlipSprite.JerryCan;
             }
 
-            return industry != null && industry.IsSink
+            return industry != null && industry.IsStore
                 ? BlipSprite.Store
                 : BlipSprite.Warehouse;
         }

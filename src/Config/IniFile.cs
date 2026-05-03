@@ -22,16 +22,34 @@ namespace IndustryLogisticV.Config
 
         public static IniFile Load(string path)
         {
-            var data = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
             if (!File.Exists(path))
             {
-                return new IniFile(data);
+                return new IniFile(new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase));
             }
 
+            return LoadFromLines(File.ReadAllLines(path));
+        }
+
+        public static IniFile LoadFromString(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return new IniFile(new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase));
+            }
+
+            var normalized = content
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+            return LoadFromLines(normalized.Split('\n'));
+        }
+
+        private static IniFile LoadFromLines(IEnumerable<string> lines)
+        {
+            var data = new Dictionary<string, Dictionary<string, string>>(StringComparer.OrdinalIgnoreCase);
             string currentSection = "Global";
             data[currentSection] = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var rawLine in File.ReadAllLines(path))
+            foreach (var rawLine in lines)
             {
                 if (rawLine == null)
                 {
@@ -193,25 +211,56 @@ namespace IndustryLogisticV.Config
                 return defaultValue;
             }
 
+            var zRaw = split[2].Trim();
+            if (split.Length > 3)
+            {
+                for (int i = 3; i < split.Length; i++)
+                {
+                    zRaw += "," + split[i].Trim();
+                }
+            }
+
             float x;
             float y;
             float z;
-            if (!float.TryParse(split[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out x))
+            if (!TryParseFloatComponent(split[0].Trim(), out x))
             {
                 return defaultValue;
             }
 
-            if (!float.TryParse(split[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out y))
+            if (!TryParseFloatComponent(split[1].Trim(), out y))
             {
                 return defaultValue;
             }
 
-            if (!float.TryParse(split[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
+            if (!TryParseFloatComponent(zRaw, out z))
             {
                 return defaultValue;
             }
 
             return new Vector3(x, y, z);
+        }
+
+        private static bool TryParseFloatComponent(string raw, out float value)
+        {
+            if (float.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            {
+                return true;
+            }
+
+            if (float.TryParse(raw, NumberStyles.Float, CultureInfo.CurrentCulture, out value))
+            {
+                return true;
+            }
+
+            var normalized = (raw ?? string.Empty).Trim().Replace(',', '.');
+            if (float.TryParse(normalized, NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+            {
+                return true;
+            }
+
+            value = 0f;
+            return false;
         }
     }
 }

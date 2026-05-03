@@ -1,0 +1,8 @@
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Debug\net48\IndustryLogisticV.dll
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Debug\net48\IndustryLogisticV.pdb
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Debug\net48\IndustryLogisticV.csproj.AssemblyReference.cache
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Debug\net48\IndustryLogisticV.GeneratedMSBuildEditorConfig.editorconfig
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Debug\net48\IndustryLogisticV.csproj.CoreCompileInputs.cache
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Debug\net48\IndustryLogisticV.sourcelink.json
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Debug\net48\IndustryLogisticV.dll
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Debug\net48\IndustryLogisticV.pdb

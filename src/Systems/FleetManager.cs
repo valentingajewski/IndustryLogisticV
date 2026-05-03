@@ -14,7 +14,7 @@ namespace IndustryLogisticV.Systems
     {
         private const string AlloySolidPropModel = "prop_pipes_01b";
         private const string MetalSolidPropModel = "prop_pipes_04a";
-
+        private const string DefaultWoodPropModel = "prop_woodpile_01b";
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
@@ -39,14 +39,14 @@ namespace IndustryLogisticV.Systems
         {
             return _definitions.Where(x =>
                 x.IsEnabled &&
-                x.CargoType == cargoType &&
-                x.CargoType != VehicleCargoType.Trailer);
+                !x.IsTractor &&
+                x.CargoType == cargoType);
         }
 
         public List<VehicleDefinition> GetTractorDefinitions()
         {
             return _definitions
-                .Where(x => x.IsEnabled && x.CargoType == VehicleCargoType.Trailer)
+                .Where(x => x.IsEnabled && x.IsTractor)
                 .ToList();
         }
 
@@ -204,9 +204,9 @@ namespace IndustryLogisticV.Systems
             if (selected.IsTrailer)
             {
                 var tractor = selectedTractor;
-                if (tractor == null || !tractor.IsEnabled || tractor.CargoType != VehicleCargoType.Trailer)
+                if (tractor == null || !tractor.IsEnabled || !tractor.IsTractor)
                 {
-                    tractor = _definitions.FirstOrDefault(x => x.CargoType == VehicleCargoType.Trailer && x.IsEnabled);
+                    tractor = _definitions.FirstOrDefault(x => x.IsEnabled && x.IsTractor);
                 }
 
                 if (tractor == null)
@@ -229,10 +229,12 @@ namespace IndustryLogisticV.Systems
                     return false;
                 }
 
-                truck.AttachToTrailer(cargoVehicle, 15f);
-                if (truck.TowedVehicle == null || !truck.TowedVehicle.Exists())
+                if (!TryAttachTruckToTrailer(truck, cargoVehicle, heading))
                 {
-                    truck.AttachToTrailer(cargoVehicle, 20f);
+                    cargoVehicle.Delete();
+                    truck.Delete();
+                    message = "Failed to connect trailer.";
+                    return false;
                 }
 
                 var trailerState = GetOrCreateCargoState(cargoVehicle);
@@ -273,29 +275,9 @@ namespace IndustryLogisticV.Systems
 
             List<string> modelNames;
             int count;
-            if (cargoState.CargoType == VehicleCargoType.Crate)
+            bool forceCenteredPlacement;
+            if (!TryResolveCargoPropLayout(cargoVehicle, cargoState, out modelNames, out count, out forceCenteredPlacement))
             {
-                if (!_objectModels.TryGetValue("Box", out modelNames) || modelNames.Count == 0)
-                {
-                    return;
-                }
-
-                count = ResolveCratePropCount(cargoVehicle, cargoState);
-            }
-            else if (cargoState.CargoType == VehicleCargoType.Solid)
-            {
-                var solidModel = ResolveSolidPropModel(cargoState.Commodity);
-                if (string.IsNullOrWhiteSpace(solidModel))
-                {
-                    return;
-                }
-
-                modelNames = new List<string> { solidModel };
-                count = 1;
-            }
-            else
-            {
-                // Loose cargo is rendered as a marker overlay during loading ticks.
                 return;
             }
 
@@ -314,8 +296,6 @@ namespace IndustryLogisticV.Systems
 
             var columns = ResolveCrateColumnCount(count);
             var rows = (int)Math.Ceiling((float)count / columns);
-
-            var forceCenteredPlacement = cargoState.CargoType == VehicleCargoType.Solid;
             for (int i = 0; i < count; i++)
             {
                 var modelName = modelNames[i % modelNames.Count];
@@ -424,6 +404,66 @@ namespace IndustryLogisticV.Systems
             return Math.Max(1, Math.Min(6, count));
         }
 
+        private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, out List<string> modelNames, out int count, out bool forceCenteredPlacement)
+        {
+            modelNames = null;
+            count = 0;
+            forceCenteredPlacement = false;
+
+            var cargoType = CommodityCatalog.ResolveCargoType(cargoState.CargoType, cargoState.Commodity);
+            if (!CommodityCatalog.UsesAttachedPropVisual(cargoType))
+            {
+                return false;
+            }
+
+            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType);
+            if (modelNames == null || modelNames.Count == 0)
+            {
+                return false;
+            }
+
+            forceCenteredPlacement = CommodityCatalog.UsesCenteredPropVisual(cargoType);
+            count = forceCenteredPlacement ? 1 : ResolveCratePropCount(cargoVehicle, cargoState);
+            return count > 0;
+        }
+
+        private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType)
+        {
+            var normalized = CommodityCatalog.Normalize(commodity);
+            List<string> modelNames;
+            if (_objectModels.TryGetValue(normalized, out modelNames) && modelNames.Count > 0)
+            {
+                return modelNames;
+            }
+
+            if (cargoType == VehicleCargoType.Wood)
+            {
+                var woodModel = ResolveWoodPropModel();
+                if (!string.IsNullOrWhiteSpace(woodModel))
+                {
+                    return new List<string> { woodModel };
+                }
+            }
+
+            if (cargoType == VehicleCargoType.OpenHull)
+            {
+                var solidModel = ResolveSolidPropModel(commodity);
+                if (!string.IsNullOrWhiteSpace(solidModel))
+                {
+                    return new List<string> { solidModel };
+                }
+            }
+
+            if ((cargoType == VehicleCargoType.CraftedGoods || cargoType == VehicleCargoType.Refrigeration) &&
+                _objectModels.TryGetValue("Box", out modelNames) &&
+                modelNames.Count > 0)
+            {
+                return modelNames;
+            }
+
+            return null;
+        }
+
         private static string ResolveSolidPropModel(string commodity)
         {
             var normalized = CommodityCatalog.Normalize(commodity);
@@ -438,6 +478,22 @@ namespace IndustryLogisticV.Systems
             }
 
             return null;
+        }
+
+        private string ResolveWoodPropModel()
+        {
+            List<string> modelNames;
+            if (_objectModels.TryGetValue("Wood", out modelNames) && modelNames.Count > 0)
+            {
+                return modelNames[0];
+            }
+
+            if (_objectModels.TryGetValue("Lumber", out modelNames) && modelNames.Count > 0)
+            {
+                return modelNames[0];
+            }
+
+            return DefaultWoodPropModel;
         }
 
         private static bool TryGetTruckBedBounds(
@@ -734,6 +790,80 @@ namespace IndustryLogisticV.Systems
             vehicle = World.CreateVehicle(model, position, heading);
             model.MarkAsNoLongerNeeded();
             return vehicle != null && vehicle.Exists();
+        }
+
+        private static bool TryAttachTruckToTrailer(Vehicle truck, Vehicle trailer, float heading)
+        {
+            if (truck == null || !truck.Exists() || trailer == null || !trailer.Exists())
+            {
+                return false;
+            }
+
+            if (TryAttachTruckToTrailerWithinRange(truck, trailer, 15f) || TryAttachTruckToTrailerWithinRange(truck, trailer, 20f))
+            {
+                return true;
+            }
+
+            var trailerPosition = trailer.Position;
+            var direction = HeadingToDirection(heading);
+            var baseSpacing = ResolveTrailerSpacing(truck, trailer);
+            var candidateSpacings = new[]
+            {
+                baseSpacing,
+                baseSpacing + 2f,
+                Math.Max(12f, baseSpacing - 1.5f),
+                baseSpacing + 4f,
+            };
+
+            for (int i = 0; i < candidateSpacings.Length; i++)
+            {
+                var targetPosition = truck.Position - (direction * candidateSpacings[i]);
+                trailer.Position = new Vector3(targetPosition.X, targetPosition.Y, trailerPosition.Z);
+                trailer.Heading = heading;
+
+                if (TryAttachTruckToTrailerWithinRange(truck, trailer, candidateSpacings[i] + 2f) ||
+                    TryAttachTruckToTrailerWithinRange(truck, trailer, candidateSpacings[i] + 6f))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryAttachTruckToTrailerWithinRange(Vehicle truck, Vehicle trailer, float attachRange)
+        {
+            truck.AttachToTrailer(trailer, attachRange);
+            return truck.TowedVehicle != null && truck.TowedVehicle.Exists();
+        }
+
+        private static float ResolveTrailerSpacing(Vehicle truck, Vehicle trailer)
+        {
+            Vector3 truckMin;
+            Vector3 truckMax;
+            Vector3 trailerMin;
+            Vector3 trailerMax;
+            if (!TryGetVehicleBounds(truck, out truckMin, out truckMax) || !TryGetVehicleBounds(trailer, out trailerMin, out trailerMax))
+            {
+                return 16f;
+            }
+
+            var truckRearExtent = Math.Max(1f, -truckMin.Y);
+            var trailerFrontExtent = Math.Max(1f, trailerMax.Y);
+            return Math.Max(13f, truckRearExtent + trailerFrontExtent + 1.25f);
+        }
+
+        private static bool TryGetVehicleBounds(Vehicle vehicle, out Vector3 modelMin, out Vector3 modelMax)
+        {
+            modelMin = Vector3.Zero;
+            modelMax = Vector3.Zero;
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return false;
+            }
+
+            vehicle.Model.GetDimensions(out modelMin, out modelMax);
+            return (modelMax.X - modelMin.X) > 0.05f && (modelMax.Y - modelMin.Y) > 0.05f;
         }
 
         private static bool TryRequestModel(Model model, int timeoutMs)

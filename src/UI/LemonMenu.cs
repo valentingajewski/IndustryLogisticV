@@ -249,9 +249,17 @@ namespace IndustryLogisticV.UI
             public LemonMenuEntry(MenuItem source)
             {
                 _source = source ?? new MenuItem();
-                Item = _source.CheckboxStateFactory != null
-                    ? new NativeCheckboxItem(string.Empty, false)
-                    : new NativeItem(string.Empty, string.Empty);
+                if (_source.IsSeparator)
+                {
+                    Item = new NativeSeparatorItem();
+                }
+                else
+                {
+                    Item = _source.CheckboxStateFactory != null
+                        ? new NativeCheckboxItem(string.Empty, false)
+                        : new NativeItem(string.Empty, string.Empty);
+                }
+
                 Item.Tag = this;
             }
 
@@ -260,6 +268,15 @@ namespace IndustryLogisticV.UI
             public void Refresh()
             {
                 Item.Title = InvokeString(_source.CaptionFactory);
+
+                if (_source.IsSeparator)
+                {
+                    Item.Description = string.Empty;
+                    Item.AltTitle = string.Empty;
+                    Item.Enabled = false;
+                    return;
+                }
+
                 Item.Description = ResolveDescription();
                 Item.AltTitle = ResolveAltTitle();
 

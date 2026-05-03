@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using GTA;
 using GTA.Math;
 using IndustryLogisticV.Config;
 using IndustryLogisticV.Domain;
@@ -20,14 +19,12 @@ namespace IndustryLogisticV.Systems
             foreach (var pair in config.IndustryConfigs)
             {
                 var industryConfig = pair.Value;
-                var useConfiguredZ = ShouldUseConfiguredZForMarker(industryConfig.Name);
-                var groundedConfig = new IndustryConfig
+                var runtimeConfig = new IndustryConfig
                 {
                     Id = industryConfig.Id,
+                    LocationKind = industryConfig.LocationKind,
                     Name = industryConfig.Name,
-                    Position = useConfiguredZ
-                        ? industryConfig.Position
-                        : GetGroundedPosition(industryConfig.Position),
+                    Position = industryConfig.Position,
                     Inputs = new HashSet<string>(industryConfig.Inputs, StringComparer.OrdinalIgnoreCase),
                     Outputs = new HashSet<string>(industryConfig.Outputs, StringComparer.OrdinalIgnoreCase),
                     InputCapacityTons = industryConfig.InputCapacityTons,
@@ -37,17 +34,17 @@ namespace IndustryLogisticV.Systems
                     Density = industryConfig.Density,
                 };
 
-                var supportsOmegaBoost = ShouldUseOmegaBoost(groundedConfig);
-                var recipes = RecipeRegistry.BuildRecipes(groundedConfig, supportsOmegaBoost);
-                var industry = new Industry(groundedConfig, recipes, supportsOmegaBoost, config.IndustryOmegaCapacityMultiplier);
+                var supportsOmegaBoost = ShouldUseOmegaBoost(runtimeConfig);
+                var recipes = RecipeRegistry.BuildRecipes(runtimeConfig, supportsOmegaBoost);
+                var industry = new Industry(runtimeConfig, recipes, supportsOmegaBoost, config.IndustryOmegaCapacityMultiplier);
                 SeedInitialOutput(industry);
-                SeedStartingTank(industry, groundedConfig);
+                SeedStartingTank(industry, runtimeConfig);
                 _industries.Add(industry);
 
                 float drainRatePerMinute;
-                if (TryGetPetrolStationDrainRatePerMinute(groundedConfig, out drainRatePerMinute))
+                if (TryGetPetrolStationDrainRatePerMinute(runtimeConfig, out drainRatePerMinute))
                 {
-                    _petrolStationDrainRatePerMinuteByIndustryId[groundedConfig.Id] = drainRatePerMinute;
+                    _petrolStationDrainRatePerMinuteByIndustryId[runtimeConfig.Id] = drainRatePerMinute;
                 }
             }
         }
@@ -341,32 +338,5 @@ namespace IndustryLogisticV.Systems
             industry.BufferStorage["Fuel"] = Math.Max(0f, currentFuel - consumed);
         }
 
-        private static Vector3 GetGroundedPosition(Vector3 position)
-        {
-            float z;
-            if (World.GetGroundHeight(new Vector3(position.X, position.Y, position.Z + 50f), out z, GetGroundHeightMode.ConsiderWaterAsGround))
-            {
-                return new Vector3(position.X, position.Y, z + 0.05f);
-            }
-
-            return position;
-        }
-
-        private static bool ShouldUseConfiguredZForMarker(string markerName)
-        {
-            if (string.IsNullOrWhiteSpace(markerName))
-            {
-                return false;
-            }
-
-            var normalized = markerName.Trim();
-            if (MarkerConstants.PreserveConfiguredZMarkerNames.Contains(normalized))
-            {
-                return true;
-            }
-
-            return normalized.IndexOf("Marina Dr", StringComparison.OrdinalIgnoreCase) >= 0
-                || normalized.IndexOf("Marina Drive", StringComparison.OrdinalIgnoreCase) >= 0;
-        }
     }
 }
