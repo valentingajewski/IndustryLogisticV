@@ -1,28 +1,64 @@
 - Fuel system
 
-- Licensing mechanism:
-    - You will add a new mechanic where the player will need to purchase a permit to move resource to a specific industry.
-    - In the F8 button, in the Industry button, add 2 buttons ("Contractor permit", "Industry statistics")
-        - The "Contractor permit" button list all industry of the game mod with their permit price which can be found under IndustryLicencePrice in the LSOL.ini
-            - Each industry is a button which can be pressed. This will open a new window (based from the F8 menu theme) which will ask if the player really want to pay for this permit. Add 2 buttons "Yes" and "No".
-        - The "Industry statistics" button will open the current industry's stats
-    - Add this new mechanic as a difficulty option. When enabled, the permit button and mechanics are enabled. When disabled, the button is not displayed and the permit mechanics are disabled
+- Hire NPC mechanism
+You will add a new mechanism where player can hire NPC to transport resources from an industry to another.
+In the Office menu add a new button "Hire NPC"
+    -  This button will open a new window (based from the F8 menu theme)
+        - This menu wil have 3 buttons:
+            - Add a "Hire NPC" button
+                - This button will open a new window (based on the f8 menu) with muliple choices:
+                    - Add a "Starting point" selection section where the player chan choose from which industry the NPC must start its journey
+                    - Add a "Destination" selection section where the player chan choose from which industry the NPC must finish its journey
+                    - Add a "Resource" selection section where the player can choose which resource (regarding previous industry choice) the NPC will transport
+                    - Add a "Tier" selection section where the plauer can choose between Veteran, Professional or Rookie driver (each with their own caracteristics which can be found in the HiringNPC.ini)
+                        - NPCModel is the model of the NPC
+                        - NPCCargoLooseRate is the max percentage of the cargo the npc can lose for each journey (0.1 means 10%)
+                        - NPCSpeedMultiplier is the NPC max speed (0.9 means 90% of NPC normal speed)
+                        - NPCPriceMultiplier is the price of the NPC depending of the price of the resource. (NPCPriceMultiplier=50 means the NPC will cost 50 times the price of one unit of resource per ton)
+            - Add a "NPC list" button
+                - Show a button list with all NPC routes purchased
+                - When selecting one NPC route, 2 buttons are available:
+                    - "Fire NPC", delete the NPC, its vehicle and its cargo with immediate effect
+                    - "Modify NPC", show the exact same content as the "Hire NPC" button. Therefore the player can either upgrade the NPC tier or reroute NPC for transporting another resource
+            - Add a "Close" button
 
-1. Core Logic & Mechanics
-- Permit Requirement: Implement a "Contractor Permit" mechanic. When active, players must purchase a specific permit for an industry before they are allowed to transport resources form or to it.
-- Data Sourcing: Permit prices for each industry should be dynamically pulled from the LSOL.ini file under the IndustryLicencePrice key.
 
-2. UI Integration (F8 Menu)
-Within the Industry sub-menu of the F8 Key interface, integrate the following two buttons:
-- Contractor Permit:
-    - Function: Displays a list of all industries available in the mod alongside their respective permit prices.
-    - Interaction: Clicking an industry entry triggers a confirmation modal (styled after the F8 menu theme).
-    - Confirmation Modal: Must explicitly ask the player if they wish to purchase the permit.
-    - Actions: Provide "Yes" (execute purchase and unlock transport) and "No" (close modal) buttons.
-- Industry Statistics:
-    - Function: Opens a dedicated window displaying real-time data and metrics for the currently selected or active industry. Use the current Industry stats
+1. Overview
+Implement a new "Hire NPC" mechanism that allows players to automate resource transportation between owned or discovered industries.
 
-3. Configuration & Difficulty Settings
-- Toggle Functionality: Add the Licensing System as a toggleable Difficulty Option.
-- Active State: When enabled, all permit requirements and UI elements (buttons/menus) are fully functional.
-- Inactive State: When disabled, the "Contractor Permit" button is hidden from the UI, and all resource transport restrictions are bypassed.
+2. UI Integration: Office Menu
+- Trigger: Add a new button labeled "Hire NPC" to the existing Office Menu.
+- Theme: The resulting windows should follow the F8 Menu aesthetic and styling.
+- Main Navigation Window: Clicking "Hire NPC" opens a sub-menu with three options:
+    - Hire New NPC
+    - Manage NPC List
+    - Close
+
+3. Functional Requirements
+A. "Hire New NPC" Interface
+This window facilitates the creation of a new logistics route. It must include the following selection sections:
+- Starting Point: A dropdown/list for the player to select the origin industry.
+- Destination: A dropdown/list for the player to select the target industry.
+- Resource Selection: A list of available resources based on the chosen origin industry.
+- Tier Selection: Options to choose between Rookie, Professional, and Veteran drivers.
+    - Note: Data for these tiers should be pulled from HiringNPC.ini.
+    - Logic Parameters (from .ini):NPCModel: The character model assigned to the driver.
+    - NPCCargoLooseRate: Max percentage of cargo lost per journey (e.g., $0.1 = 10\%$).
+    - NPCSpeedMultiplier: NPC top speed limit (e.g., $0.9 = 90\%$ of standard speed).
+    - NPCPriceMultiplier: Calculation for hiring cost based on resource value (e.g., $50 \times \text{unit price per ton}$).
+
+B. "NPC List" Interface (Management)
+This window displays all currently active NPC routes.
+- Route List: A scrollable list showing all purchased NPC contracts.
+- Management Options: Selecting a specific route opens two secondary actions:
+- Fire NPC: Immediately deletes the NPC, their vehicle, and any active cargo.
+- Modify NPC: Re-opens the hiring interface for that specific slot, allowing the player to upgrade the driver’s Tier or re-assign the route and resource type.
+
+4. Technical Notes for Implementation
+- Ensure the "Modify NPC" function retains previous settings as the default state when the window opens.
+- The "Close" button should return the player to the primary Office Menu.
+- Check for sufficient funds before confirming the "Hire" or "Modify" (Upgrade) actions based on the NPCPriceMultiplier.
+
+5. Visuals
+- Make sure the npc is visible and not something virtual
+- Each hired NPC must have a blip so they can be easily visible on the map

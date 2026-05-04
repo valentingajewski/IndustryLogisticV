@@ -62,6 +62,8 @@ namespace LSOL
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
+        private readonly NpcLogisticsManager _npcLogisticsManager;
+        private readonly NpcLogisticsController _npcLogisticsController;
         private readonly OverviewMenuController _overviewMenuController;
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
@@ -161,6 +163,16 @@ namespace LSOL
                 cargoFilterOrder,
                 defaultCargoFilter);
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
+            _npcLogisticsManager = new NpcLogisticsManager(
+                _configPath,
+                _industryManager,
+                _fleetManager,
+                _globalMarket,
+                GetGroundPosition,
+                () => _profit,
+                DeductProfit,
+                amount => _profit += amount,
+                message => ShowStatus(message));
 
             _officeMenu = new LemonMenu("Office")
             {
@@ -212,6 +224,11 @@ namespace LSOL
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
+            _npcLogisticsController = new NpcLogisticsController(
+                _controls,
+                _npcLogisticsManager,
+                OpenOfficeMenu,
+                message => ShowStatus(message));
             _overviewMenuController = new OverviewMenuController(
                 _controls,
                 _industryManager,
@@ -289,6 +306,7 @@ namespace LSOL
                     || _industryPurchaseMenu.IsOpen
                     || _difficultyMenu.IsOpen
                     || _debugMenu.IsOpen
+                    || _npcLogisticsController.AnyMenuOpen
                     || _overviewMenuController.AnyMenuOpen
                     || _industryTabletController.IsOpen;
             }
@@ -340,6 +358,8 @@ namespace LSOL
                 _lastBlipRefreshMs = gameTime;
                 _blipLifecycleManager.Refresh();
             }
+
+            _npcLogisticsManager.Update(gameTime);
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -564,6 +584,12 @@ namespace LSOL
                 return true;
             }
 
+            if (_npcLogisticsController.AnyMenuOpen)
+            {
+                _npcLogisticsController.HandleKey(key);
+                return true;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.HandleKey(key, _controls);
@@ -627,6 +653,7 @@ namespace LSOL
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
+            _npcLogisticsController.Draw();
 
             _overviewMenuController.Draw();
             if (_overviewMenuController.AnyMenuOpen)
@@ -634,7 +661,7 @@ namespace LSOL
                 return;
             }
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _npcLogisticsController.AnyMenuOpen)
             {
                 return;
             }
@@ -1228,6 +1255,7 @@ namespace LSOL
         private void CloseNonOfficeMenus()
         {
             CloseOverviewMenus();
+            _npcLogisticsController.Close();
             _vehicleCargoMenu.Close();
             _upgradeMenu.Close();
             _modControlMenu.Close();
@@ -1243,6 +1271,7 @@ namespace LSOL
         private void CloseAllMenus()
         {
             CloseOverviewMenus();
+            _npcLogisticsController.Close();
             _modControlMenu.Close();
             _savingOptionsMenu.Close();
             _newSaveSetupMenu.Close();
@@ -2400,7 +2429,37 @@ namespace LSOL
                     DetailFactory = CurrentVehicleSpawnerSelectionDetail,
                     OnActivate = OpenVehicleCargoMenu,
                 },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Hire NPC",
+                    DetailFactory = CurrentNpcHiringDetail,
+                    OnActivate = OpenNpcHiringMenu,
+                },
             });
+        }
+
+        private string CurrentNpcHiringDetail()
+        {
+            var routeCount = _npcLogisticsManager.Contracts.Count;
+            return routeCount == 1
+                ? "1 active logistics route. Open the tablet-style NPC manager."
+                : string.Format("{0} active logistics routes. Open the tablet-style NPC manager.", routeCount);
+        }
+
+        private void OpenNpcHiringMenu()
+        {
+            _officeMenu.Close();
+            _npcLogisticsController.OpenRootMenu();
+        }
+
+        private void DeductProfit(float amount)
+        {
+            if (amount <= 0f)
+            {
+                return;
+            }
+
+            _profit = Math.Max(0f, _profit - amount);
         }
 
         private void RebuildVehicleCargoMenuItems()
@@ -3918,6 +3977,7 @@ namespace LSOL
         private void OnAborted(object sender, EventArgs e)
         {
             TrySaveIndustryPersistence();
+            _npcLogisticsManager.ClearAll();
             DestroyMapBlips();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
