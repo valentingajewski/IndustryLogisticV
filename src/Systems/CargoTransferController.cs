@@ -89,6 +89,11 @@ namespace LSOL.Systems
                 return;
             }
 
+            if (!EnsureIndustryTransportPermit(industry))
+            {
+                return;
+            }
+
             var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
             var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
             if (targetLoadTons <= 0.001f)
@@ -170,6 +175,11 @@ namespace LSOL.Systems
             Action beforeStart,
             Action<float> addProfit)
         {
+            if (!EnsureIndustryTransportPermit(industry))
+            {
+                return;
+            }
+
             if (cargoState.IsEmpty)
             {
                 _showStatus("Vehicle is empty.");
@@ -252,6 +262,11 @@ namespace LSOL.Systems
             string selectedProduct,
             Action beforeStart)
         {
+            if (!EnsureIndustryTransportPermit(industry))
+            {
+                return;
+            }
+
             var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
             var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
             if (targetLoadTons <= 0.001f)
@@ -329,6 +344,11 @@ namespace LSOL.Systems
             Action beforeStart,
             Action<float> addProfit)
         {
+            if (!EnsureIndustryTransportPermit(industry))
+            {
+                return;
+            }
+
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
             var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(cargoState.CargoType)
@@ -417,6 +437,19 @@ namespace LSOL.Systems
                 && industry.Inputs != null
                 && industry.Inputs.Count == 1
                 && industry.Inputs.Contains("Omega");
+        }
+
+        private bool EnsureIndustryTransportPermit(Industry industry)
+        {
+            if (!_industryManager.RequiresContractorPermit(industry))
+            {
+                return true;
+            }
+
+            _showStatus(string.Format(
+                "Purchase the contractor permit for {0} before transporting cargo to or from it.",
+                industry.Name));
+            return false;
         }
 
         private void StartTransfer(string label, int durationMs, Action complete, Action<float> onProgress = null)

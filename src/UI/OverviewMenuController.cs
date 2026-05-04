@@ -20,21 +20,40 @@ namespace LSOL.UI
         private readonly ControlBindings _controls;
         private readonly IndustryManager _industryManager;
         private readonly Action _closeAllMenus;
+        private readonly Func<bool> _isLicensingEnabled;
+        private readonly Func<float> _getCurrentProfit;
+        private readonly Func<Industry, string> _purchaseContractorPermit;
+        private readonly Action<string> _showStatus;
         private readonly SimpleMenu _networkOverviewMenu;
         private readonly SimpleMenu _industryOverviewMenu;
+        private readonly SimpleMenu _industryStatisticsMenu;
+        private readonly SimpleMenu _industryPermitMenu;
+        private readonly SimpleMenu _industryPermitConfirmMenu;
         private readonly SimpleMenu _storeOverviewMenu;
         private readonly SimpleMenu _industryDetailMenu;
         private readonly SimpleMenu _gasStationOverviewMenu;
 
         private Industry _inspectedIndustry;
+        private Industry _pendingPermitIndustry;
         private int _industryDetailStatsScrollIndex;
         private OverviewDetailReturnMenu _detailReturnMenu;
 
-        public OverviewMenuController(ControlBindings controls, IndustryManager industryManager, Action closeAllMenus)
+        public OverviewMenuController(
+            ControlBindings controls,
+            IndustryManager industryManager,
+            Action closeAllMenus,
+            Func<bool> isLicensingEnabled,
+            Func<float> getCurrentProfit,
+            Func<Industry, string> purchaseContractorPermit,
+            Action<string> showStatus)
         {
             _controls = controls;
             _industryManager = industryManager;
             _closeAllMenus = closeAllMenus;
+            _isLicensingEnabled = isLicensingEnabled;
+            _getCurrentProfit = getCurrentProfit;
+            _purchaseContractorPermit = purchaseContractorPermit;
+            _showStatus = showStatus;
 
             _networkOverviewMenu = new SimpleMenu("Network Overview")
             {
@@ -50,9 +69,48 @@ namespace LSOL.UI
             };
             _industryOverviewMenu = new SimpleMenu("Industries Overview")
             {
+                Subtitle = "Permits and statistics for tracked industries",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.80f,
+                TabletAlignRight = false,
+                TabletCaptionScale = 0.46f,
+                TabletDetailScale = 0.285f,
+                TabletCaptionOffsetY = 18f,
+                TabletDetailOffsetY = 49f,
+                TabletMinRowHeight = 68f,
+                MaxVisibleItems = 6,
+            };
+            _industryStatisticsMenu = new SimpleMenu("Industry Statistics")
+            {
                 Subtitle = "Select an industry to inspect storage and production",
                 Theme = SimpleMenuTheme.Tablet,
                 TabletWidthScale = 0.98f,
+                TabletAlignRight = false,
+                TabletCaptionScale = 0.46f,
+                TabletDetailScale = 0.285f,
+                TabletCaptionOffsetY = 18f,
+                TabletDetailOffsetY = 49f,
+                TabletMinRowHeight = 68f,
+                MaxVisibleItems = 6,
+            };
+            _industryPermitMenu = new SimpleMenu("Contractor Permit")
+            {
+                Subtitle = "Purchase industry transport permits",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.98f,
+                TabletAlignRight = false,
+                TabletCaptionScale = 0.46f,
+                TabletDetailScale = 0.285f,
+                TabletCaptionOffsetY = 18f,
+                TabletDetailOffsetY = 49f,
+                TabletMinRowHeight = 68f,
+                MaxVisibleItems = 6,
+            };
+            _industryPermitConfirmMenu = new SimpleMenu("Contractor Permit")
+            {
+                Subtitle = "Confirm permit purchase",
+                Theme = SimpleMenuTheme.Tablet,
+                TabletWidthScale = 0.82f,
                 TabletAlignRight = false,
                 TabletCaptionScale = 0.46f,
                 TabletDetailScale = 0.285f,
@@ -99,7 +157,17 @@ namespace LSOL.UI
 
         public bool AnyMenuOpen
         {
-            get { return _networkOverviewMenu.IsOpen || _industryOverviewMenu.IsOpen || _storeOverviewMenu.IsOpen || _industryDetailMenu.IsOpen || _gasStationOverviewMenu.IsOpen; }
+            get
+            {
+                return _networkOverviewMenu.IsOpen
+                    || _industryOverviewMenu.IsOpen
+                    || _industryStatisticsMenu.IsOpen
+                    || _industryPermitMenu.IsOpen
+                    || _industryPermitConfirmMenu.IsOpen
+                    || _storeOverviewMenu.IsOpen
+                    || _industryDetailMenu.IsOpen
+                    || _gasStationOverviewMenu.IsOpen;
+            }
         }
 
         public void Toggle()
@@ -118,6 +186,9 @@ namespace LSOL.UI
         {
             _networkOverviewMenu.Close();
             _industryOverviewMenu.Close();
+            _industryStatisticsMenu.Close();
+            _industryPermitMenu.Close();
+            _industryPermitConfirmMenu.Close();
             _storeOverviewMenu.Close();
             _industryDetailMenu.Close();
             _gasStationOverviewMenu.Close();
@@ -125,6 +196,18 @@ namespace LSOL.UI
 
         public bool HandleKey(WinForms.Keys key)
         {
+            if (_industryPermitConfirmMenu.IsOpen)
+            {
+                if (IsBackMenuKey(key))
+                {
+                    OpenIndustryPermitMenu();
+                    return true;
+                }
+
+                _industryPermitConfirmMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_industryDetailMenu.IsOpen)
             {
                 if (IsBackMenuKey(key) || key == _controls.MenuSelect)
@@ -157,6 +240,30 @@ namespace LSOL.UI
                 }
 
                 _industryOverviewMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_industryStatisticsMenu.IsOpen)
+            {
+                if (IsBackMenuKey(key))
+                {
+                    OpenIndustryOverviewMenu();
+                    return true;
+                }
+
+                _industryStatisticsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_industryPermitMenu.IsOpen)
+            {
+                if (IsBackMenuKey(key))
+                {
+                    OpenIndustryOverviewMenu();
+                    return true;
+                }
+
+                _industryPermitMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -210,6 +317,24 @@ namespace LSOL.UI
                 return;
             }
 
+            if (_industryStatisticsMenu.IsOpen)
+            {
+                _industryStatisticsMenu.Draw();
+                return;
+            }
+
+            if (_industryPermitMenu.IsOpen)
+            {
+                _industryPermitMenu.Draw();
+                return;
+            }
+
+            if (_industryPermitConfirmMenu.IsOpen)
+            {
+                _industryPermitConfirmMenu.Draw();
+                return;
+            }
+
             if (_storeOverviewMenu.IsOpen)
             {
                 _storeOverviewMenu.Draw();
@@ -240,6 +365,52 @@ namespace LSOL.UI
             Close();
             RebuildIndustryOverviewMenuItems();
             _industryOverviewMenu.Open();
+        }
+
+        private void OpenIndustryStatisticsMenu()
+        {
+            Close();
+            RebuildIndustryStatisticsMenuItems();
+            _industryStatisticsMenu.Open();
+        }
+
+        private void OpenIndustryPermitMenu()
+        {
+            if (!IsLicensingEnabled())
+            {
+                _showStatus?.Invoke("Licensing system is disabled for this save.");
+                OpenIndustryOverviewMenu();
+                return;
+            }
+
+            Close();
+            RebuildIndustryPermitMenuItems();
+            _industryPermitMenu.Open();
+        }
+
+        private void OpenIndustryPermitConfirmMenu(Industry industry)
+        {
+            if (industry == null)
+            {
+                return;
+            }
+
+            if (!industry.RequiresContractorPermit)
+            {
+                _showStatus?.Invoke(string.Format("{0} does not require a contractor permit.", industry.Name));
+                return;
+            }
+
+            if (industry.HasContractorPermit)
+            {
+                _showStatus?.Invoke(string.Format("Contractor permit already purchased for {0}.", industry.Name));
+                return;
+            }
+
+            _pendingPermitIndustry = industry;
+            Close();
+            RebuildIndustryPermitConfirmMenuItems();
+            _industryPermitConfirmMenu.Open();
         }
 
         private void OpenStoreOverviewMenu()
@@ -283,7 +454,7 @@ namespace LSOL.UI
                     OpenStoreOverviewMenu();
                     break;
                 default:
-                    OpenIndustryOverviewMenu();
+                    OpenIndustryStatisticsMenu();
                     break;
             }
         }
@@ -296,8 +467,8 @@ namespace LSOL.UI
             {
                 new MenuItem
                 {
-                    CaptionFactory = () => "INDUSTRIES OVERVIEW",
-                    DetailFactory = () => string.Format("{0} tracked industry locations", GetIndustriesForOverview().Count),
+                    CaptionFactory = () => "INDUSTRY",
+                    DetailFactory = () => string.Format("Permits and statistics for {0} tracked industry locations", GetIndustriesForOverview().Count),
                     IdleBackgroundColor = Color.FromArgb(170, 46, 66, 50),
                     SelectedBackgroundColor = Color.FromArgb(205, 85, 124, 94),
                     OnActivate = OpenIndustryOverviewMenu,
@@ -334,6 +505,53 @@ namespace LSOL.UI
             var industries = GetIndustriesForOverview();
             var items = new List<MenuItem>();
 
+            if (industries.Count == 0)
+            {
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => "No industries available",
+                    DetailFactory = () => "No industry nodes are currently configured.",
+                });
+            }
+
+            if (industries.Count > 0 && IsLicensingEnabled())
+            {
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => "Contractor Permit",
+                    DetailFactory = () => string.Format("Review permit prices for {0} industries.", industries.Count),
+                    OnActivate = OpenIndustryPermitMenu,
+                });
+            }
+
+            if (industries.Count > 0)
+            {
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => "Industry Statistics",
+                    DetailFactory = () => string.Format("Open live statistics for {0} industries.", industries.Count),
+                    OnActivate = OpenIndustryStatisticsMenu,
+                });
+            }
+
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = OpenNetworkOverviewMenu,
+            });
+
+            _industryOverviewMenu.Title = "Industry";
+            _industryOverviewMenu.Subtitle = IsLicensingEnabled()
+                ? "Permits and live industry statistics"
+                : "Live industry statistics";
+            _industryOverviewMenu.SetItems(items);
+        }
+
+        private void RebuildIndustryStatisticsMenuItems()
+        {
+            var industries = GetIndustriesForOverview();
+            var items = new List<MenuItem>();
+
             for (int i = 0; i < industries.Count; i++)
             {
                 var industry = industries[i];
@@ -357,12 +575,113 @@ namespace LSOL.UI
             items.Add(new MenuItem
             {
                 CaptionFactory = () => "Back",
-                OnActivate = OpenNetworkOverviewMenu,
+                OnActivate = OpenIndustryOverviewMenu,
             });
 
-            _industryOverviewMenu.Title = "Industries Overview";
-            _industryOverviewMenu.Subtitle = "Select an industry to inspect storage and production";
-            _industryOverviewMenu.SetItems(items);
+            _industryStatisticsMenu.Title = "Industry Statistics";
+            _industryStatisticsMenu.Subtitle = "Select an industry to inspect storage and production";
+            _industryStatisticsMenu.SetItems(items);
+        }
+
+        private void RebuildIndustryPermitMenuItems()
+        {
+            var industries = GetIndustriesForOverview();
+            var items = new List<MenuItem>();
+
+            for (int i = 0; i < industries.Count; i++)
+            {
+                var industry = industries[i];
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => GetIndustryPermitCaption(industry),
+                    DetailFactory = () => GetIndustryPermitDetail(industry),
+                    OnActivate = () => OpenIndustryPermitConfirmMenu(industry),
+                });
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new MenuItem
+                {
+                    CaptionFactory = () => "No industries available",
+                    DetailFactory = () => "No industry nodes are currently configured.",
+                });
+            }
+
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = OpenIndustryOverviewMenu,
+            });
+
+            _industryPermitMenu.Title = "Contractor Permit";
+            _industryPermitMenu.Subtitle = "Select an industry permit to purchase";
+            _industryPermitMenu.SetItems(items);
+        }
+
+        private void RebuildIndustryPermitConfirmMenuItems()
+        {
+            var industry = _pendingPermitIndustry;
+            if (industry == null)
+            {
+                _industryPermitConfirmMenu.Title = "Contractor Permit";
+                _industryPermitConfirmMenu.Subtitle = "No industry selected";
+                _industryPermitConfirmMenu.SetItems(new[]
+                {
+                    new MenuItem
+                    {
+                        CaptionFactory = () => "Back",
+                        OnActivate = OpenIndustryPermitMenu,
+                    },
+                });
+                return;
+            }
+
+            _industryPermitConfirmMenu.Title = "Contractor Permit";
+            _industryPermitConfirmMenu.Subtitle = string.Format("Purchase permit for {0}?", industry.Name);
+            _industryPermitConfirmMenu.SetItems(new[]
+            {
+                new MenuItem
+                {
+                    CaptionFactory = () => "Yes",
+                    DetailFactory = () => GetIndustryPermitConfirmationDetail(industry),
+                    OnActivate = ConfirmIndustryPermitPurchase,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "No",
+                    DetailFactory = () => "Return to the permit list.",
+                    OnActivate = OpenIndustryPermitMenu,
+                },
+            });
+        }
+
+        private void ConfirmIndustryPermitPurchase()
+        {
+            var industry = _pendingPermitIndustry;
+            if (industry == null)
+            {
+                OpenIndustryPermitMenu();
+                return;
+            }
+
+            var result = _purchaseContractorPermit != null
+                ? _purchaseContractorPermit(industry)
+                : "Unable to purchase contractor permit.";
+
+            if (!string.IsNullOrWhiteSpace(result))
+            {
+                _showStatus?.Invoke(result);
+            }
+
+            if (_industryManager.RequiresContractorPermit(industry))
+            {
+                RebuildIndustryPermitConfirmMenuItems();
+                return;
+            }
+
+            _pendingPermitIndustry = null;
+            OpenIndustryPermitMenu();
         }
 
         private void RebuildStoreOverviewMenuItems()
@@ -495,6 +814,61 @@ namespace LSOL.UI
             return string.Format("{0} {1}", industry.Name, ownershipTag);
         }
 
+        private string GetIndustryPermitCaption(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            var permitTag = !industry.RequiresContractorPermit
+                ? "~g~[OPEN]~s~"
+                : (industry.HasContractorPermit ? "~g~[PERMIT]~s~" : "~r~[LOCKED]~s~");
+
+            return string.Format("{0} {1}", industry.Name, permitTag);
+        }
+
+        private string GetIndustryPermitDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            if (!industry.RequiresContractorPermit)
+            {
+                return "No permit required for this industry.";
+            }
+
+            var detail = string.Format("Permit {0}", FormatMoney(industry.IndustryLicencePrice));
+            if (industry.HasContractorPermit)
+            {
+                return detail + " | Transport unlocked.";
+            }
+
+            return detail;
+        }
+
+        private string GetIndustryPermitConfirmationDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            var detail = string.Format(
+                "Pay {0} to unlock cargo transport to and from this industry.",
+                FormatMoney(industry.IndustryLicencePrice));
+
+            var currentProfit = GetCurrentProfit();
+            if (currentProfit < industry.IndustryLicencePrice)
+            {
+                detail += string.Format(" Need {0} more.", FormatMoney(industry.IndustryLicencePrice - currentProfit));
+            }
+
+            return detail;
+        }
+
         private static string GetStoreOverviewDetail(Industry industry)
         {
             if (industry == null)
@@ -522,6 +896,22 @@ namespace LSOL.UI
         private bool IsBackMenuKey(WinForms.Keys key)
         {
             return key == _controls.MenuBack || key == WinForms.Keys.Escape;
+        }
+
+        private bool IsLicensingEnabled()
+        {
+            return _isLicensingEnabled != null && _isLicensingEnabled();
+        }
+
+        private float GetCurrentProfit()
+        {
+            return _getCurrentProfit != null ? _getCurrentProfit() : 0f;
+        }
+
+        private static string FormatMoney(float amount)
+        {
+            var absolute = Math.Abs(amount).ToString("0,0");
+            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
         }
 
         private static bool IsPetrolServiceStation(Industry industry)

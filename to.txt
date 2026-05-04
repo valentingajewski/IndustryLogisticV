@@ -1,8 +1,28 @@
 - Fuel system
 
 - Licensing mechanism:
-    - You will add a new mechanic where the player will need to purchase a licence to move resource to a specific industry.
-    - Add a "Licensing options" button in the F8 menu
-        - This button list all industry of the game mod with their License price which can be found under IndustryLicencePrice in the LSOL.ini
-        - Each industry is a button which can be pressed. This will open a new window (based from the F8 menu theme) which will ask the player really want to pay for this licence. Add 2 buttons "Yes" and "No".
-    - Add this new mechanic as a difficulty option. When enabled, the license button and mechanics are enabled. When disabled, the button is not displayed and the licensing mechanics are disabled
+    - You will add a new mechanic where the player will need to purchase a permit to move resource to a specific industry.
+    - In the F8 button, in the Industry button, add 2 buttons ("Contractor permit", "Industry statistics")
+        - The "Contractor permit" button list all industry of the game mod with their permit price which can be found under IndustryLicencePrice in the LSOL.ini
+            - Each industry is a button which can be pressed. This will open a new window (based from the F8 menu theme) which will ask if the player really want to pay for this permit. Add 2 buttons "Yes" and "No".
+        - The "Industry statistics" button will open the current industry's stats
+    - Add this new mechanic as a difficulty option. When enabled, the permit button and mechanics are enabled. When disabled, the button is not displayed and the permit mechanics are disabled
+
+1. Core Logic & Mechanics
+- Permit Requirement: Implement a "Contractor Permit" mechanic. When active, players must purchase a specific permit for an industry before they are allowed to transport resources form or to it.
+- Data Sourcing: Permit prices for each industry should be dynamically pulled from the LSOL.ini file under the IndustryLicencePrice key.
+
+2. UI Integration (F8 Menu)
+Within the Industry sub-menu of the F8 Key interface, integrate the following two buttons:
+- Contractor Permit:
+    - Function: Displays a list of all industries available in the mod alongside their respective permit prices.
+    - Interaction: Clicking an industry entry triggers a confirmation modal (styled after the F8 menu theme).
+    - Confirmation Modal: Must explicitly ask the player if they wish to purchase the permit.
+    - Actions: Provide "Yes" (execute purchase and unlock transport) and "No" (close modal) buttons.
+- Industry Statistics:
+    - Function: Opens a dedicated window displaying real-time data and metrics for the currently selected or active industry. Use the current Industry stats
+
+3. Configuration & Difficulty Settings
+- Toggle Functionality: Add the Licensing System as a toggleable Difficulty Option.
+- Active State: When enabled, all permit requirements and UI elements (buttons/menus) are fully functional.
+- Inactive State: When disabled, the "Contractor Permit" button is hidden from the UI, and all resource transport restrictions are bypassed.

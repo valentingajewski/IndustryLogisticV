@@ -55,6 +55,7 @@ namespace LSOL.Systems
                 var outputStorageModuleLevel = ParseInt(ini.GetString(section, "OutputStorageModuleLevel", industry.OutputStorageModuleLevel.ToString(CultureInfo.InvariantCulture)), industry.OutputStorageModuleLevel);
                 var omegaStorageModuleLevel = ParseInt(ini.GetString(section, "OmegaStorageModuleLevel", industry.OmegaStorageModuleLevel.ToString(CultureInfo.InvariantCulture)), industry.OmegaStorageModuleLevel);
                 var isOwned = ini.GetBool(section, "IsOwned", industry.IsOwned);
+                var hasContractorPermit = ini.GetBool(section, "HasContractorPermit", industry.HasContractorPermit);
 
                 var bufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
                 var block = ini.GetSection(section);
@@ -86,7 +87,8 @@ namespace LSOL.Systems
                     inputStorageModuleLevel,
                     outputStorageModuleLevel,
                     omegaStorageModuleLevel,
-                    isOwned);
+                    isOwned,
+                    hasContractorPermit);
 
                 restoredCount += 1;
             }
@@ -116,7 +118,7 @@ namespace LSOL.Systems
             using (var writer = new StreamWriter(filePath, false))
             {
                 writer.WriteLine("[Meta]");
-                writer.WriteLine("Version={0}", metadata != null ? 2 : 1);
+                writer.WriteLine("Version={0}", metadata != null ? 3 : 1);
                 writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
                 if (metadata != null)
                 {
@@ -125,6 +127,7 @@ namespace LSOL.Systems
                     writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
                 }
                 writer.WriteLine();
@@ -148,6 +151,7 @@ namespace LSOL.Systems
                     writer.WriteLine("OutputStorageModuleLevel={0}", industry.OutputStorageModuleLevel);
                     writer.WriteLine("OmegaStorageModuleLevel={0}", industry.OmegaStorageModuleLevel);
                     writer.WriteLine("IsOwned={0}", industry.IsOwned ? "true" : "false");
+                    writer.WriteLine("HasContractorPermit={0}", industry.HasContractorPermit ? "true" : "false");
 
                     foreach (var stock in industry.BufferStorage.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
                     {
@@ -179,6 +183,7 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "VehicleFuelDifficultyEnabled") ||
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
                 ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
+                ini.HasKey("Meta", "LicensingDifficultyEnabled") ||
                 ini.HasKey("Meta", "DifficultySettingsLocked");
 
             metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
@@ -186,6 +191,7 @@ namespace LSOL.Systems
             metadata.VehicleFuelDifficultyEnabled = ini.GetBool("Meta", "VehicleFuelDifficultyEnabled", false);
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
             metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
+            metadata.LicensingDifficultyEnabled = ini.GetBool("Meta", "LicensingDifficultyEnabled", false);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             return metadata;
         }
@@ -257,6 +263,7 @@ namespace LSOL.Systems
         public bool VehicleFuelDifficultyEnabled { get; set; }
         public bool CargoDamageDifficultyEnabled { get; set; }
         public bool IndustryPricingDifficultyEnabled { get; set; }
+        public bool LicensingDifficultyEnabled { get; set; }
         public bool DifficultySettingsLocked { get; set; }
     }
 }

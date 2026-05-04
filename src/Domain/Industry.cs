@@ -27,8 +27,10 @@ namespace LSOL.Domain
             OutputCapacityTons = Math.Max(1f, config.OutputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, InputCapacityTons * Math.Max(0.01f, omegaCapacityMultiplier));
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
+            IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
             IsOwned = config.IsOwned || IndustryPrice <= 0f;
+            HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f;
 
             _recipes = recipes ?? new List<ProductionRecipe>();
             _supportsOmegaBoost = supportsOmegaBoost;
@@ -66,8 +68,10 @@ namespace LSOL.Domain
         public float OutputCapacityTons { get; private set; }
         public float OmegaCapacityTons { get; private set; }
         public float IndustryPrice { get; }
+        public float IndustryLicencePrice { get; }
         public float IndustryOwnerCut { get; }
         public bool IsOwned { get; private set; }
+        public bool HasContractorPermit { get; private set; }
         public float LastUtilizationPercent { get; private set; }
         public float CurrentOutputPerHourTons { get; private set; }
         public int ProductionModuleLevel { get; private set; }
@@ -106,6 +110,11 @@ namespace LSOL.Domain
         public bool RequiresPurchase
         {
             get { return IndustryPrice > 0f; }
+        }
+
+        public bool RequiresContractorPermit
+        {
+            get { return IndustryLicencePrice > 0f; }
         }
 
         public float GetStock(string commodity)
@@ -509,9 +518,44 @@ namespace LSOL.Domain
             return true;
         }
 
+        public bool TryPurchaseContractorPermit(ref float profit, out float cost, out string result)
+        {
+            cost = IndustryLicencePrice;
+            result = string.Empty;
+
+            if (!RequiresContractorPermit)
+            {
+                SetContractorPermitOwned(true);
+                result = string.Format("{0} does not require a contractor permit.", Name);
+                return true;
+            }
+
+            if (HasContractorPermit)
+            {
+                result = string.Format("Contractor permit already purchased for {0}.", Name);
+                return false;
+            }
+
+            if (profit < cost)
+            {
+                result = string.Format("Not enough profit. Permit cost: ${0:0}", cost);
+                return false;
+            }
+
+            profit -= cost;
+            SetContractorPermitOwned(true);
+            result = string.Format("Purchased contractor permit for {0} for ${1:0}.", Name, cost);
+            return true;
+        }
+
         public void SetOwned(bool isOwned)
         {
             IsOwned = isOwned || !RequiresPurchase;
+        }
+
+        public void SetContractorPermitOwned(bool hasContractorPermit)
+        {
+            HasContractorPermit = hasContractorPermit || !RequiresContractorPermit;
         }
 
         public void SetProductionRate(float productionRate)
@@ -634,7 +678,8 @@ namespace LSOL.Domain
             int inputStorageModuleLevel,
             int outputStorageModuleLevel,
             int omegaStorageModuleLevel,
-            bool isOwned = false)
+            bool isOwned = false,
+            bool hasContractorPermit = false)
         {
             if (bufferStorage != null)
             {
@@ -662,6 +707,7 @@ namespace LSOL.Domain
 
             OmegaStorage = Math.Max(0f, omegaStorage);
             SetOwned(isOwned);
+            SetContractorPermitOwned(hasContractorPermit);
             ClampBuffersToCapacity();
             LastUtilizationPercent = 0f;
             CurrentOutputPerHourTons = 0f;

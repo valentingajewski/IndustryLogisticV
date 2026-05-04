@@ -101,6 +101,7 @@ namespace LSOL.Config
                 }
 
                 var industryPrice = Math.Max(0f, legacyIni.GetFloat(location.Id, "IndustryPrice", location.IndustryPrice));
+                var industryLicencePrice = Math.Max(0f, legacyIni.GetFloat(location.Id, "IndustryLicencePrice", 0f));
                 var industryOwnerCut = Math.Max(0f, Math.Min(1f, legacyIni.GetFloat(location.Id, "IndustryOwnerCut", location.IndustryOwnerCut)));
 
                 config.IndustryConfigs[pair.Key] = new IndustryConfig
@@ -117,8 +118,10 @@ namespace LSOL.Config
                     StartingTankRatio = location.StartingTankRatio,
                     Density = location.Density,
                     IndustryPrice = industryPrice,
+                    IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
                     IsOwned = industryPrice <= 0f,
+                    HasContractorPermit = industryLicencePrice <= 0f,
                 };
             }
         }
@@ -161,6 +164,7 @@ namespace LSOL.Config
                 var startingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f)));
                 var density = ini.GetString(section, "Density", "medium");
                 var industryPrice = Math.Max(0f, ini.GetFloat(section, "IndustryPrice", 0f));
+                var industryLicencePrice = Math.Max(0f, ini.GetFloat(section, "IndustryLicencePrice", 0f));
                 var industryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "IndustryOwnerCut", 0.5f)));
 
                 var productionRate = ResolveConfiguredProductionRate(ini, section, 30f);
@@ -185,8 +189,10 @@ namespace LSOL.Config
                     StartingTankRatio = startingTankRatio,
                     Density = density,
                     IndustryPrice = industryPrice,
+                    IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
                     IsOwned = industryPrice <= 0f,
+                    HasContractorPermit = industryLicencePrice <= 0f,
                 };
             }
         }
@@ -211,6 +217,7 @@ namespace LSOL.Config
                 var productionRate = ResolveProductionRate(ini, location);
 
                 var industryPrice = Math.Max(0f, ini.GetFloat(location.Id, "IndustryPrice", location.IndustryPrice));
+                var industryLicencePrice = Math.Max(0f, ini.GetFloat(location.Id, "IndustryLicencePrice", 0f));
                 var industryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "IndustryOwnerCut", location.IndustryOwnerCut)));
 
                 config.IndustryConfigs[location.Id] = new IndustryConfig
@@ -229,8 +236,10 @@ namespace LSOL.Config
                     StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "StartingTank", location.StartingTankRatio))),
                     Density = ini.GetString(location.Id, "Density", location.Density ?? "medium"),
                     IndustryPrice = industryPrice,
+                    IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
                     IsOwned = industryPrice <= 0f,
+                    HasContractorPermit = industryLicencePrice <= 0f,
                 };
             }
         }

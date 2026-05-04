@@ -105,6 +105,8 @@ namespace LSOL
         private bool _pendingCargoDamageDifficultyEnabled;
         private bool _industryPricingDifficultyEnabled;
         private bool _pendingIndustryPricingDifficultyEnabled;
+        private bool _licensingDifficultyEnabled;
+        private bool _pendingLicensingDifficultyEnabled;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
 
@@ -210,7 +212,14 @@ namespace LSOL
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
-            _overviewMenuController = new OverviewMenuController(_controls, _industryManager, CloseAllMenus);
+            _overviewMenuController = new OverviewMenuController(
+                _controls,
+                _industryManager,
+                CloseAllMenus,
+                () => _licensingDifficultyEnabled,
+                () => _profit,
+                PurchaseContractorPermitFromOverview,
+                message => ShowStatus(message));
             _industryTabletController = new IndustryTabletController(
                 _fleetManager,
                 _industryManager,
@@ -236,15 +245,17 @@ namespace LSOL
             _difficultySettingsLocked = false;
             _cargoDamageDifficultyEnabled = true;
             _industryPricingDifficultyEnabled = false;
+            _licensingDifficultyEnabled = false;
             _vehicleFuelDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
+            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingSaveName = string.Empty;
             _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
             _saveSlotMenuAction = SaveSlotMenuAction.Load;
-            _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
+            ApplyDifficultySettingsToSystems();
 
             if (_industryPersistenceEnabled)
             {
@@ -1353,6 +1364,13 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "Licensing system",
+                    DetailFactory = () => "Require contractor permits for industry cargo transport.",
+                    CheckboxStateFactory = () => _pendingLicensingDifficultyEnabled,
+                    OnActivate = TogglePendingLicensingSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => "Create save",
                     DetailFactory = () => string.Format("Starts a fresh game as {0}.state.ini", _pendingSaveName),
                     OnActivate = FinalizeNewSave,
@@ -1633,6 +1651,13 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "Licensing system",
+                    DetailFactory = () => "Require contractor permits before transporting cargo to or from industries.",
+                    CheckboxStateFactory = () => _licensingDifficultyEnabled,
+                    OnActivate = ToggleLicensingSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => "Back",
                     OnActivate = ReturnToModControlMenu,
                 },
@@ -1688,7 +1713,7 @@ namespace LSOL
         {
             return _difficultySettingsLocked
                 ? "Locked by the active save. Create a new save to change these settings."
-                : "Change vehicle fuel, cargo damage, and industry pricing settings.";
+                : "Change vehicle fuel, cargo damage, industry pricing, and licensing settings.";
         }
 
         private string CurrentSaveGameDetail()
@@ -1750,6 +1775,11 @@ namespace LSOL
             _pendingIndustryPricingDifficultyEnabled = !_pendingIndustryPricingDifficultyEnabled;
         }
 
+        private void TogglePendingLicensingSetting()
+        {
+            _pendingLicensingDifficultyEnabled = !_pendingLicensingDifficultyEnabled;
+        }
+
         private void ToggleVehicleFuelSetting()
         {
             if (_difficultySettingsLocked)
@@ -1781,6 +1811,18 @@ namespace LSOL
             }
 
             _industryPricingDifficultyEnabled = !_industryPricingDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
+        }
+
+        private void ToggleLicensingSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _licensingDifficultyEnabled = !_licensingDifficultyEnabled;
             ApplyDifficultySettingsToSystems();
         }
 
@@ -1836,6 +1878,7 @@ namespace LSOL
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
+            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
 
             _savingOptionsMenu.Close();
             RebuildNewSaveSetupMenuItems();
@@ -1864,6 +1907,7 @@ namespace LSOL
             _vehicleFuelDifficultyEnabled = _pendingVehicleFuelDifficultyEnabled;
             _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
             _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
+            _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
             ApplyDifficultySettingsToSystems();
@@ -1879,6 +1923,7 @@ namespace LSOL
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
+            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             ReturnToSavingOptionsMenu();
             ShowStatus(string.Format("Created save '{0}'.", createdSaveName), 4000);
         }
@@ -1948,6 +1993,7 @@ namespace LSOL
                     _vehicleFuelDifficultyEnabled = false;
                     _cargoDamageDifficultyEnabled = true;
                     _industryPricingDifficultyEnabled = false;
+                    _licensingDifficultyEnabled = false;
                     _difficultySettingsLocked = false;
                     ApplyDifficultySettingsToSystems();
                 }
@@ -1956,6 +2002,7 @@ namespace LSOL
                 _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
                 _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
                 _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
+                _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             }
 
             RebuildSaveSlotsMenuItems();
@@ -2074,6 +2121,7 @@ namespace LSOL
                 VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
                 IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
+                LicensingDifficultyEnabled = _licensingDifficultyEnabled,
                 DifficultySettingsLocked = _difficultySettingsLocked,
             };
         }
@@ -2087,11 +2135,13 @@ namespace LSOL
                 _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
                 _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
+                _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
                 _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
             }
             else
             {
                 _industryPricingDifficultyEnabled = false;
+                _licensingDifficultyEnabled = false;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
@@ -2099,6 +2149,7 @@ namespace LSOL
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
+            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             ApplyDifficultySettingsToSystems();
             RebuildModControlMenuItems();
             RebuildSavingOptionsMenuItems();
@@ -2108,11 +2159,30 @@ namespace LSOL
         private void ApplyDifficultySettingsToSystems()
         {
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
+            _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
 
             if (_upgradeMenu.IsOpen)
             {
                 RebuildUpgradeMenuItems();
             }
+        }
+
+        private string PurchaseContractorPermitFromOverview(Industry industry)
+        {
+            if (industry == null)
+            {
+                return "No industry selected.";
+            }
+
+            if (!_licensingDifficultyEnabled)
+            {
+                return "Licensing system is disabled for this save.";
+            }
+
+            float cost;
+            string result;
+            industry.TryPurchaseContractorPermit(ref _profit, out cost, out result);
+            return result;
         }
 
         private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)

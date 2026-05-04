@@ -14,6 +14,7 @@ namespace LSOL.Systems
         private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
         private readonly float _industryOmegaCapacityMultiplier;
         private bool _industryPricingDifficultyEnabled;
+        private bool _licensingDifficultyEnabled;
 
         public IndustryManager(ModConfig config)
         {
@@ -40,8 +41,10 @@ namespace LSOL.Systems
                     StartingTankRatio = industryConfig.StartingTankRatio,
                     Density = industryConfig.Density,
                     IndustryPrice = industryConfig.IndustryPrice,
+                    IndustryLicencePrice = industryConfig.IndustryLicencePrice,
                     IndustryOwnerCut = industryConfig.IndustryOwnerCut,
                     IsOwned = industryConfig.IsOwned,
+                    HasContractorPermit = industryConfig.HasContractorPermit,
                 };
                 _defaultIndustryConfigs[runtimeConfig.Id] = CloneIndustryConfig(runtimeConfig);
 
@@ -70,9 +73,19 @@ namespace LSOL.Systems
             get { return _industryPricingDifficultyEnabled; }
         }
 
+        public bool LicensingDifficultyEnabled
+        {
+            get { return _licensingDifficultyEnabled; }
+        }
+
         public void SetIndustryPricingDifficultyEnabled(bool enabled)
         {
             _industryPricingDifficultyEnabled = enabled;
+        }
+
+        public void SetLicensingDifficultyEnabled(bool enabled)
+        {
+            _licensingDifficultyEnabled = enabled;
         }
 
         public bool IsIndustryOwnedForGameplay(Industry industry)
@@ -88,6 +101,21 @@ namespace LSOL.Systems
         public bool RequiresIndustryPurchase(Industry industry)
         {
             return industry != null && _industryPricingDifficultyEnabled && industry.RequiresPurchase && !industry.IsOwned;
+        }
+
+        public bool HasContractorPermitForGameplay(Industry industry)
+        {
+            if (industry == null)
+            {
+                return false;
+            }
+
+            return !_licensingDifficultyEnabled || !industry.RequiresContractorPermit || industry.HasContractorPermit;
+        }
+
+        public bool RequiresContractorPermit(Industry industry)
+        {
+            return industry != null && _licensingDifficultyEnabled && industry.RequiresContractorPermit && !industry.HasContractorPermit;
         }
 
         public void ResetIndustriesToDefaults()
@@ -129,7 +157,8 @@ namespace LSOL.Systems
                     0,
                     0,
                     0,
-                    defaultConfig.IsOwned);
+                    defaultConfig.IsOwned,
+                    defaultConfig.HasContractorPermit);
 
                 SeedInitialOutput(industry);
                 SeedStartingTank(industry, defaultConfig);
@@ -431,8 +460,10 @@ namespace LSOL.Systems
                 StartingTankRatio = source.StartingTankRatio,
                 Density = source.Density,
                 IndustryPrice = source.IndustryPrice,
+                IndustryLicencePrice = source.IndustryLicencePrice,
                 IndustryOwnerCut = source.IndustryOwnerCut,
                 IsOwned = source.IsOwned,
+                HasContractorPermit = source.HasContractorPermit,
             };
         }
 
