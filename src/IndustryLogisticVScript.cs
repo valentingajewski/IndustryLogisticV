@@ -34,6 +34,7 @@ namespace IndustryLogisticV
         private const int MaxSaveNameLength = 40;
         private const float DefaultStartingBalance = 20000f;
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
+        private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
         private static readonly float[] StartingBalanceOptions = BuildStartingBalanceOptions();
 
         [DllImport("user32.dll")]
@@ -80,6 +81,7 @@ namespace IndustryLogisticV
 
         private int _selectedDebugResourceIndex;
         private int _selectedDebugResourceAmountIndex;
+        private int _selectedDebugMoneyAmountIndex;
         private int _selectedStartingBalanceIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
@@ -2180,7 +2182,20 @@ namespace IndustryLogisticV
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = CurrentDebugMoneyAmountCaption,
+                    DetailFactory = () => "Used by the add-money action.",
+                    OnLeft = () => ChangeDebugMoneyAmountSelection(-1),
+                    OnRight = () => ChangeDebugMoneyAmountSelection(1),
+                },
+                new OfficeMenuItem
+                {
                     IsSeparator = true,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Add money",
+                    DetailFactory = () => string.Format("Adds {0} to your current balance.", FormatMoney(GetSelectedDebugMoneyAmount())),
+                    OnActivate = AddDebugMoney,
                 },
                 new OfficeMenuItem
                 {
@@ -2508,9 +2523,19 @@ namespace IndustryLogisticV
             _selectedDebugResourceIndex = (_selectedDebugResourceIndex + delta + resourceOptions.Count) % resourceOptions.Count;
         }
 
+        private string CurrentDebugMoneyAmountCaption()
+        {
+            return string.Format("Money amount: < {0} >", FormatMoney(GetSelectedDebugMoneyAmount()));
+        }
+
         private void ChangeDebugResourceAmountSelection(int delta)
         {
             _selectedDebugResourceAmountIndex = (_selectedDebugResourceAmountIndex + delta + DebugResourceAmountOptionsTons.Length) % DebugResourceAmountOptionsTons.Length;
+        }
+
+        private void ChangeDebugMoneyAmountSelection(int delta)
+        {
+            _selectedDebugMoneyAmountIndex = (_selectedDebugMoneyAmountIndex + delta + DebugMoneyAmountOptions.Length) % DebugMoneyAmountOptions.Length;
         }
 
         private void AddSelectedDebugResourceToNearbyIndustry()
@@ -3470,6 +3495,18 @@ namespace IndustryLogisticV
 
             return resourceOptions[_selectedDebugResourceIndex];
         }
+        private void AddDebugMoney()
+        {
+            var amount = GetSelectedDebugMoneyAmount();
+            if (amount <= 0f)
+            {
+                ShowStatus("Select a valid money amount first.");
+                return;
+            }
+
+            _profit += amount;
+            ShowStatus(string.Format("Added {0}. Balance is now {1}.", FormatMoney(amount), FormatMoney(_profit)));
+        }
 
         private float GetSelectedDebugResourceAmountTons()
         {
@@ -3479,6 +3516,16 @@ namespace IndustryLogisticV
             }
 
             return DebugResourceAmountOptionsTons[_selectedDebugResourceAmountIndex];
+        }
+
+        private float GetSelectedDebugMoneyAmount()
+        {
+            if (_selectedDebugMoneyAmountIndex < 0 || _selectedDebugMoneyAmountIndex >= DebugMoneyAmountOptions.Length)
+            {
+                _selectedDebugMoneyAmountIndex = 0;
+            }
+
+            return DebugMoneyAmountOptions[_selectedDebugMoneyAmountIndex];
         }
 
         private void CancelPendingTransferForDebug()
