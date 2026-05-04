@@ -1,0 +1,8 @@
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Release\net48\LSOL.dll
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Release\net48\LSOL.pdb
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.csproj.AssemblyReference.cache
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.GeneratedMSBuildEditorConfig.editorconfig
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.csproj.CoreCompileInputs.cache
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.sourcelink.json
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.dll
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.pdb

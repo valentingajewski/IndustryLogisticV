@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using GTA.UI;
-using IndustryLogisticV.Domain;
+using LSOL.Domain;
 using LemonUI.Elements;
 
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     internal static class IndustryStatisticsPanelRenderer
     {

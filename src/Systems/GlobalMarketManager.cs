@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class GlobalMarketManager
     {

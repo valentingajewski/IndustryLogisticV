@@ -1,4 +1,4 @@
-namespace IndustryLogisticV.Domain
+namespace LSOL.Domain
 {
     public enum IndustryUpgradeModule
     {

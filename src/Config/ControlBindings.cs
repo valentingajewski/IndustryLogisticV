@@ -1,7 +1,7 @@
 using System;
 using WinForms = System.Windows.Forms;
 
-namespace IndustryLogisticV.Config
+namespace LSOL.Config
 {
     public sealed class ControlBindings
     {

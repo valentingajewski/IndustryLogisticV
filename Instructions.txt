@@ -1,9 +1,9 @@
-Industry Logistic V - README
+Los Santos Overloaded Logistics - README
 ============================
 
 1) What This Script Does
 ------------------------
-Industry Logistic V adds a logistics management loop to GTA V:
+Los Santos Overloaded Logistics adds a logistics management loop to GTA V:
 - Multiple industries produce/consume commodities.
 - You transport goods with cargo vehicles.
 - Profit is generated from deliveries.
@@ -43,15 +43,15 @@ Required base mods:
 
 Install steps:
 1. Build the project OR use the compiled DLL.
-2. Copy IndustryLogisticV.dll to your GTA V scripts folder:
-   - GTA5/scripts/IndustryLogisticV.dll
+2. Copy LSOL.dll to your GTA V scripts folder:
+   - GTA5/scripts/LSOL.dll
 3. Ensure LemonUI.SHVDN3.dll is present in scripts:
    - GTA5/scripts/LemonUI.SHVDN3.dll
-4. Place config.ini where the script can find it:
-   - Preferred: GTA5/scripts/config.ini
-   - Also supported by this script: GTA5/config.ini
+4. Place LSOL.ini where the script can find it:
+   - Preferred: GTA5/scripts/LSOL.ini
+   - Also supported by this script: GTA5/LSOL.ini
 
-4) Controls (from config.ini)
+4) Controls (from LSOL.ini)
 -----------------------------
 [Controls]
 - ToggleDashboard = F8
@@ -82,12 +82,12 @@ Industry sections define coordinates, inputs/outputs, and capacities.
 6) Troubleshooting
 ------------------
 Tablet background not visible:
-1. Verify IndustryLogisticV.dll is loaded from GTA5/scripts.
+1. Verify LSOL.dll is loaded from GTA5/scripts.
 2. Check ScriptHookVDotNet log for load errors.
 3. Ensure LemonUI.SHVDN3.dll exists in GTA5/scripts.
 
 Industry Menu does not open:
-1. Ensure Interact key in IndustryLogisticV.ini matches your intended key.
+1. Ensure Interact key in LSOL.ini matches your intended key.
 2. Move close to an industry marker and be on foot.
 
 Upgrades unavailable:

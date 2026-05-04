@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using GTA.Math;
-using IndustryLogisticV.Domain;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Config
+namespace LSOL.Config
 {
     public sealed class ExternalConfigCatalog
     {
@@ -78,7 +78,7 @@ namespace IndustryLogisticV.Config
         private static bool TryReadEmbeddedConfig(string fileName, out string content)
         {
             content = null;
-            var resourceName = "IndustryLogisticV.Configs." + fileName;
+            var resourceName = "LSOL.Configs." + fileName;
             using (var stream = typeof(ExternalConfigCatalog).Assembly.GetManifestResourceStream(resourceName))
             {
                 if (stream == null)

@@ -2,12 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using GTA.UI;
-using IndustryLogisticV.Config;
+using LSOL.Config;
 using LemonUI.Menus;
 using WinForms = System.Windows.Forms;
 using MenuAlignment = GTA.UI.Alignment;
 
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     public sealed class LemonMenu
     {

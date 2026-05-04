@@ -4,9 +4,9 @@ using System.Globalization;
 using System.Linq;
 using System.IO;
 using GTA.Math;
-using IndustryLogisticV.Domain;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Config
+namespace LSOL.Config
 {
     public sealed class ModConfig
     {

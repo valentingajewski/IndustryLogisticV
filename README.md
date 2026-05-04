@@ -1,4 +1,4 @@
-# Industry Logistic V - Player Guide
+# Los Santos Overloaded Logistics - Player Guide
 
 This guide explains only gameplay: how to play, where resources come from, and how the industry chain works.
 

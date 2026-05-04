@@ -2,8 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <OutputType>Library</OutputType>
-    <AssemblyName>IndustryLogisticV</AssemblyName>
-    <RootNamespace>IndustryLogisticV</RootNamespace>
+    <AssemblyName>LSOL</AssemblyName>
+    <RootNamespace>LSOL</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>disable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
@@ -32,7 +32,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="configs\*.ini">
-      <LogicalName>IndustryLogisticV.Configs.%(Filename)%(Extension)</LogicalName>
+      <LogicalName>LSOL.Configs.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 </Project>

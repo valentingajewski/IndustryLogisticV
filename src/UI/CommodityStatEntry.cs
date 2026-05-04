@@ -1,4 +1,4 @@
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     internal struct CommodityStatEntry
     {

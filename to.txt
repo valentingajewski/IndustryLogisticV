@@ -1,9 +1,8 @@
 - Fuel system
-- 
 
-- Add a new Industry price mechanic:
-    - The price of each industry can be found in the IndustrialLogisticV.ini under "IndustryPrice" variable for each industry.
-    - Add a new upgrades policy when upgrade are only unlocked when the industry has been purchased by the player. It means that the "Open upgrades" button inside thee industry menu should change to "Buy industry" while it has not been purchased. If the player select the "Buy Industry" button, a new window must open with 2 buttons ("Yes" and "No") and ask if the player really want to buy this industry. Pressing Yes deduct the Indutrsyprice to the player's balance and unlocks upgrades. pressing no come back to the previous page.
-    - Delivering cargo to a non-owned industry adds a owner cut. The value can be found in the IndustrialLogisticV.ini under IndustryOwnerCut. 0.5 means 50% cut. So while the industry is not owned by the player, each load is deducted by the OwnerCut until the industry has been purchased by the player
-    - Add a "[NOT OWNED]" in red" and a "[OWNED] in green alongside the Indsutry name in the F8 menu and in the Industry menu (when pressing E)
-    - Add the Indsutry price mechanic as a difficulty options. If enabled Industry price mechanics are enabled. If disabled Industry price mechanics are disabled. 
+- Licensing mechanism:
+    - You will add a new mechanic where the player will need to purchase a licence to move resource to a specific industry.
+    - Add a "Licensing options" button in the F8 menu
+        - This button list all industry of the game mod with their License price which can be found under IndustryLicencePrice in the LSOL.ini
+        - Each industry is a button which can be pressed. This will open a new window (based from the F8 menu theme) which will ask the player really want to pay for this licence. Add 2 buttons "Yes" and "No".
+    - Add this new mechanic as a difficulty option. When enabled, the license button and mechanics are enabled. When disabled, the button is not displayed and the licensing mechanics are disabled

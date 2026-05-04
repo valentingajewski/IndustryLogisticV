@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using GTA;
 using GTA.Math;
-using IndustryLogisticV.Domain;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class VehicleSpawnController
     {

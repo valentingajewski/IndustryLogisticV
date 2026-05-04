@@ -1,15 +1,15 @@
 {
   "format": 1,
   "restore": {
-    "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\IndustryLogisticV.csproj": {}
+    "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\LSOL.csproj": {}
   },
   "projects": {
-    "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\IndustryLogisticV.csproj": {
+    "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\LSOL.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\IndustryLogisticV.csproj",
-        "projectName": "IndustryLogisticV",
-        "projectPath": "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\IndustryLogisticV.csproj",
+        "projectUniqueName": "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\LSOL.csproj",
+        "projectName": "LSOL",
+        "projectPath": "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\LSOL.csproj",
         "packagesPath": "C:\\Users\\valga\\.nuget\\packages\\",
         "outputPath": "D:\\Personal folders\\Programmation\\Games\\gtav_industry_mgnt\\obj\\",
         "projectStyle": "PackageReference",

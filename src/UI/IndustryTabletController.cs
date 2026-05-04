@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using GTA;
-using IndustryLogisticV.Config;
-using IndustryLogisticV.Domain;
-using IndustryLogisticV.Systems;
+using LSOL.Config;
+using LSOL.Domain;
+using LSOL.Systems;
 using WinForms = System.Windows.Forms;
 
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     public sealed class IndustryTabletController
     {

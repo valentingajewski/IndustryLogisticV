@@ -4,7 +4,7 @@ using System.Globalization;
 using System.IO;
 using GTA.Math;
 
-namespace IndustryLogisticV.Config
+namespace LSOL.Config
 {
     public sealed class IniFile
     {

@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using GTA.Math;
 
-namespace IndustryLogisticV.Config
+namespace LSOL.Config
 {
     public sealed class IndustryConfig
     {

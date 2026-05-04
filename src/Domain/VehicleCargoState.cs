@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using GTA;
 
-namespace IndustryLogisticV.Domain
+namespace LSOL.Domain
 {
     public sealed class VehicleCargoState
     {

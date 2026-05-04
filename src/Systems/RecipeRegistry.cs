@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using IndustryLogisticV.Config;
-using IndustryLogisticV.Domain;
+using LSOL.Config;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public static class RecipeRegistry
     {

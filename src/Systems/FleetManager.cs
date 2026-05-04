@@ -5,10 +5,10 @@ using System.Linq;
 using GTA;
 using GTA.Math;
 using GTA.Native;
-using IndustryLogisticV.Config;
-using IndustryLogisticV.Domain;
+using LSOL.Config;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class FleetManager
     {

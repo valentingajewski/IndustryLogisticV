@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using GTA.Math;
-using IndustryLogisticV.Config;
-using IndustryLogisticV.Domain;
+using LSOL.Config;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class IndustryManager
     {

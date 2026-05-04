@@ -9,18 +9,18 @@ using GTA;
 using GTA.Math;
 using GTA.Native;
 using GTA.UI;
-using IndustryLogisticV.Config;
-using IndustryLogisticV.Domain;
-using IndustryLogisticV.Systems;
-using IndustryLogisticV.UI;
-using OfficeMenuItem = IndustryLogisticV.UI.MenuItem;
+using LSOL.Config;
+using LSOL.Domain;
+using LSOL.Systems;
+using LSOL.UI;
+using OfficeMenuItem = LSOL.UI.MenuItem;
 using WinForms = System.Windows.Forms;
 
-namespace IndustryLogisticV
+namespace LSOL
 {
-    public sealed class IndustryLogisticVScript : Script
+    public sealed class LSOLScript : Script
     {
-        private const string MessagePrefix = "~y~[IndustryLogisticV]~s~ ";
+        private const string MessagePrefix = "~y~[LSOL]~s~ ";
         private const float IndustryMarkerDrawDistance = 180f;
         private const float IndustryInteractionDistance = 4.8f;
         private const float OfficeInteractionDistance = 3.8f;
@@ -30,7 +30,7 @@ namespace IndustryLogisticV
         private const float CargoLossPerDamageRatio = 0.35f;
         private const int VkRControl = 0xA3;
         private const float DebugFillTons = 1000000f;
-        private const string SavegamesDirectoryName = "IndustrialLogisticVSaves";
+        private const string SavegamesDirectoryName = "LSOLSaves";
         private const int MaxSaveNameLength = 40;
         private const float DefaultStartingBalance = 20000f;
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
@@ -108,7 +108,7 @@ namespace IndustryLogisticV
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
 
-        public IndustryLogisticVScript()
+        public LSOLScript()
         {
             _configPath = ResolveConfigPath();
             _defaultIndustryStatePath = ResolveIndustryStatePath(_configPath);
@@ -3553,9 +3553,9 @@ namespace IndustryLogisticV
             var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? BaseDirectory;
             var candidates = new[]
             {
-                Path.Combine(assemblyDir, "IndustryLogisticV.ini"),
-                Path.Combine(BaseDirectory, "IndustryLogisticV.ini"),
-                Path.Combine(BaseDirectory, "scripts", "IndustryLogisticV.ini"),
+                Path.Combine(assemblyDir, "LSOL.ini"),
+                Path.Combine(BaseDirectory, "LSOL.ini"),
+                Path.Combine(BaseDirectory, "scripts", "LSOL.ini"),
             };
 
             for (int i = 0; i < candidates.Length; i++)
@@ -3577,10 +3577,10 @@ namespace IndustryLogisticV
 
             if (!string.IsNullOrWhiteSpace(configDirectory))
             {
-                return Path.Combine(configDirectory, "IndustryLogisticV.state.ini");
+                return Path.Combine(configDirectory, "LSOL.state.ini");
             }
 
-            return Path.Combine(BaseDirectory, "IndustryLogisticV.state.ini");
+            return Path.Combine(BaseDirectory, "LSOL.state.ini");
         }
 
         private string ResolveSavegamesDirectoryPath(string configPath)
@@ -3792,7 +3792,7 @@ namespace IndustryLogisticV
                 return MessagePrefix.TrimEnd();
             }
 
-            if (message.IndexOf("[IndustryLogisticV]", StringComparison.OrdinalIgnoreCase) >= 0)
+            if (message.IndexOf("[LSOL]", StringComparison.OrdinalIgnoreCase) >= 0)
             {
                 return message;
             }

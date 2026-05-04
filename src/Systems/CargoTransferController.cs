@@ -1,8 +1,8 @@
 using System;
 using GTA;
-using IndustryLogisticV.Domain;
+using LSOL.Domain;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class CargoTransferController
     {

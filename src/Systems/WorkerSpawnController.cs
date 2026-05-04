@@ -4,7 +4,7 @@ using System.Linq;
 using GTA;
 using GTA.Native;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class WorkerSpawnController
     {

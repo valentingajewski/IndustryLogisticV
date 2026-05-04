@@ -1,14 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using IndustryLogisticV.Config;
+using LSOL.Config;
 using GTA;
 using GTA.UI;
-using IndustryLogisticV.Domain;
+using LSOL.Domain;
 using LemonUI.Elements;
 using WinForms = System.Windows.Forms;
 
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     public sealed class IndustryTabletUi
     {

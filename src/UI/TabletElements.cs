@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using LemonUI.Elements;
 
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     public sealed class CanvasElement : IEnumerable<BaseElement>
     {

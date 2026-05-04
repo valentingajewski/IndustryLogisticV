@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace IndustryLogisticV.Domain
+namespace LSOL.Domain
 {
     public sealed class ProductionRecipe
     {

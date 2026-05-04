@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using IndustryLogisticV.Config;
+using LSOL.Config;
 using GTA.Native;
 using GTA.UI;
 using WinForms = System.Windows.Forms;
 
-namespace IndustryLogisticV.UI
+namespace LSOL.UI
 {
     public enum SimpleMenuTheme
     {

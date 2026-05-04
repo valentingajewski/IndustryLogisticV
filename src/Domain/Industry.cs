@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using GTA.Math;
-using IndustryLogisticV.Config;
+using LSOL.Config;
 
-namespace IndustryLogisticV.Domain
+namespace LSOL.Domain
 {
     public sealed class Industry
     {

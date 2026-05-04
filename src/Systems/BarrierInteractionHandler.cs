@@ -5,7 +5,7 @@ using GTA;
 using GTA.Math;
 using GTA.Native;
 
-namespace IndustryLogisticV.Systems
+namespace LSOL.Systems
 {
     public sealed class BarrierInteractionHandler
     {
