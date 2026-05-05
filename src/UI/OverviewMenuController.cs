@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using LSOL;
 using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
@@ -24,6 +25,10 @@ namespace LSOL.UI
         private readonly Func<float> _getCurrentProfit;
         private readonly Func<Industry, string> _purchaseContractorPermit;
         private readonly Action<string> _showStatus;
+        private readonly List<Industry> _industryOverviewEntries;
+        private readonly List<Industry> _storeOverviewEntries;
+        private readonly List<Industry> _gasStationOverviewEntries;
+        private readonly IndustryStatisticsSnapshotCache _industryStatisticsSnapshotCache;
         private readonly SimpleMenu _networkOverviewMenu;
         private readonly SimpleMenu _industryOverviewMenu;
         private readonly SimpleMenu _industryStatisticsMenu;
@@ -54,6 +59,10 @@ namespace LSOL.UI
             _getCurrentProfit = getCurrentProfit;
             _purchaseContractorPermit = purchaseContractorPermit;
             _showStatus = showStatus;
+            _industryOverviewEntries = BuildOverviewEntries(ExternalLocationKind.Industry);
+            _storeOverviewEntries = BuildOverviewEntries(ExternalLocationKind.Store);
+            _gasStationOverviewEntries = BuildOverviewEntries(ExternalLocationKind.GasStation);
+            _industryStatisticsSnapshotCache = new IndustryStatisticsSnapshotCache();
 
             _networkOverviewMenu = new SimpleMenu("Network Overview")
             {
@@ -218,13 +227,13 @@ namespace LSOL.UI
 
                 if (key == _controls.MenuUp)
                 {
-                    _industryDetailStatsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_inspectedIndustry, _industryDetailStatsScrollIndex, -1);
+                    _industryDetailStatsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_industryStatisticsSnapshotCache.GetSnapshot(_inspectedIndustry), _industryDetailStatsScrollIndex, -1);
                     return true;
                 }
 
                 if (key == _controls.MenuDown)
                 {
-                    _industryDetailStatsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_inspectedIndustry, _industryDetailStatsScrollIndex, 1);
+                    _industryDetailStatsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_industryStatisticsSnapshotCache.GetSnapshot(_inspectedIndustry), _industryDetailStatsScrollIndex, 1);
                     return true;
                 }
 
@@ -306,6 +315,7 @@ namespace LSOL.UI
             {
                 IndustryStatisticsPanelRenderer.DrawStandalone(
                     _inspectedIndustry,
+                    _industryStatisticsSnapshotCache.GetSnapshot(_inspectedIndustry),
                     _industryDetailStatsScrollIndex,
                     "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
                 return;
@@ -461,6 +471,10 @@ namespace LSOL.UI
 
         private void RebuildNetworkOverviewMenuItems()
         {
+            var industryOverviewDetail = string.Format("Permits and statistics for {0} tracked industry locations", _industryOverviewEntries.Count);
+            var storeOverviewDetail = string.Format("{0} retail delivery locations", _storeOverviewEntries.Count);
+            var gasStationOverviewDetail = string.Format("{0} fuel service stations", _gasStationOverviewEntries.Count);
+
             _networkOverviewMenu.Title = "Network Overview";
             _networkOverviewMenu.Subtitle = "Inspect industries, stores, and gas stations";
             _networkOverviewMenu.SetItems(new[]
@@ -468,7 +482,7 @@ namespace LSOL.UI
                 new MenuItem
                 {
                     CaptionFactory = () => "INDUSTRY",
-                    DetailFactory = () => string.Format("Permits and statistics for {0} tracked industry locations", GetIndustriesForOverview().Count),
+                    DetailFactory = () => industryOverviewDetail,
                     IdleBackgroundColor = Color.FromArgb(170, 46, 66, 50),
                     SelectedBackgroundColor = Color.FromArgb(205, 85, 124, 94),
                     OnActivate = OpenIndustryOverviewMenu,
@@ -476,7 +490,7 @@ namespace LSOL.UI
                 new MenuItem
                 {
                     CaptionFactory = () => "STORES OVERVIEW",
-                    DetailFactory = () => string.Format("{0} retail delivery locations", GetStoresForOverview().Count),
+                    DetailFactory = () => storeOverviewDetail,
                     IdleBackgroundColor = Color.FromArgb(170, 63, 58, 42),
                     SelectedBackgroundColor = Color.FromArgb(206, 132, 120, 86),
                     OnActivate = OpenStoreOverviewMenu,
@@ -484,7 +498,7 @@ namespace LSOL.UI
                 new MenuItem
                 {
                     CaptionFactory = () => "GAS STATIONS OVERVIEW",
-                    DetailFactory = () => string.Format("{0} fuel service stations", GetGasStationsForOverview().Count),
+                    DetailFactory = () => gasStationOverviewDetail,
                     IdleBackgroundColor = Color.FromArgb(170, 45, 62, 74),
                     SelectedBackgroundColor = Color.FromArgb(206, 88, 125, 150),
                     OnActivate = OpenGasStationOverviewMenu,
@@ -502,7 +516,7 @@ namespace LSOL.UI
 
         private void RebuildIndustryOverviewMenuItems()
         {
-            var industries = GetIndustriesForOverview();
+            var industries = _industryOverviewEntries;
             var items = new List<MenuItem>();
 
             if (industries.Count == 0)
@@ -549,7 +563,7 @@ namespace LSOL.UI
 
         private void RebuildIndustryStatisticsMenuItems()
         {
-            var industries = GetIndustriesForOverview();
+            var industries = _industryOverviewEntries;
             var items = new List<MenuItem>();
 
             for (int i = 0; i < industries.Count; i++)
@@ -585,7 +599,7 @@ namespace LSOL.UI
 
         private void RebuildIndustryPermitMenuItems()
         {
-            var industries = GetIndustriesForOverview();
+            var industries = _industryOverviewEntries;
             var items = new List<MenuItem>();
 
             for (int i = 0; i < industries.Count; i++)
@@ -686,7 +700,7 @@ namespace LSOL.UI
 
         private void RebuildStoreOverviewMenuItems()
         {
-            var stores = GetStoresForOverview();
+            var stores = _storeOverviewEntries;
             var items = new List<MenuItem>();
 
             for (int i = 0; i < stores.Count; i++)
@@ -722,7 +736,7 @@ namespace LSOL.UI
 
         private void RebuildGasStationOverviewMenuItems()
         {
-            var stations = GetGasStationsForOverview();
+            var stations = _gasStationOverviewEntries;
             var items = new List<MenuItem>();
 
             for (int i = 0; i < stations.Count; i++)
@@ -755,28 +769,27 @@ namespace LSOL.UI
             _gasStationOverviewMenu.SetItems(items);
         }
 
-        private List<Industry> GetIndustriesForOverview()
+        private List<Industry> BuildOverviewEntries(ExternalLocationKind locationKind)
         {
             return _industryManager.Industries
-                .Where(x => x != null && x.LocationKind == ExternalLocationKind.Industry)
+                .Where(x => x != null && x.LocationKind == locationKind)
                 .OrderBy(x => x.Name)
                 .ToList();
+        }
+
+        private List<Industry> GetIndustriesForOverview()
+        {
+            return _industryOverviewEntries;
         }
 
         private List<Industry> GetStoresForOverview()
         {
-            return _industryManager.Industries
-                .Where(x => x != null && x.LocationKind == ExternalLocationKind.Store)
-                .OrderBy(x => x.Name)
-                .ToList();
+            return _storeOverviewEntries;
         }
 
         private List<Industry> GetGasStationsForOverview()
         {
-            return _industryManager.Industries
-                .Where(x => x != null && x.LocationKind == ExternalLocationKind.GasStation)
-                .OrderBy(x => x.Name)
-                .ToList();
+            return _gasStationOverviewEntries;
         }
 
         private static string GetIndustryOverviewDetail(Industry industry)
@@ -840,7 +853,7 @@ namespace LSOL.UI
                 return "No permit required for this industry.";
             }
 
-            var detail = string.Format("Permit {0}", FormatMoney(industry.IndustryLicencePrice));
+            var detail = string.Format("Permit {0}", ModFormatting.FormatMoney(industry.IndustryLicencePrice));
             if (industry.HasContractorPermit)
             {
                 return detail + " | Transport unlocked.";
@@ -858,12 +871,12 @@ namespace LSOL.UI
 
             var detail = string.Format(
                 "Pay {0} to unlock cargo transport to and from this industry.",
-                FormatMoney(industry.IndustryLicencePrice));
+                ModFormatting.FormatMoney(industry.IndustryLicencePrice));
 
             var currentProfit = GetCurrentProfit();
             if (currentProfit < industry.IndustryLicencePrice)
             {
-                detail += string.Format(" Need {0} more.", FormatMoney(industry.IndustryLicencePrice - currentProfit));
+                detail += string.Format(" Need {0} more.", ModFormatting.FormatMoney(industry.IndustryLicencePrice - currentProfit));
             }
 
             return detail;
@@ -877,7 +890,7 @@ namespace LSOL.UI
             }
 
             var storage = industry.GetInputStockTotal();
-            var fillPercent = Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
+            var fillPercent = ModMath.Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
             return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillPercent);
         }
 
@@ -889,7 +902,7 @@ namespace LSOL.UI
             }
 
             var storage = industry.GetInputStockTotal();
-            var fillPercent = Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
+            var fillPercent = ModMath.Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
             return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillPercent);
         }
 
@@ -908,12 +921,6 @@ namespace LSOL.UI
             return _getCurrentProfit != null ? _getCurrentProfit() : 0f;
         }
 
-        private static string FormatMoney(float amount)
-        {
-            var absolute = Math.Abs(amount).ToString("0,0");
-            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
-        }
-
         private static bool IsPetrolServiceStation(Industry industry)
         {
             return industry != null && industry.IsGasStation;
@@ -924,19 +931,5 @@ namespace LSOL.UI
             return industry != null && industry.IsStore;
         }
 
-        private static float Clamp01(float value)
-        {
-            if (value <= 0f)
-            {
-                return 0f;
-            }
-
-            if (value >= 1f)
-            {
-                return 1f;
-            }
-
-            return value;
-        }
     }
 }

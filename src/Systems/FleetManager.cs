@@ -18,6 +18,7 @@ namespace LSOL.Systems
         private const string DefaultLittleBoxPropModel = "prop_boxpile_07d";
         private const string DefaultTinyBoxPropModel = "prop_rub_boxpile_02";
         private readonly List<VehicleDefinition> _definitions;
+        private readonly Dictionary<int, VehicleDefinition> _definitionsByModelHash;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
         private readonly Random _random;
@@ -26,6 +27,7 @@ namespace LSOL.Systems
         public FleetManager(ModConfig config)
         {
             _definitions = config.VehicleDefinitions;
+            _definitionsByModelHash = BuildDefinitionLookup(_definitions);
             _objectModels = config.ObjectModels;
             _cargoStates = new Dictionary<int, VehicleCargoState>();
             _random = new Random();
@@ -166,22 +168,36 @@ namespace LSOL.Systems
 
         public VehicleDefinition FindDefinition(Model model)
         {
-            var hash = model.Hash;
-            for (int i = 0; i < _definitions.Count; i++)
+            VehicleDefinition definition;
+            return _definitionsByModelHash.TryGetValue(model.Hash, out definition)
+                ? definition
+                : null;
+        }
+
+        private static Dictionary<int, VehicleDefinition> BuildDefinitionLookup(List<VehicleDefinition> definitions)
+        {
+            var lookup = new Dictionary<int, VehicleDefinition>();
+            if (definitions == null)
             {
-                var candidate = _definitions[i];
-                if (!candidate.IsEnabled)
+                return lookup;
+            }
+
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                var candidate = definitions[i];
+                if (candidate == null || !candidate.IsEnabled || string.IsNullOrWhiteSpace(candidate.ModelName))
                 {
                     continue;
                 }
 
-                if (new Model(candidate.ModelName).Hash == hash)
+                var hash = new Model(candidate.ModelName).Hash;
+                if (!lookup.ContainsKey(hash))
                 {
-                    return candidate;
+                    lookup[hash] = candidate;
                 }
             }
 
-            return null;
+            return lookup;
         }
 
         public bool SpawnSelectedVehicle(

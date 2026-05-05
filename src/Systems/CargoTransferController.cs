@@ -1,5 +1,6 @@
 using System;
 using GTA;
+using LSOL;
 using LSOL.Domain;
 
 namespace LSOL.Systems
@@ -49,10 +50,10 @@ namespace LSOL.Systems
             {
                 _pendingTransfer.OnProgress?.Invoke(progress);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 _pendingTransfer.OnProgress = null;
-                _showStatus("Transfer visual callback failed. Continuing without preview.");
+                _showStatus(ModDiagnostics.FormatFailure("Transfer visual callback", ex));
             }
 
             drawProgressBar(_pendingTransfer.Label, progress);
@@ -69,9 +70,9 @@ namespace LSOL.Systems
             {
                 completed.OnComplete?.Invoke();
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                _showStatus("Transfer completion failed.");
+                _showStatus(ModDiagnostics.FormatFailure("Transfer completion", ex));
             }
         }
 
@@ -162,7 +163,7 @@ namespace LSOL.Systems
                         return;
                     }
 
-                    var currentTons = targetLoadTons * Clamp01(progress);
+                    var currentTons = targetLoadTons * ModMath.Clamp01(progress);
                     _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
                 });
         }
@@ -224,7 +225,7 @@ namespace LSOL.Systems
                         }
 
                         var baseRevenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
-                        var conditionRatio = Clamp01(cargoState.CargoCondition);
+                        var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
                         var revenue = baseRevenue * conditionRatio;
                         addProfit(revenue);
 
@@ -332,7 +333,7 @@ namespace LSOL.Systems
                         return;
                     }
 
-                    var currentTons = targetLoadTons * Clamp01(progress);
+                    var currentTons = targetLoadTons * ModMath.Clamp01(progress);
                     _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
                 });
         }
@@ -512,21 +513,6 @@ namespace LSOL.Systems
             {
                 door.Close(false);
             }
-        }
-
-        private static float Clamp01(float value)
-        {
-            if (value <= 0f)
-            {
-                return 0f;
-            }
-
-            if (value >= 1f)
-            {
-                return 1f;
-            }
-
-            return value;
         }
 
         private sealed class PendingTransfer

@@ -10,11 +10,22 @@ namespace LSOL.UI
 {
     public sealed class IndustryTabletController
     {
+        private const int LoadOptionsRefreshIntervalMs = 250;
+
         private readonly IndustryTabletUi _industryTablet;
         private readonly FleetManager _fleetManager;
         private readonly IndustryManager _industryManager;
         private readonly GlobalMarketManager _globalMarket;
         private readonly Func<Industry, GTA.Math.Vector3> _getIndustryMarkerPosition;
+        private readonly List<string> _cachedLoadOptions;
+        private readonly Dictionary<string, string> _cachedLoadOptionSubtitles;
+
+        private Industry _cachedLoadIndustry;
+        private int _cachedLoadVehicleHandle;
+        private int _lastLoadOptionsRefreshMs;
+        private float _cachedLoadFreeCapacityTons;
+        private VehicleCargoType _cachedLoadCargoType;
+        private bool _hasCachedLoadOptions;
 
         public IndustryTabletController(
             FleetManager fleetManager,
@@ -27,6 +38,11 @@ namespace LSOL.UI
             _industryManager = industryManager;
             _globalMarket = globalMarket;
             _getIndustryMarkerPosition = getIndustryMarkerPosition;
+            _cachedLoadOptions = new List<string>();
+            _cachedLoadOptionSubtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _cachedLoadCargoType = VehicleCargoType.Unknown;
+            _cachedLoadFreeCapacityTons = -1f;
+            _lastLoadOptionsRefreshMs = int.MinValue;
         }
 
         public event Action<Industry> LoadRequested
@@ -99,6 +115,7 @@ namespace LSOL.UI
                 return false;
             }
 
+            ClearLoadOptionsCache(false);
             beforeOpen();
             _industryTablet.Open(nearestIndustry);
             return true;
@@ -148,6 +165,7 @@ namespace LSOL.UI
                 return;
             }
 
+            ClearLoadOptionsCache(false);
             _industryTablet.Close();
         }
 
@@ -155,7 +173,7 @@ namespace LSOL.UI
         {
             if (!_industryTablet.IsOpen || industry == null || player == null || !player.Exists())
             {
-                _industryTablet.SetLoadOptions(new List<string>());
+                ClearLoadOptionsCache(true);
                 return;
             }
 
@@ -163,14 +181,14 @@ namespace LSOL.UI
             var cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
             if (cargoVehicle == null || !cargoVehicle.Exists())
             {
-                _industryTablet.SetLoadOptions(new List<string>());
+                ClearLoadOptionsCache(true);
                 return;
             }
 
             var cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
             if (cargoState == null || !cargoState.IsEmpty)
             {
-                _industryTablet.SetLoadOptions(new List<string>());
+                ClearLoadOptionsCache(true);
                 return;
             }
 
@@ -180,17 +198,47 @@ namespace LSOL.UI
                 cargoType = fallbackCargoType;
             }
 
-            var loadOptions = _industryManager.GetLoadableOutputs(industry, cargoType);
-            var loadOptionSubtitles = BuildLoadOptionSubtitles(industry, loadOptions, cargoState.FreeCapacityTons);
-            _industryTablet.SetLoadOptions(loadOptions, loadOptionSubtitles);
+            var freeCapacityTons = Math.Max(0f, cargoState.FreeCapacityTons);
+            var now = Game.GameTime;
+            if (CanReuseCachedLoadOptions(industry, cargoVehicle.Handle, cargoType, freeCapacityTons, now))
+            {
+                return;
+            }
+
+            _industryManager.PopulateLoadableOutputs(industry, cargoType, _cachedLoadOptions);
+            BuildLoadOptionSubtitles(industry, _cachedLoadOptions, freeCapacityTons, _cachedLoadOptionSubtitles);
+
+            _cachedLoadIndustry = industry;
+            _cachedLoadVehicleHandle = cargoVehicle.Handle;
+            _cachedLoadCargoType = cargoType;
+            _cachedLoadFreeCapacityTons = freeCapacityTons;
+            _lastLoadOptionsRefreshMs = now;
+            _hasCachedLoadOptions = true;
+
+            _industryTablet.SetLoadOptions(_cachedLoadOptions, _cachedLoadOptionSubtitles);
         }
 
-        private Dictionary<string, string> BuildLoadOptionSubtitles(Industry industry, List<string> loadOptions, float truckFreeCapacityTons)
+        private bool CanReuseCachedLoadOptions(Industry industry, int cargoVehicleHandle, VehicleCargoType cargoType, float freeCapacityTons, int now)
         {
-            var subtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            return _hasCachedLoadOptions
+                && ReferenceEquals(_cachedLoadIndustry, industry)
+                && _cachedLoadVehicleHandle == cargoVehicleHandle
+                && _cachedLoadCargoType == cargoType
+                && Math.Abs(_cachedLoadFreeCapacityTons - freeCapacityTons) < 0.05f
+                && now - _lastLoadOptionsRefreshMs < LoadOptionsRefreshIntervalMs;
+        }
+
+        private void BuildLoadOptionSubtitles(Industry industry, List<string> loadOptions, float truckFreeCapacityTons, Dictionary<string, string> subtitles)
+        {
+            if (subtitles == null)
+            {
+                return;
+            }
+
+            subtitles.Clear();
             if (industry == null || loadOptions == null || loadOptions.Count == 0)
             {
-                return subtitles;
+                return;
             }
 
             var maxLoadTons = Math.Max(0f, truckFreeCapacityTons);
@@ -213,8 +261,28 @@ namespace LSOL.UI
                     loadableTons,
                     unitPrice);
             }
+        }
 
-            return subtitles;
+        private void ClearLoadOptionsCache(bool updateUi)
+        {
+            if (!_hasCachedLoadOptions && _cachedLoadOptions.Count == 0 && _cachedLoadOptionSubtitles.Count == 0)
+            {
+                return;
+            }
+
+            _cachedLoadIndustry = null;
+            _cachedLoadVehicleHandle = 0;
+            _cachedLoadCargoType = VehicleCargoType.Unknown;
+            _cachedLoadFreeCapacityTons = -1f;
+            _lastLoadOptionsRefreshMs = int.MinValue;
+            _hasCachedLoadOptions = false;
+            _cachedLoadOptions.Clear();
+            _cachedLoadOptionSubtitles.Clear();
+
+            if (updateUi)
+            {
+                _industryTablet.SetLoadOptions(null);
+            }
         }
     }
 }

@@ -9,7 +9,10 @@ namespace LSOL.Systems
 {
     public sealed class IndustryManager
     {
+        private const float NearestIndustryCellSize = 160f;
+
         private readonly List<Industry> _industries;
+        private readonly Dictionary<long, List<Industry>> _industriesBySpatialCell;
         private readonly Dictionary<string, IndustryConfig> _defaultIndustryConfigs;
         private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
         private readonly float _industryOmegaCapacityMultiplier;
@@ -19,6 +22,7 @@ namespace LSOL.Systems
         public IndustryManager(ModConfig config)
         {
             _industries = new List<Industry>();
+            _industriesBySpatialCell = new Dictionary<long, List<Industry>>();
             _defaultIndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase);
             _petrolStationDrainRatePerMinuteByIndustryId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             _industryOmegaCapacityMultiplier = config == null ? 0.2f : config.IndustryOmegaCapacityMultiplier;
@@ -54,6 +58,7 @@ namespace LSOL.Systems
                 SeedInitialOutput(industry);
                 SeedStartingTank(industry, runtimeConfig);
                 _industries.Add(industry);
+                AddIndustryToSpatialIndex(industry);
 
                 float drainRatePerMinute;
                 if (TryGetPetrolStationDrainRatePerMinute(runtimeConfig, out drainRatePerMinute))
@@ -182,24 +187,72 @@ namespace LSOL.Systems
 
         public Industry GetNearestIndustry(Vector3 position, float maxDistance)
         {
+            if (maxDistance <= 0f || _industries.Count == 0)
+            {
+                return null;
+            }
+
             Industry nearest = null;
             var maxDistanceSq = maxDistance * maxDistance;
             var bestSq = maxDistanceSq;
             var pos2 = new Vector2(position.X, position.Y);
+            var cellRadius = Math.Max(0, (int)Math.Ceiling(maxDistance / NearestIndustryCellSize));
+            var cellX = GetSpatialCellCoordinate(position.X);
+            var cellY = GetSpatialCellCoordinate(position.Y);
 
-            for (int i = 0; i < _industries.Count; i++)
+            for (int x = cellX - cellRadius; x <= cellX + cellRadius; x++)
             {
-                var candidate = _industries[i];
-                var cand2 = new Vector2(candidate.Position.X, candidate.Position.Y);
-                var distSq = pos2.DistanceToSquared(cand2);
-                if (distSq < bestSq)
+                for (int y = cellY - cellRadius; y <= cellY + cellRadius; y++)
                 {
-                    bestSq = distSq;
-                    nearest = candidate;
+                    List<Industry> candidates;
+                    if (!_industriesBySpatialCell.TryGetValue(BuildSpatialCellKey(x, y), out candidates))
+                    {
+                        continue;
+                    }
+
+                    for (int i = 0; i < candidates.Count; i++)
+                    {
+                        var candidate = candidates[i];
+                        var cand2 = new Vector2(candidate.Position.X, candidate.Position.Y);
+                        var distSq = pos2.DistanceToSquared(cand2);
+                        if (distSq < bestSq)
+                        {
+                            bestSq = distSq;
+                            nearest = candidate;
+                        }
+                    }
                 }
             }
 
             return nearest;
+        }
+
+        private void AddIndustryToSpatialIndex(Industry industry)
+        {
+            if (industry == null)
+            {
+                return;
+            }
+
+            var key = BuildSpatialCellKey(GetSpatialCellCoordinate(industry.Position.X), GetSpatialCellCoordinate(industry.Position.Y));
+            List<Industry> bucket;
+            if (!_industriesBySpatialCell.TryGetValue(key, out bucket))
+            {
+                bucket = new List<Industry>();
+                _industriesBySpatialCell[key] = bucket;
+            }
+
+            bucket.Add(industry);
+        }
+
+        private static int GetSpatialCellCoordinate(float value)
+        {
+            return (int)Math.Floor(value / NearestIndustryCellSize);
+        }
+
+        private static long BuildSpatialCellKey(int x, int y)
+        {
+            return ((long)x << 32) ^ (uint)y;
         }
 
         public bool TryGetLoadOffer(Industry industry, VehicleCargoType cargoType, float requestedTons, out string commodity, out float tons)
@@ -243,13 +296,27 @@ namespace LSOL.Systems
         public List<string> GetLoadableOutputs(Industry industry, VehicleCargoType cargoType)
         {
             var result = new List<string>();
-            if (industry == null || industry.Outputs.Count == 0)
+            PopulateLoadableOutputs(industry, cargoType, result);
+            return result;
+        }
+
+        public void PopulateLoadableOutputs(Industry industry, VehicleCargoType cargoType, List<string> result)
+        {
+            if (result == null)
             {
-                return result;
+                return;
             }
 
-            foreach (var output in industry.Outputs.OrderBy(x => x))
+            result.Clear();
+            if (industry == null || industry.Outputs.Count == 0)
             {
+                return;
+            }
+
+            var outputs = industry.SortedOutputs;
+            for (int i = 0; i < outputs.Count; i++)
+            {
+                var output = outputs[i];
                 if (industry.GetStock(output) <= 0.001f)
                 {
                     continue;
@@ -265,8 +332,6 @@ namespace LSOL.Systems
 
                 result.Add(output);
             }
-
-            return result;
         }
 
         public bool TryLoadCommodity(Industry industry, VehicleCargoType cargoType, string commodity, float requestedTons, out float loadedTons)

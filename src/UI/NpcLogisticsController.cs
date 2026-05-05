@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using LSOL;
 using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
@@ -646,7 +647,7 @@ namespace LSOL.UI
                 origin.Name,
                 destination.Name,
                 resource,
-                FormatMoney(additionalCost));
+                ModFormatting.FormatMoney(additionalCost));
 
             if (_editingContract != null && additionalCost <= 0f)
             {
@@ -769,10 +770,5 @@ namespace LSOL.UI
             return key == _controls.MenuBack || key == WinForms.Keys.Escape;
         }
 
-        private static string FormatMoney(float amount)
-        {
-            var absolute = Math.Abs(amount).ToString("0,0");
-            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
-        }
     }
 }

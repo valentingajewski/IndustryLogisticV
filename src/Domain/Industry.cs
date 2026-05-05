@@ -10,6 +10,8 @@ namespace LSOL.Domain
     {
         private readonly List<ProductionRecipe> _recipes;
         private readonly bool _supportsOmegaBoost;
+        private readonly List<string> _sortedInputs;
+        private readonly List<string> _sortedOutputs;
 
         public Industry(IndustryConfig config, List<ProductionRecipe> recipes, bool supportsOmegaBoost, float omegaCapacityMultiplier)
         {
@@ -34,6 +36,8 @@ namespace LSOL.Domain
 
             _recipes = recipes ?? new List<ProductionRecipe>();
             _supportsOmegaBoost = supportsOmegaBoost;
+            _sortedInputs = Inputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            _sortedOutputs = Outputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
 
             foreach (var input in Inputs)
             {
@@ -61,6 +65,16 @@ namespace LSOL.Domain
         public HashSet<string> Inputs { get; }
         public HashSet<string> Outputs { get; }
         public Dictionary<string, float> BufferStorage { get; }
+        public IReadOnlyList<string> SortedInputs
+        {
+            get { return _sortedInputs; }
+        }
+
+        public IReadOnlyList<string> SortedOutputs
+        {
+            get { return _sortedOutputs; }
+        }
+
         public float ProductionRate { get; private set; }
         public bool HasOmegaBoost { get; private set; }
         public float OmegaStorage { get; private set; }
@@ -573,12 +587,12 @@ namespace LSOL.Domain
 
         public List<string> GetSortedOutputs()
         {
-            return Outputs.OrderBy(x => x).ToList();
+            return new List<string>(_sortedOutputs);
         }
 
         public List<string> GetSortedInputs()
         {
-            return Inputs.OrderBy(x => x).ToList();
+            return new List<string>(_sortedInputs);
         }
 
         public bool HasOutputStock(string commodity)

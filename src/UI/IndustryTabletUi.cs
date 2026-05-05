@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using LSOL;
 using LSOL.Config;
 using GTA;
 using GTA.UI;
@@ -12,15 +13,6 @@ namespace LSOL.UI
 {
     public sealed class IndustryTabletUi
     {
-        private struct CommodityStatEntry
-        {
-            public string Commodity;
-            public float Stock;
-            public float Capacity;
-            public float Ratio;
-            public bool IsInput;
-        }
-
         private enum TabletPage
         {
             Main = 0,
@@ -43,8 +35,10 @@ namespace LSOL.UI
         private readonly ScaledRectangle _upgradeButton;
         private readonly ScaledRectangle _statsPanel;
         private readonly List<ScaledRectangle> _upgradeModuleButtons;
+        private readonly List<IndustryUpgradeModule> _availableUpgradeModules;
         private readonly List<string> _loadOptions;
         private readonly Dictionary<string, string> _loadOptionSubtitles;
+        private readonly IndustryStatisticsSnapshotCache _statisticsSnapshotCache;
 
         private Industry _industry;
         private float _frameX;
@@ -60,6 +54,7 @@ namespace LSOL.UI
         private TabletPage _currentPage;
         private bool _isIndustryOwnedForGameplay;
         private bool _requiresIndustryPurchase;
+        private bool _upgradeModulesDirty;
 
         public IndustryTabletUi()
         {
@@ -92,8 +87,11 @@ namespace LSOL.UI
             _selectedUnloadOptionIndex = 0;
             _statsScrollIndex = 0;
             _currentPage = TabletPage.Main;
+            _availableUpgradeModules = new List<IndustryUpgradeModule>();
             _loadOptions = new List<string>();
             _loadOptionSubtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            _statisticsSnapshotCache = new IndustryStatisticsSnapshotCache();
+            _upgradeModulesDirty = true;
             UpdateLayout();
         }
 
@@ -163,10 +161,15 @@ namespace LSOL.UI
 
         public void UpdateOwnershipState(bool isIndustryOwnedForGameplay, bool requiresIndustryPurchase, float industryPrice, float industryOwnerCut)
         {
+            if (_requiresIndustryPurchase != requiresIndustryPurchase)
+            {
+                _upgradeModulesDirty = true;
+            }
+
             _isIndustryOwnedForGameplay = isIndustryOwnedForGameplay;
             _requiresIndustryPurchase = requiresIndustryPurchase;
             _industryPrice = Math.Max(0f, industryPrice);
-            _industryOwnerCut = Clamp01(industryOwnerCut);
+            _industryOwnerCut = ModMath.Clamp01(industryOwnerCut);
         }
 
         public bool HandleKey(WinForms.Keys key, ControlBindings controls)
@@ -403,6 +406,7 @@ namespace LSOL.UI
             }
 
             var module = availableModules[_selectedUpgradeIndex];
+            _upgradeModulesDirty = true;
             UpgradeModuleRequested?.Invoke(_industry, module);
         }
 
@@ -421,6 +425,8 @@ namespace LSOL.UI
             _selectedUnloadOptionIndex = 0;
             _statsScrollIndex = 0;
             _currentPage = TabletPage.Main;
+            _upgradeModulesDirty = true;
+            _statisticsSnapshotCache.Invalidate();
         }
 
         public void Close()
@@ -440,6 +446,9 @@ namespace LSOL.UI
             _statsScrollIndex = 0;
             _loadOptions.Clear();
             _loadOptionSubtitles.Clear();
+            _availableUpgradeModules.Clear();
+            _upgradeModulesDirty = true;
+            _statisticsSnapshotCache.Invalidate();
             HideUpgradeModuleButtons();
             HideMainButtons();
         }
@@ -459,11 +468,6 @@ namespace LSOL.UI
             var ownershipColor = _isIndustryOwnedForGameplay
                 ? Color.FromArgb(232, 102, 214, 146)
                 : Color.FromArgb(232, 222, 92, 92);
-            var stockpile = _industry.GetInputStockTotal() + _industry.GetOutputStockTotal();
-            var totalCapacity = Math.Max(1f, _industry.InputCapacityTons + _industry.OutputCapacityTons);
-            var stockRatio = Clamp01(stockpile / totalCapacity);
-            var utilizationRatio = Clamp01(_industry.LastUtilizationPercent / 100f);
-            var omegaRatio = Clamp01(_industry.OmegaStorage / Math.Max(1f, _industry.OmegaCapacityTons));
 
             DrawText(
                 string.Format("{0} MENU", industryName),
@@ -691,12 +695,8 @@ namespace LSOL.UI
                 HideUpgradeModuleButtons();
                 _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
 
-                IndustryStatisticsPanelRenderer.DrawPageContent(
-                    _industry,
-                    _statsScrollIndex,
-                    _frameX,
-                    _frameY,
-                    "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
+                var statistics = _statisticsSnapshotCache.GetSnapshot(_industry);
+                IndustryStatisticsPanelRenderer.DrawPageContent(_industry, statistics, _statsScrollIndex, _frameX, _frameY, "Arrow Up/Down to scroll | Enter or Backspace or Esc to return");
             }
             else
             {
@@ -797,10 +797,16 @@ namespace LSOL.UI
 
         private List<IndustryUpgradeModule> GetAvailableUpgradeModules()
         {
-            var modules = new List<IndustryUpgradeModule>();
+            if (!_upgradeModulesDirty)
+            {
+                return _availableUpgradeModules;
+            }
+
+            _availableUpgradeModules.Clear();
             if (_industry == null)
             {
-                return modules;
+                _upgradeModulesDirty = false;
+                return _availableUpgradeModules;
             }
 
             var candidates = new[]
@@ -816,11 +822,12 @@ namespace LSOL.UI
                 var module = candidates[i];
                 if (_industry.GetUpgradeCost(module) > 0f)
                 {
-                    modules.Add(module);
+                    _availableUpgradeModules.Add(module);
                 }
             }
 
-            return modules;
+            _upgradeModulesDirty = false;
+            return _availableUpgradeModules;
         }
 
         private static string GetUpgradeModuleTitle(IndustryUpgradeModule module)
@@ -870,7 +877,7 @@ namespace LSOL.UI
             {
                 return string.Format(
                     "Purchase for {0} to unlock upgrades and remove the {1:0}% owner cut",
-                    FormatMoney(_industryPrice),
+                    ModFormatting.FormatMoney(_industryPrice),
                     _industryOwnerCut * 100f);
             }
 
@@ -886,7 +893,7 @@ namespace LSOL.UI
         {
             if (_requiresIndustryPurchase)
             {
-                return string.Format("Price {0} | Unlock upgrades at this site", FormatMoney(_industryPrice));
+                return string.Format("Price {0} | Unlock upgrades at this site", ModFormatting.FormatMoney(_industryPrice));
             }
 
             return "Switch to module upgrades in this industry";
@@ -971,226 +978,7 @@ namespace LSOL.UI
 
         private void MoveStatsSelection(int delta)
         {
-            _statsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_industry, _statsScrollIndex, delta);
-        }
-
-        private void DrawIndustryStatistics(float stockpile, float totalCapacity, float stockRatio, float utilizationRatio, float omegaRatio)
-        {
-            DrawText(
-                string.Format("Total Stockpile: {0:0.0}/{1:0.0} t", stockpile, totalCapacity),
-                _frameX + 84f,
-                _frameY + 170f,
-                0.275f,
-                Color.FromArgb(220, 214, 223, 236),
-                GTA.UI.Font.ChaletLondon,
-                Alignment.Left,
-                0f);
-
-            DrawLoadingBar(
-                _frameX + 336f,
-                _frameY + 178f,
-                274f,
-                11f,
-                stockRatio,
-                Color.FromArgb(170, 28, 40, 54),
-                Color.FromArgb(230, 214, 188, 96));
-
-            DrawText(
-                string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, _industry.CurrentOutputPerHourTons),
-                _frameX + 84f,
-                _frameY + 192f,
-                0.25f,
-                Color.FromArgb(214, 205, 217, 228),
-                GTA.UI.Font.ChaletLondon,
-                Alignment.Left,
-                0f);
-
-
-            var entries = BuildCommodityStatsEntries();
-            if (entries.Count == 0)
-            {
-                DrawText(
-                    "No input/output commodities configured for this industry.",
-                    _frameX + 84f,
-                    _frameY + 266f,
-                    0.29f,
-                    Color.FromArgb(224, 214, 226, 236),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-                return;
-            }
-
-            const int visibleRows = 6;
-            var maxScroll = Math.Max(0, entries.Count - visibleRows);
-            if (_statsScrollIndex > maxScroll)
-            {
-                _statsScrollIndex = maxScroll;
-            }
-
-            var visibleCount = Math.Min(visibleRows, entries.Count - _statsScrollIndex);
-            var listTopY = _frameY + 246f;
-
-            DrawText(
-                "IN = input storage | OUT = output storage",
-                _frameX + 84f,
-                _frameY + 232f,
-                0.24f,
-                Color.FromArgb(206, 193, 206, 219),
-                GTA.UI.Font.ChaletLondon,
-                Alignment.Left,
-                0f);
-
-            for (int i = 0; i < visibleCount; i++)
-            {
-                var entry = entries[_statsScrollIndex + i];
-                var rowY = listTopY + (i * 43f);
-                var titleColor = entry.IsInput
-                    ? Color.FromArgb(226, 132, 206, 184)
-                    : Color.FromArgb(226, 223, 196, 128);
-                var fillColor = entry.IsInput
-                    ? Color.FromArgb(228, 98, 170, 148)
-                    : Color.FromArgb(228, 214, 188, 96);
-
-                DrawText(
-                    string.Format("{0} {1}", entry.IsInput ? "IN" : "OUT", entry.Commodity.ToUpperInvariant()),
-                    _frameX + 84f,
-                    rowY,
-                    0.27f,
-                    titleColor,
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    0f);
-
-                DrawText(
-                    string.Format("{0:0.0}/{1:0.0} t", entry.Stock, entry.Capacity),
-                    _frameX + 84f,
-                    rowY + 14f,
-                    0.235f,
-                    Color.FromArgb(214, 205, 217, 228),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    0f);
-
-                DrawLoadingBar(
-                    _frameX + 336f,
-                    rowY + 14f,
-                    274f,
-                    11f,
-                    entry.Ratio,
-                    Color.FromArgb(170, 28, 40, 54),
-                    fillColor);
-            }
-
-            if (maxScroll > 0)
-            {
-                DrawText(
-                    string.Format("{0}-{1}/{2}", _statsScrollIndex + 1, _statsScrollIndex + visibleCount, entries.Count),
-                    _frameX + 690f,
-                    _frameY + 232f,
-                    0.24f,
-                    Color.FromArgb(206, 193, 206, 219),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Right,
-                    0f);
-            }
-        }
-
-        private List<CommodityStatEntry> BuildCommodityStatsEntries()
-        {
-            var entries = new List<CommodityStatEntry>();
-            if (_industry == null)
-            {
-                return entries;
-            }
-
-            var inputs = _industry.GetSortedInputs();
-            for (int i = 0; i < inputs.Count; i++)
-            {
-                var commodity = inputs[i];
-                var stock = GetCommodityStockForStats(commodity, true);
-                var capacity = GetCommodityCapacityForStats(commodity, true);
-                entries.Add(new CommodityStatEntry
-                {
-                    Commodity = commodity,
-                    Stock = stock,
-                    Capacity = capacity,
-                    Ratio = Clamp01(stock / Math.Max(0.01f, capacity)),
-                    IsInput = true,
-                });
-            }
-
-            var outputs = _industry.GetSortedOutputs();
-            for (int i = 0; i < outputs.Count; i++)
-            {
-                var commodity = outputs[i];
-                var stock = GetCommodityStockForStats(commodity, false);
-                var capacity = GetCommodityCapacityForStats(commodity, false);
-                entries.Add(new CommodityStatEntry
-                {
-                    Commodity = commodity,
-                    Stock = stock,
-                    Capacity = capacity,
-                    Ratio = Clamp01(stock / Math.Max(0.01f, capacity)),
-                    IsInput = false,
-                });
-            }
-
-            return entries;
-        }
-
-        private float GetCommodityCapacityForStats(string commodity, bool isInput)
-        {
-            if (_industry == null)
-            {
-                return 0.01f;
-            }
-
-            if (IsOmegaInputStat(commodity, isInput))
-            {
-                return Math.Max(0.01f, _industry.OmegaCapacityTons);
-            }
-
-            var stock = GetCommodityStockForStats(commodity, isInput);
-            var freeSpace = Math.Max(0f, _industry.GetMaxTransferTonsForCommodity(commodity));
-            var capacity = stock + freeSpace;
-
-            if (capacity <= 0.001f)
-            {
-                var bucketCount = isInput
-                    ? Math.Max(1, _industry.Inputs.Count)
-                    : Math.Max(1, _industry.Outputs.Count);
-                var totalCapacity = isInput
-                    ? Math.Max(1f, _industry.InputCapacityTons)
-                    : Math.Max(1f, _industry.OutputCapacityTons);
-                capacity = totalCapacity / bucketCount;
-            }
-
-            return Math.Max(0.01f, capacity);
-        }
-
-        private float GetCommodityStockForStats(string commodity, bool isInput)
-        {
-            if (_industry == null)
-            {
-                return 0f;
-            }
-
-            if (IsOmegaInputStat(commodity, isInput))
-            {
-                return Math.Max(0f, _industry.OmegaStorage);
-            }
-
-            return Math.Max(0f, _industry.GetStock(commodity));
-        }
-
-        private bool IsOmegaInputStat(string commodity, bool isInput)
-        {
-            return isInput
-                && _industry != null
-                && _industry.SupportsOmegaBoost
-                && !string.IsNullOrWhiteSpace(commodity)
-                && commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase);
+            _statsScrollIndex = IndustryStatisticsPanelRenderer.MoveScrollIndex(_statisticsSnapshotCache.GetSnapshot(_industry), _statsScrollIndex, delta);
         }
 
         private static void DrawLoadingBar(float x, float y, float width, float height, float ratio, Color backgroundColor, Color fillColor)
@@ -1202,7 +990,7 @@ namespace LSOL.UI
             back.Draw();
 
             var innerHeight = Math.Max(2f, height - 4f);
-            var innerWidth = Math.Max(2f, (width - 4f) * Clamp01(ratio));
+            var innerWidth = Math.Max(2f, (width - 4f) * ModMath.Clamp01(ratio));
 
             var fill = new ScaledRectangle(new PointF(x + 2f, y + 2f), new SizeF(innerWidth, innerHeight))
             {
@@ -1233,12 +1021,6 @@ namespace LSOL.UI
             return Math.Min(_frameX + 628f, _frameX + 92f + (nameLength * 13.5f));
         }
 
-        private static string FormatMoney(float amount)
-        {
-            var absolute = Math.Abs(amount).ToString("0,0");
-            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
-        }
-
         private static void DrawText(string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float wrap)
         {
             var entry = new ScaledText(new PointF(x, y), text ?? string.Empty, scale, font)
@@ -1255,21 +1037,6 @@ namespace LSOL.UI
             }
 
             entry.Draw();
-        }
-
-        private static float Clamp01(float value)
-        {
-            if (value <= 0f)
-            {
-                return 0f;
-            }
-
-            if (value >= 1f)
-            {
-                return 1f;
-            }
-
-            return value;
         }
 
         private static float GetUiWidth()

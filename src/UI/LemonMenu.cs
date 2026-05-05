@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using GTA;
 using GTA.UI;
 using LSOL.Config;
 using LemonUI.Menus;
@@ -11,8 +12,12 @@ namespace LSOL.UI
 {
     public sealed class LemonMenu
     {
+        private const int DynamicRefreshIntervalMs = 200;
+
         private readonly List<LemonMenuEntry> _entries;
         private readonly NativeMenu _menu;
+        private bool _refreshRequested;
+        private int _lastRefreshMs;
 
         public LemonMenu(string title)
         {
@@ -29,6 +34,8 @@ namespace LSOL.UI
             _menu.Buttons.Visible = false;
             Title = title;
             Subtitle = string.Empty;
+            _refreshRequested = true;
+            _lastRefreshMs = int.MinValue;
         }
 
         public string Title
@@ -107,12 +114,12 @@ namespace LSOL.UI
                 _menu.SelectedIndex = ClampIndex(selectedIndex, _menu.Items.Count);
             }
 
-            Refresh();
+            Refresh(true);
         }
 
         public void Open()
         {
-            Refresh();
+            Refresh(true);
             _menu.Visible = true;
         }
 
@@ -136,14 +143,14 @@ namespace LSOL.UI
             if (key == controls.MenuUp)
             {
                 _menu.Previous();
-                Refresh();
+                Refresh(true);
                 return;
             }
 
             if (key == controls.MenuDown)
             {
                 _menu.Next();
-                Refresh();
+                Refresh(true);
                 return;
             }
 
@@ -163,7 +170,7 @@ namespace LSOL.UI
                 if (entry.HandleLeft())
                 {
                     _menu.SoundLeftRight?.PlayFrontend();
-                    Refresh();
+                    Refresh(true);
                 }
 
                 return;
@@ -174,7 +181,7 @@ namespace LSOL.UI
                 if (entry.HandleRight())
                 {
                     _menu.SoundLeftRight?.PlayFrontend();
-                    Refresh();
+                    Refresh(true);
                 }
 
                 return;
@@ -185,7 +192,7 @@ namespace LSOL.UI
                 if (entry.HandleActivate())
                 {
                     _menu.SoundActivated?.PlayFrontend();
-                    Refresh();
+                    Refresh(true);
                 }
 
                 return;
@@ -199,16 +206,24 @@ namespace LSOL.UI
 
         public void Draw()
         {
-            Refresh();
+            Refresh(false);
             _menu.Process();
         }
 
-        private void Refresh()
+        private void Refresh(bool force)
         {
+            if (!force && !_refreshRequested && Game.GameTime - _lastRefreshMs < DynamicRefreshIntervalMs)
+            {
+                return;
+            }
+
             for (int i = 0; i < _entries.Count; i++)
             {
                 _entries[i].Refresh();
             }
+
+            _refreshRequested = false;
+            _lastRefreshMs = Game.GameTime;
         }
 
         private LemonMenuEntry GetSelectedEntry()

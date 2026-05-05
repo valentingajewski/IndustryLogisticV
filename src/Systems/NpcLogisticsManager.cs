@@ -5,6 +5,7 @@ using System.Linq;
 using GTA;
 using GTA.Math;
 using GTA.Native;
+using LSOL;
 using LSOL.Config;
 using LSOL.Domain;
 
@@ -245,7 +246,7 @@ namespace LSOL.Systems
             var additionalCost = Math.Max(0f, totalCost - currentCost);
             if (additionalCost > 0f && _getProfit != null && _getProfit() + 0.001f < additionalCost)
             {
-                message = string.Format("Not enough profit. Need {0} more.", FormatMoney(additionalCost - _getProfit()));
+                message = string.Format("Not enough profit. Need {0} more.", ModFormatting.FormatMoney(additionalCost - _getProfit()));
                 return false;
             }
 
@@ -577,10 +578,6 @@ namespace LSOL.Systems
 
             driver.IsPersistent = true;
             truck.IsPersistent = true;
-            if (contract.CargoVehicle != null && contract.CargoVehicle.Exists())
-            {
-                contract.CargoVehicle.IsPersistent = true;
-            }
 
             Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, driver.Handle, true);
             Function.Call(Hash.SET_PED_KEEP_TASK, driver.Handle, true);
@@ -852,12 +849,6 @@ namespace LSOL.Systems
                 contract.OriginIndustry.Name,
                 contract.DestinationIndustry.Name,
                 contract.Commodity);
-        }
-
-        private static string FormatMoney(float amount)
-        {
-            var absolute = Math.Abs(amount).ToString("0,0");
-            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
         }
 
         private static List<NpcDriverTierDefinition> LoadDriverTiers(string configPath)

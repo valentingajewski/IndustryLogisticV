@@ -18,7 +18,7 @@ using WinForms = System.Windows.Forms;
 
 namespace LSOL
 {
-    public sealed class LSOLScript : Script
+    public sealed partial class LSOLScript : Script
     {
         private const string MessagePrefix = "~y~[LSOL]~s~ ";
         private const float IndustryMarkerDrawDistance = 180f;
@@ -895,7 +895,7 @@ namespace LSOL
             var damageDelta = currentEffectiveDamage - previousEffectiveDamage;
             var damageRatioDelta = damageDelta <= 0.05f
                 ? 0f
-                : Clamp01(damageDelta / CargoRigMaxBodyHealth);
+                : ModMath.Clamp01(damageDelta / CargoRigMaxBodyHealth);
 
             var collisionDamageRatio = 0f;
             if (HasRigCollision(driverVehicle, cargoVehicle) && previousRigSpeed > 0.001f)
@@ -903,7 +903,7 @@ namespace LSOL
                 var speedDrop = Math.Max(0f, previousRigSpeed - currentRigSpeed);
                 if (speedDrop >= 1.1f)
                 {
-                    collisionDamageRatio = Clamp01(speedDrop / 70f);
+                    collisionDamageRatio = ModMath.Clamp01(speedDrop / 70f);
                 }
             }
 
@@ -954,7 +954,7 @@ namespace LSOL
             var width = resolution.Width * 0.1075f;
             var height = resolution.Height * 0.085f;
             var quantityRatio = cargoState.FillRatio;
-            var conditionRatio = Clamp01(cargoState.CargoCondition);
+            var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
             var quantityColor = ResolveCargoOverviewAccent(cargoState.CargoType);
             var conditionColor = ResolveCargoConditionColor(conditionRatio);
                 var contentX = x + 8f;
@@ -1023,7 +1023,7 @@ namespace LSOL
 
         private static void DrawCompactLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color fillColor)
         {
-            ratio = Clamp01(ratio);
+            ratio = ModMath.Clamp01(ratio);
             DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(165, 6, 10, 15));
 
             var innerHeight = Math.Max(2f, height - 2f);
@@ -1513,7 +1513,7 @@ namespace LSOL
             }
 
             _industryPurchaseMenu.Title = "Buy Industry";
-            _industryPurchaseMenu.Subtitle = string.Format("Buy {0} for {1}?", industry.Name, FormatMoney(industry.IndustryPrice));
+            _industryPurchaseMenu.Subtitle = string.Format("Buy {0} for {1}?", industry.Name, ModFormatting.FormatMoney(industry.IndustryPrice));
             _industryPurchaseMenu.SetItems(new[]
             {
                 new OfficeMenuItem
@@ -1538,7 +1538,7 @@ namespace LSOL
                 return string.Empty;
             }
 
-            var detail = string.Format("Deduct {0} and unlock upgrades.", FormatMoney(industry.IndustryPrice));
+            var detail = string.Format("Deduct {0} and unlock upgrades.", ModFormatting.FormatMoney(industry.IndustryPrice));
             if (industry.IndustryOwnerCut > 0f)
             {
                 detail += string.Format(" Removes the {0:0}% owner cut.", industry.IndustryOwnerCut * 100f);
@@ -1546,7 +1546,7 @@ namespace LSOL
 
             if (_profit < industry.IndustryPrice)
             {
-                detail += string.Format(" Need {0} more.", FormatMoney(industry.IndustryPrice - _profit));
+                detail += string.Format(" Need {0} more.", ModFormatting.FormatMoney(industry.IndustryPrice - _profit));
             }
 
             return detail;
@@ -1758,7 +1758,7 @@ namespace LSOL
 
         private string CurrentStartingBalanceCaption()
         {
-            return string.Format("Starting balance: {0}", FormatMoney(GetSelectedStartingBalance()));
+            return string.Format("Starting balance: {0}", ModFormatting.FormatMoney(GetSelectedStartingBalance()));
         }
 
         private string CurrentVehicleFuelSettingCaption()
@@ -1879,312 +1879,6 @@ namespace LSOL
             RebuildModControlMenuItems();
         }
 
-        private void PromptForNewSave()
-        {
-            var rawName = Game.GetUserInput(WindowTitle.EnterMessage60, string.Empty, MaxSaveNameLength);
-            if (string.IsNullOrWhiteSpace(rawName))
-            {
-                ShowStatus("Save creation cancelled.");
-                return;
-            }
-
-            var saveName = SanitizeSaveName(rawName);
-            if (string.IsNullOrWhiteSpace(saveName))
-            {
-                ShowStatus("Enter a valid save name.");
-                return;
-            }
-
-            var filePath = BuildNamedSavePath(saveName);
-            if (File.Exists(filePath))
-            {
-                ShowStatus("A save with that name already exists.");
-                return;
-            }
-
-            _pendingSaveName = saveName;
-            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-
-            _savingOptionsMenu.Close();
-            RebuildNewSaveSetupMenuItems();
-            _newSaveSetupMenu.Open();
-        }
-
-        private void FinalizeNewSave()
-        {
-            if (string.IsNullOrWhiteSpace(_pendingSaveName))
-            {
-                ShowStatus("No save name selected.");
-                return;
-            }
-
-            var filePath = BuildNamedSavePath(_pendingSaveName);
-            if (File.Exists(filePath))
-            {
-                ShowStatus("A save with that name already exists.");
-                return;
-            }
-
-            _industryManager.ResetIndustriesToDefaults();
-            _cargoTransferController.ClearState();
-            _profit = GetSelectedStartingBalance();
-            _currentStartingBalance = _profit;
-            _vehicleFuelDifficultyEnabled = _pendingVehicleFuelDifficultyEnabled;
-            _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
-            _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
-            _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
-            _difficultySettingsLocked = true;
-            _industryStatePath = filePath;
-            ApplyDifficultySettingsToSystems();
-
-            if (!TrySaveIndustryPersistenceToPath(filePath))
-            {
-                return;
-            }
-
-            var createdSaveName = _pendingSaveName;
-            _pendingSaveName = string.Empty;
-            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            ReturnToSavingOptionsMenu();
-            ShowStatus(string.Format("Created save '{0}'.", createdSaveName), 4000);
-        }
-
-        private void LoadNamedSave(NamedSaveEntry entry)
-        {
-            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
-            {
-                ShowStatus("Selected save was not found.");
-                RebuildSaveSlotsMenuItems();
-                return;
-            }
-
-            if (_industryPersistenceEnabled)
-            {
-                TrySaveIndustryPersistence();
-            }
-
-            IndustryPersistenceLoadResult loadResult;
-            if (!TryLoadIndustryPersistenceFromPath(entry.FilePath, true, out loadResult))
-            {
-                return;
-            }
-
-            _industryStatePath = entry.FilePath;
-            ApplyLoadedPersistenceMetadata(loadResult.Metadata, true);
-            ReturnToSavingOptionsMenu();
-            ShowStatus(string.Format("Loaded save '{0}'.", entry.DisplayName), 4000);
-        }
-
-        private void DeleteNamedSave(NamedSaveEntry entry)
-        {
-            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
-            {
-                ShowStatus("Selected save was not found.");
-                RebuildSaveSlotsMenuItems();
-                return;
-            }
-
-            var deletedActiveSave = PathsEqual(_industryStatePath, entry.FilePath);
-
-            try
-            {
-                File.Delete(entry.FilePath);
-            }
-            catch (Exception)
-            {
-                ShowStatus("Failed to delete the selected save.");
-                return;
-            }
-
-            if (deletedActiveSave)
-            {
-                _industryStatePath = _defaultIndustryStatePath;
-
-                IndustryPersistenceLoadResult loadResult;
-                if (TryLoadIndustryPersistenceFromPath(_defaultIndustryStatePath, false, out loadResult))
-                {
-                    ApplyLoadedPersistenceMetadata(loadResult.Metadata, false);
-                }
-                else
-                {
-                    _industryManager.ResetIndustriesToDefaults();
-                    _cargoTransferController.ClearState();
-                    _profit = DefaultStartingBalance;
-                    _currentStartingBalance = DefaultStartingBalance;
-                    _vehicleFuelDifficultyEnabled = false;
-                    _cargoDamageDifficultyEnabled = true;
-                    _industryPricingDifficultyEnabled = false;
-                    _licensingDifficultyEnabled = false;
-                    _difficultySettingsLocked = false;
-                    ApplyDifficultySettingsToSystems();
-                }
-
-                _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-                _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-                _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-                _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-                _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            }
-
-            RebuildSaveSlotsMenuItems();
-            RebuildSavingOptionsMenuItems();
-            RebuildModControlMenuItems();
-            ShowStatus(string.Format("Deleted save '{0}'.", entry.DisplayName), 4000);
-        }
-
-        private void SaveCurrentNamedGame()
-        {
-            NamedSaveEntry activeSave;
-            if (!TryGetActiveNamedSave(out activeSave))
-            {
-                ShowStatus("Create or load a named save first.");
-                return;
-            }
-
-            if (!TrySaveIndustryPersistenceToPath(activeSave.FilePath))
-            {
-                return;
-            }
-
-            RebuildSavingOptionsMenuItems();
-            ShowStatus(string.Format("Saved '{0}'.", activeSave.DisplayName), 4000);
-        }
-
-        private bool TryLoadIndustryPersistence(bool notifyWhenNoData)
-        {
-            IndustryPersistenceLoadResult loadResult;
-            if (!TryLoadIndustryPersistenceFromPath(_industryStatePath, notifyWhenNoData, out loadResult))
-            {
-                return false;
-            }
-
-            ApplyLoadedPersistenceMetadata(loadResult.Metadata, IsNamedSavePath(_industryStatePath));
-
-            if (loadResult.RestoredCount > 0)
-            {
-                ShowStatus(string.Format("Loaded saved industry state for {0} nodes.", loadResult.RestoredCount), 4000);
-            }
-            else
-            {
-                ShowStatus("Loaded saved game settings.", 4000);
-            }
-
-            return true;
-        }
-
-        private void TrySaveIndustryPersistence()
-        {
-            if (!_industryPersistenceEnabled)
-            {
-                return;
-            }
-
-            TrySaveIndustryPersistenceToPath(_industryStatePath);
-        }
-
-        private bool TryLoadIndustryPersistenceFromPath(string filePath, bool notifyWhenNoData, out IndustryPersistenceLoadResult loadResult)
-        {
-            loadResult = null;
-
-            try
-            {
-                loadResult = IndustryPersistenceManager.LoadWithMetadata(filePath, _industryManager.Industries);
-                if (loadResult.RestoredCount > 0 || (loadResult.Metadata != null && loadResult.Metadata.HasGameplayMetadata))
-                {
-                    return true;
-                }
-
-                if (notifyWhenNoData)
-                {
-                    ShowStatus("No saved industry state found yet.");
-                }
-            }
-            catch (Exception)
-            {
-                ShowStatus("Failed to load industry persistence data.");
-            }
-
-            return false;
-        }
-
-        private bool TrySaveIndustryPersistenceToPath(string filePath)
-        {
-            if (string.IsNullOrWhiteSpace(filePath))
-            {
-                ShowStatus("No save path is available.");
-                return false;
-            }
-
-            try
-            {
-                var directoryPath = Path.GetDirectoryName(filePath);
-                if (!string.IsNullOrWhiteSpace(directoryPath))
-                {
-                    Directory.CreateDirectory(directoryPath);
-                }
-
-                IndustryPersistenceManager.Save(filePath, _industryManager.Industries, BuildCurrentPersistenceMetadata());
-                return true;
-            }
-            catch (Exception)
-            {
-                ShowStatus("Failed to save industry persistence data.");
-                return false;
-            }
-        }
-
-        private IndustryPersistenceMetadata BuildCurrentPersistenceMetadata()
-        {
-            return new IndustryPersistenceMetadata
-            {
-                Profit = _profit,
-                StartingBalance = _currentStartingBalance,
-                VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
-                CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
-                IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
-                LicensingDifficultyEnabled = _licensingDifficultyEnabled,
-                DifficultySettingsLocked = _difficultySettingsLocked,
-            };
-        }
-
-        private void ApplyLoadedPersistenceMetadata(IndustryPersistenceMetadata metadata, bool lockDifficultySettings)
-        {
-            if (metadata != null && metadata.HasGameplayMetadata)
-            {
-                _profit = metadata.Profit;
-                _currentStartingBalance = metadata.StartingBalance;
-                _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
-                _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
-                _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
-                _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
-                _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
-            }
-            else
-            {
-                _industryPricingDifficultyEnabled = false;
-                _licensingDifficultyEnabled = false;
-                _difficultySettingsLocked = lockDifficultySettings;
-            }
-
-            _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            ApplyDifficultySettingsToSystems();
-            RebuildModControlMenuItems();
-            RebuildSavingOptionsMenuItems();
-            RebuildDifficultyMenuItems();
-        }
-
         private void ApplyDifficultySettingsToSystems()
         {
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
@@ -2293,7 +1987,7 @@ namespace LSOL
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Add money",
-                    DetailFactory = () => string.Format("Adds {0} to your current balance.", FormatMoney(GetSelectedDebugMoneyAmount())),
+                    DetailFactory = () => string.Format("Adds {0} to your current balance.", ModFormatting.FormatMoney(GetSelectedDebugMoneyAmount())),
                     OnActivate = AddDebugMoney,
                 },
                 new OfficeMenuItem
@@ -2654,7 +2348,7 @@ namespace LSOL
 
         private string CurrentDebugMoneyAmountCaption()
         {
-            return string.Format("Money amount: < {0} >", FormatMoney(GetSelectedDebugMoneyAmount()));
+            return string.Format("Money amount: < {0} >", ModFormatting.FormatMoney(GetSelectedDebugMoneyAmount()));
         }
 
         private void ChangeDebugResourceAmountSelection(int delta)
@@ -3311,7 +3005,7 @@ namespace LSOL
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Buy industry: {0}", FormatMoney(_menuIndustry.IndustryPrice)),
+                    CaptionFactory = () => string.Format("Buy industry: {0}", ModFormatting.FormatMoney(_menuIndustry.IndustryPrice)),
                     DetailFactory = () => "Purchase this site to unlock its upgrade modules.",
                     OnActivate = () => OpenIndustryPurchaseMenu(_menuIndustry, IndustryPurchaseMenuReturnTarget.UpgradeMenu),
                 });
@@ -3634,7 +3328,7 @@ namespace LSOL
             }
 
             _profit += amount;
-            ShowStatus(string.Format("Added {0}. Balance is now {1}.", FormatMoney(amount), FormatMoney(_profit)));
+            ShowStatus(string.Format("Added {0}. Balance is now {1}.", ModFormatting.FormatMoney(amount), ModFormatting.FormatMoney(_profit)));
         }
 
         private float GetSelectedDebugResourceAmountTons()
@@ -3677,218 +3371,6 @@ namespace LSOL
                 : industry.AddInput(resource, tons);
         }
 
-        private string ResolveConfigPath()
-        {
-            var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? BaseDirectory;
-            var candidates = new[]
-            {
-                Path.Combine(assemblyDir, "LSOL.ini"),
-                Path.Combine(BaseDirectory, "LSOL.ini"),
-                Path.Combine(BaseDirectory, "scripts", "LSOL.ini"),
-            };
-
-            for (int i = 0; i < candidates.Length; i++)
-            {
-                if (File.Exists(candidates[i]))
-                {
-                    return candidates[i];
-                }
-            }
-
-            return candidates[0];
-        }
-
-        private string ResolveIndustryStatePath(string configPath)
-        {
-            var configDirectory = string.IsNullOrWhiteSpace(configPath)
-                ? string.Empty
-                : Path.GetDirectoryName(configPath) ?? string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(configDirectory))
-            {
-                return Path.Combine(configDirectory, "LSOL.state.ini");
-            }
-
-            return Path.Combine(BaseDirectory, "LSOL.state.ini");
-        }
-
-        private string ResolveSavegamesDirectoryPath(string configPath)
-        {
-            var configDirectory = string.IsNullOrWhiteSpace(configPath)
-                ? string.Empty
-                : Path.GetDirectoryName(configPath) ?? string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(configDirectory))
-            {
-                return Path.Combine(configDirectory, SavegamesDirectoryName);
-            }
-
-            return Path.Combine(BaseDirectory, SavegamesDirectoryName);
-        }
-
-        private List<NamedSaveEntry> GetAvailableNamedSaves()
-        {
-            if (!Directory.Exists(_savegamesDirectoryPath))
-            {
-                return new List<NamedSaveEntry>();
-            }
-
-            return Directory
-                .GetFiles(_savegamesDirectoryPath, "*.state.ini")
-                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(path => new NamedSaveEntry(ExtractSaveDisplayName(path), path))
-                .ToList();
-        }
-
-        private string BuildSaveSlotDetail(NamedSaveEntry entry)
-        {
-            var action = _saveSlotMenuAction == SaveSlotMenuAction.Load
-                ? "Load this saved game."
-                : "Delete this saved game.";
-
-            if (entry == null)
-            {
-                return action;
-            }
-
-            if (PathsEqual(entry.FilePath, _industryStatePath))
-            {
-                action = "Currently active save. " + action;
-            }
-
-            try
-            {
-                var lastWriteTime = File.GetLastWriteTime(entry.FilePath);
-                return string.Format("{0} Last updated {1:yyyy-MM-dd HH:mm}.", action, lastWriteTime);
-            }
-            catch
-            {
-                return action;
-            }
-        }
-
-        private bool TryGetActiveNamedSave(out NamedSaveEntry activeSave)
-        {
-            activeSave = null;
-            if (!IsNamedSavePath(_industryStatePath))
-            {
-                return false;
-            }
-
-            activeSave = new NamedSaveEntry(ExtractSaveDisplayName(_industryStatePath), _industryStatePath);
-            return true;
-        }
-
-        private string GetCurrentSaveLabel()
-        {
-            NamedSaveEntry activeSave;
-            return TryGetActiveNamedSave(out activeSave) ? activeSave.DisplayName : "Default autosave";
-        }
-
-        private float GetSelectedStartingBalance()
-        {
-            if (StartingBalanceOptions.Length == 0)
-            {
-                return DefaultStartingBalance;
-            }
-
-            if (_selectedStartingBalanceIndex < 0 || _selectedStartingBalanceIndex >= StartingBalanceOptions.Length)
-            {
-                _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(DefaultStartingBalance);
-            }
-
-            return StartingBalanceOptions[_selectedStartingBalanceIndex];
-        }
-
-        private int GetNearestStartingBalanceIndex(float value)
-        {
-            if (StartingBalanceOptions.Length == 0)
-            {
-                return 0;
-            }
-
-            var bestIndex = 0;
-            var bestDistance = Math.Abs(StartingBalanceOptions[0] - value);
-            for (int i = 1; i < StartingBalanceOptions.Length; i++)
-            {
-                var distance = Math.Abs(StartingBalanceOptions[i] - value);
-                if (distance < bestDistance)
-                {
-                    bestDistance = distance;
-                    bestIndex = i;
-                }
-            }
-
-            return bestIndex;
-        }
-
-        private string BuildNamedSavePath(string saveName)
-        {
-            return Path.Combine(_savegamesDirectoryPath, saveName + ".state.ini");
-        }
-
-        private bool IsNamedSavePath(string filePath)
-        {
-            if (string.IsNullOrWhiteSpace(filePath) || PathsEqual(filePath, _defaultIndustryStatePath))
-            {
-                return false;
-            }
-
-            var directory = Path.GetDirectoryName(filePath) ?? string.Empty;
-            return filePath.EndsWith(".state.ini", StringComparison.OrdinalIgnoreCase)
-                && PathsEqual(directory, _savegamesDirectoryPath);
-        }
-
-        private static string ExtractSaveDisplayName(string filePath)
-        {
-            var fileName = Path.GetFileName(filePath) ?? string.Empty;
-            const string stateSuffix = ".state.ini";
-            if (fileName.EndsWith(stateSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                return fileName.Substring(0, fileName.Length - stateSuffix.Length);
-            }
-
-            return Path.GetFileNameWithoutExtension(fileName);
-        }
-
-        private static string SanitizeSaveName(string rawName)
-        {
-            if (string.IsNullOrWhiteSpace(rawName))
-            {
-                return string.Empty;
-            }
-
-            var invalidCharacters = Path.GetInvalidFileNameChars();
-            var filteredCharacters = rawName
-                .Trim()
-                .Where(character => !invalidCharacters.Contains(character))
-                .ToArray();
-            var sanitized = new string(filteredCharacters).Trim().Trim('.');
-
-            const string stateSuffix = ".state";
-            if (sanitized.EndsWith(stateSuffix, StringComparison.OrdinalIgnoreCase))
-            {
-                sanitized = sanitized.Substring(0, sanitized.Length - stateSuffix.Length).Trim();
-            }
-
-            return sanitized;
-        }
-
-        private static bool PathsEqual(string left, string right)
-        {
-            return string.Equals(NormalizePath(left), NormalizePath(right), StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string NormalizePath(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return string.Empty;
-            }
-
-            return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        }
-
         private static float[] BuildStartingBalanceOptions()
         {
             var values = new List<float>();
@@ -3898,12 +3380,6 @@ namespace LSOL
             }
 
             return values.ToArray();
-        }
-
-        private static string FormatMoney(float amount)
-        {
-            var absolute = Math.Abs(amount).ToString("0,0");
-            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
         }
 
         private void ShowStatus(string message, int durationMs = 3000)
@@ -3957,21 +3433,6 @@ namespace LSOL
         private static bool IsPetrolServiceStation(Industry industry)
         {
             return industry != null && industry.IsGasStation;
-        }
-
-        private static float Clamp01(float value)
-        {
-            if (value <= 0f)
-            {
-                return 0f;
-            }
-
-            if (value >= 1f)
-            {
-                return 1f;
-            }
-
-            return value;
         }
 
         private void OnAborted(object sender, EventArgs e)
