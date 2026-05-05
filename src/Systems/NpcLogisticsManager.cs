@@ -15,6 +15,8 @@ namespace LSOL.Systems
     {
         private const float ArrivalDistance = 18f;
         private const int DriveTaskRefreshIntervalMs = 4000;
+        private const int InGameMinutesPerDay = 24 * 60;
+        private const int InGameMinutesPerWeek = 7 * InGameMinutesPerDay;
         private const int LoadDelayMs = 2200;
         private const int UnloadDelayMs = 2400;
         private const int RetryDelayMs = 9000;
@@ -35,6 +37,8 @@ namespace LSOL.Systems
         private readonly Random _random;
 
         private int _nextContractId;
+        private int _lastObservedClockMinute;
+        private NpcWeeklyWageDifficulty _weeklyWageDifficulty;
 
         public NpcLogisticsManager(
             string configPath,
@@ -59,6 +63,8 @@ namespace LSOL.Systems
             _contracts = new List<NpcLogisticsContract>();
             _random = new Random();
             _nextContractId = 1;
+            _lastObservedClockMinute = -1;
+            _weeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
         }
 
         public IReadOnlyList<NpcDriverTierDefinition> DriverTiers
@@ -69,6 +75,11 @@ namespace LSOL.Systems
         public IReadOnlyList<NpcLogisticsContract> Contracts
         {
             get { return _contracts; }
+        }
+
+        public NpcWeeklyWageDifficulty WeeklyWageDifficulty
+        {
+            get { return _weeklyWageDifficulty; }
         }
 
         public List<Industry> GetOriginIndustryOptions()
@@ -125,6 +136,39 @@ namespace LSOL.Systems
             return Math.Max(0f, tier.PriceMultiplier * _globalMarket.GetUnitPrice(normalizedCommodity));
         }
 
+        public void SetWeeklyWageDifficulty(NpcWeeklyWageDifficulty difficulty)
+        {
+            _weeklyWageDifficulty = difficulty;
+        }
+
+        public float GetWeeklyWage(NpcDriverTierDefinition tier)
+        {
+            return tier != null ? tier.GetWeeklyWage(_weeklyWageDifficulty) : 0f;
+        }
+
+        public int GetRemainingPayrollMinutes(NpcLogisticsContract contract)
+        {
+            if (contract == null)
+            {
+                return InGameMinutesPerWeek;
+            }
+
+            return Math.Max(0, InGameMinutesPerWeek - Math.Max(0, contract.PayrollElapsedInGameMinutes));
+        }
+
+        public string BuildPayrollStatus(NpcLogisticsContract contract)
+        {
+            if (contract == null || contract.Tier == null)
+            {
+                return "Payroll unavailable";
+            }
+
+            return string.Format(
+                "Weekly {0} | {1}",
+                ModFormatting.FormatMoney(GetWeeklyWage(contract.Tier)),
+                FormatPayrollCountdown(GetRemainingPayrollMinutes(contract)));
+        }
+
         public bool TryCreateContract(
             Industry originIndustry,
             Industry destinationIndustry,
@@ -160,10 +204,16 @@ namespace LSOL.Systems
             return true;
         }
 
-        public void Update(int now)
+        public void Update(int now, int currentClockMinute)
         {
+            var elapsedPayrollMinutes = GetElapsedPayrollMinutes(currentClockMinute);
             for (int i = 0; i < _contracts.Count; i++)
             {
+                if (elapsedPayrollMinutes > 0)
+                {
+                    UpdatePayroll(_contracts[i], elapsedPayrollMinutes);
+                }
+
                 UpdateContract(_contracts[i], now);
             }
         }
@@ -259,6 +309,9 @@ namespace LSOL.Systems
             {
                 contract = new NpcLogisticsContract(_nextContractId++);
                 _contracts.Add(contract);
+                contract.PayrollElapsedInGameMinutes = 0;
+                contract.CompletedPayrollCycles = 0;
+                contract.TotalWeeklyWagesPaid = 0f;
             }
             else
             {
@@ -346,6 +399,42 @@ namespace LSOL.Systems
                 case NpcRoutePhase.Unloading:
                     CompleteUnloading(contract, now);
                     break;
+            }
+        }
+
+        private void UpdatePayroll(NpcLogisticsContract contract, int elapsedPayrollMinutes)
+        {
+            if (contract == null || contract.Tier == null || elapsedPayrollMinutes <= 0)
+            {
+                return;
+            }
+
+            contract.PayrollElapsedInGameMinutes += elapsedPayrollMinutes;
+
+            var payrollCyclesDue = contract.PayrollElapsedInGameMinutes / InGameMinutesPerWeek;
+            if (payrollCyclesDue <= 0)
+            {
+                return;
+            }
+
+            contract.PayrollElapsedInGameMinutes %= InGameMinutesPerWeek;
+
+            var weeklyWage = GetWeeklyWage(contract.Tier);
+            var totalCharge = weeklyWage * payrollCyclesDue;
+            if (totalCharge > 0f && _deductProfit != null)
+            {
+                _deductProfit(totalCharge);
+            }
+
+            contract.CompletedPayrollCycles += payrollCyclesDue;
+            contract.TotalWeeklyWagesPaid += totalCharge;
+
+            if (_showStatus != null && totalCharge > 0f)
+            {
+                _showStatus(string.Format(
+                    "NPC payroll charged {0} for {1}.",
+                    ModFormatting.FormatMoney(totalCharge),
+                    BuildContractLabel(contract)));
             }
         }
 
@@ -837,6 +926,53 @@ namespace LSOL.Systems
                 : (contract != null ? contract.Truck : null);
         }
 
+        private int GetElapsedPayrollMinutes(int currentClockMinute)
+        {
+            var normalizedClockMinute = Math.Max(0, currentClockMinute);
+            if (_lastObservedClockMinute < 0)
+            {
+                _lastObservedClockMinute = normalizedClockMinute;
+                return 0;
+            }
+
+            var elapsedMinutes = normalizedClockMinute - _lastObservedClockMinute;
+            if (elapsedMinutes < 0)
+            {
+                _lastObservedClockMinute = normalizedClockMinute;
+                return 0;
+            }
+
+            _lastObservedClockMinute = normalizedClockMinute;
+            return Math.Max(0, elapsedMinutes);
+        }
+
+        private static string FormatPayrollCountdown(int remainingMinutes)
+        {
+            if (remainingMinutes <= 0)
+            {
+                return "Payroll due";
+            }
+
+            var days = remainingMinutes / InGameMinutesPerDay;
+            var hours = (remainingMinutes % InGameMinutesPerDay) / 60;
+            var minutes = remainingMinutes % 60;
+            if (days > 0)
+            {
+                return hours > 0
+                    ? string.Format("Payroll in {0}d {1}h", days, hours)
+                    : string.Format("Payroll in {0}d", days);
+            }
+
+            if (hours > 0)
+            {
+                return minutes > 0
+                    ? string.Format("Payroll in {0}h {1}m", hours, minutes)
+                    : string.Format("Payroll in {0}h", hours);
+            }
+
+            return string.Format("Payroll in {0}m", Math.Max(1, minutes));
+        }
+
         private static string BuildContractLabel(NpcLogisticsContract contract)
         {
             if (contract == null || contract.OriginIndustry == null || contract.DestinationIndustry == null)
@@ -861,9 +997,9 @@ namespace LSOL.Systems
 
             return new List<NpcDriverTierDefinition>
             {
-                BuildTier(ini, "RookieNPC", "Rookie", DefaultNpcModel, 0.40f, 0.60f, 25f),
-                BuildTier(ini, "ProfessionalNPC", "Professional", "s_m_y_construct_01", 0.20f, 0.80f, 50f),
-                BuildTier(ini, "VeteranNPC", "Veteran", "s_m_m_dockwork_01", 0.10f, 0.90f, 100f),
+                BuildTier(ini, "RookieNPC", "Rookie", DefaultNpcModel, 0.40f, 0.60f, 25f, 1500f, 2000f, 3000f),
+                BuildTier(ini, "ProfessionalNPC", "Professional", "s_m_y_construct_01", 0.20f, 0.80f, 50f, 3000f, 4000f, 6000f),
+                BuildTier(ini, "VeteranNPC", "Veteran", "s_m_m_dockwork_01", 0.10f, 0.90f, 100f, 6000f, 8000f, 12000f),
             };
         }
 
@@ -874,7 +1010,10 @@ namespace LSOL.Systems
             string fallbackModel,
             float fallbackLossRate,
             float fallbackSpeedMultiplier,
-            float fallbackPriceMultiplier)
+            float fallbackPriceMultiplier,
+            float fallbackWeeklyWageCasual,
+            float fallbackWeeklyWageStandard,
+            float fallbackWeeklyWageHardcore)
         {
             var modelName = ini.GetString(section, "NPCModel", fallbackModel).Trim().Trim('"');
             return new NpcDriverTierDefinition(
@@ -883,13 +1022,32 @@ namespace LSOL.Systems
                 string.IsNullOrWhiteSpace(modelName) ? fallbackModel : modelName,
                 Math.Max(0f, ini.GetFloat(section, "NPCCargoLooseRate", fallbackLossRate)),
                 Math.Max(0.1f, ini.GetFloat(section, "NPCSpeedMultiplier", fallbackSpeedMultiplier)),
-                Math.Max(1f, ini.GetFloat(section, "NPCPriceMultiplier", fallbackPriceMultiplier)));
+                Math.Max(1f, ini.GetFloat(section, "NPCPriceMultiplier", fallbackPriceMultiplier)),
+                Math.Max(0f, ini.GetFloat(section, "NPCWeeklyWageCasual", fallbackWeeklyWageCasual)),
+                Math.Max(0f, ini.GetFloat(section, "NPCWeeklyWageStandard", fallbackWeeklyWageStandard)),
+                Math.Max(0f, ini.GetFloat(section, "NPCWeeklyWageHardcore", fallbackWeeklyWageHardcore)));
         }
+    }
+
+    public enum NpcWeeklyWageDifficulty
+    {
+        Casual = 0,
+        Standard = 1,
+        Hardcore = 2,
     }
 
     public sealed class NpcDriverTierDefinition
     {
-        public NpcDriverTierDefinition(string id, string displayName, string npcModel, float cargoLossRate, float speedMultiplier, float priceMultiplier)
+        public NpcDriverTierDefinition(
+            string id,
+            string displayName,
+            string npcModel,
+            float cargoLossRate,
+            float speedMultiplier,
+            float priceMultiplier,
+            float weeklyWageCasual,
+            float weeklyWageStandard,
+            float weeklyWageHardcore)
         {
             Id = id;
             DisplayName = displayName;
@@ -897,6 +1055,9 @@ namespace LSOL.Systems
             CargoLossRate = cargoLossRate;
             SpeedMultiplier = speedMultiplier;
             PriceMultiplier = priceMultiplier;
+            WeeklyWageCasual = weeklyWageCasual;
+            WeeklyWageStandard = weeklyWageStandard;
+            WeeklyWageHardcore = weeklyWageHardcore;
         }
 
         public string Id { get; private set; }
@@ -910,6 +1071,25 @@ namespace LSOL.Systems
         public float SpeedMultiplier { get; private set; }
 
         public float PriceMultiplier { get; private set; }
+
+        public float WeeklyWageCasual { get; private set; }
+
+        public float WeeklyWageStandard { get; private set; }
+
+        public float WeeklyWageHardcore { get; private set; }
+
+        public float GetWeeklyWage(NpcWeeklyWageDifficulty difficulty)
+        {
+            switch (difficulty)
+            {
+                case NpcWeeklyWageDifficulty.Casual:
+                    return WeeklyWageCasual;
+                case NpcWeeklyWageDifficulty.Hardcore:
+                    return WeeklyWageHardcore;
+                default:
+                    return WeeklyWageStandard;
+            }
+        }
     }
 
     public sealed class NpcLogisticsContract
@@ -936,6 +1116,12 @@ namespace LSOL.Systems
         public VehicleDefinition TractorDefinition { get; internal set; }
 
         public float ContractCost { get; internal set; }
+
+        public int PayrollElapsedInGameMinutes { get; internal set; }
+
+        public int CompletedPayrollCycles { get; internal set; }
+
+        public float TotalWeeklyWagesPaid { get; internal set; }
 
         public int CompletedDeliveries { get; internal set; }
 

@@ -118,7 +118,7 @@ namespace LSOL.Systems
             using (var writer = new StreamWriter(filePath, false))
             {
                 writer.WriteLine("[Meta]");
-                writer.WriteLine("Version={0}", metadata != null ? 3 : 1);
+                writer.WriteLine("Version={0}", metadata != null ? 4 : 1);
                 writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
                 if (metadata != null)
                 {
@@ -128,6 +128,7 @@ namespace LSOL.Systems
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
                     writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
                 }
                 writer.WriteLine();
@@ -184,6 +185,7 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
                 ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
                 ini.HasKey("Meta", "LicensingDifficultyEnabled") ||
+                ini.HasKey("Meta", "NpcWeeklyWageDifficulty") ||
                 ini.HasKey("Meta", "DifficultySettingsLocked");
 
             metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
@@ -192,8 +194,22 @@ namespace LSOL.Systems
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
             metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
             metadata.LicensingDifficultyEnabled = ini.GetBool("Meta", "LicensingDifficultyEnabled", false);
+            metadata.NpcWeeklyWageDifficulty = ParseNpcWeeklyWageDifficulty(
+                ini.GetString("Meta", "NpcWeeklyWageDifficulty", NpcWeeklyWageDifficulty.Standard.ToString()),
+                NpcWeeklyWageDifficulty.Standard);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             return metadata;
+        }
+
+        private static NpcWeeklyWageDifficulty ParseNpcWeeklyWageDifficulty(string raw, NpcWeeklyWageDifficulty fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            NpcWeeklyWageDifficulty parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 
         private static string BuildIndustrySectionName(string industryId)
@@ -264,6 +280,7 @@ namespace LSOL.Systems
         public bool CargoDamageDifficultyEnabled { get; set; }
         public bool IndustryPricingDifficultyEnabled { get; set; }
         public bool LicensingDifficultyEnabled { get; set; }
+        public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
         public bool DifficultySettingsLocked { get; set; }
     }
 }

@@ -620,10 +620,11 @@ namespace LSOL.UI
             }
 
             return string.Format(
-                "Model {0} | Loss up to {1:0}% | Speed {2:0}%",
+                "Model {0} | Loss up to {1:0}% | Speed {2:0}% | Weekly {3}",
                 tier.NpcModel,
                 tier.CargoLossRate * 100f,
-                tier.SpeedMultiplier * 100f);
+                tier.SpeedMultiplier * 100f,
+                ModFormatting.FormatMoney(_manager.GetWeeklyWage(tier)));
         }
 
         private string CurrentHireActionDetail()
@@ -641,13 +642,15 @@ namespace LSOL.UI
             var additionalCost = _editingContract == null
                 ? fullCost
                 : Math.Max(0f, fullCost - _editingContract.ContractCost);
+            var weeklyWage = _manager.GetWeeklyWage(tier);
 
             var detail = string.Format(
-                "{0} -> {1} | {2} | Cost {3}",
+                "{0} -> {1} | {2} | Upfront {3} | Weekly {4}",
                 origin.Name,
                 destination.Name,
                 resource,
-                ModFormatting.FormatMoney(additionalCost));
+                ModFormatting.FormatMoney(additionalCost),
+                ModFormatting.FormatMoney(weeklyWage));
 
             if (_editingContract != null && additionalCost <= 0f)
             {
@@ -688,8 +691,9 @@ namespace LSOL.UI
             }
 
             return string.Format(
-                "{0} | {1} | Deliveries {2}",
+                "{0} | {1} | {2} | Deliveries {3}",
                 contract.Commodity,
+                _manager.BuildPayrollStatus(contract),
                 contract.StatusText,
                 contract.CompletedDeliveries);
         }

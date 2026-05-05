@@ -109,6 +109,8 @@ namespace LSOL
         private bool _pendingIndustryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
         private bool _pendingLicensingDifficultyEnabled;
+        private NpcWeeklyWageDifficulty _npcWeeklyWageDifficulty;
+        private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
 
@@ -263,10 +265,12 @@ namespace LSOL
             _cargoDamageDifficultyEnabled = true;
             _industryPricingDifficultyEnabled = false;
             _licensingDifficultyEnabled = false;
+            _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
             _vehicleFuelDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingSaveName = string.Empty;
@@ -359,7 +363,7 @@ namespace LSOL
                 _blipLifecycleManager.Refresh();
             }
 
-            _npcLogisticsManager.Update(gameTime);
+            _npcLogisticsManager.Update(gameTime, GetCurrentInGameWeekMinute());
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -1372,6 +1376,14 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = CurrentPendingNpcWeeklyWageDifficultyCaption,
+                    DetailFactory = CurrentPendingNpcWeeklyWageDifficultyDetail,
+                    OnLeft = () => ChangePendingNpcWeeklyWageDifficulty(-1),
+                    OnRight = () => ChangePendingNpcWeeklyWageDifficulty(1),
+                    OnActivate = () => ChangePendingNpcWeeklyWageDifficulty(1),
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => "Vehicle fuel",
                     DetailFactory = () => "Enable vehicle fuel usage for this save.",
                     CheckboxStateFactory = () => _pendingVehicleFuelDifficultyEnabled,
@@ -1652,11 +1664,19 @@ namespace LSOL
         {
             _difficultyMenu.Title = "Difficulty Settings";
             _difficultyMenu.Subtitle = _difficultySettingsLocked
-                ? "Locked by the active save"
+                ? "Locked by the active save. Values are read-only."
                 : "Enable or disable challenge options";
 
             _difficultyMenu.SetItems(new[]
             {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentNpcWeeklyWageDifficultyCaption,
+                    DetailFactory = CurrentNpcWeeklyWageDifficultyDetail,
+                    OnLeft = () => ChangeNpcWeeklyWageDifficulty(-1),
+                    OnRight = () => ChangeNpcWeeklyWageDifficulty(1),
+                    OnActivate = () => ChangeNpcWeeklyWageDifficulty(1),
+                },
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Vehicle fuel",
@@ -1695,12 +1715,6 @@ namespace LSOL
 
         private void OpenDifficultyMenu()
         {
-            if (_difficultySettingsLocked)
-            {
-                ShowDifficultySettingsLockedStatus();
-                return;
-            }
-
             _modControlMenu.Close();
             RebuildDifficultyMenuItems();
             _difficultyMenu.Open();
@@ -1741,8 +1755,8 @@ namespace LSOL
         private string CurrentDifficultySettingsDetail()
         {
             return _difficultySettingsLocked
-                ? "Locked by the active save. Create a new save to change these settings."
-                : "Change vehicle fuel, cargo damage, industry pricing, and licensing settings.";
+                ? string.Format("Locked by the active save. NPC wages: {0}. Create a new save to change these settings.", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty))
+                : string.Format("Change vehicle fuel, cargo damage, industry pricing, licensing, and NPC wages. Current wages: {0}.", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
         }
 
         private string CurrentSaveGameDetail()
@@ -1764,6 +1778,26 @@ namespace LSOL
         private string CurrentVehicleFuelSettingCaption()
         {
             return string.Format("Vehicle fuel: {0}", _vehicleFuelDifficultyEnabled ? "~g~On~s~" : "~r~Off~s~");
+        }
+
+        private string CurrentNpcWeeklyWageDifficultyCaption()
+        {
+            return string.Format("NPC weekly wages: < {0} >", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
+        }
+
+        private string CurrentNpcWeeklyWageDifficultyDetail()
+        {
+            return BuildNpcWeeklyWageDifficultyDetail(_npcWeeklyWageDifficulty);
+        }
+
+        private string CurrentPendingNpcWeeklyWageDifficultyCaption()
+        {
+            return string.Format("NPC weekly wages: < {0} >", FormatWeeklyWageDifficulty(_pendingNpcWeeklyWageDifficulty));
+        }
+
+        private string CurrentPendingNpcWeeklyWageDifficultyDetail()
+        {
+            return BuildNpcWeeklyWageDifficultyDetail(_pendingNpcWeeklyWageDifficulty);
         }
 
         private void ToggleMechanicsFromMenu()
@@ -1807,6 +1841,11 @@ namespace LSOL
         private void TogglePendingLicensingSetting()
         {
             _pendingLicensingDifficultyEnabled = !_pendingLicensingDifficultyEnabled;
+        }
+
+        private void ChangePendingNpcWeeklyWageDifficulty(int delta)
+        {
+            _pendingNpcWeeklyWageDifficulty = OffsetWeeklyWageDifficulty(_pendingNpcWeeklyWageDifficulty, delta);
         }
 
         private void ToggleVehicleFuelSetting()
@@ -1855,6 +1894,18 @@ namespace LSOL
             ApplyDifficultySettingsToSystems();
         }
 
+        private void ChangeNpcWeeklyWageDifficulty(int delta)
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _npcWeeklyWageDifficulty = OffsetWeeklyWageDifficulty(_npcWeeklyWageDifficulty, delta);
+            ApplyDifficultySettingsToSystems();
+        }
+
         private void ShowDifficultySettingsLockedStatus()
         {
             ShowStatus("Difficulty settings are sealed for this save. Create a new save to change them.");
@@ -1883,11 +1934,45 @@ namespace LSOL
         {
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
+            _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
 
             if (_upgradeMenu.IsOpen)
             {
                 RebuildUpgradeMenuItems();
             }
+        }
+
+        private string BuildNpcWeeklyWageDifficultyDetail(NpcWeeklyWageDifficulty difficulty)
+        {
+            var rookie = _npcLogisticsManager.DriverTiers.FirstOrDefault(tier => string.Equals(tier.Id, "Rookie", StringComparison.OrdinalIgnoreCase));
+            var professional = _npcLogisticsManager.DriverTiers.FirstOrDefault(tier => string.Equals(tier.Id, "Professional", StringComparison.OrdinalIgnoreCase));
+            var veteran = _npcLogisticsManager.DriverTiers.FirstOrDefault(tier => string.Equals(tier.Id, "Veteran", StringComparison.OrdinalIgnoreCase));
+
+            return string.Format(
+                "Weekly NPC payroll only. Rookie {0} | Pro {1} | Veteran {2}.",
+                rookie != null ? ModFormatting.FormatMoney(rookie.GetWeeklyWage(difficulty)) : ModFormatting.FormatMoney(0f),
+                professional != null ? ModFormatting.FormatMoney(professional.GetWeeklyWage(difficulty)) : ModFormatting.FormatMoney(0f),
+                veteran != null ? ModFormatting.FormatMoney(veteran.GetWeeklyWage(difficulty)) : ModFormatting.FormatMoney(0f));
+        }
+
+        private static string FormatWeeklyWageDifficulty(NpcWeeklyWageDifficulty difficulty)
+        {
+            switch (difficulty)
+            {
+                case NpcWeeklyWageDifficulty.Casual:
+                    return "Casual";
+                case NpcWeeklyWageDifficulty.Hardcore:
+                    return "Hardcore";
+                default:
+                    return "Standard";
+            }
+        }
+
+        private static NpcWeeklyWageDifficulty OffsetWeeklyWageDifficulty(NpcWeeklyWageDifficulty current, int delta)
+        {
+            const int count = 3;
+            var next = ((int)current + delta + count) % count;
+            return (NpcWeeklyWageDifficulty)next;
         }
 
         private string PurchaseContractorPermitFromOverview(Industry industry)
@@ -2153,7 +2238,7 @@ namespace LSOL
                 return;
             }
 
-            _profit = Math.Max(0f, _profit - amount);
+            _profit -= amount;
         }
 
         private void RebuildVehicleCargoMenuItems()
@@ -3229,6 +3314,19 @@ namespace LSOL
             return new PointF(
                 x * (scriptWidth / resolution.Width),
                 y * (scriptHeight / resolution.Height));
+        }
+
+        private static int GetCurrentInGameWeekMinute()
+        {
+            var year = Math.Max(2000, Function.Call<int>(Hash.GET_CLOCK_YEAR));
+            var month = Math.Max(1, Math.Min(12, Function.Call<int>(Hash.GET_CLOCK_MONTH) + 1));
+            var day = Math.Max(1, Function.Call<int>(Hash.GET_CLOCK_DAY_OF_MONTH));
+            var hours = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_HOURS)) % 24;
+            var minutes = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_MINUTES)) % 60;
+            var clampedDay = Math.Min(day, DateTime.DaysInMonth(year, month));
+            var clockDate = new DateTime(year, month, clampedDay, hours, minutes, 0, DateTimeKind.Unspecified);
+            var epoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
+            return (int)(clockDate - epoch).TotalMinutes;
         }
 
         private static void DrawRect(float screenWidth, float screenHeight, float x, float y, float width, float height, Color color)

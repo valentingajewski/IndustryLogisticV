@@ -39,6 +39,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
 
             _savingOptionsMenu.Close();
             RebuildNewSaveSetupMenuItems();
@@ -68,6 +69,7 @@ namespace LSOL
             _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
             _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
             _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
+            _npcWeeklyWageDifficulty = _pendingNpcWeeklyWageDifficulty;
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
             ApplyDifficultySettingsToSystems();
@@ -84,6 +86,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ReturnToSavingOptionsMenu();
             ShowStatus(string.Format("Created save '{0}'.", createdSaveName), 4000);
         }
@@ -169,6 +172,7 @@ namespace LSOL
                     _cargoDamageDifficultyEnabled = true;
                     _industryPricingDifficultyEnabled = false;
                     _licensingDifficultyEnabled = false;
+                    _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
                     _difficultySettingsLocked = false;
                     ApplyDifficultySettingsToSystems();
                 }
@@ -178,6 +182,7 @@ namespace LSOL
                 _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
                 _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
                 _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+                _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             }
 
             RebuildSaveSlotsMenuItems();
@@ -324,6 +329,7 @@ namespace LSOL
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
                 IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
                 LicensingDifficultyEnabled = _licensingDifficultyEnabled,
+                NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
                 DifficultySettingsLocked = _difficultySettingsLocked,
             };
         }
@@ -338,12 +344,14 @@ namespace LSOL
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
                 _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
                 _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
+                _npcWeeklyWageDifficulty = metadata.NpcWeeklyWageDifficulty;
                 _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
             }
             else
             {
                 _industryPricingDifficultyEnabled = false;
                 _licensingDifficultyEnabled = false;
+                _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
@@ -352,6 +360,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ApplyDifficultySettingsToSystems();
             RebuildModControlMenuItems();
             RebuildSavingOptionsMenuItems();
