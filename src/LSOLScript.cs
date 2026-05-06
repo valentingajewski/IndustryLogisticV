@@ -109,6 +109,8 @@ namespace LSOL
         private bool _pendingIndustryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
         private bool _pendingLicensingDifficultyEnabled;
+        private EconomyDifficultyPreset _economyDifficultyPreset;
+        private EconomyDifficultyPreset _pendingEconomyDifficultyPreset;
         private NpcWeeklyWageDifficulty _npcWeeklyWageDifficulty;
         private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
         private bool _vehicleFuelDifficultyEnabled;
@@ -265,11 +267,13 @@ namespace LSOL
             _cargoDamageDifficultyEnabled = true;
             _industryPricingDifficultyEnabled = false;
             _licensingDifficultyEnabled = false;
+            _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
             _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
             _vehicleFuelDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
@@ -1376,6 +1380,14 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = CurrentPendingEconomyDifficultyPresetCaption,
+                    DetailFactory = CurrentPendingEconomyDifficultyPresetDetail,
+                    OnLeft = () => ChangePendingEconomyDifficultyPreset(-1),
+                    OnRight = () => ChangePendingEconomyDifficultyPreset(1),
+                    OnActivate = () => ChangePendingEconomyDifficultyPreset(1),
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = CurrentPendingNpcWeeklyWageDifficultyCaption,
                     DetailFactory = CurrentPendingNpcWeeklyWageDifficultyDetail,
                     OnLeft = () => ChangePendingNpcWeeklyWageDifficulty(-1),
@@ -1671,6 +1683,14 @@ namespace LSOL
             {
                 new OfficeMenuItem
                 {
+                    CaptionFactory = CurrentEconomyDifficultyPresetCaption,
+                    DetailFactory = CurrentEconomyDifficultyPresetDetail,
+                    OnLeft = () => ChangeEconomyDifficultyPreset(-1),
+                    OnRight = () => ChangeEconomyDifficultyPreset(1),
+                    OnActivate = () => ChangeEconomyDifficultyPreset(1),
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = CurrentNpcWeeklyWageDifficultyCaption,
                     DetailFactory = CurrentNpcWeeklyWageDifficultyDetail,
                     OnLeft = () => ChangeNpcWeeklyWageDifficulty(-1),
@@ -1755,8 +1775,14 @@ namespace LSOL
         private string CurrentDifficultySettingsDetail()
         {
             return _difficultySettingsLocked
-                ? string.Format("Locked by the active save. NPC wages: {0}. Create a new save to change these settings.", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty))
-                : string.Format("Change vehicle fuel, cargo damage, industry pricing, licensing, and NPC wages. Current wages: {0}.", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
+                ? string.Format(
+                    "Locked by the active save. Economy: {0} | NPC wages: {1}. Create a new save to change these settings.",
+                    FormatEconomyDifficultyPreset(_economyDifficultyPreset),
+                    FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty))
+                : string.Format(
+                    "Change the economy preset, vehicle fuel, cargo damage, industry pricing, licensing, and NPC wages. Economy: {0} | wages: {1}.",
+                    FormatEconomyDifficultyPreset(_economyDifficultyPreset),
+                    FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
         }
 
         private string CurrentSaveGameDetail()
@@ -1785,9 +1811,29 @@ namespace LSOL
             return string.Format("NPC weekly wages: < {0} >", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
         }
 
+        private string CurrentEconomyDifficultyPresetCaption()
+        {
+            return string.Format("Economy preset: < {0} >", FormatEconomyDifficultyPreset(_economyDifficultyPreset));
+        }
+
+        private string CurrentEconomyDifficultyPresetDetail()
+        {
+            return BuildEconomyDifficultyPresetDetail(_economyDifficultyPreset);
+        }
+
         private string CurrentNpcWeeklyWageDifficultyDetail()
         {
             return BuildNpcWeeklyWageDifficultyDetail(_npcWeeklyWageDifficulty);
+        }
+
+        private string CurrentPendingEconomyDifficultyPresetCaption()
+        {
+            return string.Format("Economy preset: < {0} >", FormatEconomyDifficultyPreset(_pendingEconomyDifficultyPreset));
+        }
+
+        private string CurrentPendingEconomyDifficultyPresetDetail()
+        {
+            return BuildEconomyDifficultyPresetDetail(_pendingEconomyDifficultyPreset);
         }
 
         private string CurrentPendingNpcWeeklyWageDifficultyCaption()
@@ -1841,6 +1887,11 @@ namespace LSOL
         private void TogglePendingLicensingSetting()
         {
             _pendingLicensingDifficultyEnabled = !_pendingLicensingDifficultyEnabled;
+        }
+
+        private void ChangePendingEconomyDifficultyPreset(int delta)
+        {
+            _pendingEconomyDifficultyPreset = OffsetEconomyDifficultyPreset(_pendingEconomyDifficultyPreset, delta);
         }
 
         private void ChangePendingNpcWeeklyWageDifficulty(int delta)
@@ -1906,6 +1957,18 @@ namespace LSOL
             ApplyDifficultySettingsToSystems();
         }
 
+        private void ChangeEconomyDifficultyPreset(int delta)
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _economyDifficultyPreset = OffsetEconomyDifficultyPreset(_economyDifficultyPreset, delta);
+            ApplyDifficultySettingsToSystems();
+        }
+
         private void ShowDifficultySettingsLockedStatus()
         {
             ShowStatus("Difficulty settings are sealed for this save. Create a new save to change them.");
@@ -1934,6 +1997,7 @@ namespace LSOL
         {
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
+            _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
             _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
 
             if (_upgradeMenu.IsOpen)
@@ -1968,11 +2032,44 @@ namespace LSOL
             }
         }
 
+        private string BuildEconomyDifficultyPresetDetail(EconomyDifficultyPreset preset)
+        {
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    return "Industry price $200,000 | licence $8,000 | 180t input | 150t output | base 40 cyc/h. OmegaFactory x1.75, RecyclingCenter x3.00.";
+                case EconomyDifficultyPreset.Hardcore:
+                    return "Industry price $800,000 | licence $18,000 | 80t input | 70t output | base 24 cyc/h. OmegaFactory x1.25, RecyclingCenter x2.00.";
+                default:
+                    return "Industry price $450,000 | licence $13,000 | 120t input | 100t output | base 32 cyc/h. OmegaFactory x1.50, RecyclingCenter x2.50.";
+            }
+        }
+
+        private static string FormatEconomyDifficultyPreset(EconomyDifficultyPreset preset)
+        {
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    return "Casual";
+                case EconomyDifficultyPreset.Hardcore:
+                    return "Hardcore";
+                default:
+                    return "Standard";
+            }
+        }
+
         private static NpcWeeklyWageDifficulty OffsetWeeklyWageDifficulty(NpcWeeklyWageDifficulty current, int delta)
         {
             const int count = 3;
             var next = ((int)current + delta + count) % count;
             return (NpcWeeklyWageDifficulty)next;
+        }
+
+        private static EconomyDifficultyPreset OffsetEconomyDifficultyPreset(EconomyDifficultyPreset current, int delta)
+        {
+            const int count = 3;
+            var next = ((int)current + delta + count) % count;
+            return (EconomyDifficultyPreset)next;
         }
 
         private string PurchaseContractorPermitFromOverview(Industry industry)

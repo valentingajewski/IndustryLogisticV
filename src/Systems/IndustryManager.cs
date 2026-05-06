@@ -13,9 +13,11 @@ namespace LSOL.Systems
 
         private readonly List<Industry> _industries;
         private readonly Dictionary<long, List<Industry>> _industriesBySpatialCell;
+        private readonly Dictionary<string, IndustryConfig> _baseIndustryConfigs;
         private readonly Dictionary<string, IndustryConfig> _defaultIndustryConfigs;
         private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
         private readonly float _industryOmegaCapacityMultiplier;
+        private EconomyDifficultyPreset _economyPreset;
         private bool _industryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
 
@@ -23,33 +25,23 @@ namespace LSOL.Systems
         {
             _industries = new List<Industry>();
             _industriesBySpatialCell = new Dictionary<long, List<Industry>>();
+            _baseIndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase);
             _defaultIndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase);
             _petrolStationDrainRatePerMinuteByIndustryId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             _industryOmegaCapacityMultiplier = config == null ? 0.2f : config.IndustryOmegaCapacityMultiplier;
+            _economyPreset = EconomyDifficultyPreset.Standard;
             foreach (var pair in config.IndustryConfigs)
             {
                 var industryConfig = pair.Value;
-                var runtimeConfig = new IndustryConfig
+                var baseConfig = CloneIndustryConfig(industryConfig);
+                if (baseConfig == null || string.IsNullOrWhiteSpace(baseConfig.Id))
                 {
-                    Id = industryConfig.Id,
-                    LocationKind = industryConfig.LocationKind,
-                    Name = industryConfig.Name,
-                    Position = industryConfig.Position,
-                    VehicleSpawnPosition = industryConfig.VehicleSpawnPosition,
-                    VehicleSpawnHeading = industryConfig.VehicleSpawnHeading,
-                    Inputs = new HashSet<string>(industryConfig.Inputs, StringComparer.OrdinalIgnoreCase),
-                    Outputs = new HashSet<string>(industryConfig.Outputs, StringComparer.OrdinalIgnoreCase),
-                    InputCapacityTons = industryConfig.InputCapacityTons,
-                    OutputCapacityTons = industryConfig.OutputCapacityTons,
-                    ProductionRate = industryConfig.ProductionRate,
-                    StartingTankRatio = industryConfig.StartingTankRatio,
-                    Density = industryConfig.Density,
-                    IndustryPrice = industryConfig.IndustryPrice,
-                    IndustryLicencePrice = industryConfig.IndustryLicencePrice,
-                    IndustryOwnerCut = industryConfig.IndustryOwnerCut,
-                    IsOwned = industryConfig.IsOwned,
-                    HasContractorPermit = industryConfig.HasContractorPermit,
-                };
+                    continue;
+                }
+
+                _baseIndustryConfigs[baseConfig.Id] = baseConfig;
+
+                var runtimeConfig = BuildEffectiveIndustryConfig(baseConfig, _economyPreset);
                 _defaultIndustryConfigs[runtimeConfig.Id] = CloneIndustryConfig(runtimeConfig);
 
                 var supportsOmegaBoost = ShouldUseOmegaBoost(runtimeConfig);
@@ -91,6 +83,57 @@ namespace LSOL.Systems
         public void SetLicensingDifficultyEnabled(bool enabled)
         {
             _licensingDifficultyEnabled = enabled;
+        }
+
+        public void SetEconomyDifficultyPreset(EconomyDifficultyPreset preset)
+        {
+            _economyPreset = preset;
+
+            _defaultIndustryConfigs.Clear();
+            foreach (var pair in _baseIndustryConfigs)
+            {
+                var effectiveConfig = BuildEffectiveIndustryConfig(pair.Value, preset);
+                _defaultIndustryConfigs[pair.Key] = CloneIndustryConfig(effectiveConfig);
+            }
+
+            for (int i = 0; i < _industries.Count; i++)
+            {
+                var industry = _industries[i];
+                if (industry == null || string.IsNullOrWhiteSpace(industry.Id))
+                {
+                    continue;
+                }
+
+                IndustryConfig effectiveConfig;
+                if (!_defaultIndustryConfigs.TryGetValue(industry.Id, out effectiveConfig) || effectiveConfig == null)
+                {
+                    continue;
+                }
+
+                var liveBuffers = new Dictionary<string, float>(industry.BufferStorage, StringComparer.OrdinalIgnoreCase);
+                var productionRate = ApplyProductionModuleLevels(effectiveConfig.ProductionRate, industry.ProductionModuleLevel);
+                var inputCapacityTons = ApplyStorageModuleLevels(effectiveConfig.InputCapacityTons, industry.InputStorageModuleLevel);
+                var outputCapacityTons = ApplyStorageModuleLevels(effectiveConfig.OutputCapacityTons, industry.OutputStorageModuleLevel);
+                var omegaCapacityTons = ApplyOmegaStorageModuleLevels(
+                    Math.Max(1f, effectiveConfig.InputCapacityTons * Math.Max(0.01f, _industryOmegaCapacityMultiplier)),
+                    industry.OmegaStorageModuleLevel);
+
+                industry.ApplyPersistentState(
+                    liveBuffers,
+                    industry.OmegaStorage,
+                    productionRate,
+                    inputCapacityTons,
+                    outputCapacityTons,
+                    omegaCapacityTons,
+                    industry.ProductionModuleLevel,
+                    industry.InputStorageModuleLevel,
+                    industry.OutputStorageModuleLevel,
+                    industry.OmegaStorageModuleLevel,
+                    industry.IsOwned,
+                    industry.HasContractorPermit,
+                    effectiveConfig.IndustryPrice,
+                    effectiveConfig.IndustryLicencePrice);
+            }
         }
 
         public bool IsIndustryOwnedForGameplay(Industry industry)
@@ -163,7 +206,9 @@ namespace LSOL.Systems
                     0,
                     0,
                     defaultConfig.IsOwned,
-                    defaultConfig.HasContractorPermit);
+                    defaultConfig.HasContractorPermit,
+                    defaultConfig.IndustryPrice,
+                    defaultConfig.IndustryLicencePrice);
 
                 SeedInitialOutput(industry);
                 SeedStartingTank(industry, defaultConfig);
@@ -519,6 +564,7 @@ namespace LSOL.Systems
                 VehicleSpawnHeading = source.VehicleSpawnHeading,
                 Inputs = new HashSet<string>(source.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 Outputs = new HashSet<string>(source.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                FactoryProductionRatio = source.FactoryProductionRatio,
                 InputCapacityTons = source.InputCapacityTons,
                 OutputCapacityTons = source.OutputCapacityTons,
                 ProductionRate = source.ProductionRate,
@@ -530,6 +576,110 @@ namespace LSOL.Systems
                 IsOwned = source.IsOwned,
                 HasContractorPermit = source.HasContractorPermit,
             };
+        }
+
+        private static IndustryConfig BuildEffectiveIndustryConfig(IndustryConfig baseConfig, EconomyDifficultyPreset preset)
+        {
+            var effectiveConfig = CloneIndustryConfig(baseConfig);
+            if (effectiveConfig == null || effectiveConfig.LocationKind != ExternalLocationKind.Industry)
+            {
+                return effectiveConfig;
+            }
+
+            var presetValues = GetEconomyPresetValues(preset);
+            var factoryRatio = Math.Max(0.1f, effectiveConfig.FactoryProductionRatio <= 0f ? 1f : effectiveConfig.FactoryProductionRatio);
+            var productionMultiplier = ResolveFactoryProductionMultiplier(effectiveConfig.Id, preset);
+
+            effectiveConfig.ProductionRate = Math.Max(1f, presetValues.IndustryProductionRate * factoryRatio * productionMultiplier);
+            effectiveConfig.InputCapacityTons = ConvertRawCapacityToTons(presetValues.IndustryInputCapacityRaw);
+            effectiveConfig.OutputCapacityTons = ConvertRawCapacityToTons(presetValues.IndustryOutputCapacityRaw);
+            effectiveConfig.IndustryPrice = presetValues.IndustryPrice;
+            effectiveConfig.IndustryLicencePrice = presetValues.IndustryLicencePrice;
+            effectiveConfig.IsOwned = effectiveConfig.IndustryPrice <= 0f;
+            effectiveConfig.HasContractorPermit = effectiveConfig.IndustryLicencePrice <= 0f;
+            return effectiveConfig;
+        }
+
+        private static EconomyPresetValues GetEconomyPresetValues(EconomyDifficultyPreset preset)
+        {
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    return new EconomyPresetValues(40f, 8000f, 200000f, 180000f, 150000f);
+                case EconomyDifficultyPreset.Hardcore:
+                    return new EconomyPresetValues(24f, 18000f, 800000f, 80000f, 70000f);
+                default:
+                    return new EconomyPresetValues(32f, 13000f, 450000f, 120000f, 100000f);
+            }
+        }
+
+        private static float ResolveFactoryProductionMultiplier(string industryId, EconomyDifficultyPreset preset)
+        {
+            if (string.Equals(industryId, "OmegaFactory", StringComparison.OrdinalIgnoreCase))
+            {
+                switch (preset)
+                {
+                    case EconomyDifficultyPreset.Casual:
+                        return 1.75f;
+                    case EconomyDifficultyPreset.Hardcore:
+                        return 1.25f;
+                    default:
+                        return 1.5f;
+                }
+            }
+
+            if (string.Equals(industryId, "RecyclingCenter", StringComparison.OrdinalIgnoreCase))
+            {
+                switch (preset)
+                {
+                    case EconomyDifficultyPreset.Casual:
+                        return 3f;
+                    case EconomyDifficultyPreset.Hardcore:
+                        return 2f;
+                    default:
+                        return 2.5f;
+                }
+            }
+
+            return 1f;
+        }
+
+        private static float ConvertRawCapacityToTons(float rawCapacity)
+        {
+            return Math.Max(1f, rawCapacity / 1000f);
+        }
+
+        private static float ApplyProductionModuleLevels(float productionRate, int moduleLevel)
+        {
+            var effectiveProductionRate = Math.Max(1f, productionRate);
+            for (var level = 0; level < Math.Max(0, moduleLevel); level++)
+            {
+                effectiveProductionRate += Math.Max(2f, effectiveProductionRate * 0.12f);
+            }
+
+            return effectiveProductionRate;
+        }
+
+        private static float ApplyStorageModuleLevels(float capacityTons, int moduleLevel)
+        {
+            var effectiveCapacityTons = Math.Max(1f, capacityTons);
+            for (var level = 0; level < Math.Max(0, moduleLevel); level++)
+            {
+                effectiveCapacityTons += Math.Max(5f, effectiveCapacityTons * 0.18f);
+            }
+
+            return effectiveCapacityTons;
+        }
+
+        private static float ApplyOmegaStorageModuleLevels(float omegaCapacityTons, int moduleLevel)
+        {
+            var effectiveOmegaCapacityTons = Math.Max(1f, omegaCapacityTons);
+            for (var level = 0; level < Math.Max(0, moduleLevel); level++)
+            {
+                effectiveOmegaCapacityTons += Math.Max(2f, effectiveOmegaCapacityTons * 0.20f);
+            }
+
+            return effectiveOmegaCapacityTons;
         }
 
         private static void DrainPetrolStationFuel(Industry industry, float deltaMinutes, float drainRatePerMinute)
@@ -554,5 +704,35 @@ namespace LSOL.Systems
             industry.BufferStorage["Fuel"] = Math.Max(0f, currentFuel - consumed);
         }
 
+    }
+
+    public enum EconomyDifficultyPreset
+    {
+        Casual = 0,
+        Standard = 1,
+        Hardcore = 2,
+    }
+
+    internal struct EconomyPresetValues
+    {
+        public EconomyPresetValues(
+            float industryProductionRate,
+            float industryLicencePrice,
+            float industryPrice,
+            float industryInputCapacityRaw,
+            float industryOutputCapacityRaw)
+        {
+            IndustryProductionRate = industryProductionRate;
+            IndustryLicencePrice = industryLicencePrice;
+            IndustryPrice = industryPrice;
+            IndustryInputCapacityRaw = industryInputCapacityRaw;
+            IndustryOutputCapacityRaw = industryOutputCapacityRaw;
+        }
+
+        public float IndustryProductionRate { get; }
+        public float IndustryLicencePrice { get; }
+        public float IndustryPrice { get; }
+        public float IndustryInputCapacityRaw { get; }
+        public float IndustryOutputCapacityRaw { get; }
     }
 }

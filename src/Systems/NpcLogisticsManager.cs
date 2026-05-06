@@ -731,7 +731,7 @@ namespace LSOL.Systems
                 return null;
             }
 
-            blip.Sprite = BlipSprite.Garage2;
+            blip.Sprite = BlipSprite.Truck;
             blip.Color = BlipColor.Blue;
             blip.Name = string.Format("NPC Route: {0}", BuildContractLabel(contract));
             blip.Scale = 0.85f;

@@ -13,6 +13,7 @@ namespace LSOL.Config
         public float? VehicleSpawnHeading { get; set; }
         public HashSet<string> Inputs { get; set; }
         public HashSet<string> Outputs { get; set; }
+        public float FactoryProductionRatio { get; set; }
         public float InputCapacityTons { get; set; }
         public float OutputCapacityTons { get; set; }
         public float ProductionRate { get; set; }

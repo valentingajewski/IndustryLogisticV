@@ -81,8 +81,8 @@ namespace LSOL.Domain
         public float InputCapacityTons { get; private set; }
         public float OutputCapacityTons { get; private set; }
         public float OmegaCapacityTons { get; private set; }
-        public float IndustryPrice { get; }
-        public float IndustryLicencePrice { get; }
+        public float IndustryPrice { get; private set; }
+        public float IndustryLicencePrice { get; private set; }
         public float IndustryOwnerCut { get; }
         public bool IsOwned { get; private set; }
         public bool HasContractorPermit { get; private set; }
@@ -693,7 +693,9 @@ namespace LSOL.Domain
             int outputStorageModuleLevel,
             int omegaStorageModuleLevel,
             bool isOwned = false,
-            bool hasContractorPermit = false)
+            bool hasContractorPermit = false,
+            float? industryPrice = null,
+            float? industryLicencePrice = null)
         {
             if (bufferStorage != null)
             {
@@ -718,6 +720,16 @@ namespace LSOL.Domain
             InputStorageModuleLevel = Math.Max(0, inputStorageModuleLevel);
             OutputStorageModuleLevel = Math.Max(0, outputStorageModuleLevel);
             OmegaStorageModuleLevel = Math.Max(0, omegaStorageModuleLevel);
+
+            if (industryPrice.HasValue)
+            {
+                IndustryPrice = Math.Max(0f, industryPrice.Value);
+            }
+
+            if (industryLicencePrice.HasValue)
+            {
+                IndustryLicencePrice = Math.Max(0f, industryLicencePrice.Value);
+            }
 
             OmegaStorage = Math.Max(0f, omegaStorage);
             SetOwned(isOwned);
