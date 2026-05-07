@@ -1,0 +1,37 @@
+VehicleID	VehicleName	ModelName	VehiceType	AcceptedResources	VehicleCapacity
+1	Burrito	burrito3	LightVan	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	3
+2	Rumpo	rumpo	LightVan	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	3
+3	Commercial Rumpo	rumpo2	LightVan	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	3
+4	Speedo	speedo	LightVan	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	3
+5	Speedo	speedo4	LightVan	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	3
+6	Speedo	speedo5	LightVan	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	3
+7	Boxville	boxville2	Van	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	5
+8	Boxville (Humane Lab)	boxville3	Van	Medecine	5
+9	Boxvile (Post OP)	boxville4	Van	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	5
+10	Benson	benson	LightTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	10
+11	Benson (Cluckin' Bell)	benson2	LightTruck	ProcessedFood	10
+12	Biff	biff	Dumper	Recyclable	20
+13	Hauler	hauler	Truck	None	0
+14	Mule	mule	LightTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	10
+15	Mule	mule2	LightTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	10
+16	Mule	mule3	LightTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	10
+17	Mule	mule4	LightTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	10
+18	Mule	mule5	LightTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	10
+19	Packer	packer	Truck	None	0
+20	Phantom	phantom3	Truck	None	0
+21	Pounder	pounder	BigTruck	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	20
+22	Heavy Machinery Trailer	armytrailer2	Trailer	HeavyMachinery	1
+23	Ron Tanker	tanker	Trailer	"Oil,Fuel,Omega,LiquidFertilizer"	30
+24	Tanker	tanker2	Trailer	"Oil,Fuel,Omega,LiquidFertilizer"	30
+25	Car Trailer	tr2	Trailer	Vehicles	4
+26	Log Trailer	trailerlogs	Trailer	Wood	30
+27	Trailer	trailers	Trailer		30
+28	Refrigerated Trailer	trailers2	Trailer	Meat	30
+29	Trailer (with ad)	trailers3	Trailer	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	30
+30	Container Trailer	trailers4	Trailer	"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer"	30
+31	Open Trailer	trflat	Trailer	"Bricks,Lumber,Steel,Alloy"	20
+32	Mixer	mixer	Mixer	"Asphalt,Cement,Concrete"	20
+33	Mixer	mixer2	Mixer	"Asphalt,Cement,Concrete"	20
+34	Rubble	rubble	Dumper	"Coal,Gravel,Ore,Crops"	30
+35	Tipper	tiptruck	Dumper	"Coal,Gravel,Ore,Crops"	20
+36	Tipper	tiptruck2	Dumper	"Coal,Gravel,Ore,Crops"	20

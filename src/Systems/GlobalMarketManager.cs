@@ -14,7 +14,7 @@ namespace LSOL.Systems
             { "Fuel", 750f },
             { "Metal", 1200f },
             { "Alloy", 1500f },
-            { "Electronic", 2600f },
+            { "Processors", 2600f },
             { "TV", 6500f },
             { "Computer", 8200f },
             { "Omega", 12000f },

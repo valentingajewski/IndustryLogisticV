@@ -10,7 +10,7 @@ namespace LSOL.Domain
             { "Iron", "Ore" },
             { "Processors", "Electronic" },
             { "Vehicle", "Vehicles" },
-            { "LiquidFertilizer", "LiquidFertiliser" },
+            { "LiquidFertilizer", "LiquidFertilizer" },
             { "Recyclables", "Recyclable" },
         };
 
@@ -167,7 +167,7 @@ namespace LSOL.Domain
                 { "Steel", VehicleCargoType.OpenHull },
                 { "Oil", VehicleCargoType.Liquid },
                 { "Fuel", VehicleCargoType.Liquid },
-                { "LiquidFertiliser", VehicleCargoType.Liquid },
+                { "LiquidFertilizer", VehicleCargoType.Liquid },
                 { "Omega", VehicleCargoType.Liquid },
                 { "Water", VehicleCargoType.Liquid },
                 { "Asphalt", VehicleCargoType.DryBulk },
@@ -186,7 +186,7 @@ namespace LSOL.Domain
                 { "MechanicalParts", VehicleCargoType.CraftedGoods },
                 { "TV", VehicleCargoType.CraftedGoods },
                 { "Computer", VehicleCargoType.CraftedGoods },
-                { "Electronic", VehicleCargoType.CraftedGoods },
+                { "Processors", VehicleCargoType.CraftedGoods },
                 { "Furniture", VehicleCargoType.CraftedGoods },
                 { "Alloy", VehicleCargoType.OpenHull },
                 { "Metal", VehicleCargoType.OpenHull },

@@ -88,7 +88,7 @@ namespace LSOL.Systems
                         },
                         new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
                         {
-                            { "Electronic", 1f },
+                            { "Processors", 1f },
                         }),
                 }
             },
@@ -99,7 +99,7 @@ namespace LSOL.Systems
                     new RecipeTemplate(
                         new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
                         {
-                            { "Electronic", 2f },
+                            { "Processors", 2f },
                         },
                         new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
                         {

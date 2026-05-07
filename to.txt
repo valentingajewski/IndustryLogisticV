@@ -1,64 +1,108 @@
-- Fuel system
+What I changed/added:
+- Added a Vehicle.csv which list all vehicles the game can have.
+- Added a District.csv which list all district/territory of the game mod
+- Modified some resources names. There was a resource misleading btween Iron and Ore, and Electronics and Processors.
 
-- Hire NPC mechanism
-You will add a new mechanism where player can hire NPC to transport resources from an industry to another.
-In the Office menu add a new button "Hire NPC"
-    -  This button will open a new window (based from the F8 menu theme)
-        - This menu wil have 3 buttons:
-            - Add a "Hire NPC" button
-                - This button will open a new window (based on the f8 menu) with muliple choices:
-                    - Add a "Starting point" selection section where the player chan choose from which industry the NPC must start its journey
-                    - Add a "Destination" selection section where the player chan choose from which industry the NPC must finish its journey
-                    - Add a "Resource" selection section where the player can choose which resource (regarding previous industry choice) the NPC will transport
-                    - Add a "Tier" selection section where the plauer can choose between Veteran, Professional or Rookie driver (each with their own caracteristics which can be found in the HiringNPC.ini)
-                        - NPCModel is the model of the NPC
-                        - NPCCargoLooseRate is the max percentage of the cargo the npc can lose for each journey (0.1 means 10%)
-                        - NPCSpeedMultiplier is the NPC max speed (0.9 means 90% of NPC normal speed)
-                        - NPCPriceMultiplier is the price of the NPC depending of the price of the resource. (NPCPriceMultiplier=50 means the NPC will cost 50 times the price of one unit of resource per ton)
-            - Add a "NPC list" button
-                - Show a button list with all NPC routes purchased
-                - When selecting one NPC route, 2 buttons are available:
-                    - "Fire NPC", delete the NPC, its vehicle and its cargo with immediate effect
-                    - "Modify NPC", show the exact same content as the "Hire NPC" button. Therefore the player can either upgrade the NPC tier or reroute NPC for transporting another resource
-            - Add a "Close" button
+Best Fit
+The strongest version of a rags-to-riches career in this project is not “earn more money,” but “turn the map into your company’s operating territory.” That fits the primitives already in IndustryManager.cs:13, NpcLogisticsManager.cs:14, IndustryPersistenceManager.cs:1, BlipLifecycleManager.cs:9, WorkerSpawnController.cs:9, BarrierInteractionHandler.cs:10, and the direction already described in career_ideas.txt:1.
 
+These are the best-fit ideas for this mod:
+- District influence system. Split Los Santos and Blaine County into business districts and give each one an influence score based on owned industries, completed deliveries, active NPC routes, and owned depots. Influence should unlock local perks, not just revenue.
+- Depot and yard acquisition. Let the player lease or buy small yards, warehouses, and truck lots. These become the visible footprint of the company and can provide local vehicle spawn, repair, storage overflow, or contract dispatch.
+- Industry activation instead of simple purchase. A site should begin as inaccessible, derelict, or low-output, then require startup work such as a first supply run, permit payment, crew assignment, or equipment delivery before it becomes “yours.”
+- Regional route rights. Instead of only unlocking industries, unlock corridors and service zones. Owning or leasing in Paleto should matter for Paleto contracts, fleet parking, and local delivery margins.
+- Store and gas station franchise control. Sinks should become territory anchors. Supplying a station repeatedly could convert it into a preferred account, then an exclusive account, then a company-branded asset with higher margin and more stable demand.
+- Physical site upgrades. Upgrades should not only increase stats. They should add workers, parked trailers, opened gates, better signage, busier yards, and stronger map identity.
+- Fleet as territorial presence. Trucks should feel stationed, not abstract. A depot could define how many rigs you can keep active in a district, where NPC routes launch from, and where repossession happens if finances collapse.
+- Workforce and management layer. Each owned site could require or benefit from a site manager, loaders, mechanics, or guards. This is a natural extension of WorkerSpawnController.cs:9.
+- Site security and access control. Owned yards should visibly grant gate access and safer operations. Unowned or rival sites can feel hostile, slow, or fee-based. That fits BarrierInteractionHandler.cs:10.
+- Contract reputation by region. Reputation should not be global only. The player can be trusted in the port while still unknown in Sandy Shores. That creates geographic progression.
+- Strategic commodities by territory. Different districts should specialize. The oil belt, port, industrial flats, farms, and Paleto timber zone should each feel like regional careers, not just points on a graph.
+- Construction-sector late game. Dead-end materials such as concrete, bricks, beams, and furniture can become meaningful if they feed depot construction, yard expansion, store remodels, or municipal contracts.
+- Recovery and repossession loop. If the player falls into debt, they should lose territory, not instantly fail. Leased yards, parked trucks, and exclusive supply contracts can be downgraded or repossessed first.
+- Soft monopoly bonuses. Owning an entire chain inside one region could reduce owner cuts, reduce NPC wages locally, speed transfers, or reveal demand forecasts. That makes map control strategically stronger than raw cash.
+- Discovery and surveying. Some sites should exist on the map only after scouting, contract work, or buying regional intelligence. That gives exploration value to the world.
+- Hub-and-spoke logistics. Add one central company depot early, then branch depots later. This makes your empire feel spatially organized instead of a list of disconnected owned nodes.
+- Public visibility system. Company influence should change blips, labels, or map colors. BlipLifecycleManager.cs:9 already gives you an obvious surface for this.
+- NPC route control by territory. NPC logistics should become more effective when launched from owned regions and less reliable when crossing uncontrolled regions. That makes map expansion mechanically relevant to automation.
 
-1. Overview
-Implement a new "Hire NPC" mechanism that allows players to automate resource transportation between owned or discovered industries.
+Main Issues
+These are the biggest bottlenecks and failure modes for this kind of career mode in the current project, with the cleanest solutions.
 
-2. UI Integration: Office Menu
-- Trigger: Add a new button labeled "Hire NPC" to the existing Office Menu.
-- Theme: The resulting windows should follow the F8 Menu aesthetic and styling.
-- Main Navigation Window: Clicking "Hire NPC" opens a sub-menu with three options:
-    - Hire New NPC
-    - Manage NPC List
-    - Close
+- Ownership currently risks feeling too abstract.
+    - Problem: if buying a site mostly changes payout rules, the player gets money progression but not territorial progression.
+    - Solution: tie ownership to visible workers, barriers, spawner access, blip changes, exclusive contracts, and local bonuses.
 
-3. Functional Requirements
-A. "Hire New NPC" Interface
-This window facilitates the creation of a new logistics route. It must include the following selection sections:
-- Starting Point: A dropdown/list for the player to select the origin industry.
-- Destination: A dropdown/list for the player to select the target industry.
-- Resource Selection: A list of available resources based on the chosen origin industry.
-- Tier Selection: Options to choose between Rookie, Professional, and Veteran drivers.
-    - Note: Data for these tiers should be pulled from HiringNPC.ini.
-    - Logic Parameters (from .ini):NPCModel: The character model assigned to the driver.
-    - NPCCargoLooseRate: Max percentage of cargo lost per journey (e.g., $0.1 = 10\%$).
-    - NPCSpeedMultiplier: NPC top speed limit (e.g., $0.9 = 90\%$ of standard speed).
-    - NPCPriceMultiplier: Calculation for hiring cost based on resource value (e.g., $50 \times \text{unit price per ton}$).
+- The economy can soft-lock fresh starts.
+    - Problem: licensing and ownership are hard gates, and the project already has save-scoped difficulty plus global prices. Over-stack those costs and early career becomes dead on arrival.
+    - Solution: guarantee one starter route family, one cheap starter permit, one small starter vehicle, and one first foothold such as a micro-depot or free starter yard.
 
-B. "NPC List" Interface (Management)
-This window displays all currently active NPC routes.
-- Route List: A scrollable list showing all purchased NPC contracts.
-- Management Options: Selecting a specific route opens two secondary actions:
-- Fire NPC: Immediately deletes the NPC, their vehicle, and any active cargo.
-- Modify NPC: Re-opens the hiring interface for that specific slot, allowing the player to upgrade the driver’s Tier or re-assign the route and resource type.
+- Several commodity chains are unfinished.
+    - Problem: real dead-end outputs remain in the live economy, and Water plus LiquidFertiliser are still missing as true sources. Expanding the map into those chains without fixing the content makes progression feel fake.
+    - Solution: either add sinks and sources before gating those chains into Career, or reserve them for phase-two construction and municipal systems.
 
-4. Technical Notes for Implementation
-- Ensure the "Modify NPC" function retains previous settings as the default state when the window opens.
-- The "Close" button should return the player to the primary Office Menu.
-- Check for sufficient funds before confirming the "Hire" or "Modify" (Upgrade) actions based on the NPCPriceMultiplier.
+- Capacity behavior is unintuitive.
+    - Problem: industry capacity is split across configured commodities, so multi-input and multi-output sites can choke earlier than the player expects.
+    - Solution: expose per-commodity effective capacity in UI, or simplify career-critical industries to fewer inputs early on.
 
-5. Visuals
-- Make sure the npc is visible and not something virtual
-- Each hired NPC must have a blip so they can be easily visible on the map
+- Global presets do not equal regional progression.
+    - Problem: the economy preset system in IndustryManager.cs:13 is good for overall tuning, but a territorial career needs local variation.
+    - Solution: keep the global preset and layer district modifiers on top of it instead of replacing it.
+
+- NPC automation is still weakly territorial.
+    - Problem: NPC routes exist, but contracts are still route objects more than regional assets, and contract persistence is still limited.
+    - Solution: keep route behavior as-is, but attach routes to depots, districts, or owned yards first. Persist territory before persisting full NPC state.
+
+- Menu overload is a real risk.
+    - Problem: this mod already has office menus, difficulty menus, industry tablets, overview screens, and NPC management.
+    - Solution: make territory a small set of big systems, not many tiny toggles. One Company Map screen, one District screen, one Depot screen is better than ten submenus.
+
+- Too many stacked costs can flatten fun.
+    - Problem: fuel, cargo damage, licences, industry price, spawn fees, weekly wages, and route costs can all pile on.
+    - Solution: stage costs by phase. Early game should punish only one or two things hard. Midgame adds operating costs. Late game adds payroll and territorial maintenance.
+
+- GTA world simulation limits can make “presence” expensive.
+    - Problem: persistent parked rigs, workers, props, and many blips can become messy or heavy.
+    - Solution: use illusion over full simulation. Only spawn visible crew and yard props when nearby. Aggregate district info at distance.
+
+- AI pathing will become a bigger problem with more yards.
+    - Problem: more depots and launch points mean more bad spawn pads and more stuck NPC routes.
+    - Solution: restrict each depot to curated spawn anchors and cap active NPC density per district.
+
+- Save-state growth will get more complex fast.
+    - Problem: once you track depots, districts, franchises, contracts, parked fleet, and staff, the save format can balloon.
+    - Solution: persist only durable strategic state first. District influence, owned depots, owned sites, and franchise level are enough for MVP.
+
+- Physical influence can become cosmetic if not tied to numbers.
+    - Problem: changing blips and props looks nice but has no strategic weight.
+    - Solution: every territorial layer should affect at least one of these: route profitability, route safety, access, demand visibility, spawn rights, or upkeep.
+
+- Regional progression can feel arbitrary.
+    - Problem: if the map opens by invisible rules, the player will read it as grind.
+    - Solution: tie unlock logic to visible local milestones such as “own one yard in the district,” “complete ten deliveries here,” or “activate the region’s anchor industry.”
+
+- Late-game monopoly can trivialize the economy.
+    - Problem: once the player owns too much, logistics becomes an autopilot cash printer.
+    - Solution: add district upkeep, labor costs, fleet maintenance, and supply obligations so control creates responsibility, not only margin.
+
+- Career identity can collapse into another difficulty preset.
+    - Problem: if Career is just lower money and higher fees, it will not feel like a company-building mode.
+    - Solution: always ask whether a feature changes where the player matters on the map. If not, it is balance, not career.
+
+Best Solutions
+If the goal is maximum payoff for minimum design risk, this is the cleanest path:
+
+- Phase 1: make territory visible.
+    - Add district influence, depot ownership, blip state changes, worker presence, and gate access first. This gives immediate “my company is here now” feedback.
+
+- Phase 2: make territory functional.
+    - Give owned depots local spawn rights, reduced operating friction, and better NPC route stability. Give owned sinks exclusive supply bonuses.
+
+- Phase 3: finish the broken chains.
+    - Add real sources for missing farm inputs and real sinks for construction and manufacturing outputs before making those branches central to career mode.
+
+- Phase 4: attach automation to geography.
+    - NPC routes should operate from depots and respect territorial footprint. That turns logistics automation into empire-building instead of just passive income.
+
+- Phase 5: add regional objectives.
+    - Introduce district quotas, municipal contracts, or franchise tiers so late-game growth is about controlling zones, not only buying nodes.
