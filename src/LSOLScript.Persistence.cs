@@ -73,6 +73,7 @@ namespace LSOL
             ApplyDifficultySettingsToSystems();
             _industryManager.ResetIndustriesToDefaults();
             _cargoTransferController.ClearState();
+            _territoryManager.Reset();
             _profit = GetSelectedStartingBalance();
             _currentStartingBalance = _profit;
 
@@ -177,6 +178,7 @@ namespace LSOL
                     ApplyDifficultySettingsToSystems();
                     _industryManager.ResetIndustriesToDefaults();
                     _cargoTransferController.ClearState();
+                    _territoryManager.Reset();
                     _profit = DefaultStartingBalance;
                     _currentStartingBalance = DefaultStartingBalance;
                 }
@@ -252,7 +254,7 @@ namespace LSOL
 
             try
             {
-                loadResult = IndustryPersistenceManager.LoadWithMetadata(filePath, _industryManager.Industries);
+                loadResult = IndustryPersistenceManager.LoadWithMetadata(filePath, _industryManager.Industries, _territoryManager);
                 if (loadResult.RestoredCount > 0 || (loadResult.Metadata != null && loadResult.Metadata.HasGameplayMetadata))
                 {
                     return true;
@@ -299,7 +301,7 @@ namespace LSOL
                     Directory.CreateDirectory(directoryPath);
                 }
 
-                IndustryPersistenceManager.Save(filePath, _industryManager.Industries, BuildCurrentPersistenceMetadata());
+                IndustryPersistenceManager.Save(filePath, _industryManager.Industries, BuildCurrentPersistenceMetadata(), _territoryManager.CreateSnapshot());
                 return true;
             }
             catch (IOException ex)

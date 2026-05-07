@@ -39,6 +39,8 @@ namespace LSOL.Config
         public List<VehicleCargoType> CargoTypes { get; private set; }
         public Dictionary<string, List<string>> ObjectModels { get; private set; }
         public List<string> WorkerModels { get; private set; }
+        public Dictionary<string, DistrictConfig> DistrictConfigs { get; private set; }
+        public List<string> ValidationMessages { get; private set; }
 
         public static ModConfig Load(string path)
         {
@@ -63,21 +65,30 @@ namespace LSOL.Config
                 CargoTypes = new List<VehicleCargoType>(),
                 ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
                 WorkerModels = new List<string>(),
+                DistrictConfigs = new Dictionary<string, DistrictConfig>(externalCatalog.Districts, StringComparer.OrdinalIgnoreCase),
+                ValidationMessages = new List<string>(externalCatalog.ValidationMessages),
             };
 
             config.CargoTypes.AddRange(ResolveCargoTypeOrder(externalCatalog));
 
             if (externalCatalog.Locations.Count > 0)
             {
-                ParseIndustries(ini, externalCatalog, config);
+                MergeExternalLocations(ini, externalCatalog, config);
             }
             else
             {
                 ParseIndustries(ini, config);
             }
 
-            MergeExternalLocations(ini, externalCatalog, config);
-            ParseVehicles(ini, config);
+            if (externalCatalog.VehicleDefinitions.Count > 0)
+            {
+                config.VehicleDefinitions.AddRange(CloneVehicleDefinitions(externalCatalog.VehicleDefinitions));
+            }
+            else
+            {
+                ParseVehicles(ini, config);
+            }
+
             ParseObjects(ini, config);
             MergeExternalObjects(externalCatalog, config);
             ParseWorkers(ini, config);
@@ -100,29 +111,50 @@ namespace LSOL.Config
                     continue;
                 }
 
-                var industryPrice = Math.Max(0f, legacyIni.GetFloat(location.Id, "IndustryPrice", location.IndustryPrice));
-                var industryLicencePrice = Math.Max(0f, legacyIni.GetFloat(location.Id, "IndustryLicencePrice", 0f));
-                var industryOwnerCut = Math.Max(0f, Math.Min(1f, legacyIni.GetFloat(location.Id, "IndustryOwnerCut", location.IndustryOwnerCut)));
+                var standardValues = location.StandardEconomy ?? SiteEconomyPresetValues.Create(0f, 0f, location.IndustryPrice, 0f, 0f, location.FactoryProductionRatio, false);
+                var ratio = Math.Max(0.1f, standardValues.ProductionRatio > 0f ? standardValues.ProductionRatio : location.FactoryProductionRatio);
+                var industryPrice = Math.Max(0f, standardValues.PurchasePrice);
+                var industryLicencePrice = standardValues.PermitRequired ? Math.Max(0f, standardValues.LicencePrice) : 0f;
+                var industryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut));
+                var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(location.SiteRole, location.OwnershipTier);
 
                 config.IndustryConfigs[pair.Key] = new IndustryConfig
                 {
+                    CatalogId = location.CatalogId,
                     Id = location.Id,
+                    LegacyKey = location.LegacyKey ?? location.Id,
                     LocationKind = location.Kind,
+                    SiteRole = location.SiteRole,
+                    OwnershipTier = location.OwnershipTier,
+                    DistrictName = location.DistrictName,
                     Name = location.Name,
+                    Company = location.Company,
                     Position = location.Position,
+                    GatePosition = location.GatePosition,
+                    BarrierModelHash = location.BarrierModelHash,
+                    WorkerPosition = location.WorkerPosition,
+                    DisplayObjectModelHash = location.DisplayObjectModelHash,
+                    MaxDisplayObjectLine = location.MaxSpawnedVehiclesLine,
+                    MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
                     Inputs = new HashSet<string>(location.Inputs, StringComparer.OrdinalIgnoreCase),
+                    OptionalInputs = new HashSet<string>(location.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                     Outputs = new HashSet<string>(location.Outputs, StringComparer.OrdinalIgnoreCase),
-                    FactoryProductionRatio = Math.Max(0.1f, legacyIni.GetFloat(location.Id, "FactoryProductionRatio", location.FactoryProductionRatio)),
-                    InputCapacityTons = Math.Max(10f, ResolveInputCapacityTons(legacyIni, location)),
-                    OutputCapacityTons = Math.Max(10f, ResolveOutputCapacityTons(legacyIni, location)),
-                    ProductionRate = ResolveProductionRate(legacyIni, location),
+                    FactoryProductionRatio = ratio,
+                    InputCapacityTons = standardValues.InputCapacityTons > 0f ? standardValues.InputCapacityTons : Math.Max(10f, ResolveInputCapacityTons(legacyIni, location)),
+                    OutputCapacityTons = standardValues.OutputCapacityTons > 0f ? standardValues.OutputCapacityTons : Math.Max(10f, ResolveOutputCapacityTons(legacyIni, location)),
+                    ProductionRate = standardValues.ProductionRate > 0f ? standardValues.ProductionRate * ratio : ResolveProductionRate(legacyIni, location),
                     StartingTankRatio = location.StartingTankRatio,
                     Density = location.Density,
+                    EmptyingRate = location.EmptyingRate,
                     IndustryPrice = industryPrice,
                     IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
-                    IsOwned = industryPrice <= 0f,
-                    HasContractorPermit = industryLicencePrice <= 0f,
+                    IsOwned = hasStarterAccess || industryPrice <= 0f,
+                    HasContractorPermit = hasStarterAccess || !standardValues.PermitRequired || industryLicencePrice <= 0f,
+                    IsCsvBacked = true,
+                    CasualEconomy = location.CasualEconomy,
+                    StandardEconomy = location.StandardEconomy,
+                    HardcoreEconomy = location.HardcoreEconomy,
                 };
             }
         }
@@ -172,9 +204,15 @@ namespace LSOL.Config
 
                 config.IndustryConfigs[section] = new IndustryConfig
                 {
+                    CatalogId = section,
                     Id = section,
+                    LegacyKey = section,
                     LocationKind = InferLocationKind(section, inputs, outputs),
+                    SiteRole = InferLegacySiteRole(section, inputs, outputs),
+                    OwnershipTier = SiteOwnershipTier.Unknown,
+                    DistrictName = string.Empty,
                     Name = name,
+                    Company = string.Empty,
                     Position = position,
                     VehicleSpawnPosition = ini.HasKey(section, "VehicleSpawningCoordinates")
                         ? (Vector3?)ini.GetVector3(section, "VehicleSpawningCoordinates", Vector3.Zero)
@@ -183,6 +221,7 @@ namespace LSOL.Config
                         ? (float?)ini.GetFloat(section, "VehicleSpawningHeading", 0f)
                         : null,
                     Inputs = inputs,
+                    OptionalInputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
                     Outputs = outputs,
                     FactoryProductionRatio = Math.Max(0.1f, ini.GetFloat(section, "FactoryProductionRatio", 1f)),
                     InputCapacityTons = Math.Max(10f, inputCapTons),
@@ -190,11 +229,13 @@ namespace LSOL.Config
                     ProductionRate = productionRate,
                     StartingTankRatio = startingTankRatio,
                     Density = density,
+                    EmptyingRate = 0f,
                     IndustryPrice = industryPrice,
                     IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
                     IsOwned = industryPrice <= 0f,
                     HasContractorPermit = industryLicencePrice <= 0f,
+                    IsCsvBacked = false,
                 };
             }
         }
@@ -214,37 +255,74 @@ namespace LSOL.Config
                     continue;
                 }
 
-                var inputCapacityTons = ResolveLocationInputCapacityTons(ini, location);
-                var outputCapacityTons = ResolveLocationOutputCapacityTons(ini, location);
-                var productionRate = ResolveProductionRate(ini, location);
-
-                var industryPrice = Math.Max(0f, ini.GetFloat(location.Id, "IndustryPrice", location.IndustryPrice));
-                var industryLicencePrice = Math.Max(0f, ini.GetFloat(location.Id, "IndustryLicencePrice", 0f));
-                var industryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "IndustryOwnerCut", location.IndustryOwnerCut)));
-
-                config.IndustryConfigs[location.Id] = new IndustryConfig
-                {
-                    Id = location.Id,
-                    LocationKind = location.Kind,
-                    Name = ini.GetString(location.Id, "Name", location.Name),
-                    Position = location.Position,
-                    VehicleSpawnPosition = location.VehicleSpawnPosition,
-                    VehicleSpawnHeading = location.VehicleSpawnHeading,
-                    Inputs = new HashSet<string>(location.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
-                    Outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
-                    FactoryProductionRatio = Math.Max(0.1f, ini.GetFloat(location.Id, "FactoryProductionRatio", location.FactoryProductionRatio)),
-                    InputCapacityTons = inputCapacityTons,
-                    OutputCapacityTons = outputCapacityTons,
-                    ProductionRate = productionRate,
-                    StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(location.Id, "StartingTank", location.StartingTankRatio))),
-                    Density = ini.GetString(location.Id, "Density", location.Density ?? "medium"),
-                    IndustryPrice = industryPrice,
-                    IndustryLicencePrice = industryLicencePrice,
-                    IndustryOwnerCut = industryOwnerCut,
-                    IsOwned = industryPrice <= 0f,
-                    HasContractorPermit = industryLicencePrice <= 0f,
-                };
+                config.IndustryConfigs[location.Id] = BuildIndustryConfigFromExternalLocation(ini, location);
             }
+        }
+
+        private static IndustryConfig BuildIndustryConfigFromExternalLocation(IniFile ini, ExternalLocationConfig location)
+        {
+            var standardValues = location.StandardEconomy ?? SiteEconomyPresetValues.Create(0f, 0f, location.IndustryPrice, 0f, 0f, location.FactoryProductionRatio, false);
+            var productionRatio = Math.Max(0.1f, standardValues.ProductionRatio > 0f ? standardValues.ProductionRatio : (location.FactoryProductionRatio > 0f ? location.FactoryProductionRatio : 1f));
+            var productionRate = standardValues.ProductionRate > 0f
+                ? standardValues.ProductionRate * productionRatio
+                : ResolveProductionRate(ini, location);
+            var inputCapacityTons = standardValues.InputCapacityTons > 0f
+                ? standardValues.InputCapacityTons
+                : ResolveLocationInputCapacityTons(ini, location);
+            var outputCapacityTons = standardValues.OutputCapacityTons > 0f
+                ? standardValues.OutputCapacityTons
+                : ResolveLocationOutputCapacityTons(ini, location);
+            var licencePrice = standardValues.PermitRequired ? Math.Max(0f, standardValues.LicencePrice) : 0f;
+            var purchasePrice = Math.Max(0f, standardValues.PurchasePrice);
+            var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(location.SiteRole, location.OwnershipTier);
+            var inputs = new HashSet<string>(location.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            var outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+
+            if (location.SiteRole == SiteRole.Warehouse)
+            {
+                outputs.UnionWith(inputs);
+            }
+
+            return new IndustryConfig
+            {
+                CatalogId = location.CatalogId,
+                Id = location.Id,
+                LegacyKey = location.LegacyKey ?? location.Id,
+                LocationKind = location.Kind,
+                SiteRole = location.SiteRole,
+                OwnershipTier = location.OwnershipTier,
+                DistrictName = location.DistrictName,
+                Name = location.Name,
+                Company = location.Company,
+                Position = location.Position,
+                VehicleSpawnPosition = location.VehicleSpawnPosition,
+                VehicleSpawnHeading = location.VehicleSpawnHeading,
+                GatePosition = location.GatePosition,
+                BarrierModelHash = location.BarrierModelHash,
+                WorkerPosition = location.WorkerPosition,
+                DisplayObjectModelHash = location.DisplayObjectModelHash,
+                MaxDisplayObjectLine = location.MaxSpawnedVehiclesLine,
+                MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
+                Inputs = inputs,
+                OptionalInputs = new HashSet<string>(location.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                Outputs = outputs,
+                FactoryProductionRatio = productionRatio,
+                InputCapacityTons = inputCapacityTons,
+                OutputCapacityTons = outputCapacityTons,
+                ProductionRate = productionRate,
+                StartingTankRatio = location.StartingTankRatio,
+                Density = location.Density,
+                EmptyingRate = location.EmptyingRate,
+                IndustryPrice = purchasePrice,
+                IndustryLicencePrice = licencePrice,
+                IndustryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut)),
+                IsOwned = hasStarterAccess || purchasePrice <= 0f,
+                HasContractorPermit = hasStarterAccess || !standardValues.PermitRequired || licencePrice <= 0f,
+                IsCsvBacked = true,
+                CasualEconomy = location.CasualEconomy,
+                StandardEconomy = location.StandardEconomy,
+                HardcoreEconomy = location.HardcoreEconomy,
+            };
         }
 
         private static float ResolveLocationInputCapacityTons(IniFile ini, ExternalLocationConfig location)
@@ -395,6 +473,33 @@ namespace LSOL.Config
                 .Select(x => x.CargoType)
                 .Where(x => x != VehicleCargoType.Unknown && x != VehicleCargoType.Trailer)
                 .Distinct()
+                .ToList();
+        }
+
+        private static IEnumerable<VehicleDefinition> CloneVehicleDefinitions(IEnumerable<VehicleDefinition> source)
+        {
+            if (source == null)
+            {
+                return new VehicleDefinition[0];
+            }
+
+            return source
+                .Where(x => x != null)
+                .Select(x => new VehicleDefinition
+                {
+                    Id = x.Id,
+                    SectionName = x.SectionName,
+                    DisplayName = x.DisplayName,
+                    ModelName = x.ModelName,
+                    CargoType = x.CargoType,
+                    AcceptedCommodities = x.AcceptedCommodities == null
+                        ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        : new HashSet<string>(x.AcceptedCommodities, StringComparer.OrdinalIgnoreCase),
+                    CapacityTons = x.CapacityTons,
+                    IsEnabled = x.IsEnabled,
+                    IsTrailer = x.IsTrailer,
+                    IsTractor = x.IsTractor,
+                })
                 .ToList();
         }
 
@@ -705,6 +810,47 @@ namespace LSOL.Config
             }
 
             return ExternalLocationKind.Industry;
+        }
+
+        private static SiteRole InferLegacySiteRole(string section, HashSet<string> inputs, HashSet<string> outputs)
+        {
+            if (string.Equals(section, "MainOffice", StringComparison.OrdinalIgnoreCase))
+            {
+                return SiteRole.StarterHQ;
+            }
+
+            var locationKind = InferLocationKind(section, inputs, outputs);
+            if (locationKind == ExternalLocationKind.Store)
+            {
+                return SiteRole.StoreSink;
+            }
+
+            if (locationKind == ExternalLocationKind.GasStation)
+            {
+                return SiteRole.FuelSink;
+            }
+
+            if (string.Equals(section, "RecyclingCenter", StringComparison.OrdinalIgnoreCase))
+            {
+                return SiteRole.RecyclingHub;
+            }
+
+            if (string.Equals(section, "OmegaFactory", StringComparison.OrdinalIgnoreCase))
+            {
+                return SiteRole.SpecialPlant;
+            }
+
+            if (outputs == null || outputs.Count == 0)
+            {
+                return SiteRole.Warehouse;
+            }
+
+            if (inputs == null || inputs.Count == 0)
+            {
+                return SiteRole.RawProducer;
+            }
+
+            return SiteRole.ProcessingPlant;
         }
 
         private static List<VehicleCargoType> ResolveCargoTypeOrder(ExternalConfigCatalog externalCatalog)

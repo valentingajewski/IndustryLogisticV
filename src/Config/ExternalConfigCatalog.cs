@@ -12,15 +12,21 @@ namespace LSOL.Config
         public ExternalConfigCatalog()
         {
             Locations = new Dictionary<string, ExternalLocationConfig>(StringComparer.OrdinalIgnoreCase);
+            Districts = new Dictionary<string, DistrictConfig>(StringComparer.OrdinalIgnoreCase);
             ResourceGroups = new List<ResourceGroupConfig>();
             ResourcesByCommodity = new Dictionary<string, ExternalResourceConfig>(StringComparer.OrdinalIgnoreCase);
             ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+            VehicleDefinitions = new List<VehicleDefinition>();
+            ValidationMessages = new List<string>();
         }
 
         public Dictionary<string, ExternalLocationConfig> Locations { get; }
+        public Dictionary<string, DistrictConfig> Districts { get; }
         public List<ResourceGroupConfig> ResourceGroups { get; }
         public Dictionary<string, ExternalResourceConfig> ResourcesByCommodity { get; }
         public Dictionary<string, List<string>> ObjectModels { get; }
+        public List<VehicleDefinition> VehicleDefinitions { get; }
+        public List<string> ValidationMessages { get; }
 
         public IReadOnlyList<VehicleCargoType> CargoTypesInOrder
         {
@@ -45,14 +51,33 @@ namespace LSOL.Config
         public static ExternalConfigCatalog Load(string configDirectory)
         {
             var catalog = new ExternalConfigCatalog();
-
-            ParseLocations(LoadConfigIni(configDirectory, "Industries.ini"), ExternalLocationKind.Industry, "Industries.ini", catalog);
-            ParseLocations(LoadConfigIni(configDirectory, "Stores.ini"), ExternalLocationKind.Store, "Stores.ini", catalog);
-            ParseLocations(LoadConfigIni(configDirectory, "GasStations.ini"), ExternalLocationKind.GasStation, "GasStations.ini", catalog);
             ParseResources(LoadConfigIni(configDirectory, "Resources.ini"), catalog);
+            CommodityCatalog.Configure(catalog.ResourceGroups);
             ParseObjects(LoadConfigIni(configDirectory, "Objects.ini"), catalog);
 
+            CsvConfigImport.TryPopulateDistricts(configDirectory, catalog);
+
+            var legacyLocations = LoadLegacyLocations(configDirectory);
+            if (!CsvConfigImport.TryPopulateSites(configDirectory, catalog, legacyLocations))
+            {
+                foreach (var pair in legacyLocations)
+                {
+                    catalog.Locations[pair.Key] = pair.Value;
+                }
+            }
+
+            CsvConfigImport.TryPopulateVehicles(configDirectory, catalog);
+
             return catalog;
+        }
+
+        private static Dictionary<string, ExternalLocationConfig> LoadLegacyLocations(string configDirectory)
+        {
+            var legacyCatalog = new ExternalConfigCatalog();
+            ParseLocations(LoadConfigIni(configDirectory, "Industries.ini"), ExternalLocationKind.Industry, "Industries.ini", legacyCatalog);
+            ParseLocations(LoadConfigIni(configDirectory, "Stores.ini"), ExternalLocationKind.Store, "Stores.ini", legacyCatalog);
+            ParseLocations(LoadConfigIni(configDirectory, "GasStations.ini"), ExternalLocationKind.GasStation, "GasStations.ini", legacyCatalog);
+            return legacyCatalog.Locations;
         }
 
         private static IniFile LoadConfigIni(string configDirectory, string fileName)
@@ -103,10 +128,18 @@ namespace LSOL.Config
                     continue;
                 }
 
+                var inputs = GetCommoditySet(ini.GetStringList(section, "Inputs"));
+                var outputs = GetCommoditySet(ini.GetStringList(section, "Outputs"));
+                var role = InferSiteRole(section, kind, inputs, outputs);
+
                 var location = new ExternalLocationConfig
                 {
+                    CatalogId = section,
                     Id = section,
+                    LegacyKey = section,
                     Kind = kind,
+                    SiteRole = role,
+                    OwnershipTier = SiteOwnershipTier.Unknown,
                     SourceFileName = sourceFileName,
                     Enabled = ini.GetBool(section, "Enabled", true),
                     Name = ini.GetString(section, "Name", section),
@@ -116,10 +149,12 @@ namespace LSOL.Config
                     VehicleSpawnHeading = GetOptionalFloat(ini, section, "VehicleSpawningHeading"),
                     FactoryDoorPosition = GetOptionalVector3(ini, section, "FactoryDoorCoordinates"),
                     FactoryProductionRatio = ini.GetFloat(section, "FactoryProductionRatio", 1f),
-                    Inputs = GetCommoditySet(ini.GetStringList(section, "Inputs")),
-                    Outputs = GetCommoditySet(ini.GetStringList(section, "Outputs")),
+                    Inputs = inputs,
+                    OptionalInputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                    Outputs = outputs,
                     Density = ini.GetString(section, "Density", "medium"),
                     StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f))),
+                    EmptyingRate = 0f,
                     IndustryPrice = Math.Max(0f, ini.GetFloat(section, "IndustryPrice", 0f)),
                     IndustryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "IndustryOwnerCut", 0.5f))),
                     SpawnedVehicleModel = ini.GetString(section, "SpawnedVehicleModel", string.Empty),
@@ -128,10 +163,53 @@ namespace LSOL.Config
                     MaxSpawnedVehiclesLine = GetOptionalInt(ini, section, "MaxSpawnedVehiclesLine"),
                     MaxSpawnedVehiclesRow = GetOptionalInt(ini, section, "MaxSpawnedVehiclesRow"),
                     ObjectToDelete = ini.GetString(section, "ObjectToDelete", string.Empty),
+                    CasualEconomy = null,
+                    StandardEconomy = null,
+                    HardcoreEconomy = null,
                 };
 
                 catalog.Locations[section] = location;
             }
+        }
+
+        private static SiteRole InferSiteRole(string section, ExternalLocationKind kind, HashSet<string> inputs, HashSet<string> outputs)
+        {
+            if (string.Equals(section, "MainOffice", StringComparison.OrdinalIgnoreCase))
+            {
+                return SiteRole.StarterHQ;
+            }
+
+            if (kind == ExternalLocationKind.Store)
+            {
+                return SiteRole.StoreSink;
+            }
+
+            if (kind == ExternalLocationKind.GasStation)
+            {
+                return SiteRole.FuelSink;
+            }
+
+            if (string.Equals(section, "RecyclingCenter", StringComparison.OrdinalIgnoreCase))
+            {
+                return SiteRole.RecyclingHub;
+            }
+
+            if (string.Equals(section, "OmegaFactory", StringComparison.OrdinalIgnoreCase))
+            {
+                return SiteRole.SpecialPlant;
+            }
+
+            if (outputs == null || outputs.Count == 0)
+            {
+                return SiteRole.Warehouse;
+            }
+
+            if (inputs == null || inputs.Count == 0)
+            {
+                return SiteRole.RawProducer;
+            }
+
+            return SiteRole.ProcessingPlant;
         }
 
         private static void ParseResources(IniFile ini, ExternalConfigCatalog catalog)
@@ -304,21 +382,31 @@ namespace LSOL.Config
 
     public sealed class ExternalLocationConfig
     {
+        public string CatalogId { get; set; }
         public string Id { get; set; }
+        public string LegacyKey { get; set; }
         public ExternalLocationKind Kind { get; set; }
+        public SiteRole SiteRole { get; set; }
+        public SiteOwnershipTier OwnershipTier { get; set; }
         public string SourceFileName { get; set; }
         public bool Enabled { get; set; }
         public string Name { get; set; }
+        public string DistrictName { get; set; }
         public string Company { get; set; }
         public Vector3 Position { get; set; }
         public Vector3? VehicleSpawnPosition { get; set; }
         public float? VehicleSpawnHeading { get; set; }
+        public Vector3? GatePosition { get; set; }
+        public int? BarrierModelHash { get; set; }
+        public Vector3? WorkerPosition { get; set; }
         public Vector3? FactoryDoorPosition { get; set; }
         public float FactoryProductionRatio { get; set; }
         public HashSet<string> Inputs { get; set; }
+        public HashSet<string> OptionalInputs { get; set; }
         public HashSet<string> Outputs { get; set; }
         public string Density { get; set; }
         public float StartingTankRatio { get; set; }
+        public float EmptyingRate { get; set; }
         public float IndustryPrice { get; set; }
         public float IndustryOwnerCut { get; set; }
         public string SpawnedVehicleModel { get; set; }
@@ -326,7 +414,11 @@ namespace LSOL.Config
         public float? SpawnedVehicleHeading { get; set; }
         public int? MaxSpawnedVehiclesLine { get; set; }
         public int? MaxSpawnedVehiclesRow { get; set; }
+        public int? DisplayObjectModelHash { get; set; }
         public string ObjectToDelete { get; set; }
+        public SiteEconomyPresetValues CasualEconomy { get; set; }
+        public SiteEconomyPresetValues StandardEconomy { get; set; }
+        public SiteEconomyPresetValues HardcoreEconomy { get; set; }
     }
 
     public sealed class ResourceGroupConfig

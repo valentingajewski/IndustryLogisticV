@@ -206,6 +206,7 @@ namespace LSOL.UI
             }
 
             _industryManager.PopulateLoadableOutputs(industry, cargoType, _cachedLoadOptions);
+            _cachedLoadOptions.RemoveAll(commodity => !_fleetManager.CanVehicleCarryCommodity(cargoVehicle, commodity));
             BuildLoadOptionSubtitles(industry, _cachedLoadOptions, freeCapacityTons, _cachedLoadOptionSubtitles);
 
             _cachedLoadIndustry = industry;

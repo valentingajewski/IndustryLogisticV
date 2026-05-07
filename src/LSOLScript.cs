@@ -48,6 +48,7 @@ namespace LSOL
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
         private readonly GlobalMarketManager _globalMarket;
+        private readonly TerritoryManager _territoryManager;
 
         private readonly LemonMenu _officeMenu;
         private readonly LemonMenu _vehicleCargoMenu;
@@ -65,6 +66,7 @@ namespace LSOL
         private readonly NpcLogisticsManager _npcLogisticsManager;
         private readonly NpcLogisticsController _npcLogisticsController;
         private readonly OverviewMenuController _overviewMenuController;
+        private readonly CompanyMapController _companyMapController;
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
         private readonly IndustryTabletController _industryTabletController;
@@ -127,6 +129,7 @@ namespace LSOL
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
             _globalMarket = new GlobalMarketManager(Game.GameTime);
+            _territoryManager = new TerritoryManager(_config, _industryManager);
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
             _vehicleSpawnMarkerSeed = _config.VehicleSpawnPosition;
@@ -137,12 +140,14 @@ namespace LSOL
                 _vehicleSpawnMarkerSeed,
                 GetGroundPosition,
                 GetIndustryMarkerPosition,
-                IsPetrolServiceStation);
+                IsPetrolServiceStation,
+                _territoryManager);
             _cargoTransferController = new CargoTransferController(
                 _fleetManager,
                 _industryManager,
                 _globalMarket,
-                message => ShowStatus(message));
+                message => ShowStatus(message),
+                _territoryManager);
             var cargoFilterOrder = _config.CargoTypes != null && _config.CargoTypes.Count > 0
                 ? _config.CargoTypes
                 : new List<VehicleCargoType>
@@ -176,7 +181,8 @@ namespace LSOL
                 () => _profit,
                 DeductProfit,
                 amount => _profit += amount,
-                message => ShowStatus(message));
+                message => ShowStatus(message),
+                _territoryManager);
 
             _officeMenu = new LemonMenu("Office")
             {
@@ -240,6 +246,16 @@ namespace LSOL
                 () => _licensingDifficultyEnabled,
                 () => _profit,
                 PurchaseContractorPermitFromOverview,
+                message => ShowStatus(message));
+            _companyMapController = new CompanyMapController(
+                _controls,
+                _territoryManager,
+                _industryManager,
+                CloseAllMenus,
+                () => _profit,
+                SecureSupportSiteFromOffice,
+                AssignSupportCrewFromOffice,
+                HireSupportStaffFromOffice,
                 message => ShowStatus(message));
             _industryTabletController = new IndustryTabletController(
                 _fleetManager,
@@ -315,6 +331,7 @@ namespace LSOL
                     || _difficultyMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _npcLogisticsController.AnyMenuOpen
+                    || _companyMapController.AnyMenuOpen
                     || _overviewMenuController.AnyMenuOpen
                     || _industryTabletController.IsOpen;
             }
@@ -353,6 +370,7 @@ namespace LSOL
                 _globalMarket.Update(gameTime);
                 _industryManager.Update(elapsed / 60000f, _config.OmegaMultiplier);
                 _fleetManager.CleanupStates();
+                _territoryManager.EvaluateFinancialPressure(_profit, gameTime, message => ShowStatus(message, 4500));
             }
 
             if (gameTime - _lastNearestProbeMs >= 250)
@@ -598,6 +616,12 @@ namespace LSOL
                 return true;
             }
 
+            if (_companyMapController.AnyMenuOpen)
+            {
+                _companyMapController.HandleKey(key);
+                return true;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.HandleKey(key, _controls);
@@ -662,14 +686,15 @@ namespace LSOL
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
             _npcLogisticsController.Draw();
+            _companyMapController.Draw();
 
             _overviewMenuController.Draw();
-            if (_overviewMenuController.AnyMenuOpen)
+            if (_overviewMenuController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _npcLogisticsController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1263,6 +1288,7 @@ namespace LSOL
         private void CloseNonOfficeMenus()
         {
             CloseOverviewMenus();
+            _companyMapController.Close();
             _npcLogisticsController.Close();
             _vehicleCargoMenu.Close();
             _upgradeMenu.Close();
@@ -1279,6 +1305,7 @@ namespace LSOL
         private void CloseAllMenus()
         {
             CloseOverviewMenus();
+            _companyMapController.Close();
             _npcLogisticsController.Close();
             _modControlMenu.Close();
             _savingOptionsMenu.Close();
@@ -1617,6 +1644,9 @@ namespace LSOL
                 RebuildIndustryPurchaseMenuItems();
                 return;
             }
+
+            _territoryManager.OnIndustryAccessChanged(industry);
+            _blipLifecycleManager.Refresh();
 
             ShowStatus(result, 4000);
             ReturnFromIndustryPurchaseMenu();
@@ -1999,6 +2029,11 @@ namespace LSOL
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
             _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
             _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
+            _territoryManager.RefreshState();
+            if (_modMechanicsEnabled)
+            {
+                _blipLifecycleManager.Refresh();
+            }
 
             if (_upgradeMenu.IsOpen)
             {
@@ -2086,7 +2121,14 @@ namespace LSOL
 
             float cost;
             string result;
+            var hadPermit = industry.HasContractorPermit;
             industry.TryPurchaseContractorPermit(ref _profit, out cost, out result);
+            if (!hadPermit && industry.HasContractorPermit)
+            {
+                _territoryManager.OnIndustryAccessChanged(industry);
+                _blipLifecycleManager.Refresh();
+            }
+
             return result;
         }
 
@@ -2112,6 +2154,7 @@ namespace LSOL
             _cargoTransferController.ClearState();
             _showContext = false;
             CloseOverviewMenus();
+            _companyMapController.Close();
             _officeMenu.Close();
             _upgradeMenu.Close();
             _difficultyMenu.Close();
@@ -2311,6 +2354,12 @@ namespace LSOL
                     DetailFactory = CurrentNpcHiringDetail,
                     OnActivate = OpenNpcHiringMenu,
                 },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Company Map",
+                    DetailFactory = CurrentCompanyMapDetail,
+                    OnActivate = OpenCompanyMapMenu,
+                },
             });
         }
 
@@ -2322,10 +2371,33 @@ namespace LSOL
                 : string.Format("{0} active logistics routes. Open the tablet-style NPC manager.", routeCount);
         }
 
+        private string CurrentCompanyMapDetail()
+        {
+            var controlledDistricts = _territoryManager.GetControlledDistrictCount();
+            var corridorCount = _territoryManager.GetActiveCorridorCount();
+            var securedSupportSites = _territoryManager.GetDepotIndustries().Count(industry =>
+            {
+                var siteState = _territoryManager.GetSiteState(industry);
+                return siteState != null && siteState.ControlLevel != TerritoryControlLevel.None;
+            });
+
+            return string.Format(
+                "{0} districts anchored | {1} corridors active | {2} depots or yards secured.",
+                controlledDistricts,
+                corridorCount,
+                securedSupportSites);
+        }
+
         private void OpenNpcHiringMenu()
         {
             _officeMenu.Close();
             _npcLogisticsController.OpenRootMenu();
+        }
+
+        private void OpenCompanyMapMenu()
+        {
+            _officeMenu.Close();
+            _companyMapController.Open();
         }
 
         private void DeductProfit(float amount)
@@ -2336,6 +2408,36 @@ namespace LSOL
             }
 
             _profit -= amount;
+        }
+
+        private string SecureSupportSiteFromOffice(Industry industry)
+        {
+            float cost;
+            string result;
+            _territoryManager.TryAcquireDepot(industry, ref _profit, out cost, out result);
+            _blipLifecycleManager.Refresh();
+            RebuildOfficeMenuItems();
+            return result;
+        }
+
+        private string AssignSupportCrewFromOffice(Industry industry)
+        {
+            float cost;
+            string result;
+            _territoryManager.TryAssignCrew(industry, ref _profit, out cost, out result);
+            _blipLifecycleManager.Refresh();
+            RebuildOfficeMenuItems();
+            return result;
+        }
+
+        private string HireSupportStaffFromOffice(Industry industry, DepotStaffRole staffRole)
+        {
+            float cost;
+            string result;
+            _territoryManager.TryHireDepotStaff(industry, staffRole, ref _profit, out cost, out result);
+            _blipLifecycleManager.Refresh();
+            RebuildOfficeMenuItems();
+            return result;
         }
 
         private void RebuildVehicleCargoMenuItems()
@@ -3076,6 +3178,13 @@ namespace LSOL
             if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 2.4f)
             {
                 ShowStatus("Move closer to an industry to open the vehicle spawner.");
+                return;
+            }
+
+            string reason;
+            if (!_territoryManager.CanSpawnCompanyVehicleAt(industry, out reason))
+            {
+                ShowStatus(reason);
                 return;
             }
 

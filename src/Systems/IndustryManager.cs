@@ -15,7 +15,7 @@ namespace LSOL.Systems
         private readonly Dictionary<long, List<Industry>> _industriesBySpatialCell;
         private readonly Dictionary<string, IndustryConfig> _baseIndustryConfigs;
         private readonly Dictionary<string, IndustryConfig> _defaultIndustryConfigs;
-        private readonly Dictionary<string, float> _petrolStationDrainRatePerMinuteByIndustryId;
+        private readonly Dictionary<string, float> _sinkDrainRatePerMinuteByIndustryId;
         private readonly float _industryOmegaCapacityMultiplier;
         private EconomyDifficultyPreset _economyPreset;
         private bool _industryPricingDifficultyEnabled;
@@ -27,7 +27,7 @@ namespace LSOL.Systems
             _industriesBySpatialCell = new Dictionary<long, List<Industry>>();
             _baseIndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase);
             _defaultIndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase);
-            _petrolStationDrainRatePerMinuteByIndustryId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            _sinkDrainRatePerMinuteByIndustryId = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             _industryOmegaCapacityMultiplier = config == null ? 0.2f : config.IndustryOmegaCapacityMultiplier;
             _economyPreset = EconomyDifficultyPreset.Standard;
             foreach (var pair in config.IndustryConfigs)
@@ -47,15 +47,14 @@ namespace LSOL.Systems
                 var supportsOmegaBoost = ShouldUseOmegaBoost(runtimeConfig);
                 var recipes = RecipeRegistry.BuildRecipes(runtimeConfig, supportsOmegaBoost);
                 var industry = new Industry(runtimeConfig, recipes, supportsOmegaBoost, config.IndustryOmegaCapacityMultiplier);
-                SeedInitialOutput(industry);
-                SeedStartingTank(industry, runtimeConfig);
+                SeedIndustryStartingState(industry, runtimeConfig);
                 _industries.Add(industry);
                 AddIndustryToSpatialIndex(industry);
 
                 float drainRatePerMinute;
-                if (TryGetPetrolStationDrainRatePerMinute(runtimeConfig, out drainRatePerMinute))
+                if (TryGetSinkDrainRatePerMinute(runtimeConfig, out drainRatePerMinute))
                 {
-                    _petrolStationDrainRatePerMinuteByIndustryId[runtimeConfig.Id] = drainRatePerMinute;
+                    _sinkDrainRatePerMinuteByIndustryId[runtimeConfig.Id] = drainRatePerMinute;
                 }
             }
         }
@@ -210,8 +209,7 @@ namespace LSOL.Systems
                     defaultConfig.IndustryPrice,
                     defaultConfig.IndustryLicencePrice);
 
-                SeedInitialOutput(industry);
-                SeedStartingTank(industry, defaultConfig);
+                SeedIndustryStartingState(industry, defaultConfig);
             }
         }
 
@@ -223,9 +221,9 @@ namespace LSOL.Systems
                 industry.Update(deltaMinutes, omegaMultiplier);
 
                 float drainRatePerMinute;
-                if (_petrolStationDrainRatePerMinuteByIndustryId.TryGetValue(industry.Id, out drainRatePerMinute))
+                if (_sinkDrainRatePerMinuteByIndustryId.TryGetValue(industry.Id, out drainRatePerMinute))
                 {
-                    DrainPetrolStationFuel(industry, deltaMinutes, drainRatePerMinute);
+                    DrainSinkStock(industry, deltaMinutes, drainRatePerMinute);
                 }
             }
         }
@@ -431,6 +429,7 @@ namespace LSOL.Systems
                 return 0f;
             }
 
+            commodity = CommodityCatalog.Normalize(commodity);
             var unitPrice = market.GetUnitPrice(commodity);
             float payout;
             if (industry.IsSink)
@@ -471,21 +470,7 @@ namespace LSOL.Systems
             return true;
         }
 
-        private static void SeedInitialOutput(Industry industry)
-        {
-            if (industry.Outputs.Count == 0)
-            {
-                return;
-            }
-
-            var perOutputSeed = Math.Min(20f, industry.OutputCapacityTons / Math.Max(1, industry.Outputs.Count) * 0.35f);
-            foreach (var output in industry.Outputs)
-            {
-                industry.SeedOutput(output, perOutputSeed);
-            }
-        }
-
-        private static void SeedStartingTank(Industry industry, IndustryConfig config)
+        private static void SeedIndustryStartingState(Industry industry, IndustryConfig config)
         {
             if (industry == null || config == null)
             {
@@ -493,21 +478,80 @@ namespace LSOL.Systems
             }
 
             var startingRatio = Math.Max(0f, Math.Min(1f, config.StartingTankRatio));
-            if (startingRatio <= 0f || !industry.Inputs.Contains("Fuel"))
+            if (!config.IsCsvBacked)
+            {
+                SeedLegacyIndustryStartingState(industry, startingRatio);
+                return;
+            }
+
+            if (startingRatio <= 0f)
+            {
+                return;
+            }
+
+            if (industry.Inputs.Count == 0 && industry.OptionalInputs.Count == 0 && industry.Outputs.Count > 0)
+            {
+                var perOutputSeed = industry.OutputCapacityTons * startingRatio / Math.Max(1, industry.Outputs.Count);
+                foreach (var output in industry.Outputs)
+                {
+                    industry.SeedOutput(output, perOutputSeed);
+                }
+
+                return;
+            }
+
+            var acceptedInputs = industry.Inputs
+                .Concat(industry.OptionalInputs)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (acceptedInputs.Count > 0)
+            {
+                var perInputSeed = industry.InputCapacityTons * startingRatio / acceptedInputs.Count;
+                for (int i = 0; i < acceptedInputs.Count; i++)
+                {
+                    industry.AddInput(acceptedInputs[i], perInputSeed);
+                }
+            }
+
+            if (industry.Outputs.Count > 0 && industry.Inputs.Count > 0)
+            {
+                var perOutputSeed = Math.Min(
+                    industry.OutputCapacityTons * 0.15f / Math.Max(1, industry.Outputs.Count),
+                    industry.OutputCapacityTons / Math.Max(1, industry.Outputs.Count));
+                if (perOutputSeed > 0f)
+                {
+                    foreach (var output in industry.Outputs)
+                    {
+                        industry.SeedOutput(output, perOutputSeed);
+                    }
+                }
+            }
+        }
+
+        private static void SeedLegacyIndustryStartingState(Industry industry, float startingRatio)
+        {
+            if (industry.Outputs.Count > 0)
+            {
+                var perOutputSeed = Math.Min(20f, industry.OutputCapacityTons / Math.Max(1, industry.Outputs.Count) * 0.35f);
+                foreach (var output in industry.Outputs)
+                {
+                    industry.SeedOutput(output, perOutputSeed);
+                }
+            }
+
+            if (startingRatio <= 0f || !industry.AcceptsCommodity("Fuel"))
             {
                 return;
             }
 
             var seedTons = industry.InputCapacityTons * startingRatio;
-            if (seedTons <= 0f)
+            if (seedTons > 0f)
             {
-                return;
+                industry.AddInput("Fuel", seedTons);
             }
-
-            industry.AddInput("Fuel", seedTons);
         }
 
-        private static bool TryGetPetrolStationDrainRatePerMinute(IndustryConfig config, out float drainRatePerMinute)
+        private static bool TryGetSinkDrainRatePerMinute(IndustryConfig config, out float drainRatePerMinute)
         {
             drainRatePerMinute = 0f;
             if (config == null)
@@ -515,7 +559,7 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (config.Outputs.Count != 0 || config.Inputs.Count != 1 || !config.Inputs.Contains("Fuel"))
+            if (config.Outputs.Count != 0 || (config.Inputs.Count == 0 && config.OptionalInputs.Count == 0))
             {
                 return false;
             }
@@ -523,28 +567,33 @@ namespace LSOL.Systems
             // Ported from oil_mod density emptying rates, converted from L/s to tons/min.
             // Conversion uses 1000L ~= 1t so: tons/min = liters/second * 60 / 1000.
             const float litersPerSecondToTonsPerMinute = 0.06f;
-            var density = (config.Density ?? "medium").Trim().ToLowerInvariant();
-            float litersPerSecond;
-
-            if (density == "very low" || density == "verylow")
-            {
-                litersPerSecond = 0.35f;
-            }
-            else if (density == "low")
-            {
-                litersPerSecond = 0.8f;
-            }
-            else if (density == "high")
-            {
-                litersPerSecond = 4.0f;
-            }
-            else
-            {
-                litersPerSecond = 2.25f;
-            }
+            var litersPerSecond = config.EmptyingRate > 0f
+                ? config.EmptyingRate
+                : ResolveLegacyDensityDrainRate(config.Density);
 
             drainRatePerMinute = litersPerSecond * litersPerSecondToTonsPerMinute;
             return drainRatePerMinute > 0f;
+        }
+
+        private static float ResolveLegacyDensityDrainRate(string density)
+        {
+            var normalized = (density ?? "medium").Trim().ToLowerInvariant();
+            if (normalized == "very low" || normalized == "verylow")
+            {
+                return 0.35f;
+            }
+
+            if (normalized == "low")
+            {
+                return 0.8f;
+            }
+
+            if (normalized == "high")
+            {
+                return 4f;
+            }
+
+            return 2.25f;
         }
 
         private static IndustryConfig CloneIndustryConfig(IndustryConfig source)
@@ -556,13 +605,26 @@ namespace LSOL.Systems
 
             return new IndustryConfig
             {
+                CatalogId = source.CatalogId,
                 Id = source.Id,
+                LegacyKey = source.LegacyKey,
                 LocationKind = source.LocationKind,
+                SiteRole = source.SiteRole,
+                OwnershipTier = source.OwnershipTier,
+                DistrictName = source.DistrictName,
                 Name = source.Name,
+                Company = source.Company,
                 Position = source.Position,
                 VehicleSpawnPosition = source.VehicleSpawnPosition,
                 VehicleSpawnHeading = source.VehicleSpawnHeading,
+                GatePosition = source.GatePosition,
+                BarrierModelHash = source.BarrierModelHash,
+                WorkerPosition = source.WorkerPosition,
+                DisplayObjectModelHash = source.DisplayObjectModelHash,
+                MaxDisplayObjectLine = source.MaxDisplayObjectLine,
+                MaxDisplayObjectRow = source.MaxDisplayObjectRow,
                 Inputs = new HashSet<string>(source.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                OptionalInputs = new HashSet<string>(source.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 Outputs = new HashSet<string>(source.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 FactoryProductionRatio = source.FactoryProductionRatio,
                 InputCapacityTons = source.InputCapacityTons,
@@ -570,11 +632,16 @@ namespace LSOL.Systems
                 ProductionRate = source.ProductionRate,
                 StartingTankRatio = source.StartingTankRatio,
                 Density = source.Density,
+                EmptyingRate = source.EmptyingRate,
                 IndustryPrice = source.IndustryPrice,
                 IndustryLicencePrice = source.IndustryLicencePrice,
                 IndustryOwnerCut = source.IndustryOwnerCut,
                 IsOwned = source.IsOwned,
                 HasContractorPermit = source.HasContractorPermit,
+                IsCsvBacked = source.IsCsvBacked,
+                CasualEconomy = CloneSiteEconomy(source.CasualEconomy),
+                StandardEconomy = CloneSiteEconomy(source.StandardEconomy),
+                HardcoreEconomy = CloneSiteEconomy(source.HardcoreEconomy),
             };
         }
 
@@ -586,9 +653,37 @@ namespace LSOL.Systems
                 return effectiveConfig;
             }
 
+            if (effectiveConfig.IsCsvBacked)
+            {
+                var sitePreset = ResolveSitePresetValues(effectiveConfig, preset);
+                if (sitePreset == null)
+                {
+                    sitePreset = SiteEconomyPresetValues.Create(0f, 0f, 0f, effectiveConfig.InputCapacityTons, effectiveConfig.OutputCapacityTons, effectiveConfig.FactoryProductionRatio, false);
+                }
+
+                var productionRatio = sitePreset.ProductionRatio > 0f
+                    ? sitePreset.ProductionRatio
+                    : ResolveFactoryProductionMultiplier(effectiveConfig.LegacyKey ?? effectiveConfig.Id, preset);
+
+                effectiveConfig.FactoryProductionRatio = Math.Max(0.1f, productionRatio <= 0f ? 1f : productionRatio);
+                effectiveConfig.ProductionRate = Math.Max(1f, sitePreset.ProductionRate > 0f
+                    ? sitePreset.ProductionRate * effectiveConfig.FactoryProductionRatio
+                    : effectiveConfig.ProductionRate);
+                effectiveConfig.InputCapacityTons = Math.Max(1f, sitePreset.InputCapacityTons > 0f ? sitePreset.InputCapacityTons : effectiveConfig.InputCapacityTons);
+                effectiveConfig.OutputCapacityTons = effectiveConfig.Outputs.Count == 0
+                    ? Math.Max(1f, sitePreset.InputCapacityTons > 0f ? sitePreset.InputCapacityTons : effectiveConfig.OutputCapacityTons)
+                    : Math.Max(1f, sitePreset.OutputCapacityTons > 0f ? sitePreset.OutputCapacityTons : effectiveConfig.OutputCapacityTons);
+                effectiveConfig.IndustryPrice = Math.Max(0f, sitePreset.PurchasePrice);
+                effectiveConfig.IndustryLicencePrice = sitePreset.PermitRequired ? Math.Max(0f, sitePreset.LicencePrice) : 0f;
+                var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(effectiveConfig.SiteRole, effectiveConfig.OwnershipTier);
+                effectiveConfig.IsOwned = hasStarterAccess || effectiveConfig.IndustryPrice <= 0f;
+                effectiveConfig.HasContractorPermit = hasStarterAccess || !sitePreset.PermitRequired || effectiveConfig.IndustryLicencePrice <= 0f;
+                return effectiveConfig;
+            }
+
             var presetValues = GetEconomyPresetValues(preset);
             var factoryRatio = Math.Max(0.1f, effectiveConfig.FactoryProductionRatio <= 0f ? 1f : effectiveConfig.FactoryProductionRatio);
-            var productionMultiplier = ResolveFactoryProductionMultiplier(effectiveConfig.Id, preset);
+            var productionMultiplier = ResolveFactoryProductionMultiplier(effectiveConfig.LegacyKey ?? effectiveConfig.Id, preset);
 
             effectiveConfig.ProductionRate = Math.Max(1f, presetValues.IndustryProductionRate * factoryRatio * productionMultiplier);
             effectiveConfig.InputCapacityTons = ConvertRawCapacityToTons(presetValues.IndustryInputCapacityRaw);
@@ -598,6 +693,36 @@ namespace LSOL.Systems
             effectiveConfig.IsOwned = effectiveConfig.IndustryPrice <= 0f;
             effectiveConfig.HasContractorPermit = effectiveConfig.IndustryLicencePrice <= 0f;
             return effectiveConfig;
+        }
+
+        private static SiteEconomyPresetValues ResolveSitePresetValues(IndustryConfig config, EconomyDifficultyPreset preset)
+        {
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    return CloneSiteEconomy(config.CasualEconomy ?? config.StandardEconomy ?? config.HardcoreEconomy);
+                case EconomyDifficultyPreset.Hardcore:
+                    return CloneSiteEconomy(config.HardcoreEconomy ?? config.StandardEconomy ?? config.CasualEconomy);
+                default:
+                    return CloneSiteEconomy(config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy);
+            }
+        }
+
+        private static SiteEconomyPresetValues CloneSiteEconomy(SiteEconomyPresetValues source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return SiteEconomyPresetValues.Create(
+                source.ProductionRate,
+                source.LicencePrice,
+                source.PurchasePrice,
+                source.InputCapacityTons,
+                source.OutputCapacityTons,
+                source.ProductionRatio,
+                source.PermitRequired);
         }
 
         private static EconomyPresetValues GetEconomyPresetValues(EconomyDifficultyPreset preset)
@@ -682,15 +807,19 @@ namespace LSOL.Systems
             return effectiveOmegaCapacityTons;
         }
 
-        private static void DrainPetrolStationFuel(Industry industry, float deltaMinutes, float drainRatePerMinute)
+        private static void DrainSinkStock(Industry industry, float deltaMinutes, float drainRatePerMinute)
         {
             if (industry == null || deltaMinutes <= 0f || drainRatePerMinute <= 0f)
             {
                 return;
             }
 
-            var currentFuel = Math.Max(0f, industry.GetStock("Fuel"));
-            if (currentFuel <= 0.0001f)
+            var acceptedInputs = industry.Inputs
+                .Concat(industry.OptionalInputs)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Where(commodity => industry.GetStock(commodity) > 0.0001f)
+                .ToList();
+            if (acceptedInputs.Count == 0)
             {
                 return;
             }
@@ -701,7 +830,12 @@ namespace LSOL.Systems
                 return;
             }
 
-            industry.BufferStorage["Fuel"] = Math.Max(0f, currentFuel - consumed);
+            var perCommodityConsumption = consumed / acceptedInputs.Count;
+            for (int i = 0; i < acceptedInputs.Count; i++)
+            {
+                var commodity = acceptedInputs[i];
+                industry.BufferStorage[commodity] = Math.Max(0f, industry.GetStock(commodity) - perCommodityConsumption);
+            }
         }
 
     }

@@ -14,6 +14,7 @@ namespace LSOL.Systems
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Func<Industry, Vector3> _getIndustryMarkerPosition;
         private readonly Func<Industry, bool> _isPetrolServiceStation;
+        private readonly TerritoryManager _territoryManager;
         private readonly List<Blip> _industryBlips;
 
         private Blip _officeBlip;
@@ -25,7 +26,8 @@ namespace LSOL.Systems
             Vector3 vehicleSpawnMarkerSeed,
             Func<Vector3, Vector3> getGroundPosition,
             Func<Industry, Vector3> getIndustryMarkerPosition,
-            Func<Industry, bool> isPetrolServiceStation)
+            Func<Industry, bool> isPetrolServiceStation,
+            TerritoryManager territoryManager = null)
         {
             _industryManager = industryManager;
             _mainOfficeMarkerSeed = mainOfficeMarkerSeed;
@@ -33,6 +35,7 @@ namespace LSOL.Systems
             _getGroundPosition = getGroundPosition;
             _getIndustryMarkerPosition = getIndustryMarkerPosition;
             _isPetrolServiceStation = isPetrolServiceStation;
+            _territoryManager = territoryManager;
             _industryBlips = new List<Blip>();
         }
 
@@ -48,10 +51,8 @@ namespace LSOL.Systems
                 var industry = _industryManager.Industries[i];
                 var isPetrolStation = _isPetrolServiceStation(industry);
                 var sprite = ResolveIndustryBlipSprite(industry, isPetrolStation);
-                var color = isPetrolStation
-                    ? BlipColor.Yellow
-                    : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
-                var blip = CreateStaticBlip(_getIndustryMarkerPosition(industry), sprite, color, industry.Name, 0.85f);
+                var color = ResolveIndustryBlipColor(industry, isPetrolStation);
+                var blip = CreateStaticBlip(_getIndustryMarkerPosition(industry), sprite, color, ResolveIndustryBlipName(industry), 0.85f);
                 if (blip != null && blip.Exists())
                 {
                     _industryBlips.Add(blip);
@@ -81,7 +82,11 @@ namespace LSOL.Systems
                 }
 
                 var industry = _industryManager.Industries[i];
+                var isPetrolStation = _isPetrolServiceStation(industry);
                 blip.Position = _getIndustryMarkerPosition(industry);
+                blip.Sprite = ResolveIndustryBlipSprite(industry, isPetrolStation);
+                blip.Color = ResolveIndustryBlipColor(industry, isPetrolStation);
+                blip.Name = ResolveIndustryBlipName(industry);
             }
         }
 
@@ -138,6 +143,86 @@ namespace LSOL.Systems
             return industry != null && industry.IsStore
                 ? BlipSprite.Store
                 : BlipSprite.Warehouse;
+        }
+
+        private BlipColor ResolveIndustryBlipColor(Industry industry, bool isPetrolStation)
+        {
+            if (_territoryManager == null || industry == null)
+            {
+                return isPetrolStation
+                    ? BlipColor.Yellow
+                    : (industry != null && industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
+            }
+
+            var siteState = _territoryManager.GetSiteState(industry);
+            var districtState = _territoryManager.GetDistrictState(industry.DistrictName);
+            if (siteState == null)
+            {
+                return isPetrolStation
+                    ? BlipColor.Yellow
+                    : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
+            }
+
+            if (industry.IsStarterHeadquarters || (industry.IsDepotLike && siteState.ControlLevel == TerritoryControlLevel.Owned))
+            {
+                return BlipColor.Blue;
+            }
+
+            if (industry.IsDepotLike && siteState.ControlLevel == TerritoryControlLevel.Leased)
+            {
+                return BlipColor.White;
+            }
+
+            if (siteState.IsOperational && districtState != null && districtState.InfluenceRatio >= 0.6f)
+            {
+                return BlipColor.Green;
+            }
+
+            if (siteState.FranchiseLevel >= TerritoryFranchiseLevel.Preferred || isPetrolStation || industry.IsStore)
+            {
+                return BlipColor.Yellow;
+            }
+
+            return BlipColor.Red;
+        }
+
+        private string ResolveIndustryBlipName(Industry industry)
+        {
+            if (_territoryManager == null || industry == null)
+            {
+                return industry != null ? industry.Name : string.Empty;
+            }
+
+            var siteState = _territoryManager.GetSiteState(industry);
+            if (siteState == null)
+            {
+                return industry.Name;
+            }
+
+            if (industry.IsStarterHeadquarters)
+            {
+                return industry.Name + " [HQ]";
+            }
+
+            if (industry.IsDepotLike || industry.SiteRole == SiteRole.FleetYard)
+            {
+                var controlTag = siteState.ControlLevel == TerritoryControlLevel.Owned
+                    ? "YARD"
+                    : (siteState.ControlLevel == TerritoryControlLevel.Leased ? "LEASE" : "OPEN");
+                return string.Format("{0} [{1}]", industry.Name, controlTag);
+            }
+
+            if (siteState.FranchiseLevel != TerritoryFranchiseLevel.None)
+            {
+                return string.Format("{0} [F{1}]", industry.Name, (int)siteState.FranchiseLevel);
+            }
+
+            if (siteState.IsOperational)
+            {
+                return industry.Name + " [LIVE]";
+            }
+
+            return industry.Name + " [SETUP]";
         }
     }
 }
