@@ -27,6 +27,7 @@ namespace LSOL.Systems
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
         private readonly GlobalMarketManager _globalMarket;
+        private readonly TerritoryManager _territoryManager;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Func<float> _getProfit;
         private readonly Action<float> _deductProfit;
@@ -49,11 +50,13 @@ namespace LSOL.Systems
             Func<float> getProfit,
             Action<float> deductProfit,
             Action<float> addProfit,
-            Action<string> showStatus)
+            Action<string> showStatus,
+            TerritoryManager territoryManager = null)
         {
             _industryManager = industryManager;
             _fleetManager = fleetManager;
             _globalMarket = globalMarket;
+            _territoryManager = territoryManager;
             _getGroundPosition = getGroundPosition;
             _getProfit = getProfit;
             _deductProfit = deductProfit;
@@ -487,6 +490,11 @@ namespace LSOL.Systems
             }
 
             var lossRatio = (float)(_random.NextDouble() * Math.Max(0f, contract.Tier.CargoLossRate));
+            if (_territoryManager != null)
+            {
+                lossRatio = _territoryManager.AdjustNpcLossRatio(contract.OriginIndustry, contract.DestinationIndustry, lossRatio);
+            }
+
             var deliveredTons = Math.Max(0.1f, loadedTons * (1f - lossRatio));
 
             cargoState.Commodity = contract.Commodity;
@@ -494,7 +502,13 @@ namespace LSOL.Systems
             cargoState.WeightTons = deliveredTons;
             cargoState.TotalLostTons += Math.Max(0f, loadedTons - deliveredTons);
             cargoState.CargoCondition = Math.Max(0.25f, 1f - lossRatio);
+            cargoState.SourceIndustryId = contract.OriginIndustry != null ? contract.OriginIndustry.Id : string.Empty;
+            cargoState.SourceDistrictName = contract.OriginIndustry != null ? contract.OriginIndustry.DistrictName : string.Empty;
             _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+            if (_territoryManager != null)
+            {
+                _territoryManager.RegisterLoad(contract.OriginIndustry, contract.Commodity, loadedTons, true);
+            }
 
             contract.LastJourneyLossRatio = lossRatio;
             contract.Phase = NpcRoutePhase.DrivingToDestination;
@@ -549,6 +563,18 @@ namespace LSOL.Systems
             }
 
             var revenue = _industryManager.ComputeDeliveryProfit(contract.DestinationIndustry, contract.Commodity, acceptedTons, _globalMarket, now);
+            if (_territoryManager != null)
+            {
+                revenue = _territoryManager.AdjustDeliveryRevenue(contract.DestinationIndustry, contract.Commodity, acceptedTons, revenue);
+                _territoryManager.RegisterDelivery(
+                    contract.DestinationIndustry,
+                    contract.Commodity,
+                    acceptedTons,
+                    true,
+                    contract.OriginIndustry != null ? contract.OriginIndustry.Id : cargoState.SourceIndustryId,
+                    contract.OriginIndustry != null ? contract.OriginIndustry.DistrictName : cargoState.SourceDistrictName);
+            }
+
             if (_addProfit != null && revenue > 0f)
             {
                 _addProfit(revenue);
@@ -826,16 +852,19 @@ namespace LSOL.Systems
             return industry != null
                 && industry.Outputs != null
                 && industry.Outputs.Count > 0
-                && HasGameplayAccess(industry);
+                && HasGameplayAccess(industry)
+                && (_territoryManager == null || _territoryManager.IsAutomationReady(industry));
         }
 
         private bool CanUseAsDestination(Industry originIndustry, Industry destinationIndustry)
         {
+            string reason;
             return destinationIndustry != null
                 && originIndustry != null
                 && !string.Equals(originIndustry.Id, destinationIndustry.Id, StringComparison.OrdinalIgnoreCase)
                 && HasGameplayAccess(destinationIndustry)
-                && GetResourceOptions(originIndustry, destinationIndustry).Count > 0;
+                && GetResourceOptions(originIndustry, destinationIndustry).Count > 0
+                && (_territoryManager == null || _territoryManager.CanCreateNpcRoute(originIndustry, destinationIndustry, out reason));
         }
 
         private bool HasGameplayAccess(Industry industry)
@@ -848,9 +877,8 @@ namespace LSOL.Systems
             selectedVehicle = null;
             selectedTractor = null;
 
-            var cargoType = CommodityCatalog.GetCargoTypeForCommodity(commodity);
             selectedVehicle = _fleetManager
-                .GetSpawnableForCargoType(cargoType)
+                .GetSpawnableForCommodity(commodity)
                 .OrderByDescending(definition => definition.CapacityTons)
                 .FirstOrDefault();
             if (selectedVehicle == null)

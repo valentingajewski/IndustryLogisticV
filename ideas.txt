@@ -1,3 +1,9 @@
+# Mod options
+- Languages
+- Daltonien mod
+
+# Gameplay fetaures
+
 - oversived cargo (machines, bigger vehicle, houses)
 - torque engine regarding the cargo
 - event mission (tranformers)
@@ -6,3 +12,31 @@
 - Vehicle, machies or Tractor parts deliver to industry to increase production
 
 - You are aa contractor at the start then with enough money you can start building your own empire
+
+
+
+
+I noticed that the OwnershipTier variable is not taken into account as I need a permit for the quarry and cement but they must be owned by the player as the startr of the game because they have the "Starter" value.
+
+Reminder:
+Its purpose is to classify how important a site is in the future career mode, so you can later decide things like:
+
+when the player can unlock it
+how expensive it should be
+how much map influence it gives
+what features it unlocks
+whether it is a starter foothold, a district hub, or a late-game prestige asset
+The values I used were these:
+
+Starter: first accessible assets. Cheap or free. Small footprint. Good for early trucks, first routes, basic depot gameplay.
+Local: small neighborhood business asset. Low influence. Good for one district corner, one sink yard, or one small service lot.
+Regional: meaningful operational foothold. Medium cost. Should unlock better routing, local bonuses, or more fleet presence.
+Core: major strategic asset in a district. High cost. Strong influence. Usually a depot, anchor industry, or major sink that defines control of the area.
+Expansion: optional later-game site used to widen the company’s footprint, often for side chains, construction goods, overflow storage, or specialization.
+A simple way to think about it is:
+
+Starter = “I can begin here.”
+Local = “I operate here.”
+Regional = “I control this part of the map.”
+Core = “This district is mine.”
+Expansion = “This grows my empire sideways.”

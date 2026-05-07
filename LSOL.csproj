@@ -34,5 +34,8 @@
     <EmbeddedResource Include="configs\*.ini">
       <LogicalName>LSOL.Configs.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
+    <EmbeddedResource Include="configs\*.csv">
+      <LogicalName>LSOL.Configs.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

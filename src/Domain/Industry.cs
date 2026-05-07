@@ -11,32 +11,48 @@ namespace LSOL.Domain
         private readonly List<ProductionRecipe> _recipes;
         private readonly bool _supportsOmegaBoost;
         private readonly List<string> _sortedInputs;
+        private readonly List<string> _sortedOptionalInputs;
         private readonly List<string> _sortedOutputs;
 
         public Industry(IndustryConfig config, List<ProductionRecipe> recipes, bool supportsOmegaBoost, float omegaCapacityMultiplier)
         {
+            CatalogId = config.CatalogId;
             Id = config.Id;
+            LegacyKey = string.IsNullOrWhiteSpace(config.LegacyKey) ? config.Id : config.LegacyKey;
             LocationKind = config.LocationKind;
+            SiteRole = config.SiteRole;
+            OwnershipTier = config.OwnershipTier;
+            DistrictName = config.DistrictName ?? string.Empty;
             Name = config.Name;
+            Company = config.Company ?? string.Empty;
             Position = config.Position;
             VehicleSpawnPosition = config.VehicleSpawnPosition;
             VehicleSpawnHeading = config.VehicleSpawnHeading;
+            GatePosition = config.GatePosition;
+            BarrierModelHash = config.BarrierModelHash;
+            WorkerPosition = config.WorkerPosition;
+            DisplayObjectModelHash = config.DisplayObjectModelHash;
+            MaxDisplayObjectLine = config.MaxDisplayObjectLine;
+            MaxDisplayObjectRow = config.MaxDisplayObjectRow;
             Inputs = new HashSet<string>(config.Inputs, StringComparer.OrdinalIgnoreCase);
+            OptionalInputs = new HashSet<string>(config.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             Outputs = new HashSet<string>(config.Outputs, StringComparer.OrdinalIgnoreCase);
             BufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             ProductionRate = Math.Max(1f, config.ProductionRate);
             InputCapacityTons = Math.Max(1f, config.InputCapacityTons);
             OutputCapacityTons = Math.Max(1f, config.OutputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, InputCapacityTons * Math.Max(0.01f, omegaCapacityMultiplier));
+            EmptyingRate = Math.Max(0f, config.EmptyingRate);
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
             IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
-            IsOwned = config.IsOwned || IndustryPrice <= 0f;
-            HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f;
+            IsOwned = config.IsOwned || IndustryPrice <= 0f || HasStarterAccess;
+            HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f || HasStarterAccess;
 
             _recipes = recipes ?? new List<ProductionRecipe>();
             _supportsOmegaBoost = supportsOmegaBoost;
             _sortedInputs = Inputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            _sortedOptionalInputs = OptionalInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
             _sortedOutputs = Outputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
 
             foreach (var input in Inputs)
@@ -54,20 +70,46 @@ namespace LSOL.Domain
                     BufferStorage[output] = 0f;
                 }
             }
+
+            foreach (var optionalInput in OptionalInputs)
+            {
+                if (!BufferStorage.ContainsKey(optionalInput))
+                {
+                    BufferStorage[optionalInput] = 0f;
+                }
+            }
         }
 
+        public string CatalogId { get; }
         public string Id { get; }
-    public ExternalLocationKind LocationKind { get; }
+        public string LegacyKey { get; }
+        public ExternalLocationKind LocationKind { get; }
+        public SiteRole SiteRole { get; }
+        public SiteOwnershipTier OwnershipTier { get; }
+        public string DistrictName { get; }
         public string Name { get; }
+        public string Company { get; }
         public Vector3 Position { get; }
         public Vector3? VehicleSpawnPosition { get; }
         public float? VehicleSpawnHeading { get; }
+        public Vector3? GatePosition { get; }
+        public int? BarrierModelHash { get; }
+        public Vector3? WorkerPosition { get; }
+        public int? DisplayObjectModelHash { get; }
+        public int? MaxDisplayObjectLine { get; }
+        public int? MaxDisplayObjectRow { get; }
         public HashSet<string> Inputs { get; }
+        public HashSet<string> OptionalInputs { get; }
         public HashSet<string> Outputs { get; }
         public Dictionary<string, float> BufferStorage { get; }
         public IReadOnlyList<string> SortedInputs
         {
             get { return _sortedInputs; }
+        }
+
+        public IReadOnlyList<string> SortedOptionalInputs
+        {
+            get { return _sortedOptionalInputs; }
         }
 
         public IReadOnlyList<string> SortedOutputs
@@ -81,6 +123,7 @@ namespace LSOL.Domain
         public float InputCapacityTons { get; private set; }
         public float OutputCapacityTons { get; private set; }
         public float OmegaCapacityTons { get; private set; }
+        public float EmptyingRate { get; private set; }
         public float IndustryPrice { get; private set; }
         public float IndustryLicencePrice { get; private set; }
         public float IndustryOwnerCut { get; }
@@ -114,6 +157,26 @@ namespace LSOL.Domain
         public bool IsGasStation
         {
             get { return LocationKind == ExternalLocationKind.GasStation; }
+        }
+
+        public bool IsDepotLike
+        {
+            get { return SiteMetadataParser.IsDepotLike(SiteRole); }
+        }
+
+        public bool IsStarterHeadquarters
+        {
+            get { return SiteRole == SiteRole.StarterHQ; }
+        }
+
+        public bool HasStarterAccess
+        {
+            get { return SiteMetadataParser.GrantsStarterAccess(SiteRole, OwnershipTier); }
+        }
+
+        public bool IsConstructionSink
+        {
+            get { return SiteRole == SiteRole.ConstructionSiteSink; }
         }
 
         public bool SupportsOmegaBoost
@@ -151,6 +214,11 @@ namespace LSOL.Domain
                 total += GetStock(input);
             }
 
+            foreach (var optionalInput in OptionalInputs)
+            {
+                total += GetStock(optionalInput);
+            }
+
             return total;
         }
 
@@ -173,7 +241,7 @@ namespace LSOL.Domain
                 return true;
             }
 
-            return Inputs.Contains(commodity);
+            return Inputs.Contains(commodity) || OptionalInputs.Contains(commodity);
         }
 
         public bool ProducesCommodity(string commodity)
@@ -314,9 +382,11 @@ namespace LSOL.Domain
                 return;
             }
 
+            var optionalBoostMultiplier = ResolveOptionalInputBoostMultiplier();
+
             var isBoosted = _supportsOmegaBoost && OmegaStorage > 0.0001f;
             HasOmegaBoost = isBoosted;
-            var effectiveCyclesBudget = baseCyclesBudget * (isBoosted ? Math.Max(1f, omegaMultiplier) : 1f);
+            var effectiveCyclesBudget = baseCyclesBudget * optionalBoostMultiplier * (isBoosted ? Math.Max(1f, omegaMultiplier) : 1f);
 
             float cyclesUsed = 0f;
             float outputProducedTons = 0f;
@@ -362,6 +432,8 @@ namespace LSOL.Domain
                 OmegaStorage = Math.Max(0f, OmegaStorage - omegaDrain);
                 HasOmegaBoost = OmegaStorage > 0.0001f;
             }
+
+            ConsumeOptionalInputs(cyclesUsed);
 
             LastUtilizationPercent = baseCyclesBudget <= 0f ? 0f : (cyclesUsed / baseCyclesBudget) * 100f;
             CurrentOutputPerHourTons = outputProducedTons <= 0f ? 0f : outputProducedTons * (60f / deltaMinutes);
@@ -564,12 +636,12 @@ namespace LSOL.Domain
 
         public void SetOwned(bool isOwned)
         {
-            IsOwned = isOwned || !RequiresPurchase;
+            IsOwned = isOwned || !RequiresPurchase || HasStarterAccess;
         }
 
         public void SetContractorPermitOwned(bool hasContractorPermit)
         {
-            HasContractorPermit = hasContractorPermit || !RequiresContractorPermit;
+            HasContractorPermit = hasContractorPermit || !RequiresContractorPermit || HasStarterAccess;
         }
 
         public void SetProductionRate(float productionRate)
@@ -739,6 +811,50 @@ namespace LSOL.Domain
             CurrentOutputPerHourTons = 0f;
         }
 
+        private float ResolveOptionalInputBoostMultiplier()
+        {
+            if (OptionalInputs.Count == 0)
+            {
+                return 1f;
+            }
+
+            var multiplier = 1f;
+            foreach (var optionalInput in OptionalInputs)
+            {
+                if (GetStock(optionalInput) > 0.05f)
+                {
+                    multiplier += 0.12f;
+                }
+            }
+
+            return multiplier;
+        }
+
+        private void ConsumeOptionalInputs(float cyclesUsed)
+        {
+            if (cyclesUsed <= 0f || OptionalInputs.Count == 0)
+            {
+                return;
+            }
+
+            var perInputConsumption = cyclesUsed * 0.15f;
+            if (perInputConsumption <= 0f)
+            {
+                return;
+            }
+
+            foreach (var optionalInput in OptionalInputs)
+            {
+                var current = GetStock(optionalInput);
+                if (current <= 0f)
+                {
+                    continue;
+                }
+
+                BufferStorage[optionalInput] = Math.Max(0f, current - Math.Min(current, perInputConsumption));
+            }
+        }
+
         private float GetMaxCyclesFromOutputCapacity(ProductionRecipe recipe)
         {
             if (recipe.OutputsTons.Count == 0)
@@ -805,9 +921,9 @@ namespace LSOL.Domain
 
         private float GetCommodityCapacityTons(string commodity)
         {
-            var inCount = Math.Max(1, Inputs.Count);
+            var inCount = Math.Max(1, Inputs.Count + OptionalInputs.Count);
             var outCount = Math.Max(1, Outputs.Count);
-            var inputShare = Inputs.Contains(commodity) ? InputCapacityTons / inCount : 0f;
+            var inputShare = (Inputs.Contains(commodity) || OptionalInputs.Contains(commodity)) ? InputCapacityTons / inCount : 0f;
             var outputShare = Outputs.Contains(commodity) ? OutputCapacityTons / outCount : 0f;
 
             var max = Math.Max(inputShare, outputShare);

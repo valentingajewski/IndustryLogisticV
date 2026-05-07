@@ -23,6 +23,8 @@ namespace LSOL.Domain
         public float TotalLostTons { get; set; }
         public float LastTrackedRigHealth { get; set; }
         public float LastTrackedRigSpeed { get; set; }
+        public string SourceIndustryId { get; set; }
+        public string SourceDistrictName { get; set; }
         public List<Prop> AttachedProps { get; }
 
         public bool IsEmpty
@@ -69,6 +71,8 @@ namespace LSOL.Domain
             TotalLostTons = 0f;
             LastTrackedRigHealth = 0f;
             LastTrackedRigSpeed = 0f;
+            SourceIndustryId = string.Empty;
+            SourceDistrictName = string.Empty;
         }
     }
 }

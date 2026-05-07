@@ -8,9 +8,13 @@ namespace LSOL.Domain
         private static readonly Dictionary<string, string> CommodityAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
             { "Iron", "Ore" },
+            { "Processor", "Electronic" },
             { "Processors", "Electronic" },
+            { "Food", "ProcessedFood" },
             { "Vehicle", "Vehicles" },
-            { "LiquidFertilizer", "LiquidFertilizer" },
+            { "Liquid Fertilizer", "LiquidFertilizer" },
+            { "LiquidFertiliser", "LiquidFertilizer" },
+            { "Medecine", "Medicine" },
             { "Recyclables", "Recyclable" },
         };
 
@@ -93,6 +97,12 @@ namespace LSOL.Domain
             }
 
             return VehicleCargoType.Aggregates;
+        }
+
+        public static bool IsKnownCommodity(string commodity)
+        {
+            var normalized = Normalize(commodity);
+            return normalized.Length > 0 && _cargoTypesByCommodity.ContainsKey(normalized);
         }
 
         public static bool RequiresCommodityResolution(VehicleCargoType cargoType)
@@ -186,7 +196,7 @@ namespace LSOL.Domain
                 { "MechanicalParts", VehicleCargoType.CraftedGoods },
                 { "TV", VehicleCargoType.CraftedGoods },
                 { "Computer", VehicleCargoType.CraftedGoods },
-                { "Processors", VehicleCargoType.CraftedGoods },
+                { "Electronic", VehicleCargoType.CraftedGoods },
                 { "Furniture", VehicleCargoType.CraftedGoods },
                 { "Alloy", VehicleCargoType.OpenHull },
                 { "Metal", VehicleCargoType.OpenHull },
@@ -194,6 +204,7 @@ namespace LSOL.Domain
                 { "Wood", VehicleCargoType.Wood },
                 { "Meat", VehicleCargoType.Refrigeration },
                 { "Recyclable", VehicleCargoType.Recyclable },
+                { "HeavyMachinery", VehicleCargoType.Vehicles },
                 { "Vehicles", VehicleCargoType.Vehicles },
             };
         }

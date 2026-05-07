@@ -14,7 +14,9 @@ namespace LSOL.Systems
             { "Fuel", 750f },
             { "Metal", 1200f },
             { "Alloy", 1500f },
-            { "Processors", 2600f },
+            { "Electronic", 2600f },
+            { "ProcessedFood", 900f },
+            { "Medicine", 4200f },
             { "TV", 6500f },
             { "Computer", 8200f },
             { "Omega", 12000f },
@@ -50,6 +52,7 @@ namespace LSOL.Systems
 
         public float GetUnitPrice(string commodity)
         {
+            commodity = Domain.CommodityCatalog.Normalize(commodity);
             float basePrice;
             if (!_basePrices.TryGetValue(commodity ?? string.Empty, out basePrice))
             {

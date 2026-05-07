@@ -47,6 +47,14 @@ namespace LSOL.Systems
                 x.CargoType == cargoType);
         }
 
+        public IEnumerable<VehicleDefinition> GetSpawnableForCommodity(string commodity)
+        {
+            return _definitions.Where(x =>
+                x.IsEnabled &&
+                !x.IsTractor &&
+                CanDefinitionCarryCommodity(x, commodity));
+        }
+
         public List<VehicleDefinition> GetTractorDefinitions()
         {
             return _definitions
@@ -172,6 +180,32 @@ namespace LSOL.Systems
             return _definitionsByModelHash.TryGetValue(model.Hash, out definition)
                 ? definition
                 : null;
+        }
+
+        public bool CanVehicleCarryCommodity(Vehicle vehicle, string commodity)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return false;
+            }
+
+            return CanDefinitionCarryCommodity(FindDefinition(vehicle.Model), commodity);
+        }
+
+        public bool CanDefinitionCarryCommodity(VehicleDefinition definition, string commodity)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return false;
+            }
+
+            var normalizedCommodity = CommodityCatalog.Normalize(commodity);
+            if (definition.AcceptedCommodities != null && definition.AcceptedCommodities.Count > 0)
+            {
+                return definition.AcceptedCommodities.Contains(normalizedCommodity);
+            }
+
+            return definition.CargoType == CommodityCatalog.GetCargoTypeForCommodity(normalizedCommodity);
         }
 
         private static Dictionary<int, VehicleDefinition> BuildDefinitionLookup(List<VehicleDefinition> definitions)

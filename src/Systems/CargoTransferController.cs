@@ -10,6 +10,7 @@ namespace LSOL.Systems
         private readonly FleetManager _fleetManager;
         private readonly IndustryManager _industryManager;
         private readonly GlobalMarketManager _globalMarket;
+        private readonly TerritoryManager _territoryManager;
         private readonly Action<string> _showStatus;
 
         private PendingTransfer _pendingTransfer;
@@ -18,12 +19,14 @@ namespace LSOL.Systems
             FleetManager fleetManager,
             IndustryManager industryManager,
             GlobalMarketManager globalMarket,
-            Action<string> showStatus)
+            Action<string> showStatus,
+            TerritoryManager territoryManager = null)
         {
             _fleetManager = fleetManager;
             _industryManager = industryManager;
             _globalMarket = globalMarket;
             _showStatus = showStatus;
+            _territoryManager = territoryManager;
         }
 
         public bool HasPendingTransfer
@@ -103,6 +106,12 @@ namespace LSOL.Systems
                 return;
             }
 
+            if (!_fleetManager.CanVehicleCarryCommodity(cargoVehicle, selectedProduct))
+            {
+                _showStatus(string.Format("This vehicle cannot carry {0}.", selectedProduct));
+                return;
+            }
+
             var productCargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
             var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(productCargoType);
             var usesLooseVisual = CommodityCatalog.UsesLooseVisual(productCargoType);
@@ -145,7 +154,14 @@ namespace LSOL.Systems
                         cargoState.CargoCondition = 1f;
                         cargoState.TotalLostTons = 0f;
                         cargoState.LastTrackedRigHealth = 0f;
+                        cargoState.SourceIndustryId = industry != null ? industry.Id : string.Empty;
+                        cargoState.SourceDistrictName = industry != null ? industry.DistrictName : string.Empty;
                         _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                        if (_territoryManager != null)
+                        {
+                            _territoryManager.RegisterLoad(industry, selectedProduct, loaded, false);
+                        }
+
                         _showStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
                     }
                     finally
@@ -227,6 +243,12 @@ namespace LSOL.Systems
                         var baseRevenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
                         var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
                         var revenue = baseRevenue * conditionRatio;
+                        if (_territoryManager != null)
+                        {
+                            revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
+                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, cargoState.SourceIndustryId, cargoState.SourceDistrictName);
+                        }
+
                         addProfit(revenue);
 
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
@@ -276,6 +298,12 @@ namespace LSOL.Systems
                 return;
             }
 
+            if (!_fleetManager.CanVehicleCarryCommodity(cargoVehicle, selectedProduct))
+            {
+                _showStatus(string.Format("This vehicle cannot carry {0}.", selectedProduct));
+                return;
+            }
+
             var cargoType = cargoState.CargoType;
             var productCargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
             var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(productCargoType);
@@ -315,7 +343,17 @@ namespace LSOL.Systems
                         cargoState.Commodity = selectedProduct;
                         cargoState.WeightTons += loaded;
                         cargoState.CargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
+                        cargoState.CargoCondition = 1f;
+                        cargoState.TotalLostTons = 0f;
+                        cargoState.LastTrackedRigHealth = 0f;
+                        cargoState.SourceIndustryId = industry != null ? industry.Id : string.Empty;
+                        cargoState.SourceDistrictName = industry != null ? industry.DistrictName : string.Empty;
                         _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                        if (_territoryManager != null)
+                        {
+                            _territoryManager.RegisterLoad(industry, selectedProduct, loaded, false);
+                        }
+
                         _showStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
                     }
                     finally
@@ -376,6 +414,12 @@ namespace LSOL.Systems
                         }
 
                         var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                        if (_territoryManager != null)
+                        {
+                            revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
+                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, cargoState.SourceIndustryId, cargoState.SourceDistrictName);
+                        }
+
                         addProfit(revenue);
 
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
