@@ -162,6 +162,7 @@ namespace LSOL.Config
                     SpawnedVehicleModel = ini.GetString(section, "SpawnedVehicleModel", string.Empty),
                     SpawnedVehiclePosition = GetOptionalVector3(ini, section, "SpawnedVehicleCoordinates"),
                     SpawnedVehicleHeading = GetOptionalFloat(ini, section, "SpawnedVehicleHeading"),
+                    DisplayObjectsAtGroundLevel = ini.GetBool(section, "DisplayObjectsAtGroundLevel", ini.GetBool(section, "GroundLevel", false)),
                     MaxSpawnedVehiclesLine = GetOptionalInt(ini, section, "MaxSpawnedVehiclesLine"),
                     MaxSpawnedVehiclesRow = GetOptionalInt(ini, section, "MaxSpawnedVehiclesRow"),
                     ObjectToDelete = ini.GetString(section, "ObjectToDelete", string.Empty),
@@ -416,6 +417,7 @@ namespace LSOL.Config
         public string SpawnedVehicleModel { get; set; }
         public Vector3? SpawnedVehiclePosition { get; set; }
         public float? SpawnedVehicleHeading { get; set; }
+        public bool DisplayObjectsAtGroundLevel { get; set; }
         public int? MaxSpawnedVehiclesLine { get; set; }
         public int? MaxSpawnedVehiclesRow { get; set; }
         public int? DisplayObjectModelHash { get; set; }

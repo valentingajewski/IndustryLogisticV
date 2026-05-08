@@ -28,10 +28,13 @@ namespace LSOL.Domain
             Position = config.Position;
             VehicleSpawnPosition = config.VehicleSpawnPosition;
             VehicleSpawnHeading = config.VehicleSpawnHeading;
+            SpawnedVehiclePosition = config.SpawnedVehiclePosition;
+            SpawnedVehicleHeading = config.SpawnedVehicleHeading;
             GatePosition = config.GatePosition;
             BarrierModelHash = config.BarrierModelHash;
             WorkerPosition = config.WorkerPosition;
             DisplayObjectModelHash = config.DisplayObjectModelHash;
+            DisplayObjectsAtGroundLevel = config.DisplayObjectsAtGroundLevel;
             MaxDisplayObjectLine = config.MaxDisplayObjectLine;
             MaxDisplayObjectRow = config.MaxDisplayObjectRow;
             Inputs = new HashSet<string>(config.Inputs, StringComparer.OrdinalIgnoreCase);
@@ -94,10 +97,13 @@ namespace LSOL.Domain
         public Vector3 Position { get; }
         public Vector3? VehicleSpawnPosition { get; }
         public float? VehicleSpawnHeading { get; }
+        public Vector3? SpawnedVehiclePosition { get; }
+        public float? SpawnedVehicleHeading { get; }
         public Vector3? GatePosition { get; }
         public int? BarrierModelHash { get; }
         public Vector3? WorkerPosition { get; }
         public int? DisplayObjectModelHash { get; }
+        public bool DisplayObjectsAtGroundLevel { get; }
         public int? MaxDisplayObjectLine { get; }
         public int? MaxDisplayObjectRow { get; }
         public HashSet<string> Inputs { get; }

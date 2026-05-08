@@ -1,6 +1,5 @@
 # Gameplay fetaures
 
-- GPS to location
 - oversived cargo (machines, bigger vehicle, houses)
 - torque engine regarding the cargo
 - event mission (tranformers)

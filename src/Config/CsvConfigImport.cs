@@ -152,11 +152,12 @@ namespace LSOL.Config
                     SpawnedVehiclePosition = TryGetVector3(row, table, "SpawnOX", "SpawnOY", "SpawnOZ"),
                     SpawnedVehicleHeading = GetOptionalFloat(row, table, "SpawnOHeading"),
                     MaxSpawnedVehiclesLine = GetOptionalInt(row, table, "MaxObjectLine", "MaxSpawnedVehiclesLine"),
-                    MaxSpawnedVehiclesRow = GetOptionalInt(row, table, "MaxObjectsRow", "MaxSpawnedVehiclesRow"),
+                    MaxSpawnedVehiclesRow = GetOptionalInt(row, table, "MaxObjectRow", "MaxObjectsRow", "MaxSpawnedVehiclesRow"),
                     DisplayObjectModelHash = GetOptionalInt(row, table, "ObjectModel"),
                     BarrierModelHash = GetOptionalInt(row, table, "BarrierModel"),
                     FactoryDoorPosition = legacy != null ? legacy.FactoryDoorPosition : null,
                     ObjectToDelete = legacy != null ? legacy.ObjectToDelete : string.Empty,
+                    DisplayObjectsAtGroundLevel = GetBool(row, table, legacy != null && legacy.DisplayObjectsAtGroundLevel, "GroundLevel", "DisplayObjectsAtGroundLevel"),
                 };
 
                 location.Position = TryGetVector3(row, table, "MarkerX", "MarkerY", "MarkerZ") ?? (legacy != null ? legacy.Position : Vector3.Zero);

@@ -131,10 +131,13 @@ namespace LSOL.Config
                     Name = location.Name,
                     Company = location.Company,
                     Position = location.Position,
+                    SpawnedVehiclePosition = location.SpawnedVehiclePosition,
+                    SpawnedVehicleHeading = location.SpawnedVehicleHeading,
                     GatePosition = location.GatePosition,
                     BarrierModelHash = location.BarrierModelHash,
                     WorkerPosition = location.WorkerPosition,
                     DisplayObjectModelHash = location.DisplayObjectModelHash,
+                    DisplayObjectsAtGroundLevel = location.DisplayObjectsAtGroundLevel,
                     MaxDisplayObjectLine = location.MaxSpawnedVehiclesLine,
                     MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
                     Inputs = new HashSet<string>(location.Inputs, StringComparer.OrdinalIgnoreCase),
@@ -223,6 +226,13 @@ namespace LSOL.Config
                     VehicleSpawnHeading = ini.HasKey(section, "VehicleSpawningHeading")
                         ? (float?)ini.GetFloat(section, "VehicleSpawningHeading", 0f)
                         : null,
+                    SpawnedVehiclePosition = ini.HasKey(section, "SpawnedVehicleCoordinates")
+                        ? (Vector3?)ini.GetVector3(section, "SpawnedVehicleCoordinates", Vector3.Zero)
+                        : null,
+                    SpawnedVehicleHeading = ini.HasKey(section, "SpawnedVehicleHeading")
+                        ? (float?)ini.GetFloat(section, "SpawnedVehicleHeading", 0f)
+                        : null,
+                    DisplayObjectsAtGroundLevel = ini.GetBool(section, "DisplayObjectsAtGroundLevel", ini.GetBool(section, "GroundLevel", false)),
                     Inputs = inputs,
                     OptionalInputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
                     Outputs = outputs,
@@ -304,10 +314,13 @@ namespace LSOL.Config
                 Position = location.Position,
                 VehicleSpawnPosition = location.VehicleSpawnPosition,
                 VehicleSpawnHeading = location.VehicleSpawnHeading,
+                SpawnedVehiclePosition = location.SpawnedVehiclePosition,
+                SpawnedVehicleHeading = location.SpawnedVehicleHeading,
                 GatePosition = location.GatePosition,
                 BarrierModelHash = location.BarrierModelHash,
                 WorkerPosition = location.WorkerPosition,
                 DisplayObjectModelHash = location.DisplayObjectModelHash,
+                DisplayObjectsAtGroundLevel = location.DisplayObjectsAtGroundLevel,
                 MaxDisplayObjectLine = location.MaxSpawnedVehiclesLine,
                 MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
                 Inputs = inputs,
@@ -649,6 +662,9 @@ namespace LSOL.Config
             controls.OpenModMenu = ControlBindings.ParseOrDefault(
                 ini.GetString("Controls", "OpenModMenu", controls.OpenModMenu.ToString()),
                 controls.OpenModMenu);
+            controls.OpenDebugMenu = ControlBindings.ParseOrDefault(
+                ini.GetString("Controls", "OpenDebugMenu", controls.OpenDebugMenu.ToString()),
+                controls.OpenDebugMenu);
             controls.Interact = ControlBindings.ParseOrDefault(
                 ini.GetString("Controls", "Interact", controls.Interact.ToString()),
                 controls.Interact);

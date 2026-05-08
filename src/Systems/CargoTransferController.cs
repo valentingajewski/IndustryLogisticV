@@ -11,6 +11,7 @@ namespace LSOL.Systems
         private readonly IndustryManager _industryManager;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
+        private readonly Action<Industry> _notifyIndustryOutputChanged;
         private readonly Action<string> _showStatus;
 
         private PendingTransfer _pendingTransfer;
@@ -20,13 +21,15 @@ namespace LSOL.Systems
             IndustryManager industryManager,
             GlobalMarketManager globalMarket,
             Action<string> showStatus,
-            TerritoryManager territoryManager = null)
+            TerritoryManager territoryManager = null,
+            Action<Industry> notifyIndustryOutputChanged = null)
         {
             _fleetManager = fleetManager;
             _industryManager = industryManager;
             _globalMarket = globalMarket;
             _showStatus = showStatus;
             _territoryManager = territoryManager;
+            _notifyIndustryOutputChanged = notifyIndustryOutputChanged;
         }
 
         public bool HasPendingTransfer
@@ -161,6 +164,8 @@ namespace LSOL.Systems
                         {
                             _territoryManager.RegisterLoad(industry, selectedProduct, loaded, false);
                         }
+
+                        NotifyIndustryOutputChanged(industry);
 
                         _showStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
                     }
@@ -354,6 +359,8 @@ namespace LSOL.Systems
                             _territoryManager.RegisterLoad(industry, selectedProduct, loaded, false);
                         }
 
+                        NotifyIndustryOutputChanged(industry);
+
                         _showStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
                     }
                     finally
@@ -495,6 +502,23 @@ namespace LSOL.Systems
                 "Purchase the contractor permit for {0} before transporting cargo to or from it.",
                 industry.Name));
             return false;
+        }
+
+        private void NotifyIndustryOutputChanged(Industry industry)
+        {
+            if (_notifyIndustryOutputChanged == null || industry == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _notifyIndustryOutputChanged(industry);
+            }
+            catch (Exception ex)
+            {
+                _showStatus(ModDiagnostics.FormatFailure("Industry output prop refresh", ex));
+            }
         }
 
         private void StartTransfer(string label, int durationMs, Action complete, Action<float> onProgress = null)

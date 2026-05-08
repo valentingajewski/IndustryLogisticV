@@ -69,6 +69,7 @@ namespace LSOL
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
+        private readonly IndustryOutputPropManager _industryOutputPropManager;
 
         private readonly LemonMenu _officeMenu;
         private readonly LemonMenu _vehicleCargoMenu;
@@ -154,6 +155,7 @@ namespace LSOL
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _globalMarket = new GlobalMarketManager(Game.GameTime);
             _territoryManager = new TerritoryManager(_config, _industryManager);
+            _industryOutputPropManager = new IndustryOutputPropManager(_industryManager.Industries);
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
             _vehicleSpawnMarkerSeed = _config.VehicleSpawnPosition;
@@ -171,7 +173,8 @@ namespace LSOL
                 _industryManager,
                 _globalMarket,
                 message => ShowStatus(message),
-                _territoryManager);
+                _territoryManager,
+                industry => _industryOutputPropManager.RefreshIndustry(industry));
             var cargoFilterOrder = _config.CargoTypes != null && _config.CargoTypes.Count > 0
                 ? _config.CargoTypes
                 : new List<VehicleCargoType>
@@ -423,6 +426,7 @@ namespace LSOL
                 _lastIndustryTickMs = gameTime;
                 _globalMarket.Update(gameTime);
                 _industryManager.Update(elapsed / 60000f, _config.OmegaMultiplier);
+                _industryOutputPropManager.Update(player.Position);
                 _fleetManager.CleanupStates();
                 _vehicleFuelSystem.CleanupStates();
                 _territoryManager.EvaluateFinancialPressure(_profit, gameTime, message => ShowStatus(message, 4500));
@@ -492,6 +496,12 @@ namespace LSOL
             if (e.KeyCode == _controls.OpenModMenu)
             {
                 ToggleModControlMenu();
+                return;
+            }
+
+            if (e.KeyCode == _controls.OpenDebugMenu)
+            {
+                ToggleDebugMenu();
                 return;
             }
 
@@ -1944,12 +1954,6 @@ namespace LSOL
 
         private void ToggleDebugMenu()
         {
-            if (!System.Diagnostics.Debugger.IsAttached)
-            {
-                ShowStatus(Text(ModTextKey.DetailDebugUnavailable));
-                return;
-            }
-
             if (_debugMenu.IsOpen)
             {
                 _debugMenu.Close();
@@ -2550,6 +2554,7 @@ namespace LSOL
             }
 
             _cargoTransferController.ClearState();
+            _industryOutputPropManager.DestroyAll();
             CloseOverviewMenus();
             _companyMapController.Close();
             _officeMenu.Close();
@@ -4224,6 +4229,7 @@ namespace LSOL
             _npcLogisticsManager.ClearAll();
             DestroyMapBlips();
             _cargoTransferController.ClearState();
+            _industryOutputPropManager.DestroyAll();
             _barrierInteractionHandler.ClearState();
             CloseAllMenus();
             _heldKeys.Clear();

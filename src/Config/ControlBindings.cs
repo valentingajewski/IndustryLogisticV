@@ -8,6 +8,7 @@ namespace LSOL.Config
         public WinForms.Keys ToggleDashboard { get; set; } = WinForms.Keys.F8;
         public WinForms.Keys ToggleContext { get; set; } = WinForms.Keys.F6;
         public WinForms.Keys OpenModMenu { get; set; } = WinForms.Keys.F7;
+        public WinForms.Keys OpenDebugMenu { get; set; } = WinForms.Keys.F9;
         public WinForms.Keys Interact { get; set; } = WinForms.Keys.E;
         public WinForms.Keys GateInteract { get; set; } = WinForms.Keys.E;
         public WinForms.Keys OpenUpgrade { get; set; } = WinForms.Keys.U;

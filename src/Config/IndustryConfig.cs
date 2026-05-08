@@ -18,10 +18,13 @@ namespace LSOL.Config
         public Vector3 Position { get; set; }
         public Vector3? VehicleSpawnPosition { get; set; }
         public float? VehicleSpawnHeading { get; set; }
+        public Vector3? SpawnedVehiclePosition { get; set; }
+        public float? SpawnedVehicleHeading { get; set; }
         public Vector3? GatePosition { get; set; }
         public int? BarrierModelHash { get; set; }
         public Vector3? WorkerPosition { get; set; }
         public int? DisplayObjectModelHash { get; set; }
+        public bool DisplayObjectsAtGroundLevel { get; set; }
         public int? MaxDisplayObjectLine { get; set; }
         public int? MaxDisplayObjectRow { get; set; }
         public HashSet<string> Inputs { get; set; }
