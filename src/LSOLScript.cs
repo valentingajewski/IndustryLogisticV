@@ -308,7 +308,7 @@ namespace LSOL
             _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet));
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
             _tabletShellController.RegisterApp(new ContextTabletApp());
-            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet));
+            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
                 IndustryInteractionDistance,
                 HandleTabletLoadRequested,
@@ -2509,6 +2509,25 @@ namespace LSOL
             _tabletStateStore.MarkNetworkDirty();
             ShowStatus(result, 4000);
             return result;
+        }
+
+        private void AddIndustryGpsRouteFromTablet(Industry industry)
+        {
+            if (industry == null)
+            {
+                ShowStatus("No industry selected.");
+                return;
+            }
+
+            var markerPosition = GetIndustryMarkerPosition(industry);
+            Function.Call(Hash.SET_NEW_WAYPOINT, markerPosition.X, markerPosition.Y);
+            ShowStatus(string.Format("GPS route added to {0}.", industry.Name), 4000);
+        }
+
+        private void ClearGpsRouteFromTablet()
+        {
+            Function.Call(Hash.SET_WAYPOINT_OFF);
+            ShowStatus("GPS route cleared.", 4000);
         }
 
         private void SetModMechanicsEnabled(bool enabled, bool keepControlMenuOpen)

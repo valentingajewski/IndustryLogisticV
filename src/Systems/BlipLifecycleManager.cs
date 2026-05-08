@@ -43,7 +43,7 @@ namespace LSOL.Systems
         {
             Destroy();
 
-            _officeBlip = CreateStaticBlip(_getGroundPosition(_mainOfficeMarkerSeed), BlipSprite.Office, BlipColor.Blue, "Logistics Office", 1.0f);
+            _officeBlip = CreateStaticBlip(_getGroundPosition(_mainOfficeMarkerSeed), BlipSprite.Office, BlipColor.Green, "Logistics Office", 1.0f);
             _vehicleSpawnBlip = CreateStaticBlip(_getGroundPosition(_vehicleSpawnMarkerSeed), BlipSprite.Garage2, BlipColor.White, "Vehicle Spawn", 0.9f);
 
             for (int i = 0; i < _industryManager.Industries.Count; i++)
@@ -149,41 +149,36 @@ namespace LSOL.Systems
         {
             if (_territoryManager == null || industry == null)
             {
+                if (industry != null && industry.IsStarterHeadquarters)
+                {
+                    return BlipColor.Green;
+                }
+
                 return isPetrolStation
                     ? BlipColor.Yellow
                     : (industry != null && industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
             }
 
             var siteState = _territoryManager.GetSiteState(industry);
-            var districtState = _territoryManager.GetDistrictState(industry.DistrictName);
             if (siteState == null)
             {
+                if (industry.IsStarterHeadquarters)
+                {
+                    return BlipColor.Green;
+                }
+
                 return isPetrolStation
                     ? BlipColor.Yellow
                     : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
             }
 
-            if (industry.IsStarterHeadquarters || (industry.IsDepotLike && siteState.ControlLevel == TerritoryControlLevel.Owned))
+            var isCompanyControlled = industry.IsStarterHeadquarters || siteState.ControlLevel != TerritoryControlLevel.None;
+            if (isCompanyControlled)
             {
-                return BlipColor.Blue;
+                return siteState.IsOperational ? BlipColor.Green : BlipColor.Blue;
             }
 
-            if (industry.IsDepotLike && siteState.ControlLevel == TerritoryControlLevel.Leased)
-            {
-                return BlipColor.White;
-            }
-
-            if (siteState.IsOperational && districtState != null && districtState.InfluenceRatio >= 0.6f)
-            {
-                return BlipColor.Green;
-            }
-
-            if (siteState.FranchiseLevel >= TerritoryFranchiseLevel.Preferred || isPetrolStation || industry.IsStore)
-            {
-                return BlipColor.Yellow;
-            }
-
-            return BlipColor.Red;
+            return siteState.IsOperational ? BlipColor.Yellow : BlipColor.Red;
         }
 
         private string ResolveIndustryBlipName(Industry industry)

@@ -707,9 +707,10 @@ namespace LSOL.Systems
                     : Math.Max(1f, sitePreset.OutputCapacityTons > 0f ? sitePreset.OutputCapacityTons : effectiveConfig.OutputCapacityTons);
                 effectiveConfig.IndustryPrice = Math.Max(0f, sitePreset.PurchasePrice);
                 effectiveConfig.IndustryLicencePrice = sitePreset.PermitRequired ? Math.Max(0f, sitePreset.LicencePrice) : 0f;
-                var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(effectiveConfig.SiteRole, effectiveConfig.OwnershipTier);
-                effectiveConfig.IsOwned = hasStarterAccess || effectiveConfig.IsOwned;
-                effectiveConfig.HasContractorPermit = hasStarterAccess || !sitePreset.PermitRequired || effectiveConfig.IndustryLicencePrice <= 0f;
+                var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(effectiveConfig.SiteRole);
+                var hasStarterPermitAccess = SiteMetadataParser.GrantsStarterPermitAccess(effectiveConfig.SiteRole, effectiveConfig.OwnershipTier);
+                effectiveConfig.IsOwned = hasStarterOwnership || effectiveConfig.IsOwned;
+                effectiveConfig.HasContractorPermit = hasStarterPermitAccess || !sitePreset.PermitRequired || effectiveConfig.IndustryLicencePrice <= 0f;
                 return effectiveConfig;
             }
 

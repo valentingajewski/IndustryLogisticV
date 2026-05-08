@@ -839,11 +839,15 @@ namespace LSOL.UI
     {
         private readonly float _interactionDistance;
         private readonly Func<Industry, string> _purchasePermit;
+        private readonly Action<Industry> _addGpsRoute;
+        private readonly Action _clearGpsRoute;
 
-        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit)
+        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute)
         {
             _interactionDistance = interactionDistance;
             _purchasePermit = purchasePermit;
+            _addGpsRoute = addGpsRoute;
+            _clearGpsRoute = clearGpsRoute;
         }
 
         public string AppId
@@ -871,6 +875,8 @@ namespace LSOL.UI
                     return BuildPermitPage(context);
                 case "permit-confirm":
                     return BuildPermitConfirmPage(context, route != null ? route.Payload as Industry : null);
+                case "stats":
+                    return BuildIndustryStatisticsPage(context, route != null ? route.Payload as Industry : null);
                 case "detail":
                     return BuildDetailPage(context, route != null ? route.Payload as Industry : null);
                 default:
@@ -1310,7 +1316,38 @@ namespace LSOL.UI
                 };
             }
 
-            if (industry.IsStore || (summary.LocationKind == LSOL.Config.ExternalLocationKind.Industry && industry.SiteRole != SiteRole.Warehouse))
+            return BuildLocationActionPage(context, snapshot, industry);
+        }
+
+        private TabletShellPage BuildLocationStatisticsPage(TabletShellContext context, Industry industry)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var summary = TabletUiHelpers.FindSummary(context, industry);
+            if (industry == null || summary == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "Site Detail",
+                    Subtitle = "No site selected",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("No Site Selected", "Return to the previous page and choose a valid location."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous page.", () => context.GoBack()),
+                    },
+                };
+            }
+
+            if (industry.IsStore)
+            {
+                return TabletUiHelpers.BuildLegacyIndustryStatisticsPage(
+                    context,
+                    snapshot,
+                    industry,
+                    "Arrow Up/Down to scroll | Enter, Backspace, or Esc to return");
+            }
+
+            if (summary.LocationKind == LSOL.Config.ExternalLocationKind.Industry && industry.SiteRole != SiteRole.Warehouse)
             {
                 return TabletUiHelpers.BuildLegacyIndustryStatisticsPage(
                     context,
@@ -1350,6 +1387,67 @@ namespace LSOL.UI
                 MaxVisibleItems = 7,
                 Items = items,
             };
+        }
+
+        private TabletShellPage BuildLocationActionPage(TabletShellContext context, TabletStateSnapshot snapshot, Industry industry)
+        {
+            if (industry == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "Industry",
+                    Subtitle = "No industry selected",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("No Industry Selected", "Return to the previous page and choose a valid industry."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous page.", () => context.GoBack()),
+                    },
+                };
+            }
+
+            var title = industry.IsGasStation
+                ? "Petrol Station"
+                : (industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : (industry.IsStore ? "Store" : "Industry"));
+            var statisticsDetail = industry.SiteRole == SiteRole.Warehouse
+                ? "Open storage, accepted resources, and purchase status for this warehouse."
+                : (industry.IsGasStation
+                    ? "Open fuel-site storage and delivery statistics for this station."
+                    : (industry.IsStore
+                        ? "Open stockpile, utilization, and retail delivery statistics for this store."
+                        : "Open stockpile, utilization, and per-commodity statistics for this industry."));
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateActionItem(
+                    "View Statistics",
+                    statisticsDetail,
+                    () => context.Push(TabletAppIds.Network, "stats", industry)),
+                TabletUiHelpers.CreateActionItem(
+                    "Add GPS Route",
+                    "Set a map waypoint to this site so you can drive there directly.",
+                    () => _addGpsRoute?.Invoke(industry)),
+                TabletUiHelpers.CreateActionItem(
+                    "Clear GPS Route",
+                    "Remove the current waypoint from the map.",
+                    () => _clearGpsRoute?.Invoke()),
+                TabletUiHelpers.CreateNavigationItem("Back", "Return to the industry list.", () => context.GoBack(), "BACK"),
+            };
+
+            return new TabletShellPage
+            {
+                Title = title,
+                Subtitle = industry.Name,
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.84f,
+                MaxVisibleItems = 5,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildIndustryStatisticsPage(TabletShellContext context, Industry industry)
+        {
+            return BuildLocationStatisticsPage(context, industry);
         }
 
         private static string BuildPermitConfirmDetail(TabletShellContext context, Industry industry)

@@ -116,7 +116,8 @@ namespace LSOL.Config
                 var industryPrice = Math.Max(0f, standardValues.PurchasePrice);
                 var industryLicencePrice = standardValues.PermitRequired ? Math.Max(0f, standardValues.LicencePrice) : 0f;
                 var industryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut));
-                var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(location.SiteRole, location.OwnershipTier);
+                var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(location.SiteRole);
+                var hasStarterPermitAccess = SiteMetadataParser.GrantsStarterPermitAccess(location.SiteRole, location.OwnershipTier);
 
                 config.IndustryConfigs[pair.Key] = new IndustryConfig
                 {
@@ -151,8 +152,8 @@ namespace LSOL.Config
                     IndustryPrice = industryPrice,
                     IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
-                    IsOwned = hasStarterAccess,
-                    HasContractorPermit = hasStarterAccess || !standardValues.PermitRequired || industryLicencePrice <= 0f,
+                    IsOwned = hasStarterOwnership,
+                    HasContractorPermit = hasStarterPermitAccess || !standardValues.PermitRequired || industryLicencePrice <= 0f,
                     IsCsvBacked = true,
                     CasualEconomy = location.CasualEconomy,
                     StandardEconomy = location.StandardEconomy,
@@ -278,7 +279,8 @@ namespace LSOL.Config
                 : ResolveLocationOutputCapacityTons(ini, location);
             var licencePrice = standardValues.PermitRequired ? Math.Max(0f, standardValues.LicencePrice) : 0f;
             var purchasePrice = Math.Max(0f, standardValues.PurchasePrice);
-            var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(location.SiteRole, location.OwnershipTier);
+            var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(location.SiteRole);
+            var hasStarterPermitAccess = SiteMetadataParser.GrantsStarterPermitAccess(location.SiteRole, location.OwnershipTier);
             var inputs = new HashSet<string>(location.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             var outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
 
@@ -323,8 +325,8 @@ namespace LSOL.Config
                 IndustryPrice = purchasePrice,
                 IndustryLicencePrice = licencePrice,
                 IndustryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut)),
-                IsOwned = hasStarterAccess,
-                HasContractorPermit = hasStarterAccess || !standardValues.PermitRequired || licencePrice <= 0f,
+                IsOwned = hasStarterOwnership,
+                HasContractorPermit = hasStarterPermitAccess || !standardValues.PermitRequired || licencePrice <= 0f,
                 IsCsvBacked = true,
                 CasualEconomy = location.CasualEconomy,
                 StandardEconomy = location.StandardEconomy,

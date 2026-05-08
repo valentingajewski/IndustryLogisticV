@@ -121,9 +121,14 @@ namespace LSOL.Domain
                 || role == SiteRole.TruckYard;
         }
 
-        public static bool GrantsStarterAccess(SiteRole role, SiteOwnershipTier ownershipTier)
+        public static bool GrantsStarterOwnership(SiteRole role)
         {
-            return role == SiteRole.StarterHQ || ownershipTier == SiteOwnershipTier.Starter;
+            return role == SiteRole.StarterHQ;
+        }
+
+        public static bool GrantsStarterPermitAccess(SiteRole role, SiteOwnershipTier ownershipTier)
+        {
+            return GrantsStarterOwnership(role) || ownershipTier == SiteOwnershipTier.Starter;
         }
 
         private static string Normalize(string raw)

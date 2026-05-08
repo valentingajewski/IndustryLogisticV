@@ -48,8 +48,8 @@ namespace LSOL.Domain
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
             IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
-            IsOwned = config.IsOwned || HasStarterAccess;
-            HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f || HasStarterAccess;
+            IsOwned = config.IsOwned || HasStarterOwnership;
+            HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f || HasStarterPermitAccess;
 
             _recipes = recipes ?? new List<ProductionRecipe>();
             _supportsOmegaBoost = supportsOmegaBoost;
@@ -173,9 +173,14 @@ namespace LSOL.Domain
             get { return SiteRole == SiteRole.StarterHQ; }
         }
 
-        public bool HasStarterAccess
+        public bool HasStarterOwnership
         {
-            get { return SiteMetadataParser.GrantsStarterAccess(SiteRole, OwnershipTier); }
+            get { return SiteMetadataParser.GrantsStarterOwnership(SiteRole); }
+        }
+
+        public bool HasStarterPermitAccess
+        {
+            get { return SiteMetadataParser.GrantsStarterPermitAccess(SiteRole, OwnershipTier); }
         }
 
         public bool IsConstructionSink
@@ -693,12 +698,12 @@ namespace LSOL.Domain
 
         public void SetOwned(bool isOwned)
         {
-            IsOwned = isOwned || HasStarterAccess;
+            IsOwned = isOwned || HasStarterOwnership;
         }
 
         public void SetContractorPermitOwned(bool hasContractorPermit)
         {
-            HasContractorPermit = hasContractorPermit || !RequiresContractorPermit || HasStarterAccess;
+            HasContractorPermit = hasContractorPermit || !RequiresContractorPermit || HasStarterPermitAccess;
         }
 
         public void SetProductionRate(float productionRate)
