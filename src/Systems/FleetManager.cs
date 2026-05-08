@@ -99,6 +99,37 @@ namespace LSOL.Systems
             return null;
         }
 
+        public Vehicle ResolvePoweredVehicle(Ped player, out Vehicle cargoVehicle)
+        {
+            cargoVehicle = null;
+            Vehicle driverVehicle;
+            cargoVehicle = ResolveCargoVehicle(player, out driverVehicle);
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                return null;
+            }
+
+            if (driverVehicle != null && driverVehicle.Exists() && driverVehicle.Handle != cargoVehicle.Handle)
+            {
+                return driverVehicle;
+            }
+
+            var towingVehicle = ResolveTowVehicle(cargoVehicle);
+            if (towingVehicle != null)
+            {
+                return towingVehicle;
+            }
+
+            return cargoVehicle;
+        }
+
+        public bool TryResolveVehicleContext(Ped player, out Vehicle poweredVehicle, out Vehicle cargoVehicle)
+        {
+            cargoVehicle = null;
+            poweredVehicle = ResolvePoweredVehicle(player, out cargoVehicle);
+            return poweredVehicle != null && poweredVehicle.Exists() && cargoVehicle != null && cargoVehicle.Exists();
+        }
+
         private static Vehicle ResolveAttachedTrailer(Vehicle vehicle)
         {
             if (vehicle == null || !vehicle.Exists())
@@ -150,6 +181,34 @@ namespace LSOL.Systems
             }
 
             return null;
+        }
+
+        private static Vehicle ResolveTowVehicle(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return null;
+            }
+
+            int attachedHandle;
+            try
+            {
+                attachedHandle = Function.Call<int>(Hash.GET_ENTITY_ATTACHED_TO, vehicle.Handle);
+            }
+            catch
+            {
+                return null;
+            }
+
+            if (attachedHandle <= 0 || attachedHandle == vehicle.Handle)
+            {
+                return null;
+            }
+
+            var attachedVehicle = Entity.FromHandle(attachedHandle) as Vehicle;
+            return attachedVehicle != null && attachedVehicle.Exists()
+                ? attachedVehicle
+                : null;
         }
 
         public VehicleCargoState GetOrCreateCargoState(Vehicle vehicle)

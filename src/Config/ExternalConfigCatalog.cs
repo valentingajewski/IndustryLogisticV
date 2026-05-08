@@ -155,6 +155,8 @@ namespace LSOL.Config
                     Density = ini.GetString(section, "Density", "medium"),
                     StartingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f))),
                     EmptyingRate = 0f,
+                    HasConfiguredEmptyingRate = false,
+                    RefuelIsFree = false,
                     IndustryPrice = Math.Max(0f, ini.GetFloat(section, "IndustryPrice", 0f)),
                     IndustryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "IndustryOwnerCut", 0.5f))),
                     SpawnedVehicleModel = ini.GetString(section, "SpawnedVehicleModel", string.Empty),
@@ -407,6 +409,8 @@ namespace LSOL.Config
         public string Density { get; set; }
         public float StartingTankRatio { get; set; }
         public float EmptyingRate { get; set; }
+        public bool HasConfiguredEmptyingRate { get; set; }
+        public bool RefuelIsFree { get; set; }
         public float IndustryPrice { get; set; }
         public float IndustryOwnerCut { get; set; }
         public string SpawnedVehicleModel { get; set; }

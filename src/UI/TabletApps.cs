@@ -269,12 +269,22 @@ namespace LSOL.UI
                 return "No cargo vehicle linked to the tablet.";
             }
 
-            return string.Format(
+            var cargoSummary = string.Format(
                 "{0} | {1} | {2:0.0}/{3:0.0}t",
                 snapshot.CargoVehicleName,
                 snapshot.CargoIsEmpty ? "Empty" : snapshot.CargoCommodity,
                 snapshot.CargoWeightTons,
                 snapshot.CargoCapacityTons);
+
+            if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
+            {
+                return cargoSummary;
+            }
+
+            var fuelSummary = snapshot.FuelVehicleMatchesCargoVehicle
+                ? string.Format("Fuel {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
+                : string.Format("Fuel {0} {1:0}/{2:0}L", snapshot.PoweredVehicleName, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+            return string.Format("{0} | {1}", cargoSummary, fuelSummary);
         }
 
         public static string BuildMarketSummary(TabletStateSnapshot snapshot)
@@ -762,6 +772,18 @@ namespace LSOL.UI
                     ? string.Format("Weight {0:0.0}/{1:0.0}t", snapshot.CargoWeightTons, snapshot.CargoCapacityTons)
                     : "No cargo vehicle is currently resolved by FleetManager.",
                 snapshot.CargoCapacityRatio));
+            items.Add(TabletUiHelpers.CreateInfoItem(
+                snapshot.HasPoweredVehicle
+                    ? string.Format("Fuel: {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
+                    : "Fuel: unavailable",
+                snapshot.HasPoweredVehicle
+                    ? (snapshot.FuelVehicleMatchesCargoVehicle
+                        ? (snapshot.FuelIsEmpty
+                            ? "Powered vehicle tank is empty. Refuel at a petrol station."
+                            : "Fuel telemetry for the active powered cargo vehicle.")
+                        : string.Format("Powered vehicle {0} | Fuel belongs to the tractor, not the trailer.", snapshot.PoweredVehicleName))
+                    : "Move near a powered company cargo vehicle to inspect truck fuel telemetry.",
+                snapshot.FuelRatio));
 
             if (snapshot.HasNearestIndustry)
             {
@@ -803,11 +825,11 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Context",
-                Subtitle = "Vehicle cargo and nearest industry telemetry",
+                Subtitle = "Vehicle cargo, fuel, and nearest industry telemetry",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Up/Down Navigate | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.98f,
-                MaxVisibleItems = 6,
+                MaxVisibleItems = 7,
                 Items = items,
             };
         }
@@ -1982,6 +2004,7 @@ namespace LSOL.UI
         private readonly Action<Industry, string> _loadCommodityRequested;
         private readonly Action<Industry> _unloadRequested;
         private readonly Action<Industry, bool> _unloadModeRequested;
+        private readonly Action<Industry> _refuelRequested;
         private readonly Action<Industry, IndustryUpgradeModule> _upgradeModuleRequested;
         private readonly Action<Industry> _vehicleSpawnerRequested;
         private readonly Func<Industry, string> _purchaseIndustry;
@@ -1992,6 +2015,7 @@ namespace LSOL.UI
             Action<Industry, string> loadCommodityRequested,
             Action<Industry> unloadRequested,
             Action<Industry, bool> unloadModeRequested,
+            Action<Industry> refuelRequested,
             Action<Industry, IndustryUpgradeModule> upgradeModuleRequested,
             Action<Industry> vehicleSpawnerRequested,
             Func<Industry, string> purchaseIndustry)
@@ -2001,6 +2025,7 @@ namespace LSOL.UI
             _loadCommodityRequested = loadCommodityRequested;
             _unloadRequested = unloadRequested;
             _unloadModeRequested = unloadModeRequested;
+            _refuelRequested = refuelRequested;
             _upgradeModuleRequested = upgradeModuleRequested;
             _vehicleSpawnerRequested = vehicleSpawnerRequested;
             _purchaseIndustry = purchaseIndustry;
@@ -2102,6 +2127,19 @@ namespace LSOL.UI
                 },
                 progress: snapshot.CargoCapacityRatio));
 
+            if (industry.IsGasStation && snapshot.HasPoweredVehicle && snapshot.FuelCapacityLiters > 0.001f)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Refuel",
+                    BuildRefuelActionDetail(snapshot, industry),
+                    () =>
+                    {
+                        _refuelRequested?.Invoke(industry);
+                        context.Refresh();
+                    },
+                    progress: snapshot.FuelRatio));
+            }
+
             items.Add(TabletUiHelpers.CreateActionItem(
                 industry.SiteRole == SiteRole.Warehouse ? "Storage Detail" : "Statistics",
                 industry.SiteRole == SiteRole.Warehouse
@@ -2147,7 +2185,7 @@ namespace LSOL.UI
                 Subtitle = industry.Name,
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.96f,
-                MaxVisibleItems = 7,
+                MaxVisibleItems = 8,
                 Items = items,
             };
         }
@@ -2460,6 +2498,30 @@ namespace LSOL.UI
             }
 
             return string.Format("Unload {0} from the active cargo vehicle.", snapshot.CargoCommodity);
+        }
+
+        private static string BuildRefuelActionDetail(TabletStateSnapshot snapshot, Industry industry)
+        {
+            if (snapshot == null || !snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
+            {
+                return "Bring a powered cargo vehicle close to the petrol station.";
+            }
+
+            var tankDetail = snapshot.FuelVehicleMatchesCargoVehicle
+                ? string.Format("Tank {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
+                : string.Format("{0} tank {1:0}/{2:0}L", snapshot.PoweredVehicleName, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+            var pricingDetail = industry != null && industry.RefuelIsFree
+                ? "Free at office station."
+                : "Uses station stock and current fuel market price.";
+
+            if (snapshot.FuelIsEmpty)
+            {
+                pricingDetail = industry != null && industry.RefuelIsFree
+                    ? "Truck is empty. Office refill is free."
+                    : "Truck is empty. Paid refill uses station stock.";
+            }
+
+            return string.Format("{0} | {1}", tankDetail, pricingDetail);
         }
 
         private static string BuildIndustryPurchaseDetail(TabletShellContext context, Industry industry)

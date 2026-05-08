@@ -47,6 +47,7 @@ namespace LSOL
         private readonly ControlBindings _controls;
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
+        private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
 
@@ -129,6 +130,7 @@ namespace LSOL
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
+            _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _globalMarket = new GlobalMarketManager(Game.GameTime);
             _territoryManager = new TerritoryManager(_config, _industryManager);
 
@@ -273,6 +275,7 @@ namespace LSOL
             _tabletStateStore = new TabletStateStore(
                 _industryManager,
                 _fleetManager,
+                _vehicleFuelSystem,
                 _globalMarket,
                 _npcLogisticsManager,
                 () => Game.Player.Character,
@@ -297,6 +300,7 @@ namespace LSOL
                 HandleTabletLoadCommodityRequested,
                 HandleTabletUnloadRequested,
                 HandleTabletUnloadModeRequested,
+                HandleTabletRefuelRequested,
                 HandleTabletUpgradeModuleRequested,
                 HandleTabletVehicleSpawnerRequested,
                 PurchaseIndustryFromTablet));
@@ -402,6 +406,7 @@ namespace LSOL
                 _globalMarket.Update(gameTime);
                 _industryManager.Update(elapsed / 60000f, _config.OmegaMultiplier);
                 _fleetManager.CleanupStates();
+                _vehicleFuelSystem.CleanupStates();
                 _territoryManager.EvaluateFinancialPressure(_profit, gameTime, message => ShowStatus(message, 4500));
                 _tabletStateStore.MarkMarketDirty();
                 _tabletStateStore.MarkNetworkDirty();
@@ -423,6 +428,11 @@ namespace LSOL
 
             _npcLogisticsManager.Update(gameTime, GetCurrentInGameWeekMinute());
             _tabletStateStore.CaptureHistory(gameTime);
+
+            if (_vehicleFuelSystem.Update(player, gameTime))
+            {
+                _tabletStateStore.MarkCargoDirty();
+            }
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -836,6 +846,7 @@ namespace LSOL
         private void DrawContextPanel(Ped player)
         {
             var lines = new List<string> { "F6 CONTEXT" };
+            var fuelTelemetry = _vehicleFuelSystem.GetActiveTelemetry(player);
 
             Vehicle driverVehicle;
             var cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
@@ -850,6 +861,26 @@ namespace LSOL
             else
             {
                 lines.Add("Veh: none nearby");
+            }
+
+            if (fuelTelemetry != null)
+            {
+                if (fuelTelemetry.UsesSeparatePoweredVehicle && fuelTelemetry.PoweredVehicle != null && fuelTelemetry.PoweredVehicle.Exists())
+                {
+                    lines.Add(string.Format("Powered truck: {0}", fuelTelemetry.PoweredVehicle.DisplayName));
+                }
+
+                lines.Add(string.Format(
+                    "Fuel: {0:0}/{1:0}L{2}",
+                    fuelTelemetry.CurrentLiters,
+                    fuelTelemetry.CapacityLiters,
+                    fuelTelemetry.IsOutOfFuel
+                        ? " | EMPTY"
+                        : string.Format(" | {0:0}%", fuelTelemetry.FuelRatio * 100f)));
+            }
+            else
+            {
+                lines.Add("Fuel: n/a");
             }
 
             lines.Add(string.Empty);
@@ -891,12 +922,10 @@ namespace LSOL
                 SyncCargoDamageTracking(cargoVehicle, driverVehicle, cargoState);
             }
 
-            if (cargoState.IsEmpty)
-            {
-                return;
-            }
-
-            DrawCargoOverview(cargoState);
+            var fuelTelemetry = _vehicleFuelSystem.GetTelemetry(
+                driverVehicle != null && driverVehicle.Exists() ? driverVehicle : cargoVehicle,
+                cargoVehicle);
+            DrawCargoOverview(cargoState, fuelTelemetry);
         }
 
         private bool TryGetActiveCargoContext(Ped player, out Vehicle cargoVehicle, out Vehicle driverVehicle, out VehicleCargoState cargoState)
@@ -917,7 +946,23 @@ namespace LSOL
             }
 
             cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
-            return cargoState != null && !cargoState.IsEmpty;
+            if (cargoState == null)
+            {
+                return false;
+            }
+
+            if (!cargoState.IsEmpty)
+            {
+                return true;
+            }
+
+            if (driverVehicle == null || !driverVehicle.Exists() || player.CurrentVehicle != driverVehicle)
+            {
+                return false;
+            }
+
+            var definition = _fleetManager.FindDefinition(cargoVehicle.Model);
+            return definition != null && !definition.IsTractor;
         }
 
         private void SyncCargoDamageTracking(Vehicle cargoVehicle, Vehicle driverVehicle, VehicleCargoState cargoState)
@@ -1015,81 +1060,112 @@ namespace LSOL
             }
         }
 
-        private void DrawCargoOverview(VehicleCargoState cargoState)
+        private void DrawCargoOverview(VehicleCargoState cargoState, VehicleFuelTelemetry fuelTelemetry)
         {
-            if (cargoState == null || cargoState.IsEmpty)
+            if (cargoState == null)
             {
                 return;
             }
 
             var resolution = Screen.MainWindowResolution;
             var x = resolution.Width * 0.18f;
-            var y = resolution.Height * 0.845f;
+            var y = resolution.Height * 0.812f;
             var width = resolution.Width * 0.1075f;
-            var height = resolution.Height * 0.085f;
+            var height = resolution.Height * 0.112f;
+            var isEmpty = cargoState.IsEmpty;
             var quantityRatio = cargoState.FillRatio;
             var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
-            var quantityColor = ResolveCargoOverviewAccent(cargoState.CargoType);
+            var fuelRatio = fuelTelemetry != null ? fuelTelemetry.FuelRatio : 0f;
+            var quantityColor = isEmpty
+                ? Color.FromArgb(186, 122, 140, 156)
+                : ResolveCargoOverviewAccent(cargoState.CargoType);
+            var fuelColor = fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f
+                ? Color.FromArgb(186, 122, 140, 156)
+                : (fuelRatio >= 0.5f
+                    ? Color.FromArgb(220, 116, 202, 138)
+                    : (fuelRatio >= 0.2f
+                        ? Color.FromArgb(224, 220, 180, 80)
+                        : Color.FromArgb(224, 214, 92, 78)));
             var conditionColor = ResolveCargoConditionColor(conditionRatio);
-                var contentX = x + 8f;
-                var titleY = y + 5f;
-                var commodityY = y + (height * 0.22f);
-                var quantityTextY = y + (height * 0.43f);
-                var quantityBarY = y + (height * 0.60f);
-                var conditionTextY = y + (height * 0.72f);
-                var conditionBarY = y + (height * 0.86f);
-                var barWidth = width - 16f;
-                var barHeight = Math.Max(4f, height * 0.08f);
+            var commodityLabel = isEmpty ? "No cargo loaded" : cargoState.Commodity;
+            var quantityLabel = isEmpty
+                ? "Qty 0% | Empty"
+                : string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons);
+            var fuelLabel = fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f
+                ? "Fuel n/a"
+                : string.Format(
+                    "Fuel {0:0}% | {1:0}/{2:0}L{3}",
+                    fuelRatio * 100f,
+                    fuelTelemetry.CurrentLiters,
+                    fuelTelemetry.CapacityLiters,
+                    fuelTelemetry.UsesSeparatePoweredVehicle ? " | Tractor" : string.Empty);
+            var conditionLabel = isEmpty
+                ? "Cond Ready | 100%"
+                : string.Format("Cond {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f);
+            var contentX = x + 8f;
+            var titleY = y + 5f;
+            var commodityY = y + (height * 0.17f);
+            var quantityTextY = y + (height * 0.33f);
+            var quantityBarY = y + (height * 0.44f);
+            var fuelTextY = y + (height * 0.56f);
+            var fuelBarY = y + (height * 0.67f);
+            var conditionTextY = y + (height * 0.79f);
+            var conditionBarY = y + (height * 0.90f);
+            var barWidth = width - 16f;
+            var barHeight = Math.Max(4f, height * 0.055f);
 
             DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(92, 0, 0, 0));
             DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
             DrawRect(resolution.Width, resolution.Height, x, y, width, 4f, quantityColor);
 
-            new TextElement(
-                    "CARGO",
-                    ToScriptTextCoords(resolution, contentX, titleY),
-                    0.30f,
-                    Color.FromArgb(248, 239, 247, 255),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawHudText(
+                resolution,
+                "CARGO",
+                contentX,
+                titleY,
+                0.30f,
+                Color.FromArgb(248, 239, 247, 255),
+                GTA.UI.Font.ChaletComprimeCologne);
 
-            new TextElement(
-                    cargoState.Commodity,
-                    ToScriptTextCoords(resolution, contentX, commodityY),
-                    0.19f,
-                    Color.FromArgb(232, 220, 229, 239),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawHudText(
+                resolution,
+                commodityLabel,
+                contentX,
+                commodityY,
+                0.19f,
+                Color.FromArgb(232, 220, 229, 239),
+                GTA.UI.Font.ChaletLondon);
 
-            new TextElement(
-                    string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons),
-                    ToScriptTextCoords(resolution, contentX, quantityTextY),
-                    0.18f,
-                    Color.FromArgb(224, 214, 223, 233),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawHudText(
+                resolution,
+                quantityLabel,
+                contentX,
+                quantityTextY,
+                0.18f,
+                Color.FromArgb(224, 214, 223, 233),
+                GTA.UI.Font.ChaletLondon);
 
             DrawCompactLoadingBar(resolution, contentX, quantityBarY, barWidth, barHeight, quantityRatio, quantityColor);
 
-            new TextElement(
-                    string.Format("Cond {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f),
-                    ToScriptTextCoords(resolution, contentX, conditionTextY),
-                    0.18f,
-                    conditionColor,
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawHudText(
+                resolution,
+                fuelLabel,
+                contentX,
+                fuelTextY,
+                0.18f,
+                fuelColor,
+                GTA.UI.Font.ChaletLondon);
+
+            DrawCompactLoadingBar(resolution, contentX, fuelBarY, barWidth, barHeight, fuelRatio, fuelColor);
+
+            DrawHudText(
+                resolution,
+                conditionLabel,
+                contentX,
+                conditionTextY,
+                0.18f,
+                conditionColor,
+                GTA.UI.Font.ChaletLondon);
 
             DrawCompactLoadingBar(resolution, contentX, conditionBarY, barWidth, barHeight, conditionRatio, conditionColor);
 
@@ -1108,6 +1184,20 @@ namespace LSOL
             }
 
             DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, innerWidth, innerHeight, fillColor);
+        }
+
+        private static void DrawHudText(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font)
+        {
+            var coords = ToScriptTextCoords(resolution, x, y);
+            Function.Call(Hash.SET_TEXT_FONT, (int)font);
+            Function.Call(Hash.SET_TEXT_SCALE, 0f, scale);
+            Function.Call(Hash.SET_TEXT_COLOUR, color.R, color.G, color.B, color.A);
+            Function.Call(Hash.SET_TEXT_CENTRE, false);
+            Function.Call(Hash.SET_TEXT_DROPSHADOW, 0, 0, 0, 0, 0);
+            Function.Call(Hash.SET_TEXT_OUTLINE);
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text ?? string.Empty);
+            Function.Call(Hash.END_TEXT_COMMAND_DISPLAY_TEXT, coords.X / 1280f, coords.Y / 720f, 0);
         }
 
         private static float GetActiveRigBodyHealth(Vehicle driverVehicle, Vehicle cargoVehicle)
@@ -2086,6 +2176,7 @@ namespace LSOL
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
             _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
+            _vehicleFuelSystem.SetDifficultyEnabled(_vehicleFuelDifficultyEnabled);
             _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
             _territoryManager.RefreshState();
             if (_modMechanicsEnabled)
@@ -3021,6 +3112,9 @@ namespace LSOL
                 return;
             }
 
+            _vehicleFuelSystem.InitializeSpawnedVehicle(truck);
+            _tabletStateStore.MarkCargoDirty();
+
             ShowStatus(message);
         }
 
@@ -3087,6 +3181,56 @@ namespace LSOL
             if (cargoState == null)
             {
                 error = "Unable to initialize cargo state.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryGetIndustryRefuelContext(Industry industry, out Vehicle cargoVehicle, out Vehicle poweredVehicle, out VehicleFuelTelemetry fuelTelemetry, out string error)
+        {
+            cargoVehicle = null;
+            poweredVehicle = null;
+            fuelTelemetry = null;
+            error = string.Empty;
+
+            if (industry == null)
+            {
+                error = "No target industry.";
+                return false;
+            }
+
+            if (!industry.IsGasStation)
+            {
+                error = "Refueling is only available at petrol stations.";
+                return false;
+            }
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                error = "Player unavailable.";
+                return false;
+            }
+
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
+            {
+                error = "Move closer to the petrol station marker.";
+                return false;
+            }
+
+            if (!_fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle)
+                || poweredVehicle == null
+                || !poweredVehicle.Exists())
+            {
+                error = "Bring a powered cargo vehicle close to the petrol station.";
+                return false;
+            }
+
+            fuelTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
+            if (fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f)
+            {
+                error = "No powered cargo vehicle with a fuel tank is in range.";
                 return false;
             }
 
@@ -3240,6 +3384,112 @@ namespace LSOL
             }
 
             StartTabletUnloadTransfer(industry, cargoVehicle, cargoState, omegaOnly);
+        }
+
+        private void HandleTabletRefuelRequested(Industry industry)
+        {
+            if (_cargoTransferController.HasPendingTransfer)
+            {
+                ShowStatus("Transfer already in progress.");
+                return;
+            }
+
+            Vehicle cargoVehicle;
+            Vehicle poweredVehicle;
+            VehicleFuelTelemetry fuelTelemetry;
+            string error;
+            if (!TryGetIndustryRefuelContext(industry, out cargoVehicle, out poweredVehicle, out fuelTelemetry, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
+            var litersNeeded = Math.Max(0f, fuelTelemetry.CapacityLiters - fuelTelemetry.CurrentLiters);
+            if (litersNeeded <= 0.05f)
+            {
+                ShowStatus(string.Format("Fuel tank already full ({0:0}/{1:0}L).", fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters));
+                return;
+            }
+
+            var availableStockLiters = Math.Max(0f, industry.GetStock("Fuel") * 1000f);
+            if (availableStockLiters <= 0.05f)
+            {
+                ShowStatus("Station out of fuel.");
+                return;
+            }
+
+            var pricePerTon = Math.Max(0f, _globalMarket.GetUnitPrice("Fuel"));
+            var affordableLiters = industry.RefuelIsFree || pricePerTon <= 0.001f
+                ? litersNeeded
+                : Math.Max(0f, (_profit / pricePerTon) * 1000f);
+
+            if (!industry.RefuelIsFree && affordableLiters <= 0.05f)
+            {
+                ShowStatus("Insufficient funds to refuel.");
+                return;
+            }
+
+            var litersToDispense = Math.Min(litersNeeded, availableStockLiters);
+            if (!industry.RefuelIsFree)
+            {
+                litersToDispense = Math.Min(litersToDispense, affordableLiters);
+            }
+
+            if (litersToDispense <= 0.05f)
+            {
+                ShowStatus(industry.RefuelIsFree ? "Station out of fuel." : "Insufficient funds to refuel.");
+                return;
+            }
+
+            float dispensedLiters;
+            if (!_industryManager.TryDispenseFuel(industry, litersToDispense, out dispensedLiters) || dispensedLiters <= 0.05f)
+            {
+                ShowStatus("Station out of fuel.");
+                return;
+            }
+
+            var addedLiters = _vehicleFuelSystem.AddFuel(poweredVehicle, dispensedLiters);
+            if (addedLiters <= 0.05f)
+            {
+                industry.AddInput("Fuel", dispensedLiters / 1000f);
+                ShowStatus("Fuel tank already full.");
+                return;
+            }
+
+            var pricePaid = industry.RefuelIsFree ? 0f : _industryManager.ComputeFuelRefillPrice(addedLiters, _globalMarket);
+            if (pricePaid > 0f)
+            {
+                DeductProfit(pricePaid);
+            }
+
+            var resultingTank = Math.Min(fuelTelemetry.CapacityLiters, fuelTelemetry.CurrentLiters + addedLiters);
+            var notes = new List<string>();
+            if (availableStockLiters + 0.05f < litersNeeded)
+            {
+                notes.Add("station out of fuel");
+            }
+
+            if (!industry.RefuelIsFree && affordableLiters + 0.05f < litersNeeded)
+            {
+                notes.Add("insufficient funds");
+            }
+
+            var priceText = industry.RefuelIsFree
+                ? "Free at office station"
+                : string.Format("Paid {0}", ModFormatting.FormatMoney(pricePaid));
+            var noteText = notes.Count > 0
+                ? string.Format(" | {0}", string.Join(" | ", notes))
+                : string.Empty;
+
+            _tabletStateStore.MarkAllDirty();
+            ShowStatus(string.Format(
+                "Refueled {0:0}L. Tank {1:0}/{2:0}L | {3}{4}",
+                addedLiters,
+                resultingTank,
+                fuelTelemetry.CapacityLiters,
+                priceText,
+                noteText),
+                4500);
         }
 
         private void StartTabletLoadTransfer(Industry industry, Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleCargoType cargoType, string selectedProduct)

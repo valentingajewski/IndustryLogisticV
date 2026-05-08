@@ -20,7 +20,8 @@ Build profit by moving commodities through the logistics network:
 5. Pick a cargo filter + vehicle and spawn it.
 6. Drive to an industry marker and press `E` to open the industry tablet.
 7. Load cargo, deliver it to the next step in the chain, unload, repeat.
-8. While carrying cargo, watch the minimap-side cargo overview: collisions reduce cargo condition and can spill part of the load.
+8. If **Vehicle fuel** is enabled for the save, throttle and reverse propulsion consume truck fuel and empty tanks must be refilled at petrol stations.
+9. While carrying cargo, watch the minimap-side cargo overview: it now shows cargo quantity, truck fuel in liters, and cargo condition.
 
 ## 3. Default Controls
 
@@ -67,7 +68,8 @@ Tip: if cargo type and vehicle type do not match, loading options will be limite
   - Grapeseed Store
   - Paleto Store
 - **Terminal**: accepts multiple commodities (bulk sink)
-- **Petrol Stations**: accept Fuel and continuously drain stock over time (repeat demand)
+- **Petrol Stations**: accept Fuel and normally drain stock over time (repeat demand)
+- **Office Gas Station**: accepts Fuel, does not passively drain, and provides free truck refueling at the logistics office
 
 ## 7. Industry Chain Examples
 
@@ -107,9 +109,10 @@ Focus early upgrades on bottleneck processors (Refinery, Smelting, Processor, Co
 
 - Start with short routes first (one producer -> one processor).
 - Use `F8` to inspect industry storage, store stock, omega values, and gas station fill levels.
-- Use `F6` when near an industry to inspect local stock and omega values.
-- The cargo overview HUD appears next to the minimap whenever your truck or trailer carries a resource.
+- Use `F6` when near an industry to inspect local stock, omega values, and truck fuel telemetry.
+- The cargo overview HUD appears next to the minimap whenever your truck or trailer carries a resource, and now includes the powered vehicle fuel tank in liters.
 - Heavy vehicle damage reduces cargo condition and can destroy part of the load, so rough driving directly lowers final payout.
+- Public petrol stations consume their own fuel stock when you refuel there and charge the current Fuel market price. The office station is free, but still consumes its station stock.
 - Keep mod mechanics **On** in F7, otherwise production/interaction systems stay disabled.
 
 ## 10. Industry Persistence

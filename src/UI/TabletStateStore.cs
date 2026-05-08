@@ -174,6 +174,7 @@ namespace LSOL.UI
             StatusBanner = string.Empty;
             CargoVehicleName = string.Empty;
             CargoCommodity = string.Empty;
+            PoweredVehicleName = string.Empty;
             NearestIndustryName = string.Empty;
             NearestIndustryProductionWarning = string.Empty;
         }
@@ -203,6 +204,20 @@ namespace LSOL.UI
         public float CargoCapacityTons { get; set; }
 
         public float CargoCapacityRatio { get; set; }
+
+        public bool HasPoweredVehicle { get; set; }
+
+        public string PoweredVehicleName { get; set; }
+
+        public bool FuelVehicleMatchesCargoVehicle { get; set; }
+
+        public bool FuelIsEmpty { get; set; }
+
+        public float FuelCurrentLiters { get; set; }
+
+        public float FuelCapacityLiters { get; set; }
+
+        public float FuelRatio { get; set; }
 
         public Industry NearestIndustry { get; set; }
 
@@ -263,6 +278,7 @@ namespace LSOL.UI
 
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
+        private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly NpcLogisticsManager _npcLogisticsManager;
         private readonly Func<Ped> _getPlayer;
@@ -306,6 +322,7 @@ namespace LSOL.UI
         public TabletStateStore(
             IndustryManager industryManager,
             FleetManager fleetManager,
+            VehicleFuelSystem vehicleFuelSystem,
             GlobalMarketManager globalMarket,
             NpcLogisticsManager npcLogisticsManager,
             Func<Ped> getPlayer,
@@ -322,6 +339,7 @@ namespace LSOL.UI
         {
             _industryManager = industryManager ?? throw new ArgumentNullException(nameof(industryManager));
             _fleetManager = fleetManager ?? throw new ArgumentNullException(nameof(fleetManager));
+            _vehicleFuelSystem = vehicleFuelSystem ?? throw new ArgumentNullException(nameof(vehicleFuelSystem));
             _globalMarket = globalMarket ?? throw new ArgumentNullException(nameof(globalMarket));
             _npcLogisticsManager = npcLogisticsManager;
             _getPlayer = getPlayer;
@@ -790,10 +808,11 @@ namespace LSOL.UI
             snapshot.SecuredSupportSiteCount = _getSecuredSupportSiteCount != null ? _getSecuredSupportSiteCount() : 0;
 
             var player = _getPlayer != null ? _getPlayer() : null;
-            Vehicle driverVehicle;
-            var cargoVehicle = player != null && player.Exists()
-                ? _fleetManager.ResolveCargoVehicle(player, out driverVehicle)
-                : null;
+            Vehicle poweredVehicle = null;
+            Vehicle cargoVehicle = null;
+            var hasVehicleContext = player != null
+                && player.Exists()
+                && _fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle);
             var cargoState = cargoVehicle != null && cargoVehicle.Exists()
                 ? _fleetManager.GetOrCreateCargoState(cargoVehicle)
                 : null;
@@ -809,6 +828,21 @@ namespace LSOL.UI
                 snapshot.CargoCapacityRatio = snapshot.CargoCapacityTons <= 0.001f
                     ? 0f
                     : ModMath.Clamp01(snapshot.CargoWeightTons / snapshot.CargoCapacityTons);
+            }
+
+            if (hasVehicleContext)
+            {
+                var fuelTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
+                if (fuelTelemetry != null)
+                {
+                    snapshot.HasPoweredVehicle = true;
+                    snapshot.PoweredVehicleName = poweredVehicle.DisplayName;
+                    snapshot.FuelVehicleMatchesCargoVehicle = !fuelTelemetry.UsesSeparatePoweredVehicle;
+                    snapshot.FuelIsEmpty = fuelTelemetry.IsOutOfFuel;
+                    snapshot.FuelCurrentLiters = Math.Max(0f, fuelTelemetry.CurrentLiters);
+                    snapshot.FuelCapacityLiters = Math.Max(0f, fuelTelemetry.CapacityLiters);
+                    snapshot.FuelRatio = fuelTelemetry.FuelRatio;
+                }
             }
 
             var nearestIndustry = _getNearestIndustry != null ? _getNearestIndustry() : null;
@@ -1003,6 +1037,15 @@ namespace LSOL.UI
                 }
 
                 return detail;
+            }
+
+            if (locationKind == ExternalLocationKind.GasStation)
+            {
+                return string.Format(
+                    "Fuel {0:0.0}t | {1:0}% full{2}",
+                    storage,
+                    fillRatio * 100f,
+                    industry.RefuelIsFree ? " | Free office refuel" : string.Empty);
             }
 
             return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);

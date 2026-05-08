@@ -12,6 +12,7 @@ namespace LSOL.Domain
         public VehicleCargoType CargoType { get; set; }
         public HashSet<string> AcceptedCommodities { get; set; }
         public float CapacityTons { get; set; }
+        public float FuelCapacityLiters { get; set; }
         public bool IsEnabled { get; set; }
         public bool IsTrailer { get; set; }
         public bool IsTractor { get; set; }
@@ -21,6 +22,11 @@ namespace LSOL.Domain
         public override string ToString()
         {
             var label = string.IsNullOrWhiteSpace(DisplayName) ? ModelName : DisplayName;
+            if (FuelCapacityLiters > 0f)
+            {
+                return string.Format("{0} ({1}, {2:0.0}t, {3:0}L)", label, CargoType.ToDisplayName(), CapacityTons, FuelCapacityLiters);
+            }
+
             return string.Format("{0} ({1}, {2:0.0}t)", label, CargoType.ToDisplayName(), CapacityTons);
         }
     }

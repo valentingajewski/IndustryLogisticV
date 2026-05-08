@@ -422,6 +422,29 @@ namespace LSOL.Systems
             return acceptedTons > 0f;
         }
 
+        public bool TryDispenseFuel(Industry industry, float requestedLiters, out float dispensedLiters)
+        {
+            dispensedLiters = 0f;
+            if (industry == null || requestedLiters <= 0f || !industry.AcceptsCommodity("Fuel"))
+            {
+                return false;
+            }
+
+            var removedTons = industry.RemoveInput("Fuel", requestedLiters / 1000f);
+            dispensedLiters = Math.Max(0f, removedTons * 1000f);
+            return dispensedLiters > 0.01f;
+        }
+
+        public float ComputeFuelRefillPrice(float liters, GlobalMarketManager market)
+        {
+            if (liters <= 0f || market == null)
+            {
+                return 0f;
+            }
+
+            return Math.Max(0f, market.GetUnitPrice("Fuel")) * (liters / 1000f);
+        }
+
         public float ComputeDeliveryProfit(Industry industry, string commodity, float deliveredTons, GlobalMarketManager market, int gameTimeMs)
         {
             if (industry == null || deliveredTons <= 0f)
@@ -567,8 +590,8 @@ namespace LSOL.Systems
             // Ported from oil_mod density emptying rates, converted from L/s to tons/min.
             // Conversion uses 1000L ~= 1t so: tons/min = liters/second * 60 / 1000.
             const float litersPerSecondToTonsPerMinute = 0.06f;
-            var litersPerSecond = config.EmptyingRate > 0f
-                ? config.EmptyingRate
+            var litersPerSecond = config.HasConfiguredEmptyingRate
+                ? Math.Max(0f, config.EmptyingRate)
                 : ResolveLegacyDensityDrainRate(config.Density);
 
             drainRatePerMinute = litersPerSecond * litersPerSecondToTonsPerMinute;
@@ -633,6 +656,8 @@ namespace LSOL.Systems
                 StartingTankRatio = source.StartingTankRatio,
                 Density = source.Density,
                 EmptyingRate = source.EmptyingRate,
+                HasConfiguredEmptyingRate = source.HasConfiguredEmptyingRate,
+                RefuelIsFree = source.RefuelIsFree,
                 IndustryPrice = source.IndustryPrice,
                 IndustryLicencePrice = source.IndustryLicencePrice,
                 IndustryOwnerCut = source.IndustryOwnerCut,

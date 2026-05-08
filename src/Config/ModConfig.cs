@@ -146,6 +146,8 @@ namespace LSOL.Config
                     StartingTankRatio = location.StartingTankRatio,
                     Density = location.Density,
                     EmptyingRate = location.EmptyingRate,
+                    HasConfiguredEmptyingRate = location.HasConfiguredEmptyingRate,
+                    RefuelIsFree = location.RefuelIsFree,
                     IndustryPrice = industryPrice,
                     IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
@@ -230,6 +232,8 @@ namespace LSOL.Config
                     StartingTankRatio = startingTankRatio,
                     Density = density,
                     EmptyingRate = 0f,
+                    HasConfiguredEmptyingRate = false,
+                    RefuelIsFree = false,
                     IndustryPrice = industryPrice,
                     IndustryLicencePrice = industryLicencePrice,
                     IndustryOwnerCut = industryOwnerCut,
@@ -314,6 +318,8 @@ namespace LSOL.Config
                 StartingTankRatio = location.StartingTankRatio,
                 Density = location.Density,
                 EmptyingRate = location.EmptyingRate,
+                HasConfiguredEmptyingRate = location.HasConfiguredEmptyingRate,
+                RefuelIsFree = location.RefuelIsFree,
                 IndustryPrice = purchasePrice,
                 IndustryLicencePrice = licencePrice,
                 IndustryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut)),
@@ -398,14 +404,16 @@ namespace LSOL.Config
                     var modelName = rawModels[i];
                     var cargoType = NormalizeVehicleCargoType(section, modelName, configuredCargoType);
                     var isTractor = IsTractorDefinition(section, modelName, cargoType);
+                    var isTrailer = isTrailerSection && !isTractor;
                     config.VehicleDefinitions.Add(new VehicleDefinition
                     {
                         SectionName = section,
                         ModelName = modelName,
                         CargoType = cargoType,
                         CapacityTons = Math.Max(0f, capacityTons),
+                        FuelCapacityLiters = ResolveLegacyFuelCapacityLiters(ini, section, modelName, cargoType, Math.Max(0f, capacityTons), isTractor, isTrailer),
                         IsEnabled = true,
-                        IsTrailer = isTrailerSection && !isTractor,
+                        IsTrailer = isTrailer,
                         IsTractor = isTractor,
                     });
                 }
@@ -438,6 +446,7 @@ namespace LSOL.Config
                 ModelName = "trflat",
                 CargoType = VehicleCargoType.OpenHull,
                 CapacityTons = 30f,
+                FuelCapacityLiters = 0f,
                 IsEnabled = true,
                 IsTrailer = true,
                 IsTractor = false,
@@ -497,11 +506,73 @@ namespace LSOL.Config
                         ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                         : new HashSet<string>(x.AcceptedCommodities, StringComparer.OrdinalIgnoreCase),
                     CapacityTons = x.CapacityTons,
+                    FuelCapacityLiters = x.FuelCapacityLiters,
                     IsEnabled = x.IsEnabled,
                     IsTrailer = x.IsTrailer,
                     IsTractor = x.IsTractor,
                 })
                 .ToList();
+        }
+
+        private static float ResolveLegacyFuelCapacityLiters(IniFile ini, string section, string modelName, VehicleCargoType cargoType, float capacityTons, bool isTractor, bool isTrailer)
+        {
+            if (isTrailer || cargoType == VehicleCargoType.Trailer)
+            {
+                return 0f;
+            }
+
+            var configuredValue = ResolveFuelCapacityOverride(ini, section, modelName);
+            if (configuredValue > 0f)
+            {
+                return configuredValue;
+            }
+
+            if (isTractor)
+            {
+                return 400f;
+            }
+
+            if (capacityTons >= 18f)
+            {
+                return 200f;
+            }
+
+            if (capacityTons >= 8f)
+            {
+                return 150f;
+            }
+
+            return 90f;
+        }
+
+        private static float ResolveFuelCapacityOverride(IniFile ini, string section, string modelName)
+        {
+            if (ini == null)
+            {
+                return 0f;
+            }
+
+            var aliases = new[]
+            {
+                "VehicleFuelCapacity",
+                "FuelCapacity",
+            };
+
+            for (int i = 0; i < aliases.Length; i++)
+            {
+                var alias = aliases[i];
+                if (ini.HasKey(section, alias))
+                {
+                    return Math.Max(0f, ini.GetFloat(section, alias, 0f));
+                }
+
+                if (!string.IsNullOrWhiteSpace(modelName) && ini.HasKey(modelName, alias))
+                {
+                    return Math.Max(0f, ini.GetFloat(modelName, alias, 0f));
+                }
+            }
+
+            return 0f;
         }
 
         private static void ParseObjects(IniFile ini, ModConfig config)

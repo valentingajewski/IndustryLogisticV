@@ -125,6 +125,9 @@ namespace LSOL.Config
                 ExternalLocationConfig legacy = null;
                 legacyLocations?.TryGetValue(legacyKey, out legacy);
 
+                float configuredEmptyingRate;
+                var hasConfiguredEmptyingRate = row.TryGetFloat(table, out configuredEmptyingRate, "EmptyingRate");
+
                 var location = new ExternalLocationConfig
                 {
                     CatalogId = catalogId,
@@ -138,7 +141,9 @@ namespace LSOL.Config
                     IndustryOwnerCut = GetFloat(row, table, legacy != null ? legacy.IndustryOwnerCut : 0.5f, "IndustryOwnerCut"),
                     StartingTankRatio = GetClampedRatio(row, table, legacy != null ? legacy.StartingTankRatio : 0f, "StartingResources", "StartingTank"),
                     Density = NormalizeDensity(row.GetString(table, "Density"), legacy != null ? legacy.Density : string.Empty),
-                    EmptyingRate = GetFloat(row, table, 0f, "EmptyingRate"),
+                    EmptyingRate = hasConfiguredEmptyingRate ? configuredEmptyingRate : 0f,
+                    HasConfiguredEmptyingRate = hasConfiguredEmptyingRate,
+                    RefuelIsFree = GetBool(row, table, legacy != null && legacy.RefuelIsFree, "FreeRefuel", "RefuelIsFree"),
                     OwnershipTier = SiteMetadataParser.ParseOwnershipTier(row.GetString(table, "OwnershipTier")),
                     GatePosition = TryGetVector3(row, table, "GateX", "GateY", "GateZ"),
                     WorkerPosition = TryGetVector3(row, table, "WorkerX", "WorkerY", "WorkerZ"),
@@ -175,7 +180,7 @@ namespace LSOL.Config
                     catalog.ValidationMessages.Add(string.Format("Sites.csv line {0}: site '{1}' is missing marker coordinates.", row.LineNumber, location.LegacyKey));
                 }
 
-                if (location.EmptyingRate <= 0f)
+                if (!location.HasConfiguredEmptyingRate)
                 {
                     location.EmptyingRate = InferEmptyingRate(location);
                 }
@@ -233,9 +238,15 @@ namespace LSOL.Config
                     .ToList();
 
                 var capacity = Math.Max(0f, GetFloat(row, table, 0f, "VehicleCapacity", "Capacity"));
+                var fuelCapacityLiters = GetFloat(row, table, float.NaN, "VehicleFuelCapacity", "FuelCapacity");
                 var isTrailer = vehicleType.IndexOf("Trailer", StringComparison.OrdinalIgnoreCase) >= 0;
                 var isTractor = capacity <= 0f
                     || vehicleType.IndexOf("Truck", StringComparison.OrdinalIgnoreCase) >= 0 && acceptedCommodities.Count == 0;
+
+                if (float.IsNaN(fuelCapacityLiters))
+                {
+                    fuelCapacityLiters = ResolveDefaultFuelCapacityLiters(vehicleType, capacity, isTractor, isTrailer);
+                }
 
                 var definition = new VehicleDefinition
                 {
@@ -246,6 +257,7 @@ namespace LSOL.Config
                     CargoType = ResolvePrimaryCargoType(acceptedCargoTypes, vehicleType, capacity),
                     AcceptedCommodities = acceptedCommodities,
                     CapacityTons = capacity,
+                    FuelCapacityLiters = Math.Max(0f, fuelCapacityLiters),
                     IsEnabled = capacity > 0f || isTractor,
                     IsTrailer = isTrailer && !isTractor,
                     IsTractor = isTractor,
@@ -394,9 +406,10 @@ namespace LSOL.Config
                 location.Density = legacy.Density;
             }
 
-            if (location.EmptyingRate <= 0f && legacy.EmptyingRate > 0f)
+            if (!location.HasConfiguredEmptyingRate && legacy.HasConfiguredEmptyingRate)
             {
                 location.EmptyingRate = legacy.EmptyingRate;
+                location.HasConfiguredEmptyingRate = true;
             }
 
             if (string.IsNullOrWhiteSpace(location.Company))
@@ -515,6 +528,39 @@ namespace LSOL.Config
             }
 
             return 2.25f;
+        }
+
+        private static float ResolveDefaultFuelCapacityLiters(string vehicleType, float capacityTons, bool isTractor, bool isTrailer)
+        {
+            if (isTrailer)
+            {
+                return 0f;
+            }
+
+            var normalizedType = (vehicleType ?? string.Empty).Trim();
+            if (isTractor)
+            {
+                return 400f;
+            }
+
+            if (normalizedType.IndexOf("Van", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 90f;
+            }
+
+            if (normalizedType.IndexOf("BigTruck", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 220f;
+            }
+
+            if (normalizedType.IndexOf("Truck", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                normalizedType.IndexOf("Mixer", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                normalizedType.IndexOf("Dumper", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return capacityTons >= 18f ? 200f : 150f;
+            }
+
+            return capacityTons >= 8f ? 120f : 70f;
         }
 
         private static string NormalizeDensity(string raw, string fallback)

@@ -43,6 +43,8 @@ namespace LSOL.Domain
             OutputCapacityTons = Math.Max(1f, config.OutputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, InputCapacityTons * Math.Max(0.01f, omegaCapacityMultiplier));
             EmptyingRate = Math.Max(0f, config.EmptyingRate);
+            HasConfiguredEmptyingRate = config.HasConfiguredEmptyingRate;
+            RefuelIsFree = config.RefuelIsFree;
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
             IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
@@ -124,6 +126,8 @@ namespace LSOL.Domain
         public float OutputCapacityTons { get; private set; }
         public float OmegaCapacityTons { get; private set; }
         public float EmptyingRate { get; private set; }
+        public bool HasConfiguredEmptyingRate { get; }
+        public bool RefuelIsFree { get; }
         public float IndustryPrice { get; private set; }
         public float IndustryLicencePrice { get; private set; }
         public float IndustryOwnerCut { get; }
@@ -313,6 +317,43 @@ namespace LSOL.Domain
             var added = Math.Min(free, tons);
             BufferStorage[commodity] = current + added;
             return added;
+        }
+
+        public float RemoveInput(string commodity, float tons)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (tons <= 0f)
+            {
+                return 0f;
+            }
+
+            if (_supportsOmegaBoost && commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            {
+                if (OmegaStorage <= 0f)
+                {
+                    return 0f;
+                }
+
+                var removedOmega = Math.Min(OmegaStorage, tons);
+                OmegaStorage = Math.Max(0f, OmegaStorage - removedOmega);
+                HasOmegaBoost = OmegaStorage > 0.0001f;
+                return removedOmega;
+            }
+
+            if (!Inputs.Contains(commodity) && !OptionalInputs.Contains(commodity))
+            {
+                return 0f;
+            }
+
+            var current = GetStock(commodity);
+            if (current <= 0f)
+            {
+                return 0f;
+            }
+
+            var removed = Math.Min(current, tons);
+            BufferStorage[commodity] = current - removed;
+            return removed;
         }
 
         public float RemoveOutput(string commodity, float tons)
