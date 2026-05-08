@@ -66,6 +66,8 @@ namespace LSOL
         private readonly NpcLogisticsManager _npcLogisticsManager;
         private readonly NpcLogisticsController _npcLogisticsController;
         private readonly OverviewMenuController _overviewMenuController;
+        private readonly TabletStateStore _tabletStateStore;
+        private readonly TabletShellController _tabletShellController;
         private readonly CompanyMapController _companyMapController;
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
@@ -101,7 +103,6 @@ namespace LSOL
         private IndustryPurchaseMenuReturnTarget _industryPurchaseMenuReturnTarget;
         private SaveSlotMenuAction _saveSlotMenuAction;
 
-        private bool _showContext;
         private bool _modMechanicsEnabled;
         private bool _industryPersistenceEnabled;
         private bool _difficultySettingsLocked;
@@ -180,7 +181,7 @@ namespace LSOL
                 GetGroundPosition,
                 () => _profit,
                 DeductProfit,
-                amount => _profit += amount,
+                AddProfit,
                 message => ShowStatus(message),
                 _territoryManager);
 
@@ -269,6 +270,36 @@ namespace LSOL
             _industryTabletController.IndustryPurchaseRequested += HandleTabletIndustryPurchaseRequested;
             _industryTabletController.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
             _industryTabletController.VehicleSpawnerRequested += HandleTabletVehicleSpawnerRequested;
+            _tabletStateStore = new TabletStateStore(
+                _industryManager,
+                _fleetManager,
+                _globalMarket,
+                _npcLogisticsManager,
+                () => Game.Player.Character,
+                () => _nearestIndustry,
+                () => _profit,
+                () => _vehicleSpawnController.SelectedFilter,
+                GetIndustryMarkerPosition,
+                () => _cargoTransferController.HasPendingTransfer,
+                GetActiveStatusMessage,
+                () => _territoryManager != null ? _territoryManager.GetControlledDistrictCount() : 0,
+                () => _territoryManager != null ? _territoryManager.GetActiveCorridorCount() : 0,
+                GetSecuredSupportSiteCount,
+                () => _territoryManager != null ? _territoryManager.DistrictStates : Enumerable.Empty<TerritoryDistrictState>());
+            _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
+            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet));
+            _tabletShellController.RegisterApp(new AnalyticsTabletApp());
+            _tabletShellController.RegisterApp(new ContextTabletApp());
+            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet));
+            _tabletShellController.RegisterApp(new IndustryTabletApp(
+                IndustryInteractionDistance,
+                HandleTabletLoadRequested,
+                HandleTabletLoadCommodityRequested,
+                HandleTabletUnloadRequested,
+                HandleTabletUnloadModeRequested,
+                HandleTabletUpgradeModuleRequested,
+                HandleTabletVehicleSpawnerRequested,
+                PurchaseIndustryFromTablet));
 
             _keyCooldownUntil = new Dictionary<WinForms.Keys, int>();
             _heldKeys = new HashSet<WinForms.Keys>();
@@ -333,7 +364,8 @@ namespace LSOL
                     || _npcLogisticsController.AnyMenuOpen
                     || _companyMapController.AnyMenuOpen
                     || _overviewMenuController.AnyMenuOpen
-                    || _industryTabletController.IsOpen;
+                    || _industryTabletController.IsOpen
+                    || _tabletShellController.IsOpen;
             }
         }
 
@@ -371,12 +403,16 @@ namespace LSOL
                 _industryManager.Update(elapsed / 60000f, _config.OmegaMultiplier);
                 _fleetManager.CleanupStates();
                 _territoryManager.EvaluateFinancialPressure(_profit, gameTime, message => ShowStatus(message, 4500));
+                _tabletStateStore.MarkMarketDirty();
+                _tabletStateStore.MarkNetworkDirty();
             }
 
             if (gameTime - _lastNearestProbeMs >= 250)
             {
                 _lastNearestProbeMs = gameTime;
                 _nearestIndustry = _industryManager.GetNearestIndustry(player.Position, 40f);
+                _tabletStateStore.MarkNearestIndustryDirty();
+                _tabletStateStore.MarkCargoDirty();
             }
 
             if (gameTime - _lastBlipRefreshMs >= 6000)
@@ -386,17 +422,13 @@ namespace LSOL
             }
 
             _npcLogisticsManager.Update(gameTime, GetCurrentInGameWeekMinute());
+            _tabletStateStore.CaptureHistory(gameTime);
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
-            DrawOpenMenus();
-            DrawIndustryTablet(player);
             UpdateCargoOverviewAndIntegrity(player, gameTime);
-
-            if (_showContext)
-            {
-                DrawContextPanel(player);
-            }
+            DrawOpenMenus();
+            DrawTabletShell();
 
             if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
             {
@@ -439,9 +471,24 @@ namespace LSOL
             {
                 if (_modMechanicsEnabled)
                 {
-                    ToggleOverviewMenu();
+                    OpenTabletNetworkApp();
                 }
 
+                return;
+            }
+
+            if (e.KeyCode == _controls.ToggleContext)
+            {
+                if (_modMechanicsEnabled)
+                {
+                    OpenTabletContextApp();
+                }
+
+                return;
+            }
+
+            if (HandleTabletShellKey(e.KeyCode))
+            {
                 return;
             }
 
@@ -462,12 +509,6 @@ namespace LSOL
 
             if (!_modMechanicsEnabled)
             {
-                return;
-            }
-
-            if (e.KeyCode == _controls.ToggleContext)
-            {
-                _showContext = !_showContext;
                 return;
             }
 
@@ -519,6 +560,11 @@ namespace LSOL
         private static bool IsVirtualKeyDown(int vKey)
         {
             return (GetAsyncKeyState(vKey) & 0x8000) != 0;
+        }
+
+        private bool HandleTabletShellKey(WinForms.Keys key)
+        {
+            return _tabletShellController != null && _tabletShellController.HandleKey(key);
         }
 
         private bool HandleTabletKey(WinForms.Keys key)
@@ -705,14 +751,9 @@ namespace LSOL
             }
         }
 
-        private void DrawIndustryTablet(Ped player)
+        private void DrawTabletShell()
         {
-            _industryTabletController.Draw(
-                player,
-                _profit,
-                _vehicleSpawnController.SelectedFilter,
-                IndustryInteractionDistance,
-                message => ShowStatus(message));
+            _tabletShellController.Draw();
         }
 
         private void DrawMarkers(Ped player)
@@ -1694,12 +1735,14 @@ namespace LSOL
             }
 
             _menuIndustry = industry;
-            return _industryTabletController.TryOpen(
-                player,
-                industry,
-                IndustryInteractionDistance,
-                () => { },
-                message => ShowStatus(message));
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance)
+            {
+                return false;
+            }
+
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.OpenIndustry(industry);
+            return true;
         }
 
         private void RebuildDifficultyMenuItems()
@@ -1785,12 +1828,27 @@ namespace LSOL
 
         private void ToggleOverviewMenu()
         {
-            _overviewMenuController.Toggle();
+            OpenTabletNetworkApp();
         }
 
         private void CloseOverviewMenus()
         {
             _overviewMenuController.Close();
+            _tabletShellController.Close();
+        }
+
+        private void OpenTabletContextApp()
+        {
+            CloseAllMenus();
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.OpenContext();
+        }
+
+        private void OpenTabletNetworkApp()
+        {
+            CloseAllMenus();
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.OpenHome();
         }
 
         private string CurrentActivationCaption()
@@ -2129,6 +2187,55 @@ namespace LSOL
                 _blipLifecycleManager.Refresh();
             }
 
+            _tabletStateStore.MarkBalanceDirty();
+            _tabletStateStore.MarkNetworkDirty();
+
+            return result;
+        }
+
+        private string PurchaseContractorPermitFromTablet(Industry industry)
+        {
+            var result = PurchaseContractorPermitFromOverview(industry);
+            if (!string.IsNullOrWhiteSpace(result))
+            {
+                ShowStatus(result);
+            }
+
+            return result;
+        }
+
+        private string PurchaseIndustryFromTablet(Industry industry)
+        {
+            if (industry == null)
+            {
+                ShowStatus("No industry selected.");
+                return "No industry selected.";
+            }
+
+            if (!_industryManager.RequiresIndustryPurchase(industry))
+            {
+                var message = _industryManager.IsIndustryOwnedForGameplay(industry)
+                    ? string.Format("{0} is already owned.", industry.Name)
+                    : "Industry pricing is disabled for this save.";
+                ShowStatus(message);
+                return message;
+            }
+
+            float cost;
+            string result;
+            if (!industry.TryPurchase(ref _profit, out cost, out result))
+            {
+                ShowStatus(result);
+                _tabletStateStore.MarkBalanceDirty();
+                _tabletStateStore.MarkNetworkDirty();
+                return result;
+            }
+
+            _territoryManager.OnIndustryAccessChanged(industry);
+            _blipLifecycleManager.Refresh();
+            _tabletStateStore.MarkBalanceDirty();
+            _tabletStateStore.MarkNetworkDirty();
+            ShowStatus(result, 4000);
             return result;
         }
 
@@ -2152,7 +2259,6 @@ namespace LSOL
             }
 
             _cargoTransferController.ClearState();
-            _showContext = false;
             CloseOverviewMenus();
             _companyMapController.Close();
             _officeMenu.Close();
@@ -2396,8 +2502,57 @@ namespace LSOL
 
         private void OpenCompanyMapMenu()
         {
-            _officeMenu.Close();
+            CloseAllMenus();
             _companyMapController.Open();
+        }
+
+        private void OpenCompanyMapMenuFromTablet()
+        {
+            CloseAllMenus();
+            _companyMapController.Open(ReturnToTabletHomeFromCompanyMap);
+        }
+
+        private void OpenCompanyDistrictViewFromTablet()
+        {
+            CloseAllMenus();
+            _companyMapController.OpenDistrictView(ReturnToTabletHomeFromCompanyMap);
+        }
+
+        private void OpenCompanyDepotViewFromTablet()
+        {
+            CloseAllMenus();
+            _companyMapController.OpenDepotView(ReturnToTabletHomeFromCompanyMap);
+        }
+
+        private void ReturnToTabletHomeFromCompanyMap()
+        {
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.OpenHome();
+        }
+
+        private int GetSecuredSupportSiteCount()
+        {
+            if (_territoryManager == null)
+            {
+                return 0;
+            }
+
+            return _territoryManager.GetDepotIndustries().Count(industry =>
+            {
+                var siteState = _territoryManager.GetSiteState(industry);
+                return siteState != null && siteState.ControlLevel != TerritoryControlLevel.None;
+            });
+        }
+
+        private void AddProfit(float amount)
+        {
+            if (amount <= 0f)
+            {
+                return;
+            }
+
+            _profit += amount;
+            _tabletStateStore.MarkBalanceDirty();
         }
 
         private void DeductProfit(float amount)
@@ -2408,6 +2563,7 @@ namespace LSOL
             }
 
             _profit -= amount;
+            _tabletStateStore.MarkBalanceDirty();
         }
 
         private string SecureSupportSiteFromOffice(Industry industry)
@@ -2530,12 +2686,14 @@ namespace LSOL
                 return;
             }
 
-            _industryTabletController.TryOpen(
-                player,
-                _menuIndustry,
-                IndustryInteractionDistance,
-                () => { },
-                message => ShowStatus(message));
+            if (player.Position.DistanceTo(GetIndustryMarkerPosition(_menuIndustry)) > IndustryInteractionDistance)
+            {
+                ShowStatus("Move closer to the industry marker to reopen operations.");
+                return;
+            }
+
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.OpenIndustry(_menuIndustry);
         }
 
         private string CurrentVehicleSpawnerSelectionDetail()
@@ -2880,17 +3038,16 @@ namespace LSOL
                 return;
             }
 
-            _industryTabletController.TryOpen(
-                player,
-                _nearestIndustry,
-                IndustryInteractionDistance,
-                () =>
-                {
-                    _menuIndustry = _nearestIndustry;
-                    _officeMenu.Close();
-                    _upgradeMenu.Close();
-                },
-                message => ShowStatus(message));
+            if (_nearestIndustry == null || player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) > IndustryInteractionDistance)
+            {
+                ShowStatus("No industry marker in range.");
+                return;
+            }
+
+            _menuIndustry = _nearestIndustry;
+            CloseAllMenus();
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.OpenIndustry(_nearestIndustry);
         }
 
         private bool TryGetIndustryTabletContext(Industry industry, out Vehicle cargoVehicle, out VehicleCargoState cargoState, out string error)
@@ -3110,7 +3267,7 @@ namespace LSOL
                 {
                     CloseIndustryTablet();
                 },
-                amount => _profit += amount);
+                AddProfit);
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)
@@ -3463,6 +3620,7 @@ namespace LSOL
         private void CloseIndustryTablet()
         {
             _industryTabletController.Close();
+            _tabletShellController.Close();
         }
 
         private void CreateMapBlips()
@@ -3691,7 +3849,15 @@ namespace LSOL
             var prefixed = PrefixMessage(message);
             _statusMessage = prefixed;
             _statusMessageUntil = Game.GameTime + durationMs;
+            _tabletStateStore.MarkAllDirty();
             Notification.PostTicker(prefixed, false, false);
+        }
+
+        private string GetActiveStatusMessage()
+        {
+            return !string.IsNullOrWhiteSpace(_statusMessage) && Game.GameTime <= _statusMessageUntil
+                ? _statusMessage
+                : string.Empty;
         }
 
         private static string PrefixMessage(string message)

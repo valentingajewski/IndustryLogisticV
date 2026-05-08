@@ -74,6 +74,7 @@ namespace LSOL
             _industryManager.ResetIndustriesToDefaults();
             _cargoTransferController.ClearState();
             _territoryManager.Reset();
+            _tabletStateStore.ResetAnalyticsState();
             _profit = GetSelectedStartingBalance();
             _currentStartingBalance = _profit;
 
@@ -179,6 +180,7 @@ namespace LSOL
                     _industryManager.ResetIndustriesToDefaults();
                     _cargoTransferController.ClearState();
                     _territoryManager.Reset();
+                    _tabletStateStore.ResetAnalyticsState();
                     _profit = DefaultStartingBalance;
                     _currentStartingBalance = DefaultStartingBalance;
                 }
@@ -339,6 +341,7 @@ namespace LSOL
                 EconomyDifficultyPreset = _economyDifficultyPreset,
                 NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
                 DifficultySettingsLocked = _difficultySettingsLocked,
+                Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
             };
         }
 
@@ -364,6 +367,8 @@ namespace LSOL
                 _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
+
+            _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;

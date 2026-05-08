@@ -580,6 +580,8 @@ namespace LSOL.Systems
                 _addProfit(revenue);
             }
 
+            contract.TotalDeliveredTons += acceptedTons;
+
             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - acceptedTons);
             if (cargoState.WeightTons <= 0.001f)
             {
@@ -1152,6 +1154,8 @@ namespace LSOL.Systems
         public float TotalWeeklyWagesPaid { get; internal set; }
 
         public int CompletedDeliveries { get; internal set; }
+
+        public float TotalDeliveredTons { get; internal set; }
 
         public float TotalProfitEarned { get; internal set; }
 

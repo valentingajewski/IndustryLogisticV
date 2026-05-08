@@ -281,6 +281,7 @@ namespace LSOL.Config
             if (location.SiteRole == SiteRole.Warehouse)
             {
                 outputs.UnionWith(inputs);
+                productionRate = 0f;
             }
 
             return new IndustryConfig
@@ -711,6 +712,11 @@ namespace LSOL.Config
 
         private static float ResolveProductionRate(IniFile legacyIni, ExternalLocationConfig location)
         {
+            if (location != null && location.SiteRole == SiteRole.Warehouse)
+            {
+                return 0f;
+            }
+
             var productionRate = legacyIni.GetFloat(location.Id, "ProductionRate", float.NaN);
             if (float.IsNaN(productionRate))
             {

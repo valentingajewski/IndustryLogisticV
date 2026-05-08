@@ -776,6 +776,11 @@ namespace LSOL.Systems
 
         private static float ApplyProductionModuleLevels(float productionRate, int moduleLevel)
         {
+            if (productionRate <= 0f)
+            {
+                return 0f;
+            }
+
             var effectiveProductionRate = Math.Max(1f, productionRate);
             for (var level = 0; level < Math.Max(0, moduleLevel); level++)
             {
