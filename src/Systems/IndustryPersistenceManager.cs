@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using LSOL.Config;
 using LSOL.Domain;
+using LSOL.UI;
 
 namespace LSOL.Systems
 {
@@ -142,7 +143,11 @@ namespace LSOL.Systems
             using (var writer = new StreamWriter(filePath, false))
             {
                 writer.WriteLine("[Meta]");
-                writer.WriteLine("Version={0}", metadata != null || territorySnapshot != null ? 6 : 1);
+                writer.WriteLine(
+                    "Version={0}",
+                    metadata != null && metadata.Analytics != null
+                        ? 7
+                        : (metadata != null || territorySnapshot != null ? 6 : 1));
                 writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
                 if (metadata != null)
                 {
@@ -197,6 +202,11 @@ namespace LSOL.Systems
                 {
                     WriteTerritorySnapshot(writer, territorySnapshot);
                 }
+
+                if (metadata != null && metadata.Analytics != null)
+                {
+                    WriteAnalyticsSnapshot(writer, metadata.Analytics);
+                }
             }
         }
 
@@ -232,7 +242,253 @@ namespace LSOL.Systems
                 ini.GetString("Meta", "NpcWeeklyWageDifficulty", NpcWeeklyWageDifficulty.Standard.ToString()),
                 NpcWeeklyWageDifficulty.Standard);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
+            metadata.Analytics = ReadAnalyticsSnapshot(ini);
             return metadata;
+        }
+
+        private static TabletAnalyticsPersistenceSnapshot ReadAnalyticsSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new TabletAnalyticsPersistenceSnapshot();
+            var hasAnalytics = false;
+            if (ini.HasSection("AnalyticsMeta"))
+            {
+                hasAnalytics = true;
+                snapshot.SelectedGraphTimeframe = ParseGraphTimeframe(
+                    ini.GetString("AnalyticsMeta", "SelectedGraphTimeframe", TabletGraphTimeframe.ThirtyMinutes.ToString()),
+                    TabletGraphTimeframe.ThirtyMinutes);
+                snapshot.SelectedTrendCommodity = CommodityCatalog.Normalize(
+                    ini.GetString("AnalyticsMeta", "SelectedTrendCommodity", string.Empty));
+            }
+
+            var profitHistory = ReadTimeSeriesPersistence(ini, BuildAnalyticsProfitSectionName());
+            if (profitHistory != null)
+            {
+                snapshot.ProfitHistory = profitHistory;
+                hasAnalytics = true;
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section))
+                {
+                    continue;
+                }
+
+                if (section.StartsWith("Analytics:Commodity:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var commodityKey = section.Substring("Analytics:Commodity:".Length).Trim();
+                    var series = ReadTimeSeriesPersistence(ini, section);
+                    if (!string.IsNullOrWhiteSpace(commodityKey) && series != null)
+                    {
+                        snapshot.CommodityPriceHistories.Add(new TabletNamedTimeSeriesPersistence
+                        {
+                            Key = CommodityCatalog.Normalize(commodityKey),
+                            Series = series,
+                        });
+                        hasAnalytics = true;
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("Analytics:SiteUtilization:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var siteKey = section.Substring("Analytics:SiteUtilization:".Length).Trim();
+                    var series = ReadTimeSeriesPersistence(ini, section);
+                    if (!string.IsNullOrWhiteSpace(siteKey) && series != null)
+                    {
+                        snapshot.SiteUtilizationHistories.Add(new TabletNamedTimeSeriesPersistence
+                        {
+                            Key = siteKey,
+                            Series = series,
+                        });
+                        hasAnalytics = true;
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("Analytics:SiteStorage:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var siteKey = section.Substring("Analytics:SiteStorage:".Length).Trim();
+                    var series = ReadTimeSeriesPersistence(ini, section);
+                    if (!string.IsNullOrWhiteSpace(siteKey) && series != null)
+                    {
+                        snapshot.SiteStorageHistories.Add(new TabletNamedTimeSeriesPersistence
+                        {
+                            Key = siteKey,
+                            Series = series,
+                        });
+                        hasAnalytics = true;
+                    }
+                }
+            }
+
+            return hasAnalytics ? snapshot : null;
+        }
+
+        private static void WriteAnalyticsSnapshot(StreamWriter writer, TabletAnalyticsPersistenceSnapshot analytics)
+        {
+            if (writer == null || analytics == null)
+            {
+                return;
+            }
+
+            writer.WriteLine("[AnalyticsMeta]");
+            writer.WriteLine("SelectedGraphTimeframe={0}", analytics.SelectedGraphTimeframe);
+            writer.WriteLine("SelectedTrendCommodity={0}", analytics.SelectedTrendCommodity ?? string.Empty);
+            writer.WriteLine();
+
+            WriteTimeSeriesPersistence(writer, BuildAnalyticsProfitSectionName(), analytics.ProfitHistory);
+            WriteNamedSeriesPersistence(writer, "Analytics:Commodity:", analytics.CommodityPriceHistories, CommodityCatalog.Normalize);
+            WriteNamedSeriesPersistence(writer, "Analytics:SiteUtilization:", analytics.SiteUtilizationHistories, key => key);
+            WriteNamedSeriesPersistence(writer, "Analytics:SiteStorage:", analytics.SiteStorageHistories, key => key);
+        }
+
+        private static void WriteNamedSeriesPersistence(
+            StreamWriter writer,
+            string sectionPrefix,
+            IEnumerable<TabletNamedTimeSeriesPersistence> entries,
+            Func<string, string> normalizeKey)
+        {
+            if (writer == null || entries == null)
+            {
+                return;
+            }
+
+            foreach (var entry in entries.OrderBy(x => x != null ? x.Key : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.Key) || entry.Series == null)
+                {
+                    continue;
+                }
+
+                var normalizedKey = normalizeKey != null ? normalizeKey(entry.Key) : entry.Key;
+                if (string.IsNullOrWhiteSpace(normalizedKey))
+                {
+                    continue;
+                }
+
+                WriteTimeSeriesPersistence(writer, sectionPrefix + normalizedKey.Trim(), entry.Series);
+            }
+        }
+
+        private static void WriteTimeSeriesPersistence(StreamWriter writer, string sectionName, TabletTimeSeriesPersistence series)
+        {
+            if (writer == null || string.IsNullOrWhiteSpace(sectionName) || series == null || !series.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[{0}]", sectionName);
+            if (series.Timeframes != null)
+            {
+                foreach (var timeframe in series.Timeframes.OrderBy(x => x != null ? x.Timeframe : TabletGraphTimeframe.FiveMinutes))
+                {
+                    if (timeframe == null || !timeframe.HasData)
+                    {
+                        continue;
+                    }
+
+                    writer.WriteLine("{0}.Values={1}", timeframe.Timeframe, FormatFloatList(timeframe.Values));
+                    writer.WriteLine("{0}.PendingSampleCount={1}", timeframe.Timeframe, timeframe.PendingSampleCount);
+                    writer.WriteLine("{0}.PendingSum={1}", timeframe.Timeframe, FormatFloat(timeframe.PendingSum));
+                }
+            }
+
+            writer.WriteLine();
+        }
+
+        private static TabletTimeSeriesPersistence ReadTimeSeriesPersistence(IniFile ini, string sectionName)
+        {
+            if (ini == null || string.IsNullOrWhiteSpace(sectionName) || !ini.HasSection(sectionName))
+            {
+                return null;
+            }
+
+            var persistence = new TabletTimeSeriesPersistence();
+            var hasData = false;
+            for (int i = 0; i < TabletGraphTimeframeCatalog.All.Count; i++)
+            {
+                var timeframe = TabletGraphTimeframeCatalog.All[i];
+                var values = ParseFloatList(ini.GetString(sectionName, timeframe + ".Values", string.Empty));
+                var pendingSampleCount = ParseInt(ini.GetString(sectionName, timeframe + ".PendingSampleCount", "0"), 0);
+                var pendingSum = ini.GetFloat(sectionName, timeframe + ".PendingSum", 0f);
+                if (values.Count == 0 && pendingSampleCount <= 0 && Math.Abs(pendingSum) <= 0.001f)
+                {
+                    continue;
+                }
+
+                var timeframePersistence = new TabletTimeframeHistoryPersistence
+                {
+                    Timeframe = timeframe,
+                    PendingSampleCount = pendingSampleCount,
+                    PendingSum = pendingSum,
+                };
+                for (int valueIndex = 0; valueIndex < values.Count; valueIndex++)
+                {
+                    timeframePersistence.Values.Add(values[valueIndex]);
+                }
+
+                persistence.Timeframes.Add(timeframePersistence);
+                hasData = true;
+            }
+
+            return hasData ? persistence : null;
+        }
+
+        private static string BuildAnalyticsProfitSectionName()
+        {
+            return "Analytics:Profit";
+        }
+
+        private static TabletGraphTimeframe ParseGraphTimeframe(string raw, TabletGraphTimeframe fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            TabletGraphTimeframe parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static string FormatFloatList(IReadOnlyList<float> values)
+        {
+            if (values == null || values.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var parts = new string[values.Count];
+            for (int i = 0; i < values.Count; i++)
+            {
+                parts[i] = FormatFloat(values[i]);
+            }
+
+            return string.Join(",", parts);
+        }
+
+        private static List<float> ParseFloatList(string raw)
+        {
+            var values = new List<float>();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return values;
+            }
+
+            var parts = raw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                values.Add(ParseFloat(parts[i], 0f));
+            }
+
+            return values;
         }
 
         private static EconomyDifficultyPreset ParseEconomyDifficultyPreset(string raw, EconomyDifficultyPreset fallback)
@@ -486,5 +742,6 @@ namespace LSOL.Systems
         public EconomyDifficultyPreset EconomyDifficultyPreset { get; set; } = EconomyDifficultyPreset.Standard;
         public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
         public bool DifficultySettingsLocked { get; set; }
+        public TabletAnalyticsPersistenceSnapshot Analytics { get; set; }
     }
 }

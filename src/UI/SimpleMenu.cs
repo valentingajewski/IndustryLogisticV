@@ -8,16 +8,36 @@ using WinForms = System.Windows.Forms;
 
 namespace LSOL.UI
 {
+    public sealed class SimpleMenuTabletPanelContext
+    {
+        public Size Resolution { get; set; }
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Width { get; set; }
+        public float Height { get; set; }
+        public int SelectedIndex { get; set; }
+        public int FirstVisibleIndex { get; set; }
+        public IReadOnlyList<MenuItem> Items { get; set; }
+        public IReadOnlyList<MenuItem> VisibleItems { get; set; }
+    }
+
     public enum SimpleMenuTheme
     {
         Classic = 0,
         Tablet = 1,
     }
 
+    public enum SimpleMenuTabletLayout
+    {
+        List = 0,
+        Dashboard = 1,
+    }
+
     public sealed class MenuItem
     {
         public Func<string> CaptionFactory { get; set; }
         public Func<string> DetailFactory { get; set; }
+        public Func<string> IconLabelFactory { get; set; }
         public Func<float?> ProgressRatioFactory { get; set; }
         public Func<bool> CheckboxStateFactory { get; set; }
         public Action OnActivate { get; set; }
@@ -42,6 +62,7 @@ namespace LSOL.UI
             _firstVisibleIndex = 0;
             SelectedIndex = 0;
             Theme = SimpleMenuTheme.Classic;
+            TabletLayout = SimpleMenuTabletLayout.List;
             TabletWidthScale = 1f;
             TabletAlignRight = false;
             TabletCaptionScale = 0.305f;
@@ -50,12 +71,18 @@ namespace LSOL.UI
             TabletDetailOffsetY = 31f;
             TabletMinRowHeight = 0f;
             TabletMinProgressRowHeight = 0f;
+            TabletDashboardSidebarCount = 0;
+            TabletDashboardTileColumns = 5;
+            TabletBottomPanelHeight = 0f;
             MaxVisibleItems = 0;
         }
 
         public string Title { get; set; }
         public string Subtitle { get; set; }
+        public Func<string> HeaderRightTextFactory { get; set; }
+        public Func<string> FooterTextFactory { get; set; }
         public SimpleMenuTheme Theme { get; set; }
+        public SimpleMenuTabletLayout TabletLayout { get; set; }
         public float TabletWidthScale { get; set; }
         public bool TabletAlignRight { get; set; }
         public float TabletCaptionScale { get; set; }
@@ -64,6 +91,12 @@ namespace LSOL.UI
         public float TabletDetailOffsetY { get; set; }
         public float TabletMinRowHeight { get; set; }
         public float TabletMinProgressRowHeight { get; set; }
+        public int TabletDashboardSidebarCount { get; set; }
+        public int TabletDashboardTileColumns { get; set; }
+        public float TabletBottomPanelHeight { get; set; }
+        public Action<SimpleMenuTabletPanelContext> TabletContentRenderer { get; set; }
+        public Action<SimpleMenuTabletPanelContext> TabletBottomPanelRenderer { get; set; }
+        public Action TabletSelectAction { get; set; }
         public int MaxVisibleItems { get; set; }
         public bool IsOpen { get; private set; }
         public int SelectedIndex { get; private set; }
@@ -77,6 +110,19 @@ namespace LSOL.UI
                 SelectedIndex = Math.Max(0, _items.Count - 1);
             }
 
+            EnsureSelectionVisible();
+        }
+
+        public void SetSelectedIndex(int selectedIndex)
+        {
+            if (_items.Count == 0)
+            {
+                SelectedIndex = 0;
+                _firstVisibleIndex = 0;
+                return;
+            }
+
+            SelectedIndex = Math.Max(0, Math.Min(_items.Count - 1, selectedIndex));
             EnsureSelectionVisible();
         }
 
@@ -100,6 +146,14 @@ namespace LSOL.UI
             if (controls == null)
             {
                 controls = new ControlBindings();
+            }
+
+            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.Dashboard)
+            {
+                if (TryHandleDashboardNavigation(key, controls))
+                {
+                    return;
+                }
             }
 
             if (key == controls.MenuUp)
@@ -131,7 +185,13 @@ namespace LSOL.UI
 
             if (key == controls.MenuSelect)
             {
-                selected.OnActivate?.Invoke();
+                if (selected.OnActivate != null)
+                {
+                    selected.OnActivate();
+                    return;
+                }
+
+                TabletSelectAction?.Invoke();
                 return;
             }
 
@@ -266,7 +326,7 @@ namespace LSOL.UI
 
             var footerY = y + headerHeight + contentHeight;
             DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, Color.FromArgb(185, 14, 20, 28));
-            var footerText = BuildFooterText("Navigate | Edit | Select | Close");
+            var footerText = GetFooterText("Navigate | Edit | Select | Close");
             new TextElement(
                     footerText,
                     ToScriptTextCoords(resolution, x + 12f, footerY + 4f),
@@ -281,29 +341,44 @@ namespace LSOL.UI
 
         private void DrawTabletTheme()
         {
-            var resolution = GTA.UI.Screen.MainWindowResolution;
-            var y = resolution.Height * 0.14f;
-            var scale = Math.Max(0.25f, TabletWidthScale);
-            var width = resolution.Width * 0.60f * scale;
-            var sideMargin = resolution.Width * 0.035f;
-            var x = TabletAlignRight
-                ? resolution.Width - width - sideMargin
-                : (resolution.Width - width) * 0.5f;
-            var lineHeight = resolution.Height * 0.043f;
-            var visibleItems = GetVisibleItems();
-            var contentHeight = ComputeContentHeight(lineHeight, visibleItems);
-            var headerHeight = lineHeight * 1.62f;
-            var footerHeight = lineHeight * 0.82f;
-            var height = contentHeight + headerHeight + footerHeight + 12f;
+            if (TabletLayout == SimpleMenuTabletLayout.Dashboard)
+            {
+                DrawTabletDashboardTheme();
+                return;
+            }
 
-            DrawRect(resolution.Width, resolution.Height, x + 7f, y + 7f, width, height, Color.FromArgb(98, 8, 10, 16));
-            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
-            DrawRect(resolution.Width, resolution.Height, x, y + 4f, width, headerHeight - 4f, Color.FromArgb(156, 20, 30, 40));
+            DrawTabletListTheme();
+        }
+
+        private void DrawTabletListTheme()
+        {
+            var resolution = GTA.UI.Screen.MainWindowResolution;
+            var scale = Math.Max(0.25f, TabletWidthScale);
+            var lineHeight = resolution.Height * 0.043f;
+            var headerHeight = lineHeight * 1.95f;
+            var footerHeight = lineHeight * 0.88f;
+            var screenWidth = resolution.Width * 0.56f * scale;
+            var screenHeight = resolution.Height * 0.58f;
+            var bottomPanelHeight = TabletBottomPanelRenderer != null && TabletBottomPanelHeight > 0f
+                ? TabletBottomPanelHeight
+                : 0f;
+            var contentHeight = GetTabletListContentHeight(screenHeight, lineHeight, headerHeight, footerHeight, bottomPanelHeight);
+            var visibleItems = GetVisibleItems(lineHeight, contentHeight);
+            var bodyX = (resolution.Width - (screenWidth + 58f)) * 0.5f;
+            var bodyY = resolution.Height * 0.08f;
+            var screenX = bodyX + 29f;
+            var screenY = bodyY + 34f;
+            var bodyWidth = screenWidth + 58f;
+            var bodyHeight = screenHeight + 82f;
+
+            DrawTabletDeviceFrame(resolution, bodyX, bodyY, bodyWidth, bodyHeight, screenX, screenY, screenWidth, screenHeight);
+            DrawTabletWallpaper(resolution, screenX, screenY, screenWidth, screenHeight);
+            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, headerHeight + 8f, Color.FromArgb(94, 5, 8, 18));
 
             new TextElement(
                     Title,
-                    ToScriptTextCoords(resolution, x + 14f, y + 9f),
-                    0.41f,
+                    ToScriptTextCoords(resolution, screenX + 20f, screenY + 16f),
+                    0.43f,
                     Color.FromArgb(236, 242, 246, 252),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
@@ -315,7 +390,7 @@ namespace LSOL.UI
             {
                 new TextElement(
                         Subtitle,
-                        ToScriptTextCoords(resolution, x + 14f, y + 33f),
+                        ToScriptTextCoords(resolution, screenX + 20f, screenY + 42f),
                         0.275f,
                         Color.FromArgb(222, 214, 225, 236),
                         GTA.UI.Font.ChaletLondon,
@@ -325,92 +400,458 @@ namespace LSOL.UI
                     .Draw();
             }
 
-            var rowY = y + headerHeight;
-            for (int i = 0; i < visibleItems.Count; i++)
+            var headerRightText = GetHeaderRightText();
+            if (!string.IsNullOrWhiteSpace(headerRightText))
             {
-                var itemIndex = _firstVisibleIndex + i;
-                var item = visibleItems[i];
-                var detail = GetDetailText(item);
-                var hasProgressBar = HasProgressBar(item);
-                var rowHeight = GetRowHeight(lineHeight, detail, hasProgressBar);
-                if (TabletMinRowHeight > 0f)
-                {
-                    var minimumRowHeight = hasProgressBar && TabletMinProgressRowHeight > 0f
-                        ? TabletMinProgressRowHeight
-                        : TabletMinRowHeight;
-                    rowHeight = Math.Max(rowHeight, minimumRowHeight);
-                }
-
-                var selected = itemIndex == SelectedIndex;
-                var idleColor = item.IdleBackgroundColor ?? Color.FromArgb(160, 46, 60, 76);
-                var activeColor = item.SelectedBackgroundColor ?? Color.FromArgb(210, 92, 126, 158);
-                DrawRect(
-                    resolution.Width,
-                    resolution.Height,
-                    x + 12f,
-                    rowY + 3f,
-                    width - 24f,
-                    rowHeight - 6f,
-                    selected ? activeColor : idleColor);
-
-                var captionFactory = item.CaptionFactory;
-                var caption = captionFactory != null ? captionFactory() : string.Empty;
-                var color = selected
-                    ? Color.FromArgb(238, 245, 249, 255)
-                    : Color.FromArgb(220, 222, 231, 240);
                 new TextElement(
-                        caption,
-                    ToScriptTextCoords(resolution, x + 28f, rowY + TabletCaptionOffsetY),
-                    TabletCaptionScale,
-                        color,
-                        GTA.UI.Font.ChaletComprimeCologne,
-                        Alignment.Left,
+                        headerRightText,
+                        ToScriptTextCoords(resolution, screenX + screenWidth - 20f, screenY + 18f),
+                        0.255f,
+                        Color.FromArgb(230, 207, 220, 232),
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Right,
                         true,
                         false)
                     .Draw();
+            }
 
-                if (!string.IsNullOrWhiteSpace(detail))
+            var customContentRenderer = TabletContentRenderer;
+            if (customContentRenderer != null)
+            {
+                customContentRenderer(new SimpleMenuTabletPanelContext
                 {
-                    var detailColor = selected
-                        ? Color.FromArgb(225, 241, 247, 252)
-                        : Color.FromArgb(205, 204, 216, 228);
-                    new TextElement(
+                    Resolution = resolution,
+                    X = screenX + 18f,
+                    Y = screenY + headerHeight + 12f,
+                    Width = screenWidth - 36f,
+                    Height = contentHeight,
+                    SelectedIndex = SelectedIndex,
+                    FirstVisibleIndex = _firstVisibleIndex,
+                    Items = _items,
+                    VisibleItems = visibleItems,
+                });
+            }
+            else
+            {
+                var rowY = screenY + headerHeight + 12f;
+                for (int i = 0; i < visibleItems.Count; i++)
+                {
+                    var itemIndex = _firstVisibleIndex + i;
+                    var item = visibleItems[i];
+                    var detail = GetDetailText(item);
+                    var rowHeight = GetItemRowHeight(lineHeight, item);
+
+                    var selected = itemIndex == SelectedIndex;
+                    var idleColor = item.IdleBackgroundColor ?? Color.FromArgb(142, 29, 39, 60);
+                    var activeColor = item.SelectedBackgroundColor ?? Color.FromArgb(218, 88, 124, 162);
+                    var cardX = screenX + 18f;
+                    var cardWidth = screenWidth - 36f;
+                    DrawRect(
+                        resolution.Width,
+                        resolution.Height,
+                        cardX + 4f,
+                        rowY + 6f,
+                        cardWidth,
+                        rowHeight - 4f,
+                        Color.FromArgb(56, 0, 0, 0));
+                    DrawRect(
+                        resolution.Width,
+                        resolution.Height,
+                        cardX,
+                        rowY,
+                        cardWidth,
+                        rowHeight - 2f,
+                        Color.FromArgb(selected ? 210 : 170, 10, 16, 28));
+                    DrawRect(
+                        resolution.Width,
+                        resolution.Height,
+                        cardX + 2f,
+                        rowY + 2f,
+                        cardWidth - 4f,
+                        rowHeight - 6f,
+                        selected ? activeColor : idleColor);
+                    DrawRect(
+                        resolution.Width,
+                        resolution.Height,
+                        cardX + 2f,
+                        rowY + 2f,
+                        6f,
+                        rowHeight - 6f,
+                        selected ? Color.FromArgb(236, 249, 251, 255) : Color.FromArgb(188, 165, 180, 198));
+
+                    var captionFactory = item.CaptionFactory;
+                    var caption = captionFactory != null ? captionFactory() : string.Empty;
+                    var color = selected
+                        ? Color.FromArgb(238, 245, 249, 255)
+                        : Color.FromArgb(220, 222, 231, 240);
+                    DrawTextBlock(
+                        resolution,
+                        caption,
+                        cardX + 24f,
+                        rowY + TabletCaptionOffsetY,
+                        TabletCaptionScale,
+                        color,
+                        GTA.UI.Font.ChaletComprimeCologne,
+                        Alignment.Left,
+                        18f);
+
+                    if (!string.IsNullOrWhiteSpace(detail))
+                    {
+                        var detailColor = selected
+                            ? Color.FromArgb(225, 241, 247, 252)
+                            : Color.FromArgb(205, 204, 216, 228);
+                        DrawTextBlock(
+                            resolution,
                             detail,
-                            ToScriptTextCoords(resolution, x + 28f, rowY + TabletDetailOffsetY),
+                            cardX + 24f,
+                            rowY + TabletDetailOffsetY,
                             TabletDetailScale,
                             detailColor,
                             GTA.UI.Font.ChaletLondon,
                             Alignment.Left,
-                            true,
-                            false)
-                        .Draw();
+                            16f);
+                    }
+
+                    DrawProgressBarIfNeeded(
+                        resolution,
+                        item,
+                        cardX + 24f,
+                        rowY + rowHeight - 12f,
+                        cardWidth - 48f,
+                        7f,
+                        selected);
+
+                    rowY += rowHeight;
                 }
 
-                DrawProgressBarIfNeeded(
-                    resolution,
-                    item,
-                    x + 28f,
-                    rowY + rowHeight - 12f,
-                    width - 56f,
-                    7f,
-                    selected);
-
-                rowY += rowHeight;
+                if (bottomPanelHeight > 0f)
+                {
+                    var panelY = screenY + screenHeight - footerHeight - 22f - bottomPanelHeight;
+                    DrawTabletBottomPanel(
+                        resolution,
+                        screenX + 18f,
+                        panelY,
+                        screenWidth - 36f,
+                        bottomPanelHeight,
+                        visibleItems);
+                }
             }
 
-            var footerY = y + headerHeight + contentHeight;
-            DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, Color.FromArgb(148, 16, 24, 34));
-            var footerText = BuildFooterText("Arrow Up/Down to navigate | Enter to select | Backspace/Esc to close");
-            new TextElement(
-                    footerText,
-                    ToScriptTextCoords(resolution, x + 14f, footerY + 5f),
-                    0.245f,
-                    Color.FromArgb(214, 195, 206, 218),
+            var footerText = customContentRenderer != null
+                ? (FooterTextFactory != null ? FooterTextFactory() ?? string.Empty : string.Empty)
+                : GetFooterText("Arrow Up/Down to navigate | Enter to select | Backspace/Esc to close", visibleItems.Count);
+            if (string.IsNullOrWhiteSpace(footerText))
+            {
+                footerText = "Arrow Up/Down to navigate | Enter to select | Backspace/Esc to close";
+            }
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                screenX + 18f,
+                screenY + screenHeight - footerHeight - 12f,
+                screenWidth - 36f,
+                footerHeight,
+                Color.FromArgb(84, 9, 14, 24));
+            DrawTextBlock(
+                resolution,
+                footerText,
+                screenX + 24f,
+                screenY + screenHeight - footerHeight - 6f,
+                0.235f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                14f);
+        }
+
+        private void DrawTabletDashboardTheme()
+        {
+            var resolution = GTA.UI.Screen.MainWindowResolution;
+            var scale = Math.Max(0.26f, TabletWidthScale);
+            var screenWidth = resolution.Width * 0.56f * scale;
+            var screenHeight = resolution.Height * 0.58f;
+            var bodyX = (resolution.Width - (screenWidth + 58f)) * 0.5f;
+            var bodyY = resolution.Height * 0.08f;
+            var screenX = bodyX + 29f;
+            var screenY = bodyY + 34f;
+            var bodyWidth = screenWidth + 58f;
+            var bodyHeight = screenHeight + 82f;
+            var sidebarCount = Math.Max(0, Math.Min(TabletDashboardSidebarCount, _items.Count));
+            var tileColumns = Math.Max(1, TabletDashboardTileColumns);
+            var gap = 14f;
+            var sidebarWidth = Math.Max(148f, screenWidth * 0.22f);
+            var rightAreaX = screenX + sidebarWidth + 18f;
+            var rightAreaWidth = screenWidth - sidebarWidth - 30f;
+            var tileSize = Math.Min(76f, (rightAreaWidth - ((tileColumns - 1) * gap)) / tileColumns);
+            var headerY = screenY + 12f;
+            var bottomPanelHeight = TabletBottomPanelRenderer != null && TabletBottomPanelHeight > 0f
+                ? TabletBottomPanelHeight
+                : 140f;
+
+            DrawTabletDeviceFrame(resolution, bodyX, bodyY, bodyWidth, bodyHeight, screenX, screenY, screenWidth, screenHeight);
+            DrawTabletWallpaper(resolution, screenX, screenY, screenWidth, screenHeight);
+            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, 38f, Color.FromArgb(62, 5, 8, 18));
+
+            DrawTextBlock(
+                resolution,
+                Title,
+                screenX + 16f,
+                headerY,
+                0.27f,
+                Color.FromArgb(228, 238, 244, 250),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                14f);
+            if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                DrawTextBlock(
+                    resolution,
+                    Subtitle,
+                    screenX + 16f,
+                    headerY + 16f,
+                    0.185f,
+                    Color.FromArgb(198, 197, 208, 221),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+                    12f);
+            }
+
+            var headerRightText = GetHeaderRightText();
+            if (!string.IsNullOrWhiteSpace(headerRightText))
+            {
+                DrawTextBlock(
+                    resolution,
+                    headerRightText,
+                    screenX + screenWidth - 18f,
+                    headerY + 2f,
+                    0.23f,
+                    Color.FromArgb(222, 209, 223, 236),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right,
+                    12f);
+            }
+
+            var widgetTopY = screenY + 52f;
+            var widgetAvailableHeight = screenHeight - 118f;
+            var primaryWidgetHeight = Math.Min(132f, Math.Max(116f, widgetAvailableHeight * 0.28f));
+            var secondaryWidgetHeight = Math.Max(130f, widgetAvailableHeight - primaryWidgetHeight - gap);
+
+            for (int i = 0; i < sidebarCount; i++)
+            {
+                var item = _items[i];
+                var widgetHeight = i == 0 ? primaryWidgetHeight : secondaryWidgetHeight;
+                var widgetY = i == 0 ? widgetTopY : widgetTopY + primaryWidgetHeight + gap;
+                DrawDashboardWidget(
+                    resolution,
+                    item,
+                    screenX + 16f,
+                    widgetY,
+                    sidebarWidth - 8f,
+                    widgetHeight,
+                    i == SelectedIndex,
+                    i == 0);
+            }
+
+            var tilesStartIndex = sidebarCount;
+            var tileCount = Math.Max(0, _items.Count - sidebarCount);
+            var tileStartY = screenY + 36f;
+            for (int i = 0; i < tileCount; i++)
+            {
+                var itemIndex = tilesStartIndex + i;
+                var column = i % tileColumns;
+                var row = i / tileColumns;
+                var tileX = rightAreaX + (column * (tileSize + gap));
+                var tileY = tileStartY + (row * (tileSize + 32f));
+                DrawDashboardTile(
+                    resolution,
+                    _items[itemIndex],
+                    tileX,
+                    tileY,
+                    tileSize,
+                    itemIndex == SelectedIndex);
+            }
+
+            if (_items.Count > 0)
+            {
+                var panelY = screenY + screenHeight - bottomPanelHeight - 36f;
+                if (TabletBottomPanelRenderer != null && TabletBottomPanelHeight > 0f)
+                {
+                    DrawTabletBottomPanel(
+                        resolution,
+                        rightAreaX,
+                        panelY,
+                        rightAreaWidth,
+                        bottomPanelHeight,
+                        new List<MenuItem>(_items));
+                }
+                else
+                {
+                    var selectedItem = _items[Math.Max(0, Math.Min(SelectedIndex, _items.Count - 1))];
+                    DrawDashboardDetailCard(
+                        resolution,
+                        selectedItem,
+                        rightAreaX,
+                        panelY,
+                        rightAreaWidth,
+                        bottomPanelHeight);
+                }
+            }
+
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                screenX + 18f,
+                screenY + screenHeight - 28f,
+                screenWidth - 36f,
+                20f,
+                Color.FromArgb(38, 4, 7, 18));
+            DrawTextBlock(
+                resolution,
+                GetFooterText("Arrow Keys Navigate | Enter Select | Backspace/Esc Close"),
+                screenX + 24f,
+                screenY + screenHeight - 26f,
+                0.205f,
+                Color.FromArgb(198, 187, 199, 214),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                12f);
+        }
+
+        private bool TryHandleDashboardNavigation(WinForms.Keys key, ControlBindings controls)
+        {
+            if (_items.Count == 0 || controls == null)
+            {
+                return false;
+            }
+
+            var sidebarCount = Math.Max(0, Math.Min(TabletDashboardSidebarCount, _items.Count));
+            var tileCount = Math.Max(0, _items.Count - sidebarCount);
+            var tileColumns = Math.Max(1, TabletDashboardTileColumns);
+
+            if (SelectedIndex < sidebarCount)
+            {
+                if (key == controls.MenuDown)
+                {
+                    if (SelectedIndex + 1 < sidebarCount)
+                    {
+                        SelectedIndex += 1;
+                    }
+                    else if (tileCount > 0)
+                    {
+                        SelectedIndex = sidebarCount;
+                    }
+                    else
+                    {
+                        SelectedIndex = 0;
+                    }
+
+                    EnsureSelectionVisible();
+                    return true;
+                }
+
+                if (key == controls.MenuUp)
+                {
+                    SelectedIndex = SelectedIndex <= 0 ? _items.Count - 1 : SelectedIndex - 1;
+                    EnsureSelectionVisible();
+                    return true;
+                }
+
+                if (key == controls.MenuRight && tileCount > 0)
+                {
+                    SelectedIndex = sidebarCount;
+                    EnsureSelectionVisible();
+                    return true;
+                }
+
+                if (key == controls.MenuLeft)
+                {
+                    SelectedIndex = _items.Count - 1;
+                    EnsureSelectionVisible();
+                    return true;
+                }
+
+                return false;
+            }
+
+            if (tileCount <= 0)
+            {
+                return false;
+            }
+
+            var relativeIndex = SelectedIndex - sidebarCount;
+            if (key == controls.MenuRight)
+            {
+                relativeIndex = (relativeIndex + 1) % tileCount;
+                SelectedIndex = sidebarCount + relativeIndex;
+                EnsureSelectionVisible();
+                return true;
+            }
+
+            if (key == controls.MenuLeft)
+            {
+                relativeIndex = (relativeIndex - 1 + tileCount) % tileCount;
+                SelectedIndex = sidebarCount + relativeIndex;
+                EnsureSelectionVisible();
+                return true;
+            }
+
+            if (key == controls.MenuDown)
+            {
+                var nextIndex = relativeIndex + tileColumns;
+                if (nextIndex < tileCount)
+                {
+                    SelectedIndex = sidebarCount + nextIndex;
+                }
+                else
+                {
+                    SelectedIndex = sidebarCount + (relativeIndex % tileColumns);
+                    if (SelectedIndex >= _items.Count)
+                    {
+                        SelectedIndex = _items.Count - 1;
+                    }
+                }
+
+                EnsureSelectionVisible();
+                return true;
+            }
+
+            if (key == controls.MenuUp)
+            {
+                var nextIndex = relativeIndex - tileColumns;
+                if (nextIndex >= 0)
+                {
+                    SelectedIndex = sidebarCount + nextIndex;
+                }
+                else if (sidebarCount > 0)
+                {
+                    SelectedIndex = Math.Min(sidebarCount - 1, relativeIndex);
+                }
+                else
+                {
+                    SelectedIndex = sidebarCount + Math.Max(0, tileCount - 1);
+                }
+
+                EnsureSelectionVisible();
+                return true;
+            }
+
+            return false;
+        }
+
+        private string GetHeaderRightText()
+        {
+            return HeaderRightTextFactory != null
+                ? HeaderRightTextFactory() ?? string.Empty
+                : string.Empty;
+        }
+
+        private string GetFooterText(string defaultText, int visibleItemCount = -1)
+        {
+            var footerText = FooterTextFactory != null
+                ? FooterTextFactory() ?? string.Empty
+                : string.Empty;
+
+            return BuildFooterText(string.IsNullOrWhiteSpace(footerText) ? defaultText : footerText, visibleItemCount);
         }
 
         private float ComputeContentHeight(float lineHeight, List<MenuItem> items)
@@ -429,11 +870,24 @@ namespace LSOL.UI
             return total;
         }
 
-        private List<MenuItem> GetVisibleItems()
+        private List<MenuItem> GetVisibleItems(float lineHeight = 0f, float availableContentHeight = 0f)
         {
             if (_items.Count == 0)
             {
                 return new List<MenuItem>();
+            }
+
+            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.Dashboard)
+            {
+                _firstVisibleIndex = 0;
+                return new List<MenuItem>(_items);
+            }
+
+            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.List && lineHeight > 0f && availableContentHeight > 0f)
+            {
+                _firstVisibleIndex = Math.Max(0, Math.Min(_firstVisibleIndex, _items.Count - 1));
+                var dynamicVisibleCount = GetVisibleItemCount(_firstVisibleIndex, lineHeight, availableContentHeight);
+                return _items.GetRange(_firstVisibleIndex, Math.Min(Math.Max(1, dynamicVisibleCount), _items.Count - _firstVisibleIndex));
             }
 
             if (MaxVisibleItems <= 0 || _items.Count <= MaxVisibleItems)
@@ -454,6 +908,46 @@ namespace LSOL.UI
 
         private void EnsureSelectionVisible()
         {
+            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.List)
+            {
+                if (_items.Count == 0)
+                {
+                    _firstVisibleIndex = 0;
+                    return;
+                }
+
+                var resolution = GTA.UI.Screen.MainWindowResolution;
+                var lineHeight = resolution.Height * 0.043f;
+                var screenHeight = resolution.Height * 0.58f;
+                var headerHeight = lineHeight * 1.95f;
+                var footerHeight = lineHeight * 0.88f;
+                var availableContentHeight = GetTabletListContentHeight(screenHeight, lineHeight, headerHeight, footerHeight);
+
+                _firstVisibleIndex = Math.Max(0, Math.Min(_firstVisibleIndex, _items.Count - 1));
+                if (SelectedIndex < _firstVisibleIndex)
+                {
+                    _firstVisibleIndex = SelectedIndex;
+                }
+
+                while (true)
+                {
+                    var dynamicVisibleCount = GetVisibleItemCount(_firstVisibleIndex, lineHeight, availableContentHeight);
+                    if (dynamicVisibleCount <= 0)
+                    {
+                        _firstVisibleIndex = Math.Max(0, Math.Min(SelectedIndex, _items.Count - 1));
+                        return;
+                    }
+
+                    var dynamicLastVisibleIndex = _firstVisibleIndex + dynamicVisibleCount - 1;
+                    if (SelectedIndex <= dynamicLastVisibleIndex)
+                    {
+                        return;
+                    }
+
+                    _firstVisibleIndex += 1;
+                }
+            }
+
             if (MaxVisibleItems <= 0 || _items.Count <= MaxVisibleItems)
             {
                 _firstVisibleIndex = 0;
@@ -474,36 +968,117 @@ namespace LSOL.UI
             }
         }
 
-        private string BuildFooterText(string baseText)
+        private string BuildFooterText(string baseText, int visibleItemCount = -1)
         {
-            if (MaxVisibleItems <= 0 || _items.Count <= MaxVisibleItems)
+            if (_items.Count == 0)
+            {
+                return baseText;
+            }
+
+            if (visibleItemCount <= 0)
+            {
+                visibleItemCount = MaxVisibleItems > 0 ? Math.Max(1, MaxVisibleItems) : _items.Count;
+            }
+
+            if (_firstVisibleIndex <= 0 && visibleItemCount >= _items.Count)
             {
                 return baseText;
             }
 
             var start = _firstVisibleIndex + 1;
-            var end = Math.Min(_items.Count, _firstVisibleIndex + Math.Max(1, MaxVisibleItems));
+            var end = Math.Min(_items.Count, _firstVisibleIndex + Math.Max(1, visibleItemCount));
             return string.Format("{0} | {1}-{2}/{3}", baseText, start, end, _items.Count);
+        }
+
+        private float GetItemRowHeight(float baseLineHeight, MenuItem item)
+        {
+            var detail = GetDetailText(item);
+            var hasProgressBar = HasProgressBar(item);
+            var rowHeight = GetRowHeight(baseLineHeight, detail, hasProgressBar);
+            if (TabletMinRowHeight > 0f)
+            {
+                var minimumRowHeight = hasProgressBar && TabletMinProgressRowHeight > 0f
+                    ? TabletMinProgressRowHeight
+                    : TabletMinRowHeight;
+                rowHeight = Math.Max(rowHeight, minimumRowHeight);
+            }
+
+            return rowHeight;
+        }
+
+        private int GetVisibleItemCount(int startIndex, float lineHeight, float availableContentHeight)
+        {
+            if (_items.Count == 0 || startIndex < 0 || startIndex >= _items.Count)
+            {
+                return 0;
+            }
+
+            var maxVisibleCount = MaxVisibleItems > 0 ? MaxVisibleItems : _items.Count;
+            var usedHeight = 0f;
+            var visibleCount = 0;
+
+            for (int i = startIndex; i < _items.Count && visibleCount < maxVisibleCount; i++)
+            {
+                var rowHeight = GetItemRowHeight(lineHeight, _items[i]);
+                if (visibleCount > 0 && usedHeight + rowHeight > availableContentHeight)
+                {
+                    break;
+                }
+
+                usedHeight += rowHeight;
+                visibleCount += 1;
+            }
+
+            return Math.Max(1, visibleCount);
+        }
+
+        private void DrawTabletBottomPanel(Size resolution, float x, float y, float width, float height, IReadOnlyList<MenuItem> visibleItems)
+        {
+            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, Color.FromArgb(46, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(146, 7, 10, 18));
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, width - 4f, height - 4f, Color.FromArgb(108, 12, 18, 28));
+
+            var renderer = TabletBottomPanelRenderer;
+            if (renderer == null)
+            {
+                return;
+            }
+
+            renderer(new SimpleMenuTabletPanelContext
+            {
+                Resolution = resolution,
+                X = x + 2f,
+                Y = y + 2f,
+                Width = width - 4f,
+                Height = height - 4f,
+                SelectedIndex = SelectedIndex,
+                FirstVisibleIndex = _firstVisibleIndex,
+                Items = _items,
+                VisibleItems = visibleItems ?? Array.Empty<MenuItem>(),
+            });
+        }
+
+        private static float GetTabletListContentHeight(float screenHeight, float lineHeight, float headerHeight, float footerHeight, float bottomPanelHeight = 0f)
+        {
+            var panelSpacing = bottomPanelHeight > 0f ? 18f : 0f;
+            return Math.Max(lineHeight, screenHeight - headerHeight - footerHeight - 24f - bottomPanelHeight - panelSpacing);
         }
 
         private static float GetRowHeight(float baseLineHeight, string detail, bool hasProgressBar)
         {
-            if (!string.IsNullOrWhiteSpace(detail) && hasProgressBar)
+            var detailLineCount = GetLineCount(detail);
+            if (detailLineCount <= 0)
             {
-                return baseLineHeight * 2.28f;
+                return hasProgressBar ? baseLineHeight * 1.55f : baseLineHeight * 1.12f;
             }
 
-            if (!string.IsNullOrWhiteSpace(detail))
-            {
-                return baseLineHeight * 1.88f;
-            }
-
+            var heightMultiplier = 1.20f + (detailLineCount * 0.58f);
             if (hasProgressBar)
             {
-                return baseLineHeight * 1.55f;
+                heightMultiplier += 0.32f;
             }
 
-            return baseLineHeight;
+            return baseLineHeight * heightMultiplier;
         }
 
         private static string GetDetailText(MenuItem item)
@@ -544,6 +1119,211 @@ namespace LSOL.UI
             DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(158, 11, 17, 24));
             DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, Math.Max(0f, (width - 2f) * ratio), Math.Max(1f, height - 2f), fillColor);
             DrawRect(resolution.Width, resolution.Height, x, y, width, 1f, Color.FromArgb(192, 255, 255, 255));
+        }
+
+        private static void DrawTabletDeviceFrame(Size resolution, float bodyX, float bodyY, float bodyWidth, float bodyHeight, float screenX, float screenY, float screenWidth, float screenHeight)
+        {
+            DrawRect(resolution.Width, resolution.Height, bodyX + 10f, bodyY + 10f, bodyWidth, bodyHeight, Color.FromArgb(72, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, bodyX, bodyY, bodyWidth, bodyHeight, Color.FromArgb(228, 20, 22, 28));
+            DrawRect(resolution.Width, resolution.Height, bodyX + 2f, bodyY + 2f, bodyWidth - 4f, bodyHeight - 4f, Color.FromArgb(242, 32, 34, 42));
+            DrawRect(resolution.Width, resolution.Height, bodyX + 4f, bodyY + 4f, bodyWidth - 8f, bodyHeight - 8f, Color.FromArgb(224, 11, 13, 18));
+            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, screenHeight, Color.FromArgb(255, 6, 10, 18));
+            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, 20f, Color.FromArgb(44, 255, 255, 255));
+            DrawRect(resolution.Width, resolution.Height, bodyX + (bodyWidth * 0.5f) - 3f, bodyY + 12f, 6f, 6f, Color.FromArgb(132, 42, 52, 70));
+            DrawRect(resolution.Width, resolution.Height, bodyX + (bodyWidth * 0.5f), bodyY + bodyHeight - 18f, 44f, 4f, Color.FromArgb(162, 176, 182, 193));
+            DrawRect(resolution.Width, resolution.Height, bodyX + bodyWidth - 10f, bodyY + 52f, 3f, 18f, Color.FromArgb(128, 124, 129, 138));
+        }
+
+        private static void DrawTabletWallpaper(Size resolution, float x, float y, float width, float height)
+        {
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(255, 10, 36, 96));
+            DrawRect(resolution.Width, resolution.Height, x, y + (height * 0.82f), width, height * 0.18f, Color.FromArgb(82, 4, 7, 18));
+        }
+
+        private static void DrawDashboardWidget(Size resolution, MenuItem item, float x, float y, float width, float height, bool selected, bool compact)
+        {
+            var idleColor = item != null && item.IdleBackgroundColor.HasValue ? item.IdleBackgroundColor.Value : Color.FromArgb(176, 12, 18, 28);
+            var activeColor = item != null && item.SelectedBackgroundColor.HasValue ? item.SelectedBackgroundColor.Value : Color.FromArgb(212, 72, 118, 162);
+            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, Color.FromArgb(52, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(176, 8, 10, 18));
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, width - 4f, height - 4f, selected ? activeColor : idleColor);
+
+            var eyebrow = GetIconLabelText(item);
+            if (!string.IsNullOrWhiteSpace(eyebrow))
+            {
+                DrawTextBlock(
+                    resolution,
+                    eyebrow,
+                    x + 14f,
+                    y + 14f,
+                    0.19f,
+                    compact ? Color.FromArgb(236, 255, 110, 110) : Color.FromArgb(216, 188, 204, 224),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    12f);
+            }
+
+            var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
+            DrawTextBlock(
+                resolution,
+                caption,
+                x + 14f,
+                y + (compact ? 34f : 40f),
+                compact ? 0.56f : 0.33f,
+                Color.FromArgb(238, 245, 249, 255),
+                compact ? GTA.UI.Font.ChaletComprimeCologne : GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                compact ? 18f : 16f);
+
+            var detail = GetDetailText(item);
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                DrawTextBlock(
+                    resolution,
+                    detail,
+                    x + 14f,
+                    y + (compact ? 78f : 70f),
+                    compact ? 0.20f : 0.21f,
+                    Color.FromArgb(212, 214, 225, 236),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    14f);
+            }
+        }
+
+        private static void DrawDashboardTile(Size resolution, MenuItem item, float x, float y, float size, bool selected)
+        {
+            var idleColor = item != null && item.IdleBackgroundColor.HasValue ? item.IdleBackgroundColor.Value : Color.FromArgb(172, 24, 34, 48);
+            var activeColor = item != null && item.SelectedBackgroundColor.HasValue ? item.SelectedBackgroundColor.Value : Color.FromArgb(228, 88, 124, 162);
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 4f, size, size, Color.FromArgb(58, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, size, size, Color.FromArgb(150, 12, 16, 24));
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, size - 4f, size - 4f, selected ? activeColor : idleColor);
+
+            var iconText = GetIconLabelText(item);
+            DrawTextBlock(
+                resolution,
+                iconText,
+                x + (size * 0.5f),
+                y + (size * 0.28f),
+                0.36f,
+                Color.FromArgb(244, 248, 250, 255),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Center,
+                14f);
+
+            var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
+            DrawTextBlock(
+                resolution,
+                caption,
+                x + (size * 0.5f),
+                y + size + 8f,
+                0.18f,
+                Color.FromArgb(224, 242, 246, 252),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Center,
+                12f);
+        }
+
+        private static void DrawDashboardDetailCard(Size resolution, MenuItem item, float x, float y, float width, float height)
+        {
+            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, Color.FromArgb(46, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(146, 7, 10, 18));
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, width - 4f, height - 4f, Color.FromArgb(108, 12, 18, 28));
+
+            var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
+            var detail = GetDetailText(item);
+            DrawTextBlock(
+                resolution,
+                caption,
+                x + 18f,
+                y + 18f,
+                0.34f,
+                Color.FromArgb(236, 243, 248, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                16f);
+            DrawTextBlock(
+                resolution,
+                string.IsNullOrWhiteSpace(detail) ? "Select an app to inspect its current context." : detail,
+                x + 18f,
+                y + 48f,
+                0.215f,
+                Color.FromArgb(210, 212, 223, 235),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                14f);
+        }
+
+        private static void DrawTextBlock(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float lineSpacing)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return;
+            }
+
+            var lines = text.Replace("\r", string.Empty).Split(new[] { '\n' }, StringSplitOptions.None);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (string.IsNullOrWhiteSpace(lines[i]))
+                {
+                    continue;
+                }
+
+                new TextElement(
+                        lines[i],
+                        ToScriptTextCoords(resolution, x, y + (i * lineSpacing)),
+                        scale,
+                        color,
+                        font,
+                        alignment,
+                        true,
+                        false)
+                    .Draw();
+            }
+        }
+
+        private static int GetLineCount(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return 0;
+            }
+
+            return text.Replace("\r", string.Empty).Split(new[] { '\n' }, StringSplitOptions.None).Length;
+        }
+
+        private static string GetIconLabelText(MenuItem item)
+        {
+            if (item != null && item.IconLabelFactory != null)
+            {
+                var explicitLabel = item.IconLabelFactory();
+                if (!string.IsNullOrWhiteSpace(explicitLabel))
+                {
+                    return explicitLabel.Trim();
+                }
+            }
+
+            var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
+            return BuildMonogram(caption);
+        }
+
+        private static string BuildMonogram(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return "APP";
+            }
+
+            var parts = text.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length >= 2)
+            {
+                return string.Concat(parts[0][0], parts[1][0]).ToUpperInvariant();
+            }
+
+            var trimmed = parts.Length == 1 ? parts[0] : text.Trim();
+            return trimmed.Length <= 3
+                ? trimmed.ToUpperInvariant()
+                : trimmed.Substring(0, 3).ToUpperInvariant();
         }
 
         private static PointF ToScriptTextCoords(Size resolution, float x, float y)

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace LSOL.Domain
 {
@@ -162,6 +163,13 @@ namespace LSOL.Domain
         public static bool IsSameCommodity(string left, string right)
         {
             return string.Equals(Normalize(left), Normalize(right), StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static IReadOnlyList<string> GetKnownCommodities()
+        {
+            return _cargoTypesByCommodity.Keys
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
         private static Dictionary<string, VehicleCargoType> CreateDefaultCargoTypeMap()

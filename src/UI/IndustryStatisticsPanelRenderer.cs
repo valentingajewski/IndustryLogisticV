@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using GTA.Native;
 using LSOL;
 using GTA.UI;
 using LSOL.Domain;
@@ -34,7 +35,7 @@ namespace LSOL.UI
             menuBackground.Draw();
 
             DrawText(
-                string.Format("{0} MENU", BuildIndustryLabel(industry.Name)),
+                BuildMenuTitle(industry.Name),
                 frameX + 78f,
                 frameY + 62f,
                 0.53f,
@@ -44,7 +45,7 @@ namespace LSOL.UI
                 0f);
 
             DrawText(
-                "Industry Operations Interface",
+                BuildOperationsSubtitle(industry),
                 frameX + 80f,
                 frameY + 88f,
                 0.31f,
@@ -64,7 +65,7 @@ namespace LSOL.UI
             }
 
             DrawText(
-                "INDUSTRY STATISTICS",
+                BuildStatisticsHeading(industry),
                 frameX + 80f,
                 frameY + 116f,
                 0.39f,
@@ -108,6 +109,202 @@ namespace LSOL.UI
             var entryCount = snapshot == null || snapshot.Entries == null ? 0 : snapshot.Entries.Count;
             var maxScroll = Math.Max(0, entryCount - VisibleRows);
             return Math.Max(0, Math.Min(maxScroll, requestedScrollIndex));
+        }
+
+        public static int GetScrollSlotCount(IndustryStatisticsSnapshot snapshot)
+        {
+            return ClampScrollIndex(snapshot, int.MaxValue) + 1;
+        }
+
+        public static string BuildMenuTitle(string industryName)
+        {
+            return string.Format("{0} MENU", BuildIndustryLabel(industryName));
+        }
+
+        public static string BuildOperationsSubtitle(Industry industry)
+        {
+            if (industry != null && industry.IsStore)
+            {
+                return "Store Operations Interface";
+            }
+
+            return "Industry Operations Interface";
+        }
+
+        public static string BuildStatisticsHeading(Industry industry)
+        {
+            if (industry != null && industry.IsStore)
+            {
+                return "STORE STATISTICS";
+            }
+
+            return "INDUSTRY STATISTICS";
+        }
+
+        public static void DrawTabletBody(Industry industry, IndustryStatisticsSnapshot snapshot, int scrollIndex, SimpleMenuTabletPanelContext panel)
+        {
+            if (industry == null || panel == null)
+            {
+                return;
+            }
+
+            var resolution = panel.Resolution;
+            var entries = snapshot == null ? null : snapshot.Entries;
+            var stockpile = snapshot == null ? 0f : snapshot.Stockpile;
+            var totalCapacity = snapshot == null ? 1f : snapshot.TotalCapacity;
+            var stockRatio = snapshot == null ? 0f : snapshot.StockRatio;
+            var utilizationRatio = snapshot == null ? 0f : snapshot.UtilizationRatio;
+            var clampedScrollIndex = ClampScrollIndex(snapshot, scrollIndex);
+            var visibleCount = entries == null ? 0 : Math.Min(VisibleRows, entries.Count - clampedScrollIndex);
+            var statsWidth = Math.Min(Math.Max(420f, panel.Width - 220f), 620f);
+            var statsHeight = Math.Min(Math.Max(232f, 170f + (visibleCount * 36f)), Math.Max(232f, panel.Height - 18f));
+            var statsX = panel.X + Math.Max(0f, (panel.Width - statsWidth) * 0.5f);
+            var statsY = panel.Y + Math.Max(8f, (panel.Height - statsHeight) * 0.5f);
+            var contentX = statsX + 18f;
+            var contentY = statsY + 16f;
+            var barWidth = Math.Min(290f, Math.Max(130f, statsWidth - 286f));
+            var barX = statsX + statsWidth - barWidth - 18f;
+
+            DrawPixelRect(resolution, statsX, statsY, statsWidth, statsHeight, Color.FromArgb(162, 8, 12, 18));
+
+            DrawPixelText(
+                resolution,
+                BuildStatisticsHeading(industry),
+                contentX,
+                contentY,
+                0.39f,
+                Color.FromArgb(236, 234, 242, 252),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                0f);
+
+            DrawPixelText(
+                resolution,
+                "Input and output stock by commodity",
+                contentX + 2f,
+                contentY + 24f,
+                0.30f,
+                Color.FromArgb(224, 214, 226, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            DrawPixelText(
+                resolution,
+                string.Format("Total Stockpile: {0:0.0}/{1:0.0} t", stockpile, totalCapacity),
+                contentX,
+                contentY + 52f,
+                0.275f,
+                Color.FromArgb(220, 214, 223, 236),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            DrawPixelLoadingBar(
+                resolution,
+                barX,
+                contentY + 60f,
+                barWidth,
+                11f,
+                stockRatio,
+                Color.FromArgb(170, 28, 40, 54),
+                Color.FromArgb(230, 214, 188, 96));
+
+            DrawPixelText(
+                resolution,
+                string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, industry.CurrentOutputPerHourTons),
+                contentX,
+                contentY + 74f,
+                0.25f,
+                Color.FromArgb(214, 205, 217, 228),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            if (entries == null || entries.Count == 0)
+            {
+                DrawPixelText(
+                    resolution,
+                    "No input/output commodities configured for this industry.",
+                    contentX,
+                    contentY + 138f,
+                    0.29f,
+                    Color.FromArgb(224, 214, 226, 236),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    0f);
+                return;
+            }
+
+            DrawPixelText(
+                resolution,
+                "IN = input storage | OUT = output storage",
+                contentX,
+                contentY + 112f,
+                0.24f,
+                Color.FromArgb(206, 193, 206, 219),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                0f);
+
+            if (entries.Count > VisibleRows)
+            {
+                DrawPixelText(
+                    resolution,
+                    string.Format("{0}-{1}/{2}", clampedScrollIndex + 1, clampedScrollIndex + visibleCount, entries.Count),
+                    statsX + statsWidth - 18f,
+                    contentY + 112f,
+                    0.24f,
+                    Color.FromArgb(206, 193, 206, 219),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right,
+                    0f);
+            }
+
+            var listTopY = contentY + 126f;
+            for (int i = 0; i < visibleCount; i++)
+            {
+                var entry = entries[clampedScrollIndex + i];
+                var rowY = listTopY + (i * 35f);
+                var titleColor = entry.IsInput
+                    ? Color.FromArgb(226, 132, 206, 184)
+                    : Color.FromArgb(226, 223, 196, 128);
+                var fillColor = entry.IsInput
+                    ? Color.FromArgb(228, 98, 170, 148)
+                    : Color.FromArgb(228, 214, 188, 96);
+
+                DrawPixelText(
+                    resolution,
+                    string.Format("{0} {1}", entry.IsInput ? "IN" : "OUT", entry.Commodity.ToUpperInvariant()),
+                    contentX,
+                    rowY,
+                    0.27f,
+                    titleColor,
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left,
+                    0f);
+
+                DrawPixelText(
+                    resolution,
+                    string.Format("{0:0.0}/{1:0.0} t", entry.Stock, entry.Capacity),
+                    contentX,
+                    rowY + 14f,
+                    0.235f,
+                    Color.FromArgb(214, 205, 217, 228),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    0f);
+
+                DrawPixelLoadingBar(
+                    resolution,
+                    barX,
+                    rowY + 13f,
+                    barWidth,
+                    10f,
+                    entry.Ratio,
+                    Color.FromArgb(170, 28, 40, 54),
+                    fillColor);
+            }
         }
 
         private static void DrawIndustryStatistics(Industry industry, IndustryStatisticsSnapshot snapshot, int scrollIndex, float frameX, float frameY)
@@ -275,6 +472,46 @@ namespace LSOL.UI
             }
 
             return label.Substring(0, 24);
+        }
+
+        private static void DrawPixelText(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float wrap)
+        {
+            var entry = new TextElement(
+                text ?? string.Empty,
+                ToScriptTextCoords(resolution, x, y),
+                scale,
+                color,
+                font,
+                alignment,
+                true,
+                false);
+
+            entry.Draw();
+        }
+
+        private static void DrawPixelLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color backgroundColor, Color fillColor)
+        {
+            DrawPixelRect(resolution, x, y, width, height, backgroundColor);
+
+            var innerHeight = Math.Max(2f, height - 4f);
+            var innerWidth = Math.Max(2f, (width - 4f) * ModMath.Clamp01(ratio));
+            DrawPixelRect(resolution, x + 2f, y + 2f, innerWidth, innerHeight, fillColor);
+        }
+
+        private static PointF ToScriptTextCoords(Size resolution, float x, float y)
+        {
+            return new PointF(
+                x * (UiFallbackWidth / Math.Max(1f, resolution.Width)),
+                y * (UiFallbackHeight / Math.Max(1f, resolution.Height)));
+        }
+
+        private static void DrawPixelRect(Size resolution, float x, float y, float width, float height, Color color)
+        {
+            var centerX = (x + (width * 0.5f)) / Math.Max(1f, resolution.Width);
+            var centerY = (y + (height * 0.5f)) / Math.Max(1f, resolution.Height);
+            var normalizedW = width / Math.Max(1f, resolution.Width);
+            var normalizedH = height / Math.Max(1f, resolution.Height);
+            Function.Call(Hash.DRAW_RECT, centerX, centerY, normalizedW, normalizedH, color.R, color.G, color.B, color.A);
         }
 
         private static void DrawText(string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float wrap)

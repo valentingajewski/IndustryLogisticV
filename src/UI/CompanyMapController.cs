@@ -24,6 +24,7 @@ namespace LSOL.UI
         private readonly SimpleMenu _districtDetailMenu;
         private readonly SimpleMenu _depotMenu;
         private readonly SimpleMenu _depotDetailMenu;
+        private Action _returnAction;
 
         private string _selectedDistrictName;
         private Industry _selectedSupportIndustry;
@@ -68,13 +69,34 @@ namespace LSOL.UI
             }
         }
 
-        public void Open()
+        public void Open(Action returnAction = null)
         {
             _closeAllMenus();
+            _returnAction = returnAction;
             OpenRootMenu();
         }
 
+        public void OpenDistrictView(Action returnAction = null)
+        {
+            _closeAllMenus();
+            _returnAction = returnAction;
+            OpenDistrictMenu();
+        }
+
+        public void OpenDepotView(Action returnAction = null)
+        {
+            _closeAllMenus();
+            _returnAction = returnAction;
+            OpenDepotMenu();
+        }
+
         public void Close()
+        {
+            CloseMenus();
+            _returnAction = null;
+        }
+
+        private void CloseMenus()
         {
             _rootMenu.Close();
             _districtMenu.Close();
@@ -113,7 +135,7 @@ namespace LSOL.UI
             {
                 if (IsBackMenuKey(key))
                 {
-                    OpenRootMenu();
+                    BackFromDistrictMenu();
                     return true;
                 }
 
@@ -125,7 +147,7 @@ namespace LSOL.UI
             {
                 if (IsBackMenuKey(key))
                 {
-                    OpenRootMenu();
+                    BackFromDepotMenu();
                     return true;
                 }
 
@@ -135,6 +157,12 @@ namespace LSOL.UI
 
             if (_rootMenu.IsOpen)
             {
+                if (IsBackMenuKey(key))
+                {
+                    ReturnToPreviousPage();
+                    return true;
+                }
+
                 _rootMenu.HandleKey(key, _controls);
                 return true;
             }
@@ -153,14 +181,14 @@ namespace LSOL.UI
 
         private void OpenRootMenu()
         {
-            Close();
+            CloseMenus();
             RebuildRootMenuItems();
             _rootMenu.Open();
         }
 
         private void OpenDistrictMenu()
         {
-            Close();
+            CloseMenus();
             RebuildDistrictMenuItems();
             _districtMenu.Open();
         }
@@ -168,14 +196,14 @@ namespace LSOL.UI
         private void OpenDistrictDetailMenu(string districtName)
         {
             _selectedDistrictName = districtName ?? string.Empty;
-            Close();
+            CloseMenus();
             RebuildDistrictDetailMenuItems();
             _districtDetailMenu.Open();
         }
 
         private void OpenDepotMenu()
         {
-            Close();
+            CloseMenus();
             RebuildDepotMenuItems();
             _depotMenu.Open();
         }
@@ -183,9 +211,42 @@ namespace LSOL.UI
         private void OpenDepotDetailMenu(Industry industry)
         {
             _selectedSupportIndustry = industry;
-            Close();
+            CloseMenus();
             RebuildDepotDetailMenuItems();
             _depotDetailMenu.Open();
+        }
+
+        private void ReturnToPreviousPage()
+        {
+            var returnAction = _returnAction;
+            CloseMenus();
+            _returnAction = null;
+            if (returnAction != null)
+            {
+                returnAction();
+            }
+        }
+
+        private void BackFromDistrictMenu()
+        {
+            if (_returnAction != null)
+            {
+                ReturnToPreviousPage();
+                return;
+            }
+
+            OpenRootMenu();
+        }
+
+        private void BackFromDepotMenu()
+        {
+            if (_returnAction != null)
+            {
+                ReturnToPreviousPage();
+                return;
+            }
+
+            OpenRootMenu();
         }
 
         private void RebuildRootMenuItems()
@@ -216,20 +277,9 @@ namespace LSOL.UI
                 },
                 new MenuItem
                 {
-                    CaptionFactory = () => "District View",
-                    DetailFactory = () => "Inspect district influence, reputation, site coverage, and corridor posture.",
-                    OnActivate = OpenDistrictMenu,
-                },
-                new MenuItem
-                {
-                    CaptionFactory = () => "Depot / Yard View",
-                    DetailFactory = () => "Lease or buy support sites, assign crews, and grow local staff.",
-                    OnActivate = OpenDepotMenu,
-                },
-                new MenuItem
-                {
-                    CaptionFactory = () => "Close",
-                    OnActivate = Close,
+                    CaptionFactory = () => "Back",
+                    DetailFactory = () => "Return to the previous screen.",
+                    OnActivate = ReturnToPreviousPage,
                 },
             });
         }
@@ -256,9 +306,10 @@ namespace LSOL.UI
             for (int i = 0; i < districts.Count; i++)
             {
                 var district = districts[i];
+                var reputationLabel = GetReputationLabel(district);
                 items.Add(new MenuItem
                 {
-                    CaptionFactory = () => string.Format("{0} [{1}]", district.DistrictName, district.ReputationLabel),
+                    CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(reputationLabel)),
                     DetailFactory = () => string.Format(
                         "Influence {0:0}% | Depots {1} | Operational {2} | Corridors {3}",
                         district.InfluenceRatio * 100f,
@@ -272,7 +323,8 @@ namespace LSOL.UI
             items.Add(new MenuItem
             {
                 CaptionFactory = () => "Back",
-                OnActivate = OpenRootMenu,
+                DetailFactory = () => _returnAction != null ? "Return to the company hub." : "Return to the company map.",
+                OnActivate = BackFromDistrictMenu,
             });
 
             _districtMenu.SetItems(items);
@@ -300,10 +352,11 @@ namespace LSOL.UI
 
             items.Add(new MenuItem
             {
-                CaptionFactory = () => string.Format("{0} [{1}]", district.DistrictName, district.ReputationLabel),
+                CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(GetReputationLabel(district))),
                 DetailFactory = () => string.Format(
-                    "Influence score {0:0.0} | Reputation score {1:0.0}",
+                    "Influence score {0:0.0} | {1}Reputation score {2:0.0}~s~",
                     district.InfluenceScore,
+                    GetReputationColorCode(GetReputationLabel(district)),
                     district.ReputationScore),
             });
             items.Add(new MenuItem
@@ -392,7 +445,8 @@ namespace LSOL.UI
             items.Add(new MenuItem
             {
                 CaptionFactory = () => "Back",
-                OnActivate = OpenRootMenu,
+                DetailFactory = () => _returnAction != null ? "Return to the company hub." : "Return to the company map.",
+                OnActivate = BackFromDepotMenu,
             });
 
             _depotMenu.SetItems(items);
@@ -559,6 +613,36 @@ namespace LSOL.UI
         private bool IsBackMenuKey(WinForms.Keys key)
         {
             return key == _controls.MenuBack || key == WinForms.Keys.Escape;
+        }
+
+        private static string GetReputationLabel(TerritoryDistrictState district)
+        {
+            return district != null && !string.IsNullOrWhiteSpace(district.ReputationLabel)
+                ? district.ReputationLabel
+                : "Unknown";
+        }
+
+        private static string FormatReputationLabel(string reputationLabel)
+        {
+            var label = string.IsNullOrWhiteSpace(reputationLabel) ? "Unknown" : reputationLabel.Trim();
+            return string.Format("[{0}{1}~s~]", GetReputationColorCode(label), label);
+        }
+
+        private static string GetReputationColorCode(string reputationLabel)
+        {
+            switch ((reputationLabel ?? string.Empty).Trim().ToUpperInvariant())
+            {
+                case "DOMINANT":
+                    return "~y~";
+                case "ANCHORED":
+                    return "~g~";
+                case "ESTABLISHED":
+                    return "~b~";
+                case "EMERGING":
+                    return "~o~";
+                default:
+                    return "~c~";
+            }
         }
 
         private float GetDistrictSiteSortValue(Industry industry)

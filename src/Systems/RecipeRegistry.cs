@@ -119,6 +119,11 @@ namespace LSOL.Systems
                 return recipes;
             }
 
+            if (config.SiteRole == SiteRole.Warehouse)
+            {
+                return recipes;
+            }
+
             var id = config.Id ?? string.Empty;
             RecipeTemplate[] templates;
             if (RegisteredRecipes.TryGetValue(id, out templates))

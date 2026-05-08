@@ -38,7 +38,7 @@ namespace LSOL.Domain
             OptionalInputs = new HashSet<string>(config.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             Outputs = new HashSet<string>(config.Outputs, StringComparer.OrdinalIgnoreCase);
             BufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            ProductionRate = Math.Max(1f, config.ProductionRate);
+            ProductionRate = NormalizeProductionRate(config.ProductionRate);
             InputCapacityTons = Math.Max(1f, config.InputCapacityTons);
             OutputCapacityTons = Math.Max(1f, config.OutputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, InputCapacityTons * Math.Max(0.01f, omegaCapacityMultiplier));
@@ -177,6 +177,11 @@ namespace LSOL.Domain
         public bool IsConstructionSink
         {
             get { return SiteRole == SiteRole.ConstructionSiteSink; }
+        }
+
+        public bool IsWarehouse
+        {
+            get { return SiteRole == SiteRole.Warehouse; }
         }
 
         public bool SupportsOmegaBoost
@@ -441,6 +446,11 @@ namespace LSOL.Domain
 
         public float GetUpgradeCost(IndustryUpgradeModule module)
         {
+            if (IsWarehouse)
+            {
+                return -1f;
+            }
+
             var isInputOnlySink = Outputs.Count == 0 && Inputs.Count > 0;
 
             if (module == IndustryUpgradeModule.Production)
@@ -646,7 +656,7 @@ namespace LSOL.Domain
 
         public void SetProductionRate(float productionRate)
         {
-            ProductionRate = Math.Max(1f, productionRate);
+            ProductionRate = NormalizeProductionRate(productionRate);
         }
 
         public float GetMaxTransferTonsForCommodity(string commodity)
@@ -693,6 +703,11 @@ namespace LSOL.Domain
 
         public string GetPrimaryConversionDescription()
         {
+            if (IsWarehouse)
+            {
+                return "Storage site only.";
+            }
+
             if (_recipes.Count == 0)
             {
                 return "No production recipe.";
@@ -708,6 +723,11 @@ namespace LSOL.Domain
 
         public string GetProductionWarning()
         {
+            if (IsWarehouse)
+            {
+                return string.Empty;
+            }
+
             if (_recipes.Count == 0)
             {
                 return string.Empty;
@@ -783,7 +803,7 @@ namespace LSOL.Domain
                 }
             }
 
-            ProductionRate = Math.Max(1f, productionRate);
+            ProductionRate = NormalizeProductionRate(productionRate);
             InputCapacityTons = Math.Max(1f, inputCapacityTons);
             OutputCapacityTons = Math.Max(1f, outputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, omegaCapacityTons);
@@ -809,6 +829,13 @@ namespace LSOL.Domain
             ClampBuffersToCapacity();
             LastUtilizationPercent = 0f;
             CurrentOutputPerHourTons = 0f;
+        }
+
+        private float NormalizeProductionRate(float productionRate)
+        {
+            return IsWarehouse
+                ? Math.Max(0f, productionRate)
+                : Math.Max(1f, productionRate);
         }
 
         private float ResolveOptionalInputBoostMultiplier()
