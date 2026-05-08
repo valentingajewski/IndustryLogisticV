@@ -59,14 +59,7 @@ namespace LSOL.Systems
                 basePrice = 400f;
             }
 
-            if (commodity != null &&
-                (commodity.Equals("TV", StringComparison.OrdinalIgnoreCase) ||
-                 commodity.Equals("Computer", StringComparison.OrdinalIgnoreCase)))
-            {
-                return basePrice * PriceMultiplier;
-            }
-
-            return basePrice;
+            return basePrice * PriceMultiplier;
         }
     }
 }

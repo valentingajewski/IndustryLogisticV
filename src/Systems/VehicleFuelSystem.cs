@@ -73,7 +73,7 @@ namespace LSOL.Systems
             }
         }
 
-        public void InitializeSpawnedVehicle(Vehicle poweredVehicle)
+        public void InitializeSpawnedVehicle(Vehicle poweredVehicle, float? currentFuelLiters = null)
         {
             var state = GetOrCreateState(poweredVehicle);
             if (state == null)
@@ -81,15 +81,34 @@ namespace LSOL.Systems
                 return;
             }
 
-            state.CurrentFuelLiters = state.CapacityLiters;
+            var resolvedFuelLiters = currentFuelLiters.HasValue
+                ? Math.Max(0f, Math.Min(state.CapacityLiters, currentFuelLiters.Value))
+                : state.CapacityLiters;
+            state.CurrentFuelLiters = resolvedFuelLiters;
             state.OutOfFuelMessageShown = false;
+            state.PowerCutApplied = false;
+            ApplyPropulsionState(poweredVehicle, state);
+        }
+
+        public void EnsureTrackedVehicle(Vehicle poweredVehicle, float? currentFuelLiters = null)
+        {
+            var state = GetOrCreateState(poweredVehicle);
+            if (state == null)
+            {
+                return;
+            }
+
+            if (currentFuelLiters.HasValue)
+            {
+                state.CurrentFuelLiters = Math.Max(0f, Math.Min(state.CapacityLiters, currentFuelLiters.Value));
+                state.OutOfFuelMessageShown = state.CurrentFuelLiters <= 0.001f;
+            }
+
             ApplyPropulsionState(poweredVehicle, state);
         }
 
         public bool Update(Ped player, int gameTimeMs)
         {
-            CleanupStates();
-
             if (gameTimeMs < 0)
             {
                 return false;
@@ -163,7 +182,7 @@ namespace LSOL.Systems
 
         public VehicleFuelTelemetry GetTelemetry(Vehicle poweredVehicle, Vehicle cargoVehicle = null)
         {
-            var state = GetOrCreateState(poweredVehicle);
+            var state = GetState(poweredVehicle);
             if (state == null)
             {
                 return null;
@@ -187,12 +206,13 @@ namespace LSOL.Systems
         {
             Vehicle cargoVehicle;
             var poweredVehicle = _fleetManager.ResolvePoweredVehicle(player, out cargoVehicle);
+            EnsureTrackedVehicle(poweredVehicle);
             return GetTelemetry(poweredVehicle, cargoVehicle);
         }
 
         public float AddFuel(Vehicle poweredVehicle, float liters)
         {
-            var state = GetOrCreateState(poweredVehicle);
+            var state = GetState(poweredVehicle);
             if (state == null || liters <= 0f)
             {
                 return 0f;
@@ -241,6 +261,13 @@ namespace LSOL.Systems
             }
         }
 
+        public void ClearAllStates()
+        {
+            RestoreAllVehiclePower();
+            _fuelStates.Clear();
+            _lastUpdateMs = int.MinValue;
+        }
+
         private VehicleFuelState GetOrCreateState(Vehicle poweredVehicle)
         {
             if (poweredVehicle == null || !poweredVehicle.Exists())
@@ -269,6 +296,19 @@ namespace LSOL.Systems
 
             _fuelStates[poweredVehicle.Handle] = state;
             return state;
+        }
+
+        private VehicleFuelState GetState(Vehicle poweredVehicle)
+        {
+            if (poweredVehicle == null || !poweredVehicle.Exists())
+            {
+                return null;
+            }
+
+            VehicleFuelState state;
+            return _fuelStates.TryGetValue(poweredVehicle.Handle, out state)
+                ? state
+                : null;
         }
 
         private static float ResolveThrottleInput(Vehicle poweredVehicle)
@@ -361,6 +401,7 @@ namespace LSOL.Systems
 
             try
             {
+                Function.Call(Hash.SET_VEHICLE_UNDRIVEABLE, poweredVehicle.Handle, shouldCutPower);
                 SetEngineState(poweredVehicle, !shouldCutPower);
                 state.PowerCutApplied = shouldCutPower;
             }

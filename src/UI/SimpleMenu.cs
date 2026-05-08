@@ -219,6 +219,7 @@ namespace LSOL.UI
 
         private void DrawClassicTheme()
         {
+            var palette = AccessibilityTheme.Service.Palette;
             var resolution = GTA.UI.Screen.MainWindowResolution;
             var x = resolution.Width * 0.56f;
             var y = resolution.Height * 0.15f;
@@ -230,16 +231,16 @@ namespace LSOL.UI
             var footerHeight = lineHeight * 0.86f;
             var height = contentHeight + headerHeight + footerHeight + 10f;
 
-            DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(95, 8, 10, 16));
-            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(206, 8, 12, 18));
-            DrawRect(resolution.Width, resolution.Height, x, y, width, 5f, Color.FromArgb(238, 227, 170, 58));
-            DrawRect(resolution.Width, resolution.Height, x, y + 5f, width, headerHeight - 5f, Color.FromArgb(194, 17, 24, 34));
+            DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, palette.Get(ModColorRole.BackgroundOuter, 95));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, palette.Get(ModColorRole.BackgroundOuter, 206));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, 5f, palette.Get(ModColorRole.AccentGold, 238));
+            DrawRect(resolution.Width, resolution.Height, x, y + 5f, width, headerHeight - 5f, palette.Get(ModColorRole.BackgroundHeader, 194));
 
             new TextElement(
                     Title,
                     ToScriptTextCoords(resolution, x + 12f, y + 8f),
                     0.40f,
-                    Color.White,
+                    palette.Get(ModColorRole.TextPrimary),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
                     true,
@@ -252,7 +253,7 @@ namespace LSOL.UI
                         Subtitle,
                         ToScriptTextCoords(resolution, x + 12f, y + 30f),
                         0.27f,
-                        Color.FromArgb(236, 224, 232, 238),
+                        palette.Get(ModColorRole.TextSecondary, 236),
                         GTA.UI.Font.ChaletLondon,
                         Alignment.Left,
                         true,
@@ -268,7 +269,7 @@ namespace LSOL.UI
                 var detail = GetDetailText(item);
                 var hasProgressBar = HasProgressBar(item);
                 var rowHeight = GetRowHeight(lineHeight, detail, hasProgressBar);
-                var idleRowColor = item.IdleBackgroundColor ?? (itemIndex % 2 == 0 ? Color.FromArgb(34, 255, 255, 255) : Color.Empty);
+                var idleRowColor = item.IdleBackgroundColor ?? (itemIndex % 2 == 0 ? palette.Get(ModColorRole.TextPrimary, 34) : Color.Empty);
                 if (idleRowColor != Color.Empty)
                 {
                     DrawRect(resolution.Width, resolution.Height, x, rowY, width, rowHeight, idleRowColor);
@@ -276,14 +277,14 @@ namespace LSOL.UI
 
                 if (itemIndex == SelectedIndex)
                 {
-                    var selectedRowColor = item.SelectedBackgroundColor ?? Color.FromArgb(220, 212, 164, 72);
+                    var selectedRowColor = item.SelectedBackgroundColor ?? palette.Get(ModColorRole.AccentGold, 220);
                     DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, width - 4f, rowHeight - 4f, selectedRowColor);
-                    DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, 5f, rowHeight - 4f, Color.FromArgb(240, 252, 246, 220));
+                    DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, 5f, rowHeight - 4f, palette.Get(ModColorRole.Highlight, 240));
                 }
 
                 var captionFactory = item.CaptionFactory;
                 var caption = captionFactory != null ? captionFactory() : string.Empty;
-                var color = itemIndex == SelectedIndex ? Color.White : Color.FromArgb(235, 220, 230, 240);
+                var color = itemIndex == SelectedIndex ? palette.Get(ModColorRole.TextPrimary) : palette.Get(ModColorRole.TextSecondary, 235);
                 new TextElement(
                         caption,
                         ToScriptTextCoords(resolution, x + 11f, rowY + 6f),
@@ -298,8 +299,8 @@ namespace LSOL.UI
                 if (!string.IsNullOrWhiteSpace(detail))
                 {
                     var detailColor = itemIndex == SelectedIndex
-                        ? Color.FromArgb(232, 244, 248, 252)
-                        : Color.FromArgb(214, 205, 216, 228);
+                        ? palette.Get(ModColorRole.TextPrimary, 232)
+                        : palette.Get(ModColorRole.TextMuted, 214);
                     new TextElement(
                             detail,
                             ToScriptTextCoords(resolution, x + 11f, rowY + 28f),
@@ -325,13 +326,13 @@ namespace LSOL.UI
             }
 
             var footerY = y + headerHeight + contentHeight;
-            DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, Color.FromArgb(185, 14, 20, 28));
+            DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, palette.Get(ModColorRole.BackgroundPanel, 185));
             var footerText = GetFooterText("Navigate | Edit | Select | Close");
             new TextElement(
                     footerText,
                     ToScriptTextCoords(resolution, x + 12f, footerY + 4f),
                     0.255f,
-                    Color.FromArgb(228, 214, 223, 233),
+                    palette.Get(ModColorRole.TextSecondary, 228),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     true,
@@ -352,6 +353,7 @@ namespace LSOL.UI
 
         private void DrawTabletListTheme()
         {
+            var palette = AccessibilityTheme.Service.Palette;
             var resolution = GTA.UI.Screen.MainWindowResolution;
             var scale = Math.Max(0.25f, TabletWidthScale);
             var lineHeight = resolution.Height * 0.043f;
@@ -373,13 +375,13 @@ namespace LSOL.UI
 
             DrawTabletDeviceFrame(resolution, bodyX, bodyY, bodyWidth, bodyHeight, screenX, screenY, screenWidth, screenHeight);
             DrawTabletWallpaper(resolution, screenX, screenY, screenWidth, screenHeight);
-            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, headerHeight + 8f, Color.FromArgb(94, 5, 8, 18));
+            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, headerHeight + 8f, palette.Get(ModColorRole.BackgroundOuter, 94));
 
             new TextElement(
                     Title,
                     ToScriptTextCoords(resolution, screenX + 20f, screenY + 16f),
                     0.43f,
-                    Color.FromArgb(236, 242, 246, 252),
+                    palette.Get(ModColorRole.TextPrimary, 236),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
                     true,
@@ -392,7 +394,7 @@ namespace LSOL.UI
                         Subtitle,
                         ToScriptTextCoords(resolution, screenX + 20f, screenY + 42f),
                         0.275f,
-                        Color.FromArgb(222, 214, 225, 236),
+                        palette.Get(ModColorRole.TextSecondary, 222),
                         GTA.UI.Font.ChaletLondon,
                         Alignment.Left,
                         true,
@@ -407,7 +409,7 @@ namespace LSOL.UI
                         headerRightText,
                         ToScriptTextCoords(resolution, screenX + screenWidth - 20f, screenY + 18f),
                         0.255f,
-                        Color.FromArgb(230, 207, 220, 232),
+                        palette.Get(ModColorRole.TextSecondary, 230),
                         GTA.UI.Font.ChaletLondon,
                         Alignment.Right,
                         true,
@@ -442,8 +444,8 @@ namespace LSOL.UI
                     var rowHeight = GetItemRowHeight(lineHeight, item);
 
                     var selected = itemIndex == SelectedIndex;
-                    var idleColor = item.IdleBackgroundColor ?? Color.FromArgb(142, 29, 39, 60);
-                    var activeColor = item.SelectedBackgroundColor ?? Color.FromArgb(218, 88, 124, 162);
+                    var idleColor = item.IdleBackgroundColor ?? palette.Get(ModColorRole.BackgroundCard, 142);
+                    var activeColor = item.SelectedBackgroundColor ?? palette.Get(ModColorRole.BackgroundCardSelected, 218);
                     var cardX = screenX + 18f;
                     var cardWidth = screenWidth - 36f;
                     DrawRect(
@@ -453,7 +455,7 @@ namespace LSOL.UI
                         rowY + 6f,
                         cardWidth,
                         rowHeight - 4f,
-                        Color.FromArgb(56, 0, 0, 0));
+                        palette.Get(ModColorRole.BackgroundOuter, 56));
                     DrawRect(
                         resolution.Width,
                         resolution.Height,
@@ -461,7 +463,7 @@ namespace LSOL.UI
                         rowY,
                         cardWidth,
                         rowHeight - 2f,
-                        Color.FromArgb(selected ? 210 : 170, 10, 16, 28));
+                        palette.Get(ModColorRole.BackgroundPanel, selected ? 210 : 170));
                     DrawRect(
                         resolution.Width,
                         resolution.Height,
@@ -477,13 +479,13 @@ namespace LSOL.UI
                         rowY + 2f,
                         6f,
                         rowHeight - 6f,
-                        selected ? Color.FromArgb(236, 249, 251, 255) : Color.FromArgb(188, 165, 180, 198));
+                        selected ? palette.Get(ModColorRole.Highlight, 236) : palette.Get(ModColorRole.TextMuted, 188));
 
                     var captionFactory = item.CaptionFactory;
                     var caption = captionFactory != null ? captionFactory() : string.Empty;
                     var color = selected
-                        ? Color.FromArgb(238, 245, 249, 255)
-                        : Color.FromArgb(220, 222, 231, 240);
+                        ? palette.Get(ModColorRole.TextPrimary, 238)
+                        : palette.Get(ModColorRole.TextSecondary, 220);
                     DrawTextBlock(
                         resolution,
                         caption,
@@ -498,8 +500,8 @@ namespace LSOL.UI
                     if (!string.IsNullOrWhiteSpace(detail))
                     {
                         var detailColor = selected
-                            ? Color.FromArgb(225, 241, 247, 252)
-                            : Color.FromArgb(205, 204, 216, 228);
+                            ? palette.Get(ModColorRole.TextPrimary, 225)
+                            : palette.Get(ModColorRole.TextMuted, 205);
                         DrawTextBlock(
                             resolution,
                             detail,
@@ -1111,14 +1113,15 @@ namespace LSOL.UI
         {
             if (!HasProgressBar(item))
             {
-                return;
+                return; 
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             var ratio = GetProgressRatio(item);
-            var fillColor = item.ProgressBarColor ?? (selected ? Color.FromArgb(228, 244, 200, 96) : Color.FromArgb(218, 88, 156, 220));
-            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(158, 11, 17, 24));
+            var fillColor = item.ProgressBarColor ?? (selected ? palette.Get(ModColorRole.ProgressSelected, 228) : palette.Get(ModColorRole.ProgressIdle, 218));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, palette.Get(ModColorRole.BackgroundPanel, 158));
             DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, Math.Max(0f, (width - 2f) * ratio), Math.Max(1f, height - 2f), fillColor);
-            DrawRect(resolution.Width, resolution.Height, x, y, width, 1f, Color.FromArgb(192, 255, 255, 255));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, 1f, palette.Get(ModColorRole.Highlight, 192));
         }
 
         private static void DrawTabletDeviceFrame(Size resolution, float bodyX, float bodyY, float bodyWidth, float bodyHeight, float screenX, float screenY, float screenWidth, float screenHeight)
@@ -1142,10 +1145,11 @@ namespace LSOL.UI
 
         private static void DrawDashboardWidget(Size resolution, MenuItem item, float x, float y, float width, float height, bool selected, bool compact)
         {
-            var idleColor = item != null && item.IdleBackgroundColor.HasValue ? item.IdleBackgroundColor.Value : Color.FromArgb(176, 12, 18, 28);
-            var activeColor = item != null && item.SelectedBackgroundColor.HasValue ? item.SelectedBackgroundColor.Value : Color.FromArgb(212, 72, 118, 162);
-            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, Color.FromArgb(52, 0, 0, 0));
-            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(176, 8, 10, 18));
+            var palette = AccessibilityTheme.Service.Palette;
+            var idleColor = item != null && item.IdleBackgroundColor.HasValue ? item.IdleBackgroundColor.Value : palette.Get(ModColorRole.BackgroundCard, 176);
+            var activeColor = item != null && item.SelectedBackgroundColor.HasValue ? item.SelectedBackgroundColor.Value : palette.Get(ModColorRole.BackgroundCardSelected, 212);
+            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, palette.Get(ModColorRole.BackgroundOuter, 52));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, palette.Get(ModColorRole.BackgroundOuter, 176));
             DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, width - 4f, height - 4f, selected ? activeColor : idleColor);
 
             var eyebrow = GetIconLabelText(item);
@@ -1157,7 +1161,7 @@ namespace LSOL.UI
                     x + 14f,
                     y + 14f,
                     0.19f,
-                    compact ? Color.FromArgb(236, 255, 110, 110) : Color.FromArgb(216, 188, 204, 224),
+                    compact ? palette.Get(ModColorRole.AccentOrange, 236) : palette.Get(ModColorRole.TextSecondary, 216),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     12f);
@@ -1170,7 +1174,7 @@ namespace LSOL.UI
                 x + 14f,
                 y + (compact ? 34f : 40f),
                 compact ? 0.56f : 0.33f,
-                Color.FromArgb(238, 245, 249, 255),
+                palette.Get(ModColorRole.TextPrimary, 238),
                 compact ? GTA.UI.Font.ChaletComprimeCologne : GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
                 compact ? 18f : 16f);
@@ -1184,7 +1188,7 @@ namespace LSOL.UI
                     x + 14f,
                     y + (compact ? 78f : 70f),
                     compact ? 0.20f : 0.21f,
-                    Color.FromArgb(212, 214, 225, 236),
+                    palette.Get(ModColorRole.TextSecondary, 212),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     14f);
@@ -1193,10 +1197,11 @@ namespace LSOL.UI
 
         private static void DrawDashboardTile(Size resolution, MenuItem item, float x, float y, float size, bool selected)
         {
-            var idleColor = item != null && item.IdleBackgroundColor.HasValue ? item.IdleBackgroundColor.Value : Color.FromArgb(172, 24, 34, 48);
-            var activeColor = item != null && item.SelectedBackgroundColor.HasValue ? item.SelectedBackgroundColor.Value : Color.FromArgb(228, 88, 124, 162);
-            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 4f, size, size, Color.FromArgb(58, 0, 0, 0));
-            DrawRect(resolution.Width, resolution.Height, x, y, size, size, Color.FromArgb(150, 12, 16, 24));
+            var palette = AccessibilityTheme.Service.Palette;
+            var idleColor = item != null && item.IdleBackgroundColor.HasValue ? item.IdleBackgroundColor.Value : palette.Get(ModColorRole.BackgroundCard, 172);
+            var activeColor = item != null && item.SelectedBackgroundColor.HasValue ? item.SelectedBackgroundColor.Value : palette.Get(ModColorRole.BackgroundCardSelected, 228);
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 4f, size, size, palette.Get(ModColorRole.BackgroundOuter, 58));
+            DrawRect(resolution.Width, resolution.Height, x, y, size, size, palette.Get(ModColorRole.BackgroundPanel, 150));
             DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, size - 4f, size - 4f, selected ? activeColor : idleColor);
 
             var iconText = GetIconLabelText(item);
@@ -1206,7 +1211,7 @@ namespace LSOL.UI
                 x + (size * 0.5f),
                 y + (size * 0.28f),
                 0.36f,
-                Color.FromArgb(244, 248, 250, 255),
+                palette.Get(ModColorRole.TextPrimary, 244),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Center,
                 14f);
@@ -1218,7 +1223,7 @@ namespace LSOL.UI
                 x + (size * 0.5f),
                 y + size + 8f,
                 0.18f,
-                Color.FromArgb(224, 242, 246, 252),
+                palette.Get(ModColorRole.TextPrimary, 224),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Center,
                 12f);
@@ -1226,9 +1231,10 @@ namespace LSOL.UI
 
         private static void DrawDashboardDetailCard(Size resolution, MenuItem item, float x, float y, float width, float height)
         {
-            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, Color.FromArgb(46, 0, 0, 0));
-            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(146, 7, 10, 18));
-            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, width - 4f, height - 4f, Color.FromArgb(108, 12, 18, 28));
+            var palette = AccessibilityTheme.Service.Palette;
+            DrawRect(resolution.Width, resolution.Height, x + 4f, y + 6f, width, height, palette.Get(ModColorRole.BackgroundOuter, 46));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, palette.Get(ModColorRole.BackgroundOuter, 146));
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, width - 4f, height - 4f, palette.Get(ModColorRole.BackgroundPanel, 108));
 
             var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
             var detail = GetDetailText(item);
@@ -1238,7 +1244,7 @@ namespace LSOL.UI
                 x + 18f,
                 y + 18f,
                 0.34f,
-                Color.FromArgb(236, 243, 248, 252),
+                palette.Get(ModColorRole.TextPrimary, 236),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
                 16f);
@@ -1248,7 +1254,7 @@ namespace LSOL.UI
                 x + 18f,
                 y + 48f,
                 0.215f,
-                Color.FromArgb(210, 212, 223, 235),
+                palette.Get(ModColorRole.TextSecondary, 210),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 14f);

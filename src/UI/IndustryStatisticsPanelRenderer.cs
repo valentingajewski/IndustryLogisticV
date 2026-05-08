@@ -242,7 +242,7 @@ namespace LSOL.UI
                 contentX,
                 contentY + 112f,
                 0.24f,
-                Color.FromArgb(206, 193, 206, 219),
+                AccessibilityTheme.Service.Palette.Get(ModColorRole.TextMuted, 206),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
@@ -255,7 +255,7 @@ namespace LSOL.UI
                     statsX + statsWidth - 18f,
                     contentY + 112f,
                     0.24f,
-                    Color.FromArgb(206, 193, 206, 219),
+                    AccessibilityTheme.Service.Palette.Get(ModColorRole.TextMuted, 206),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Right,
                     0f);
@@ -267,11 +267,11 @@ namespace LSOL.UI
                 var entry = entries[clampedScrollIndex + i];
                 var rowY = listTopY + (i * 35f);
                 var titleColor = entry.IsInput
-                    ? Color.FromArgb(226, 132, 206, 184)
-                    : Color.FromArgb(226, 223, 196, 128);
+                    ? AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentTeal, 226)
+                    : AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 226);
                 var fillColor = entry.IsInput
-                    ? Color.FromArgb(228, 98, 170, 148)
-                    : Color.FromArgb(228, 214, 188, 96);
+                    ? AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentTeal, 228)
+                    : AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 228);
 
                 DrawPixelText(
                     resolution,
@@ -290,7 +290,7 @@ namespace LSOL.UI
                     contentX,
                     rowY + 14f,
                     0.235f,
-                    Color.FromArgb(214, 205, 217, 228),
+                    AccessibilityTheme.Service.Palette.Get(ModColorRole.TextSecondary, 214),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -302,7 +302,7 @@ namespace LSOL.UI
                     barWidth,
                     10f,
                     entry.Ratio,
-                    Color.FromArgb(170, 28, 40, 54),
+                    AccessibilityTheme.Service.Palette.Get(ModColorRole.BackgroundHeader, 170),
                     fillColor);
             }
         }
@@ -320,7 +320,7 @@ namespace LSOL.UI
                 frameX + 84f,
                 frameY + 170f,
                 0.275f,
-                Color.FromArgb(220, 214, 223, 236),
+                AccessibilityTheme.Service.Palette.Get(ModColorRole.TextSecondary, 220),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
@@ -331,15 +331,15 @@ namespace LSOL.UI
                 274f,
                 11f,
                 stockRatio,
-                Color.FromArgb(170, 28, 40, 54),
-                Color.FromArgb(230, 214, 188, 96));
+                AccessibilityTheme.Service.Palette.Get(ModColorRole.BackgroundHeader, 170),
+                AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 230));
 
             DrawText(
                 string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, industry.CurrentOutputPerHourTons),
                 frameX + 84f,
                 frameY + 192f,
                 0.25f,
-                Color.FromArgb(214, 205, 217, 228),
+                AccessibilityTheme.Service.Palette.Get(ModColorRole.TextSecondary, 214),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
@@ -351,7 +351,7 @@ namespace LSOL.UI
                     frameX + 84f,
                     frameY + 266f,
                     0.29f,
-                    Color.FromArgb(224, 214, 226, 236),
+                    AccessibilityTheme.Service.Palette.Get(ModColorRole.TextSecondary, 224),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -366,7 +366,7 @@ namespace LSOL.UI
                 frameX + 84f,
                 frameY + 232f,
                 0.24f,
-                Color.FromArgb(206, 193, 206, 219),
+                AccessibilityTheme.Service.Palette.Get(ModColorRole.TextMuted, 206),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
@@ -376,11 +376,11 @@ namespace LSOL.UI
                 var entry = entries[scrollIndex + i];
                 var rowY = listTopY + (i * 43f);
                 var titleColor = entry.IsInput
-                    ? Color.FromArgb(226, 132, 206, 184)
-                    : Color.FromArgb(226, 223, 196, 128);
+                    ? AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentTeal, 226)
+                    : AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 226);
                 var fillColor = entry.IsInput
-                    ? Color.FromArgb(228, 98, 170, 148)
-                    : Color.FromArgb(228, 214, 188, 96);
+                    ? AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentTeal, 228)
+                    : AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 228);
 
                 DrawText(
                     string.Format("{0} {1}", entry.IsInput ? "IN" : "OUT", entry.Commodity.ToUpperInvariant()),
@@ -397,7 +397,7 @@ namespace LSOL.UI
                     frameX + 84f,
                     rowY + 14f,
                     0.235f,
-                    Color.FromArgb(214, 205, 217, 228),
+                    AccessibilityTheme.Service.Palette.Get(ModColorRole.TextSecondary, 214),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -408,7 +408,7 @@ namespace LSOL.UI
                     274f,
                     11f,
                     entry.Ratio,
-                    Color.FromArgb(170, 28, 40, 54),
+                    AccessibilityTheme.Service.Palette.Get(ModColorRole.BackgroundHeader, 170),
                     fillColor);
             }
 

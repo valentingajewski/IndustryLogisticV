@@ -8,13 +8,8 @@
 - torque engine regarding the cargo
 - event mission (tranformers)
 - driving and cargo licenses
-- Loading container on a flatbed with heavy machinery
+- Loading container on a flatbed with 
+- loading heavy machinery
 - Vehicle, machies or Tractor parts deliver to industry to increase production
 
 - You are a contractor at the start then with enough money you can start building your own empire
-
-
-
-You will add a fuel mechanism for vehicles:
-- I added a Petrol Station in the office area (and as a row in the Sites.csv) where the player can refuel its truck. This petrol station has no emptyingrate value and it must stay like this.
-- The player can only refuel its truck at a 

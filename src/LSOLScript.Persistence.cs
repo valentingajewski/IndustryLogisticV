@@ -5,31 +5,43 @@ using System.Linq;
 using System.Reflection;
 using GTA;
 using LSOL.Systems;
+using LSOL.UI;
 
 namespace LSOL
 {
     public sealed partial class LSOLScript
     {
+        private void ResetSaveSessionState()
+        {
+            _npcLogisticsManager.ClearAll();
+            _fleetManager.DespawnOwnedFleet();
+            _fleetManager.ClearAllStates();
+            _vehicleFuelSystem.ClearAllStates();
+            _cargoTransferController.ClearState();
+            _barrierInteractionHandler.ClearState();
+            _tabletStateStore.MarkAllDirty();
+        }
+
         private void PromptForNewSave()
         {
             var rawName = Game.GetUserInput(WindowTitle.EnterMessage60, string.Empty, MaxSaveNameLength);
             if (string.IsNullOrWhiteSpace(rawName))
             {
-                ShowStatus("Save creation cancelled.");
+                ShowStatus(Text(ModTextKey.DetailSaveCreationCancelled));
                 return;
             }
 
             var saveName = SanitizeSaveName(rawName);
             if (string.IsNullOrWhiteSpace(saveName))
             {
-                ShowStatus("Enter a valid save name.");
+                ShowStatus(Text(ModTextKey.DetailSaveNameInvalid));
                 return;
             }
 
             var filePath = BuildNamedSavePath(saveName);
             if (File.Exists(filePath))
             {
-                ShowStatus("A save with that name already exists.");
+                ShowStatus(Text(ModTextKey.DetailSaveExists));
                 return;
             }
 
@@ -51,14 +63,14 @@ namespace LSOL
         {
             if (string.IsNullOrWhiteSpace(_pendingSaveName))
             {
-                ShowStatus("No save name selected.");
+                ShowStatus(Text(ModTextKey.DetailNoPendingSaveName));
                 return;
             }
 
             var filePath = BuildNamedSavePath(_pendingSaveName);
             if (File.Exists(filePath))
             {
-                ShowStatus("A save with that name already exists.");
+                ShowStatus(Text(ModTextKey.DetailSaveExists));
                 return;
             }
 
@@ -71,8 +83,8 @@ namespace LSOL
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
             ApplyDifficultySettingsToSystems();
+            ResetSaveSessionState();
             _industryManager.ResetIndustriesToDefaults();
-            _cargoTransferController.ClearState();
             _territoryManager.Reset();
             _tabletStateStore.ResetAnalyticsState();
             _profit = GetSelectedStartingBalance();
@@ -93,14 +105,14 @@ namespace LSOL
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ReturnToSavingOptionsMenu();
-            ShowStatus(string.Format("Created save '{0}'.", createdSaveName), 4000);
+            ShowStatus(Text(ModTextKey.DetailSaveCreated, createdSaveName), 4000);
         }
 
         private void LoadNamedSave(NamedSaveEntry entry)
         {
             if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
             {
-                ShowStatus("Selected save was not found.");
+                ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
                 RebuildSaveSlotsMenuItems();
                 return;
             }
@@ -119,14 +131,14 @@ namespace LSOL
             _industryStatePath = entry.FilePath;
             ApplyLoadedPersistenceMetadata(loadResult.Metadata, true);
             ReturnToSavingOptionsMenu();
-            ShowStatus(string.Format("Loaded save '{0}'.", entry.DisplayName), 4000);
+            ShowStatus(Text(ModTextKey.DetailSaveLoaded, entry.DisplayName), 4000);
         }
 
         private void DeleteNamedSave(NamedSaveEntry entry)
         {
             if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
             {
-                ShowStatus("Selected save was not found.");
+                ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
                 RebuildSaveSlotsMenuItems();
                 return;
             }
@@ -173,12 +185,15 @@ namespace LSOL
                     _cargoDamageDifficultyEnabled = true;
                     _industryPricingDifficultyEnabled = false;
                     _licensingDifficultyEnabled = false;
+                    _language = ModLanguage.English;
                     _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
+                    _colorblindMode = ColorblindMode.Off;
                     _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
                     _difficultySettingsLocked = false;
+                    ApplyPresentationSettings(false);
                     ApplyDifficultySettingsToSystems();
+                    ResetSaveSessionState();
                     _industryManager.ResetIndustriesToDefaults();
-                    _cargoTransferController.ClearState();
                     _territoryManager.Reset();
                     _tabletStateStore.ResetAnalyticsState();
                     _profit = DefaultStartingBalance;
@@ -197,7 +212,7 @@ namespace LSOL
             RebuildSaveSlotsMenuItems();
             RebuildSavingOptionsMenuItems();
             RebuildModControlMenuItems();
-            ShowStatus(string.Format("Deleted save '{0}'.", entry.DisplayName), 4000);
+            ShowStatus(Text(ModTextKey.DetailSaveDeleted, entry.DisplayName), 4000);
         }
 
         private void SaveCurrentNamedGame()
@@ -205,7 +220,7 @@ namespace LSOL
             NamedSaveEntry activeSave;
             if (!TryGetActiveNamedSave(out activeSave))
             {
-                ShowStatus("Create or load a named save first.");
+                ShowStatus(Text(ModTextKey.DetailCreateOrLoadNamedSave));
                 return;
             }
 
@@ -215,7 +230,7 @@ namespace LSOL
             }
 
             RebuildSavingOptionsMenuItems();
-            ShowStatus(string.Format("Saved '{0}'.", activeSave.DisplayName), 4000);
+            ShowStatus(Text(ModTextKey.DetailSaveSaved, activeSave.DisplayName), 4000);
         }
 
         private bool TryLoadIndustryPersistence(bool notifyWhenNoData)
@@ -230,11 +245,11 @@ namespace LSOL
 
             if (loadResult.RestoredCount > 0)
             {
-                ShowStatus(string.Format("Loaded saved industry state for {0} nodes.", loadResult.RestoredCount), 4000);
+                ShowStatus(Text(ModTextKey.DetailLoadSavedState, loadResult.RestoredCount), 4000);
             }
             else
             {
-                ShowStatus("Loaded saved game settings.", 4000);
+                ShowStatus(Text(ModTextKey.DetailLoadSavedSettings), 4000);
             }
 
             return true;
@@ -256,6 +271,7 @@ namespace LSOL
 
             try
             {
+                ResetSaveSessionState();
                 loadResult = IndustryPersistenceManager.LoadWithMetadata(filePath, _industryManager.Industries, _territoryManager);
                 if (loadResult.RestoredCount > 0 || (loadResult.Metadata != null && loadResult.Metadata.HasGameplayMetadata))
                 {
@@ -264,7 +280,7 @@ namespace LSOL
 
                 if (notifyWhenNoData)
                 {
-                    ShowStatus("No saved industry state found yet.");
+                    ShowStatus(Text(ModTextKey.DetailNoSavedState));
                 }
             }
             catch (IOException ex)
@@ -291,7 +307,7 @@ namespace LSOL
         {
             if (string.IsNullOrWhiteSpace(filePath))
             {
-                ShowStatus("No save path is available.");
+                ShowStatus(Text(ModTextKey.DetailNoSavePath));
                 return false;
             }
 
@@ -334,6 +350,8 @@ namespace LSOL
             {
                 Profit = _profit,
                 StartingBalance = _currentStartingBalance,
+                Language = _language,
+                ColorblindMode = _colorblindMode,
                 VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
                 IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
@@ -342,6 +360,8 @@ namespace LSOL
                 NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
                 DifficultySettingsLocked = _difficultySettingsLocked,
                 Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
+                OwnedFleet = _fleetManager.CreateOwnedFleetSnapshot(_vehicleFuelSystem),
+                NpcLogistics = _npcLogisticsManager.CreatePersistenceSnapshot(),
             };
         }
 
@@ -351,23 +371,28 @@ namespace LSOL
             {
                 _profit = metadata.Profit;
                 _currentStartingBalance = metadata.StartingBalance;
+                _language = metadata.Language ?? ModLanguage.English;
                 _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
                 _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
                 _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
                 _economyDifficultyPreset = metadata.EconomyDifficultyPreset;
+                _colorblindMode = metadata.ColorblindMode ?? ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = metadata.NpcWeeklyWageDifficulty;
                 _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
             }
             else
             {
+                _language = ModLanguage.English;
                 _industryPricingDifficultyEnabled = false;
                 _licensingDifficultyEnabled = false;
                 _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
+                _colorblindMode = ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
+            ApplyPresentationSettings(false);
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
@@ -378,9 +403,16 @@ namespace LSOL
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ApplyDifficultySettingsToSystems();
+            _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
+            _fleetManager.RestoreOwnedFleet(
+                metadata != null ? metadata.OwnedFleet : null,
+                _vehicleFuelSystem,
+                GetGroundPosition);
+            _tabletStateStore.MarkAllDirty();
             RebuildModControlMenuItems();
             RebuildSavingOptionsMenuItems();
             RebuildDifficultyMenuItems();
+            RebuildOptionsMenuItems();
         }
 
         private string ResolveConfigPath()
@@ -488,7 +520,7 @@ namespace LSOL
         private string GetCurrentSaveLabel()
         {
             NamedSaveEntry activeSave;
-            return TryGetActiveNamedSave(out activeSave) ? activeSave.DisplayName : "Default autosave";
+            return TryGetActiveNamedSave(out activeSave) ? activeSave.DisplayName : Text(ModTextKey.ValueDefaultAutosave);
         }
 
         private float GetSelectedStartingBalance()

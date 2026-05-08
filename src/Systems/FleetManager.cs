@@ -19,8 +19,10 @@ namespace LSOL.Systems
         private const string DefaultTinyBoxPropModel = "prop_rub_boxpile_02";
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<int, VehicleDefinition> _definitionsByModelHash;
+        private readonly Dictionary<string, VehicleDefinition> _definitionsByModelName;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
+        private readonly List<OwnedFleetRig> _ownedRigs;
         private readonly Random _random;
         private readonly Model[] _emptyModelArray;
 
@@ -28,8 +30,10 @@ namespace LSOL.Systems
         {
             _definitions = config.VehicleDefinitions;
             _definitionsByModelHash = BuildDefinitionLookup(_definitions);
+            _definitionsByModelName = BuildDefinitionModelNameLookup(_definitions);
             _objectModels = config.ObjectModels;
             _cargoStates = new Dictionary<int, VehicleCargoState>();
+            _ownedRigs = new List<OwnedFleetRig>();
             _random = new Random();
             _emptyModelArray = new Model[0];
         }
@@ -241,6 +245,192 @@ namespace LSOL.Systems
                 : null;
         }
 
+        public VehicleDefinition FindDefinitionByModelName(string modelName)
+        {
+            if (string.IsNullOrWhiteSpace(modelName))
+            {
+                return null;
+            }
+
+            VehicleDefinition definition;
+            return _definitionsByModelName.TryGetValue(modelName.Trim(), out definition)
+                ? definition
+                : null;
+        }
+
+        public void RegisterOwnedRig(Vehicle truck, Vehicle cargoVehicle)
+        {
+            if (truck == null || !truck.Exists())
+            {
+                return;
+            }
+
+            if (cargoVehicle == null || !cargoVehicle.Exists())
+            {
+                cargoVehicle = truck;
+            }
+
+            for (int i = 0; i < _ownedRigs.Count; i++)
+            {
+                if (_ownedRigs[i].Matches(truck.Handle, cargoVehicle.Handle))
+                {
+                    _ownedRigs[i].TruckHandle = truck.Handle;
+                    _ownedRigs[i].CargoHandle = cargoVehicle.Handle;
+                    truck.IsPersistent = true;
+                    cargoVehicle.IsPersistent = true;
+                    return;
+                }
+            }
+
+            truck.IsPersistent = true;
+            cargoVehicle.IsPersistent = true;
+            _ownedRigs.Add(new OwnedFleetRig
+            {
+                TruckHandle = truck.Handle,
+                CargoHandle = cargoVehicle.Handle,
+            });
+        }
+
+        public void DespawnOwnedFleet()
+        {
+            CleanupOwnedRigs(true);
+        }
+
+        public OwnedFleetPersistenceSnapshot CreateOwnedFleetSnapshot(VehicleFuelSystem fuelSystem)
+        {
+            var snapshot = new OwnedFleetPersistenceSnapshot();
+
+            for (int i = _ownedRigs.Count - 1; i >= 0; i--)
+            {
+                var rig = _ownedRigs[i];
+                var truck = ResolveVehicleHandle(rig.TruckHandle);
+                var cargoVehicle = ResolveVehicleHandle(rig.CargoHandle);
+                if (truck == null || !truck.Exists() || cargoVehicle == null || !cargoVehicle.Exists())
+                {
+                    _ownedRigs.RemoveAt(i);
+                    continue;
+                }
+
+                var truckDefinition = FindDefinition(truck.Model);
+                var cargoDefinition = FindDefinition(cargoVehicle.Model);
+                if (truckDefinition == null || cargoDefinition == null)
+                {
+                    continue;
+                }
+
+                var cargoState = GetOrCreateCargoState(cargoVehicle);
+                if (cargoState == null)
+                {
+                    continue;
+                }
+
+                var fuelTelemetry = fuelSystem != null
+                    ? fuelSystem.GetTelemetry(truck, cargoVehicle)
+                    : null;
+
+                snapshot.Vehicles.Add(new OwnedFleetVehicleSnapshot
+                {
+                    PoweredModelName = truckDefinition.ModelName,
+                    CargoModelName = cargoDefinition.ModelName,
+                    HasSeparateCargoVehicle = truck.Handle != cargoVehicle.Handle,
+                    PoweredPosition = truck.Position,
+                    PoweredHeading = truck.Heading,
+                    CargoType = cargoState.CargoType,
+                    CapacityTons = cargoState.CapacityTons,
+                    Commodity = cargoState.Commodity,
+                    WeightTons = cargoState.WeightTons,
+                    CargoCondition = cargoState.CargoCondition,
+                    TotalLostTons = cargoState.TotalLostTons,
+                    SourceIndustryId = cargoState.SourceIndustryId,
+                    SourceDistrictName = cargoState.SourceDistrictName,
+                    CurrentFuelLiters = fuelTelemetry != null ? fuelTelemetry.CurrentLiters : 0f,
+                });
+            }
+
+            return snapshot;
+        }
+
+        public int RestoreOwnedFleet(
+            OwnedFleetPersistenceSnapshot snapshot,
+            VehicleFuelSystem fuelSystem,
+            Func<Vector3, Vector3> getGroundPosition)
+        {
+            if (snapshot == null || snapshot.Vehicles == null || snapshot.Vehicles.Count == 0)
+            {
+                return 0;
+            }
+
+            var restoredCount = 0;
+            for (int i = 0; i < snapshot.Vehicles.Count; i++)
+            {
+                var entry = snapshot.Vehicles[i];
+                if (entry == null || string.IsNullOrWhiteSpace(entry.PoweredModelName))
+                {
+                    continue;
+                }
+
+                var truckDefinition = FindDefinitionByModelName(entry.PoweredModelName);
+                var cargoDefinition = entry.HasSeparateCargoVehicle
+                    ? FindDefinitionByModelName(entry.CargoModelName)
+                    : truckDefinition;
+                var tractorDefinition = entry.HasSeparateCargoVehicle ? truckDefinition : null;
+                if (truckDefinition == null || cargoDefinition == null)
+                {
+                    continue;
+                }
+
+                Vehicle truck;
+                Vehicle cargoVehicle;
+                string ignoredMessage;
+                var spawnPosition = getGroundPosition != null
+                    ? getGroundPosition(entry.PoweredPosition)
+                    : entry.PoweredPosition;
+                if (!SpawnSelectedVehicle(
+                    cargoDefinition,
+                    tractorDefinition,
+                    spawnPosition,
+                    entry.PoweredHeading,
+                    out truck,
+                    out cargoVehicle,
+                    out ignoredMessage))
+                {
+                    continue;
+                }
+
+                RegisterOwnedRig(truck, cargoVehicle);
+
+                var cargoState = GetOrCreateCargoState(cargoVehicle);
+                if (cargoState != null)
+                {
+                    cargoState.CargoType = entry.CargoType;
+                    cargoState.CapacityTons = Math.Max(1f, entry.CapacityTons > 0f ? entry.CapacityTons : cargoState.CapacityTons);
+                    if (!string.IsNullOrWhiteSpace(entry.Commodity) && entry.WeightTons > 0.001f)
+                    {
+                        cargoState.Commodity = CommodityCatalog.Normalize(entry.Commodity);
+                        cargoState.WeightTons = Math.Max(0f, entry.WeightTons);
+                        cargoState.CargoCondition = Math.Max(0f, Math.Min(1f, entry.CargoCondition));
+                        cargoState.TotalLostTons = Math.Max(0f, entry.TotalLostTons);
+                        cargoState.SourceIndustryId = entry.SourceIndustryId ?? string.Empty;
+                        cargoState.SourceDistrictName = entry.SourceDistrictName ?? string.Empty;
+                        ApplyCargoVisuals(cargoVehicle, cargoState);
+                    }
+                    else
+                    {
+                        cargoState.ClearCargo();
+                    }
+                }
+
+                if (fuelSystem != null)
+                {
+                    fuelSystem.InitializeSpawnedVehicle(truck, entry.CurrentFuelLiters);
+                }
+
+                restoredCount += 1;
+            }
+
+            return restoredCount;
+        }
+
         public bool CanVehicleCarryCommodity(Vehicle vehicle, string commodity)
         {
             if (vehicle == null || !vehicle.Exists())
@@ -287,6 +477,31 @@ namespace LSOL.Systems
                 if (!lookup.ContainsKey(hash))
                 {
                     lookup[hash] = candidate;
+                }
+            }
+
+            return lookup;
+        }
+
+        private static Dictionary<string, VehicleDefinition> BuildDefinitionModelNameLookup(List<VehicleDefinition> definitions)
+        {
+            var lookup = new Dictionary<string, VehicleDefinition>(StringComparer.OrdinalIgnoreCase);
+            if (definitions == null)
+            {
+                return lookup;
+            }
+
+            for (int i = 0; i < definitions.Count; i++)
+            {
+                var candidate = definitions[i];
+                if (candidate == null || !candidate.IsEnabled || string.IsNullOrWhiteSpace(candidate.ModelName))
+                {
+                    continue;
+                }
+
+                if (!lookup.ContainsKey(candidate.ModelName.Trim()))
+                {
+                    lookup[candidate.ModelName.Trim()] = candidate;
                 }
             }
 
@@ -1051,6 +1266,18 @@ namespace LSOL.Systems
             {
                 _cargoStates.Remove(remove[i]);
             }
+
+            CleanupOwnedRigs(false);
+        }
+
+        public void ClearAllStates()
+        {
+            foreach (var pair in _cargoStates)
+            {
+                ClearCargoVisuals(pair.Value);
+            }
+
+            _cargoStates.Clear();
         }
 
         private bool TrySpawnVehicle(VehicleDefinition definition, Vector3 position, float heading, out Vehicle vehicle)
@@ -1228,6 +1455,79 @@ namespace LSOL.Systems
         {
             var radians = heading * (float)Math.PI / 180f;
             return new Vector3((float)-Math.Sin(radians), (float)Math.Cos(radians), 0f);
+        }
+
+        private void CleanupOwnedRigs(bool deleteVehicles)
+        {
+            for (int i = _ownedRigs.Count - 1; i >= 0; i--)
+            {
+                var rig = _ownedRigs[i];
+                var truck = ResolveVehicleHandle(rig.TruckHandle);
+                var cargoVehicle = ResolveVehicleHandle(rig.CargoHandle);
+                var hasTruck = truck != null && truck.Exists();
+                var hasCargoVehicle = cargoVehicle != null && cargoVehicle.Exists();
+                var singleVehicleRig = rig.TruckHandle == rig.CargoHandle;
+                var isAlive = hasTruck && (singleVehicleRig || hasCargoVehicle);
+
+                if (deleteVehicles)
+                {
+                    if (hasCargoVehicle)
+                    {
+                        cargoVehicle.Delete();
+                    }
+
+                    if (hasTruck && (!hasCargoVehicle || truck.Handle != cargoVehicle.Handle))
+                    {
+                        truck.Delete();
+                    }
+
+                    RemoveCargoState(rig.CargoHandle);
+                    if (!singleVehicleRig)
+                    {
+                        RemoveCargoState(rig.TruckHandle);
+                    }
+
+                    _ownedRigs.RemoveAt(i);
+                    continue;
+                }
+
+                if (!isAlive)
+                {
+                    _ownedRigs.RemoveAt(i);
+                }
+            }
+        }
+
+        private void RemoveCargoState(int vehicleHandle)
+        {
+            VehicleCargoState state;
+            if (!_cargoStates.TryGetValue(vehicleHandle, out state))
+            {
+                return;
+            }
+
+            ClearCargoVisuals(state);
+            _cargoStates.Remove(vehicleHandle);
+        }
+
+        private static Vehicle ResolveVehicleHandle(int handle)
+        {
+            return Entity.FromHandle(handle) as Vehicle;
+        }
+
+        private sealed class OwnedFleetRig
+        {
+            public int TruckHandle { get; set; }
+
+            public int CargoHandle { get; set; }
+
+            public bool Matches(int truckHandle, int cargoHandle)
+            {
+                return (TruckHandle == truckHandle && CargoHandle == cargoHandle)
+                    || (TruckHandle == cargoHandle && CargoHandle == truckHandle)
+                    || TruckHandle == truckHandle
+                    || CargoHandle == cargoHandle;
+            }
         }
     }
 }

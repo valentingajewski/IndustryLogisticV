@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using GTA.Math;
 using LSOL.Config;
 using LSOL.Domain;
 using LSOL.UI;
@@ -143,16 +144,45 @@ namespace LSOL.Systems
             using (var writer = new StreamWriter(filePath, false))
             {
                 writer.WriteLine("[Meta]");
+                var persistenceVersion = 1;
+                if (metadata != null || territorySnapshot != null)
+                {
+                    persistenceVersion = 6;
+                }
+
+                if (metadata != null && metadata.Analytics != null)
+                {
+                    persistenceVersion = 7;
+                }
+
+                if (metadata != null && (HasOwnedFleetData(metadata.OwnedFleet) || HasNpcLogisticsData(metadata.NpcLogistics)))
+                {
+                    persistenceVersion = 8;
+                }
+
+                if (metadata != null && (metadata.Language.HasValue || metadata.ColorblindMode.HasValue))
+                {
+                    persistenceVersion = 9;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
-                    metadata != null && metadata.Analytics != null
-                        ? 7
-                        : (metadata != null || territorySnapshot != null ? 6 : 1));
+                    persistenceVersion);
                 writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
                 if (metadata != null)
                 {
                     writer.WriteLine("Profit={0}", FormatFloat(metadata.Profit));
                     writer.WriteLine("StartingBalance={0}", FormatFloat(metadata.StartingBalance));
+                    if (metadata.Language.HasValue)
+                    {
+                        writer.WriteLine("Language={0}", metadata.Language.Value);
+                    }
+
+                    if (metadata.ColorblindMode.HasValue)
+                    {
+                        writer.WriteLine("ColorblindMode={0}", metadata.ColorblindMode.Value);
+                    }
+
                     writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
@@ -207,6 +237,16 @@ namespace LSOL.Systems
                 {
                     WriteAnalyticsSnapshot(writer, metadata.Analytics);
                 }
+
+                if (metadata != null && HasOwnedFleetData(metadata.OwnedFleet))
+                {
+                    WriteOwnedFleetSnapshot(writer, metadata.OwnedFleet);
+                }
+
+                if (metadata != null && HasNpcLogisticsData(metadata.NpcLogistics))
+                {
+                    WriteNpcLogisticsSnapshot(writer, metadata.NpcLogistics);
+                }
             }
         }
 
@@ -221,6 +261,8 @@ namespace LSOL.Systems
             metadata.HasGameplayMetadata =
                 ini.HasKey("Meta", "Profit") ||
                 ini.HasKey("Meta", "StartingBalance") ||
+                ini.HasKey("Meta", "Language") ||
+                ini.HasKey("Meta", "ColorblindMode") ||
                 ini.HasKey("Meta", "VehicleFuelDifficultyEnabled") ||
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
                 ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
@@ -231,6 +273,12 @@ namespace LSOL.Systems
 
             metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
             metadata.Profit = ini.GetFloat("Meta", "Profit", metadata.StartingBalance);
+            metadata.Language = ParseModLanguage(
+                ini.GetString("Meta", "Language", string.Empty),
+                ModLanguage.English);
+            metadata.ColorblindMode = ParseColorblindMode(
+                ini.GetString("Meta", "ColorblindMode", string.Empty),
+                ColorblindMode.Off);
             metadata.VehicleFuelDifficultyEnabled = ini.GetBool("Meta", "VehicleFuelDifficultyEnabled", false);
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
             metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
@@ -243,6 +291,8 @@ namespace LSOL.Systems
                 NpcWeeklyWageDifficulty.Standard);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             metadata.Analytics = ReadAnalyticsSnapshot(ini);
+            metadata.OwnedFleet = ReadOwnedFleetSnapshot(ini);
+            metadata.NpcLogistics = ReadNpcLogisticsSnapshot(ini);
             return metadata;
         }
 
@@ -447,6 +497,152 @@ namespace LSOL.Systems
             return "Analytics:Profit";
         }
 
+        private static void WriteOwnedFleetSnapshot(StreamWriter writer, OwnedFleetPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || snapshot.Vehicles == null || snapshot.Vehicles.Count == 0)
+            {
+                return;
+            }
+
+            var orderedVehicles = snapshot.Vehicles
+                .Where(vehicle => vehicle != null && !string.IsNullOrWhiteSpace(vehicle.PoweredModelName))
+                .OrderBy(vehicle => vehicle.PoweredModelName, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(vehicle => vehicle.PoweredPosition.X)
+                .ThenBy(vehicle => vehicle.PoweredPosition.Y)
+                .ToList();
+
+            for (int i = 0; i < orderedVehicles.Count; i++)
+            {
+                var vehicle = orderedVehicles[i];
+                writer.WriteLine("[{0}]", BuildOwnedFleetSectionName(i + 1));
+                writer.WriteLine("PoweredModelName={0}", vehicle.PoweredModelName ?? string.Empty);
+                writer.WriteLine("CargoModelName={0}", vehicle.CargoModelName ?? string.Empty);
+                writer.WriteLine("HasSeparateCargoVehicle={0}", vehicle.HasSeparateCargoVehicle ? "true" : "false");
+                writer.WriteLine("PoweredPosition={0}", FormatVector3(vehicle.PoweredPosition));
+                writer.WriteLine("PoweredHeading={0}", FormatFloat(vehicle.PoweredHeading));
+                writer.WriteLine("CargoType={0}", vehicle.CargoType);
+                writer.WriteLine("CapacityTons={0}", FormatFloat(vehicle.CapacityTons));
+                writer.WriteLine("Commodity={0}", vehicle.Commodity ?? string.Empty);
+                writer.WriteLine("WeightTons={0}", FormatFloat(vehicle.WeightTons));
+                writer.WriteLine("CargoCondition={0}", FormatFloat(vehicle.CargoCondition));
+                writer.WriteLine("TotalLostTons={0}", FormatFloat(vehicle.TotalLostTons));
+                writer.WriteLine("SourceIndustryId={0}", vehicle.SourceIndustryId ?? string.Empty);
+                writer.WriteLine("SourceDistrictName={0}", vehicle.SourceDistrictName ?? string.Empty);
+                writer.WriteLine("CurrentFuelLiters={0}", FormatFloat(vehicle.CurrentFuelLiters));
+                writer.WriteLine();
+            }
+        }
+
+        private static OwnedFleetPersistenceSnapshot ReadOwnedFleetSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new OwnedFleetPersistenceSnapshot();
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("OwnedFleet:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var poweredModelName = ini.GetString(section, "PoweredModelName", string.Empty);
+                if (string.IsNullOrWhiteSpace(poweredModelName))
+                {
+                    continue;
+                }
+
+                snapshot.Vehicles.Add(new OwnedFleetVehicleSnapshot
+                {
+                    PoweredModelName = poweredModelName,
+                    CargoModelName = ini.GetString(section, "CargoModelName", string.Empty),
+                    HasSeparateCargoVehicle = ini.GetBool(section, "HasSeparateCargoVehicle", false),
+                    PoweredPosition = ParseVector3(ini.GetString(section, "PoweredPosition", string.Empty), Vector3.Zero),
+                    PoweredHeading = ini.GetFloat(section, "PoweredHeading", 0f),
+                    CargoType = ParseVehicleCargoType(ini.GetString(section, "CargoType", VehicleCargoType.Unknown.ToString()), VehicleCargoType.Unknown),
+                    CapacityTons = ini.GetFloat(section, "CapacityTons", 0f),
+                    Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                    WeightTons = ini.GetFloat(section, "WeightTons", 0f),
+                    CargoCondition = ini.GetFloat(section, "CargoCondition", 1f),
+                    TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
+                    SourceIndustryId = ini.GetString(section, "SourceIndustryId", string.Empty),
+                    SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
+                    CurrentFuelLiters = ini.GetFloat(section, "CurrentFuelLiters", 0f),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
+        private static void WriteNpcLogisticsSnapshot(StreamWriter writer, NpcLogisticsPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || snapshot.Contracts == null || snapshot.Contracts.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var contract in snapshot.Contracts.OrderBy(entry => entry != null ? entry.Id : 0))
+            {
+                if (contract == null || string.IsNullOrWhiteSpace(contract.OriginIndustryId) || string.IsNullOrWhiteSpace(contract.DestinationIndustryId))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildNpcContractSectionName(contract.Id));
+                writer.WriteLine("OriginIndustryId={0}", contract.OriginIndustryId ?? string.Empty);
+                writer.WriteLine("DestinationIndustryId={0}", contract.DestinationIndustryId ?? string.Empty);
+                writer.WriteLine("Commodity={0}", contract.Commodity ?? string.Empty);
+                writer.WriteLine("TierId={0}", contract.TierId ?? string.Empty);
+                writer.WriteLine("ContractCost={0}", FormatFloat(contract.ContractCost));
+                writer.WriteLine("PayrollElapsedInGameMinutes={0}", contract.PayrollElapsedInGameMinutes);
+                writer.WriteLine("CompletedPayrollCycles={0}", contract.CompletedPayrollCycles);
+                writer.WriteLine("TotalWeeklyWagesPaid={0}", FormatFloat(contract.TotalWeeklyWagesPaid));
+                writer.WriteLine("CompletedDeliveries={0}", contract.CompletedDeliveries);
+                writer.WriteLine("TotalDeliveredTons={0}", FormatFloat(contract.TotalDeliveredTons));
+                writer.WriteLine("TotalProfitEarned={0}", FormatFloat(contract.TotalProfitEarned));
+                writer.WriteLine("LastJourneyLossRatio={0}", FormatFloat(contract.LastJourneyLossRatio));
+                writer.WriteLine();
+            }
+        }
+
+        private static NpcLogisticsPersistenceSnapshot ReadNpcLogisticsSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new NpcLogisticsPersistenceSnapshot();
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("NpcContract:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                snapshot.Contracts.Add(new NpcLogisticsContractSnapshot
+                {
+                    Id = ParseInt(section.Substring("NpcContract:".Length).Trim(), 0),
+                    OriginIndustryId = ini.GetString(section, "OriginIndustryId", string.Empty),
+                    DestinationIndustryId = ini.GetString(section, "DestinationIndustryId", string.Empty),
+                    Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                    TierId = ini.GetString(section, "TierId", string.Empty),
+                    ContractCost = ini.GetFloat(section, "ContractCost", 0f),
+                    PayrollElapsedInGameMinutes = ParseInt(ini.GetString(section, "PayrollElapsedInGameMinutes", "0"), 0),
+                    CompletedPayrollCycles = ParseInt(ini.GetString(section, "CompletedPayrollCycles", "0"), 0),
+                    TotalWeeklyWagesPaid = ini.GetFloat(section, "TotalWeeklyWagesPaid", 0f),
+                    CompletedDeliveries = ParseInt(ini.GetString(section, "CompletedDeliveries", "0"), 0),
+                    TotalDeliveredTons = ini.GetFloat(section, "TotalDeliveredTons", 0f),
+                    TotalProfitEarned = ini.GetFloat(section, "TotalProfitEarned", 0f),
+                    LastJourneyLossRatio = ini.GetFloat(section, "LastJourneyLossRatio", 0f),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
         private static TabletGraphTimeframe ParseGraphTimeframe(string raw, TabletGraphTimeframe fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -510,6 +706,28 @@ namespace LSOL.Systems
             }
 
             NpcWeeklyWageDifficulty parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static ModLanguage? ParseModLanguage(string raw, ModLanguage fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            ModLanguage parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static ColorblindMode? ParseColorblindMode(string raw, ColorblindMode fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            ColorblindMode parsed;
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 
@@ -644,6 +862,16 @@ namespace LSOL.Systems
             return "TerritorySite:" + (siteId ?? string.Empty).Trim();
         }
 
+        private static string BuildOwnedFleetSectionName(int index)
+        {
+            return "OwnedFleet:" + Math.Max(1, index).ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string BuildNpcContractSectionName(int contractId)
+        {
+            return "NpcContract:" + Math.Max(1, contractId).ToString(CultureInfo.InvariantCulture);
+        }
+
         private static string BuildTerritoryCorridorSectionName(string districtA, string districtB)
         {
             var left = districtA ?? string.Empty;
@@ -679,6 +907,16 @@ namespace LSOL.Systems
         private static string FormatFloat(float value)
         {
             return value.ToString("0.####", CultureInfo.InvariantCulture);
+        }
+
+        private static string FormatVector3(Vector3 value)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0},{1},{2}",
+                FormatFloat(value.X),
+                FormatFloat(value.Y),
+                FormatFloat(value.Z));
         }
 
         private static float ParseFloat(string raw, float fallback)
@@ -722,6 +960,46 @@ namespace LSOL.Systems
 
             return fallback;
         }
+
+        private static Vector3 ParseVector3(string raw, Vector3 fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            var parts = raw.Split(',');
+            if (parts.Length != 3)
+            {
+                return fallback;
+            }
+
+            return new Vector3(
+                ParseFloat(parts[0], fallback.X),
+                ParseFloat(parts[1], fallback.Y),
+                ParseFloat(parts[2], fallback.Z));
+        }
+
+        private static VehicleCargoType ParseVehicleCargoType(string raw, VehicleCargoType fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            VehicleCargoType parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static bool HasOwnedFleetData(OwnedFleetPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static bool HasNpcLogisticsData(NpcLogisticsPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
     }
 
     public sealed class IndustryPersistenceLoadResult
@@ -735,6 +1013,8 @@ namespace LSOL.Systems
         public bool HasGameplayMetadata { get; set; }
         public float Profit { get; set; }
         public float StartingBalance { get; set; }
+        public ModLanguage? Language { get; set; }
+        public ColorblindMode? ColorblindMode { get; set; }
         public bool VehicleFuelDifficultyEnabled { get; set; }
         public bool CargoDamageDifficultyEnabled { get; set; }
         public bool IndustryPricingDifficultyEnabled { get; set; }
@@ -743,5 +1023,7 @@ namespace LSOL.Systems
         public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
         public bool DifficultySettingsLocked { get; set; }
         public TabletAnalyticsPersistenceSnapshot Analytics { get; set; }
+        public OwnedFleetPersistenceSnapshot OwnedFleet { get; set; }
+        public NpcLogisticsPersistenceSnapshot NpcLogistics { get; set; }
     }
 }

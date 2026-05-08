@@ -187,6 +187,11 @@ namespace LSOL.Systems
                     emptyBuffers[input] = 0f;
                 }
 
+                foreach (var optionalInput in industry.OptionalInputs)
+                {
+                    emptyBuffers[optionalInput] = 0f;
+                }
+
                 foreach (var output in industry.Outputs)
                 {
                     emptyBuffers[output] = 0f;
@@ -457,8 +462,7 @@ namespace LSOL.Systems
             float payout;
             if (industry.IsSink)
             {
-                if (commodity.Equals("TV", StringComparison.OrdinalIgnoreCase) ||
-                    commodity.Equals("Computer", StringComparison.OrdinalIgnoreCase))
+                if (market != null)
                 {
                     market.RegisterDelivery(gameTimeMs);
                 }
@@ -587,14 +591,17 @@ namespace LSOL.Systems
                 return false;
             }
 
-            // Ported from oil_mod density emptying rates, converted from L/s to tons/min.
-            // Conversion uses 1000L ~= 1t so: tons/min = liters/second * 60 / 1000.
-            const float litersPerSecondToTonsPerMinute = 0.06f;
-            var litersPerSecond = config.HasConfiguredEmptyingRate
+            var configuredDrainRate = config.HasConfiguredEmptyingRate
                 ? Math.Max(0f, config.EmptyingRate)
                 : ResolveLegacyDensityDrainRate(config.Density);
 
-            drainRatePerMinute = litersPerSecond * litersPerSecondToTonsPerMinute;
+            // CSV sink rates are authored directly as tons/min so service sinks drain visibly.
+            // Legacy INI density values keep the previous liters/second semantics.
+            const float litersPerSecondToTonsPerMinute = 0.06f;
+            drainRatePerMinute = config.IsCsvBacked
+                ? configuredDrainRate
+                : configuredDrainRate * litersPerSecondToTonsPerMinute;
+
             return drainRatePerMinute > 0f;
         }
 
@@ -701,7 +708,7 @@ namespace LSOL.Systems
                 effectiveConfig.IndustryPrice = Math.Max(0f, sitePreset.PurchasePrice);
                 effectiveConfig.IndustryLicencePrice = sitePreset.PermitRequired ? Math.Max(0f, sitePreset.LicencePrice) : 0f;
                 var hasStarterAccess = SiteMetadataParser.GrantsStarterAccess(effectiveConfig.SiteRole, effectiveConfig.OwnershipTier);
-                effectiveConfig.IsOwned = hasStarterAccess || effectiveConfig.IndustryPrice <= 0f;
+                effectiveConfig.IsOwned = hasStarterAccess || effectiveConfig.IsOwned;
                 effectiveConfig.HasContractorPermit = hasStarterAccess || !sitePreset.PermitRequired || effectiveConfig.IndustryLicencePrice <= 0f;
                 return effectiveConfig;
             }

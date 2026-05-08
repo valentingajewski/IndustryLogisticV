@@ -460,21 +460,22 @@ namespace LSOL.UI
                 return;
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             UpdateLayout();
             _menuBackground.Draw();
 
             var industryName = BuildIndustryLabel(_industry.Name);
             var ownershipLabel = _isIndustryOwnedForGameplay ? "[OWNED]" : "[NOT OWNED]";
             var ownershipColor = _isIndustryOwnedForGameplay
-                ? Color.FromArgb(232, 102, 214, 146)
-                : Color.FromArgb(232, 222, 92, 92);
+                ? palette.Get(ModColorRole.AccentTeal, 232)
+                : palette.Get(ModColorRole.AccentOrange, 232);
 
             DrawText(
                 string.Format("{0} MENU", industryName),
                 _frameX + 78f,
                 _frameY + 62f,
                 0.53f,
-                Color.FromArgb(236, 242, 246, 252),
+                palette.Get(ModColorRole.TextPrimary, 236),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
                 0f);
@@ -494,7 +495,7 @@ namespace LSOL.UI
                 _frameX + 80f,
                 _frameY + 88f,
                 0.31f,
-                Color.FromArgb(222, 214, 225, 236),
+                palette.Get(ModColorRole.TextSecondary, 222),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
@@ -520,40 +521,40 @@ namespace LSOL.UI
                     _loadButton,
                     "LOAD CARGO TRUCK",
                     loadSubtitle,
-                    Color.FromArgb(170, 45, 62, 74),
-                    Color.FromArgb(206, 88, 125, 150),
+                    palette.Get(ModColorRole.AccentBlue, 170),
+                    palette.Get(ModColorRole.AccentBlue, 206),
                     _selectedMainIndex == 0);
 
                 DrawButton(
                     _unloadButton,
                     unloadTitle,
                     unloadSubtitle,
-                    Color.FromArgb(170, 56, 45, 61),
-                    Color.FromArgb(210, 132, 86, 158),
+                    palette.Get(ModColorRole.AccentPurple, 170),
+                    palette.Get(ModColorRole.AccentPurple, 210),
                     _selectedMainIndex == 1);
 
                 DrawButton(
                     _statsButton,
                     string.Format("VIEW {0} STATISTICS", industryName),
                     "Open statistics page with input/output loading bars",
-                    Color.FromArgb(170, 46, 66, 50),
-                    Color.FromArgb(205, 85, 124, 94),
+                    palette.Get(ModColorRole.AccentTeal, 170),
+                    palette.Get(ModColorRole.AccentTeal, 205),
                     _selectedMainIndex == 2);
 
                 DrawButton(
                     _vehicleSpawnerButton,
                     "VEHICLE SPAWNER",
                     "Open fleet selection at this industry's spawn pad",
-                    Color.FromArgb(170, 52, 60, 44),
-                    Color.FromArgb(210, 120, 152, 102),
+                    palette.Get(ModColorRole.AccentOrange, 170),
+                    palette.Get(ModColorRole.AccentOrange, 210),
                     _selectedMainIndex == 3);
 
                 DrawButton(
                     _upgradeButton,
                     GetUpgradeActionTitle(),
                     GetUpgradeActionSubtitle(),
-                    Color.FromArgb(170, 58, 51, 86),
-                    Color.FromArgb(212, 124, 104, 178),
+                    palette.Get(ModColorRole.AccentGold, 170),
+                    palette.Get(ModColorRole.AccentGold, 212),
                     _selectedMainIndex == 4);
 
                 _statsPanel.Color = Color.FromArgb(0, 0, 0, 0);
@@ -563,7 +564,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 515f,
                     0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
+                    palette.Get(ModColorRole.TextMuted, 214),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -579,7 +580,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 116f,
                     0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
+                    palette.Get(ModColorRole.TextPrimary, 236),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
                     0f);
@@ -591,7 +592,7 @@ namespace LSOL.UI
                     _frameX + 82f,
                     _frameY + 143f,
                     0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
+                    palette.Get(ModColorRole.TextSecondary, 224),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -625,7 +626,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 515f,
                     0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
+                    palette.Get(ModColorRole.TextMuted, 214),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -641,7 +642,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 116f,
                     0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
+                    palette.Get(ModColorRole.TextPrimary, 236),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
                     0f);
@@ -651,7 +652,7 @@ namespace LSOL.UI
                     _frameX + 82f,
                     _frameY + 143f,
                     0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
+                    palette.Get(ModColorRole.TextSecondary, 224),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -684,7 +685,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 515f,
                     0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
+                    palette.Get(ModColorRole.TextMuted, 214),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -715,7 +716,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 116f,
                     0.39f,
-                    Color.FromArgb(236, 234, 242, 252),
+                    palette.Get(ModColorRole.TextPrimary, 236),
                     GTA.UI.Font.ChaletComprimeCologne,
                     Alignment.Left,
                     0f);
@@ -725,7 +726,7 @@ namespace LSOL.UI
                     _frameX + 82f,
                     _frameY + 143f,
                     0.30f,
-                    Color.FromArgb(224, 214, 226, 236),
+                    palette.Get(ModColorRole.TextSecondary, 224),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -760,7 +761,7 @@ namespace LSOL.UI
                     _frameX + 80f,
                     _frameY + 515f,
                     0.28f,
-                    Color.FromArgb(214, 195, 206, 218),
+                    palette.Get(ModColorRole.TextMuted, 214),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
                     0f);
@@ -906,9 +907,10 @@ namespace LSOL.UI
                 return;
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             var rectangle = _upgradeModuleButtons[index];
-            var idle = index == 4 ? Color.FromArgb(160, 66, 58, 82) : Color.FromArgb(160, 46, 60, 76);
-            var active = index == 4 ? Color.FromArgb(212, 124, 104, 178) : Color.FromArgb(210, 92, 126, 158);
+            var idle = index == 4 ? palette.Get(ModColorRole.AccentGold, 160) : palette.Get(ModColorRole.BackgroundCard, 160);
+            var active = index == 4 ? palette.Get(ModColorRole.AccentGold, 212) : palette.Get(ModColorRole.BackgroundCardSelected, 210);
             rectangle.Color = selected ? active : idle;
             rectangle.Draw();
 
@@ -917,7 +919,7 @@ namespace LSOL.UI
                 rectangle.Position.X + 20f,
                 rectangle.Position.Y + 14f,
                 0.40f,
-                Color.FromArgb(238, 245, 249, 255),
+                palette.Get(ModColorRole.TextPrimary, 238),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
                 0f);
@@ -927,7 +929,7 @@ namespace LSOL.UI
                 rectangle.Position.X + 22f,
                 rectangle.Position.Y + 39f,
                 0.265f,
-                Color.FromArgb(220, 222, 231, 240),
+                palette.Get(ModColorRole.TextSecondary, 220),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);
@@ -935,6 +937,7 @@ namespace LSOL.UI
 
         private void DrawButton(ScaledRectangle rectangle, string title, string subtitle, Color idleColor, Color hoverColor, bool selected)
         {
+            var palette = AccessibilityTheme.Service.Palette;
             rectangle.Color = selected ? hoverColor : idleColor;
             rectangle.Draw();
 
@@ -943,7 +946,7 @@ namespace LSOL.UI
                 rectangle.Position.X + 20f,
                 rectangle.Position.Y + 18f,
                 0.46f,
-                Color.FromArgb(238, 245, 249, 255),
+                palette.Get(ModColorRole.TextPrimary, 238),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
                 0f);
@@ -953,7 +956,7 @@ namespace LSOL.UI
                 rectangle.Position.X + 22f,
                 rectangle.Position.Y + 49f,
                 0.285f,
-                Color.FromArgb(220, 222, 231, 240),
+                palette.Get(ModColorRole.TextSecondary, 220),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
                 0f);

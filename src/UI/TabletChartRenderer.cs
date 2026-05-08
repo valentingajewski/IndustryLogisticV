@@ -38,6 +38,7 @@ namespace LSOL.UI
                 return;
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             DrawPanelHeading(panel, title, subtitle, string.Empty);
             DrawTextBlock(
                 panel.Resolution,
@@ -45,7 +46,7 @@ namespace LSOL.UI
                 panel.X + 14f,
                 panel.Y + 58f,
                 0.225f,
-                Color.FromArgb(206, 214, 222, 236),
+                palette.Get(ModColorRole.TextSecondary, 206),
                 UiFont.ChaletLondon,
                 Alignment.Left,
                 14f);
@@ -64,6 +65,7 @@ namespace LSOL.UI
                 return;
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             formatter = formatter ?? (value => value.ToString("0.0"));
             var latestText = values != null && values.Count > 0
                 ? formatter(values[values.Count - 1])
@@ -78,7 +80,7 @@ namespace LSOL.UI
                     panel.X + 14f,
                     panel.Y + 58f,
                     0.21f,
-                    Color.FromArgb(198, 214, 222, 236),
+                    palette.Get(ModColorRole.TextSecondary, 198),
                     UiFont.ChaletLondon,
                     Alignment.Left,
                     14f);
@@ -114,7 +116,7 @@ namespace LSOL.UI
                     rowY,
                     chartWidth,
                     1f,
-                    Color.FromArgb(34, 222, 230, 240));
+                        palette.Get(ModColorRole.ChartGrid, 34));
             }
 
             DrawTextBlock(
@@ -123,7 +125,7 @@ namespace LSOL.UI
                 chartX + chartWidth,
                 chartY - 8f,
                 0.17f,
-                Color.FromArgb(154, 201, 212, 228),
+                palette.Get(ModColorRole.TextMuted, 154),
                 UiFont.ChaletLondon,
                 Alignment.Right,
                 10f);
@@ -133,7 +135,7 @@ namespace LSOL.UI
                 chartX + chartWidth,
                 chartY + chartHeight - 8f,
                 0.17f,
-                Color.FromArgb(154, 201, 212, 228),
+                palette.Get(ModColorRole.TextMuted, 154),
                 UiFont.ChaletLondon,
                 Alignment.Right,
                 10f);
@@ -188,6 +190,7 @@ namespace LSOL.UI
                 return;
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             DrawPanelHeading(panel, title, subtitle, string.Empty);
             if (entries == null || entries.Count == 0)
             {
@@ -197,7 +200,7 @@ namespace LSOL.UI
                     panel.X + 14f,
                     panel.Y + 58f,
                     0.21f,
-                    Color.FromArgb(198, 214, 222, 236),
+                    palette.Get(ModColorRole.TextSecondary, 198),
                     UiFont.ChaletLondon,
                     Alignment.Left,
                     14f);
@@ -222,14 +225,14 @@ namespace LSOL.UI
                 var rowY = panel.Y + 50f + (rowHeight * i);
                 var selected = i == highlightIndex;
                 var fillColor = entry.FillColor == default(Color)
-                    ? Color.FromArgb(208, 112, 176, 222)
+                    ? palette.Get(ModColorRole.AccentBlue, 208)
                     : entry.FillColor;
                 var trackColor = selected
-                    ? Color.FromArgb(74, 224, 236, 248)
-                    : Color.FromArgb(42, 180, 196, 216);
+                    ? palette.Get(ModColorRole.Highlight, 74)
+                    : palette.Get(ModColorRole.ChartFill, 42);
                 var textColor = selected
-                    ? Color.FromArgb(232, 246, 248, 252)
-                    : Color.FromArgb(204, 216, 224, 238);
+                    ? palette.Get(ModColorRole.TextPrimary, 232)
+                    : palette.Get(ModColorRole.TextSecondary, 204);
                 var fillWidth = barWidth * (Math.Max(0f, entry.Value) / maxValue);
 
                 DrawTextBlock(
@@ -282,6 +285,7 @@ namespace LSOL.UI
                 return;
             }
 
+            var palette = AccessibilityTheme.Service.Palette;
             DrawPanelHeading(panel, title, subtitle, string.Empty);
             if (entries == null || entries.Count == 0)
             {
@@ -291,7 +295,7 @@ namespace LSOL.UI
                     panel.X + 14f,
                     panel.Y + 58f,
                     0.21f,
-                    Color.FromArgb(198, 214, 222, 236),
+                    palette.Get(ModColorRole.TextSecondary, 198),
                     UiFont.ChaletLondon,
                     Alignment.Left,
                     14f);
@@ -304,7 +308,7 @@ namespace LSOL.UI
                 var entry = entries[i] ?? new TabletMetricBarEntry();
                 var ratio = Clamp01(entry.Ratio);
                 var fillColor = entry.FillColor == default(Color)
-                    ? Color.FromArgb(212, 112, 176, 222)
+                    ? palette.Get(ModColorRole.AccentBlue, 212)
                     : entry.FillColor;
                 var rowY = panel.Y + 50f + (rowHeight * i);
                 var barX = panel.X + 14f;
@@ -317,7 +321,7 @@ namespace LSOL.UI
                     barX,
                     rowY - 2f,
                     0.205f,
-                    Color.FromArgb(224, 242, 246, 252),
+                    palette.Get(ModColorRole.TextPrimary, 224),
                     UiFont.ChaletLondon,
                     Alignment.Left,
                     12f);
@@ -327,7 +331,7 @@ namespace LSOL.UI
                     panel.X + panel.Width - 12f,
                     rowY - 2f,
                     0.195f,
-                    Color.FromArgb(208, 216, 224, 238),
+                    palette.Get(ModColorRole.TextSecondary, 208),
                     UiFont.ChaletLondon,
                     Alignment.Right,
                     12f);
@@ -338,7 +342,7 @@ namespace LSOL.UI
                     barY,
                     barWidth,
                     9f,
-                    Color.FromArgb(40, 184, 196, 214));
+                    palette.Get(ModColorRole.ChartFill, 40));
                 DrawRect(
                     panel.Resolution.Width,
                     panel.Resolution.Height,
@@ -352,13 +356,14 @@ namespace LSOL.UI
 
         private static void DrawPanelHeading(SimpleMenuTabletPanelContext panel, string title, string subtitle, string rightText)
         {
+            var palette = AccessibilityTheme.Service.Palette;
             DrawTextBlock(
                 panel.Resolution,
                 title,
                 panel.X + 14f,
                 panel.Y + 10f,
                 0.31f,
-                Color.FromArgb(236, 243, 248, 252),
+                palette.Get(ModColorRole.TextPrimary, 236),
                 UiFont.ChaletComprimeCologne,
                 Alignment.Left,
                 16f);
@@ -368,7 +373,7 @@ namespace LSOL.UI
                 panel.X + 14f,
                 panel.Y + 34f,
                 0.19f,
-                Color.FromArgb(196, 210, 220, 234),
+                palette.Get(ModColorRole.TextSecondary, 196),
                 UiFont.ChaletLondon,
                 Alignment.Left,
                 12f);
@@ -380,7 +385,7 @@ namespace LSOL.UI
                     panel.X + panel.Width - 12f,
                     panel.Y + 12f,
                     0.22f,
-                    Color.FromArgb(222, 231, 239, 248),
+                    palette.Get(ModColorRole.TextPrimary, 222),
                     UiFont.ChaletLondon,
                     Alignment.Right,
                     12f);

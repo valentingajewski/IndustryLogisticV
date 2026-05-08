@@ -217,6 +217,8 @@ namespace LSOL.UI
                 return;
             }
 
+            ApplyTheme();
+
             for (int i = 0; i < _entries.Count; i++)
             {
                 _entries[i].Refresh();
@@ -224,6 +226,20 @@ namespace LSOL.UI
 
             _refreshRequested = false;
             _lastRefreshMs = Game.GameTime;
+        }
+
+        private void ApplyTheme()
+        {
+            var palette = AccessibilityTheme.Service.Palette;
+            if (_menu.Banner != null)
+            {
+                _menu.Banner.Color = palette.Get(ModColorRole.AccentBlue, 228);
+            }
+
+            if (_menu.BannerText != null)
+            {
+                _menu.BannerText.Color = palette.Get(ModColorRole.TextPrimary, 244);
+            }
         }
 
         private LemonMenuEntry GetSelectedEntry()
@@ -257,6 +273,32 @@ namespace LSOL.UI
             return index;
         }
 
+        private static ColorSet BuildColorSet()
+        {
+            var palette = AccessibilityTheme.Service.Palette;
+            return new ColorSet
+            {
+                TitleNormal = palette.Get(ModColorRole.TextPrimary, 235),
+                TitleHovered = palette.Get(ModColorRole.TextPrimary, 245),
+                TitleDisabled = palette.Get(ModColorRole.TextMuted, 175),
+                AltTitleNormal = palette.Get(ModColorRole.TextSecondary, 226),
+                AltTitleHovered = palette.Get(ModColorRole.TextPrimary, 242),
+                AltTitleDisabled = palette.Get(ModColorRole.TextMuted, 172),
+                ArrowsNormal = palette.Get(ModColorRole.AccentGold, 236),
+                ArrowsHovered = palette.Get(ModColorRole.Highlight, 244),
+                ArrowsDisabled = palette.Get(ModColorRole.TextMuted, 168),
+                BadgeLeftNormal = palette.Get(ModColorRole.AccentBlue, 220),
+                BadgeLeftHovered = palette.Get(ModColorRole.AccentBlue, 236),
+                BadgeLeftDisabled = palette.Get(ModColorRole.TextMuted, 168),
+                BadgeRightNormal = palette.Get(ModColorRole.AccentGold, 220),
+                BadgeRightHovered = palette.Get(ModColorRole.AccentGold, 236),
+                BadgeRightDisabled = palette.Get(ModColorRole.TextMuted, 168),
+                BackgroundNormal = palette.Get(ModColorRole.BackgroundCard, 190),
+                BackgroundHovered = palette.Get(ModColorRole.BackgroundCardSelected, 226),
+                BackgroundDisabled = palette.Get(ModColorRole.BackgroundCard, 132),
+            };
+        }
+
         private sealed class LemonMenuEntry
         {
             private readonly MenuItem _source;
@@ -276,6 +318,7 @@ namespace LSOL.UI
                 }
 
                 Item.Tag = this;
+                Item.UseCustomBackground = !_source.IsSeparator;
             }
 
             public NativeItem Item { get; }
@@ -292,6 +335,7 @@ namespace LSOL.UI
                     return;
                 }
 
+                Item.Colors = BuildColorSet();
                 Item.Description = ResolveDescription();
                 Item.AltTitle = ResolveAltTitle();
 
@@ -347,23 +391,23 @@ namespace LSOL.UI
 
                 if (_source.CheckboxStateFactory != null)
                 {
-                    return _source.OnActivate != null ? "Press Enter to toggle." : string.Empty;
+                    return _source.OnActivate != null ? ModLocalization.Service.Get(ModTextKey.LemonToggleHint) : string.Empty;
                 }
 
                 var hasLeftRight = _source.OnLeft != null || _source.OnRight != null;
                 if (hasLeftRight && _source.OnActivate != null)
                 {
-                    return "Left/Right to adjust.";
+                    return ModLocalization.Service.Get(ModTextKey.LemonAdjustHint);
                 }
 
                 if (hasLeftRight)
                 {
-                    return "Left/Right to cycle options.";
+                    return ModLocalization.Service.Get(ModTextKey.LemonCycleHint);
                 }
 
                 if (_source.OnActivate != null)
                 {
-                    return "Press Enter to use this option.";
+                    return ModLocalization.Service.Get(ModTextKey.LemonUseHint);
                 }
 
                 return string.Empty;

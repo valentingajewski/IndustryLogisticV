@@ -48,7 +48,7 @@ namespace LSOL.Domain
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
             IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
-            IsOwned = config.IsOwned || IndustryPrice <= 0f || HasStarterAccess;
+            IsOwned = config.IsOwned || HasStarterAccess;
             HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f || HasStarterAccess;
 
             _recipes = recipes ?? new List<ProductionRecipe>();
@@ -280,7 +280,7 @@ namespace LSOL.Domain
                 return addedOmega;
             }
 
-            if (!Inputs.Contains(commodity))
+            if (!Inputs.Contains(commodity) && !OptionalInputs.Contains(commodity))
             {
                 return 0f;
             }
@@ -382,6 +382,12 @@ namespace LSOL.Domain
             {
                 removed += GetStock(input);
                 BufferStorage[input] = 0f;
+            }
+
+            foreach (var optionalInput in OptionalInputs)
+            {
+                removed += GetStock(optionalInput);
+                BufferStorage[optionalInput] = 0f;
             }
 
             if (_supportsOmegaBoost)
@@ -687,7 +693,7 @@ namespace LSOL.Domain
 
         public void SetOwned(bool isOwned)
         {
-            IsOwned = isOwned || !RequiresPurchase || HasStarterAccess;
+            IsOwned = isOwned || HasStarterAccess;
         }
 
         public void SetContractorPermitOwned(bool hasContractorPermit)
@@ -830,6 +836,11 @@ namespace LSOL.Domain
             float? industryPrice = null,
             float? industryLicencePrice = null)
         {
+            foreach (var key in BufferStorage.Keys.ToList())
+            {
+                BufferStorage[key] = 0f;
+            }
+
             if (bufferStorage != null)
             {
                 foreach (var pair in bufferStorage)

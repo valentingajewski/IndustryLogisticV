@@ -229,6 +229,106 @@ namespace LSOL.Systems
             }
 
             _contracts.Clear();
+            _nextContractId = 1;
+            _lastObservedClockMinute = -1;
+        }
+
+        public NpcLogisticsPersistenceSnapshot CreatePersistenceSnapshot()
+        {
+            var snapshot = new NpcLogisticsPersistenceSnapshot();
+            for (int i = 0; i < _contracts.Count; i++)
+            {
+                var contract = _contracts[i];
+                if (contract == null || contract.OriginIndustry == null || contract.DestinationIndustry == null || contract.Tier == null)
+                {
+                    continue;
+                }
+
+                snapshot.Contracts.Add(new NpcLogisticsContractSnapshot
+                {
+                    Id = contract.Id,
+                    OriginIndustryId = contract.OriginIndustry.Id,
+                    DestinationIndustryId = contract.DestinationIndustry.Id,
+                    Commodity = contract.Commodity,
+                    TierId = contract.Tier.Id,
+                    ContractCost = contract.ContractCost,
+                    PayrollElapsedInGameMinutes = contract.PayrollElapsedInGameMinutes,
+                    CompletedPayrollCycles = contract.CompletedPayrollCycles,
+                    TotalWeeklyWagesPaid = contract.TotalWeeklyWagesPaid,
+                    CompletedDeliveries = contract.CompletedDeliveries,
+                    TotalDeliveredTons = contract.TotalDeliveredTons,
+                    TotalProfitEarned = contract.TotalProfitEarned,
+                    LastJourneyLossRatio = contract.LastJourneyLossRatio,
+                });
+            }
+
+            return snapshot;
+        }
+
+        public void ApplyPersistenceSnapshot(NpcLogisticsPersistenceSnapshot snapshot)
+        {
+            ClearAll();
+
+            if (snapshot == null || snapshot.Contracts == null || snapshot.Contracts.Count == 0)
+            {
+                return;
+            }
+
+            var nextContractId = 1;
+            for (int i = 0; i < snapshot.Contracts.Count; i++)
+            {
+                var entry = snapshot.Contracts[i];
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                var originIndustry = FindIndustryById(entry.OriginIndustryId);
+                var destinationIndustry = FindIndustryById(entry.DestinationIndustryId);
+                var tier = FindDriverTier(entry.TierId);
+                if (originIndustry == null || destinationIndustry == null || tier == null)
+                {
+                    continue;
+                }
+
+                var normalizedCommodity = CommodityCatalog.Normalize(entry.Commodity);
+                if (string.IsNullOrWhiteSpace(normalizedCommodity))
+                {
+                    continue;
+                }
+
+                VehicleDefinition selectedVehicle;
+                VehicleDefinition selectedTractor;
+                if (!TryResolveVehicleForCommodity(normalizedCommodity, out selectedVehicle, out selectedTractor))
+                {
+                    continue;
+                }
+
+                var contract = new NpcLogisticsContract(Math.Max(1, entry.Id))
+                {
+                    OriginIndustry = originIndustry,
+                    DestinationIndustry = destinationIndustry,
+                    Commodity = normalizedCommodity,
+                    Tier = tier,
+                    VehicleDefinition = selectedVehicle,
+                    TractorDefinition = selectedTractor,
+                    ContractCost = Math.Max(0f, entry.ContractCost),
+                    PayrollElapsedInGameMinutes = Math.Max(0, entry.PayrollElapsedInGameMinutes),
+                    CompletedPayrollCycles = Math.Max(0, entry.CompletedPayrollCycles),
+                    TotalWeeklyWagesPaid = Math.Max(0f, entry.TotalWeeklyWagesPaid),
+                    CompletedDeliveries = Math.Max(0, entry.CompletedDeliveries),
+                    TotalDeliveredTons = Math.Max(0f, entry.TotalDeliveredTons),
+                    TotalProfitEarned = Math.Max(0f, entry.TotalProfitEarned),
+                    LastJourneyLossRatio = Math.Max(0f, entry.LastJourneyLossRatio),
+                    StatusText = "Preparing route",
+                };
+
+                _contracts.Add(contract);
+                nextContractId = Math.Max(nextContractId, contract.Id + 1);
+            }
+
+            _nextContractId = nextContractId;
+            _lastObservedClockMinute = -1;
         }
 
         private bool TryUpsertContract(
@@ -872,6 +972,30 @@ namespace LSOL.Systems
         private bool HasGameplayAccess(Industry industry)
         {
             return industry != null && !_industryManager.RequiresContractorPermit(industry);
+        }
+
+        private Industry FindIndustryById(string industryId)
+        {
+            if (string.IsNullOrWhiteSpace(industryId) || _industryManager.Industries == null)
+            {
+                return null;
+            }
+
+            return _industryManager.Industries.FirstOrDefault(industry =>
+                industry != null &&
+                string.Equals(industry.Id, industryId.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        private NpcDriverTierDefinition FindDriverTier(string tierId)
+        {
+            if (string.IsNullOrWhiteSpace(tierId))
+            {
+                return null;
+            }
+
+            return _driverTiers.FirstOrDefault(tier =>
+                tier != null &&
+                string.Equals(tier.Id, tierId.Trim(), StringComparison.OrdinalIgnoreCase));
         }
 
         private bool TryResolveVehicleForCommodity(string commodity, out VehicleDefinition selectedVehicle, out VehicleDefinition selectedTractor)

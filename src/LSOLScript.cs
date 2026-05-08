@@ -28,7 +28,6 @@ namespace LSOL
         private const float CargoDamageGraceHealth = 40f;
         private const float CargoConditionLossPerDamageRatio = 0.75f;
         private const float CargoLossPerDamageRatio = 0.35f;
-        private const int VkRControl = 0xA3;
         private const float DebugFillTons = 1000000f;
         private const string SavegamesDirectoryName = "LSOLSaves";
         private const int MaxSaveNameLength = 40;
@@ -36,6 +35,26 @@ namespace LSOL
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
         private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
         private static readonly float[] StartingBalanceOptions = BuildStartingBalanceOptions();
+        private static readonly ModLanguage[] SelectableLanguages =
+        {
+            ModLanguage.English,
+            ModLanguage.French,
+            ModLanguage.Italian,
+            ModLanguage.Spanish,
+            ModLanguage.Russian,
+            ModLanguage.Japanese,
+            ModLanguage.Chinese,
+            ModLanguage.Hindi,
+            ModLanguage.Portuguese,
+            ModLanguage.Turkish,
+        };
+        private static readonly ColorblindMode[] ColorblindModeOptions =
+        {
+            ColorblindMode.Off,
+            ColorblindMode.Deuteranopia,
+            ColorblindMode.Protanopia,
+            ColorblindMode.Tritanopia,
+        };
 
         [DllImport("user32.dll")]
         private static extern short GetAsyncKeyState(int vKey);
@@ -60,19 +79,19 @@ namespace LSOL
         private readonly LemonMenu _saveSlotsMenu;
         private readonly LemonMenu _industryPurchaseMenu;
         private readonly LemonMenu _difficultyMenu;
+        private readonly LemonMenu _optionsMenu;
         private readonly LemonMenu _debugMenu;
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
         private readonly NpcLogisticsManager _npcLogisticsManager;
+        private readonly IndustryRefuelService _industryRefuelService;
         private readonly NpcLogisticsController _npcLogisticsController;
-        private readonly OverviewMenuController _overviewMenuController;
         private readonly TabletStateStore _tabletStateStore;
         private readonly TabletShellController _tabletShellController;
         private readonly CompanyMapController _companyMapController;
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
-        private readonly IndustryTabletController _industryTabletController;
 
         private readonly Dictionary<WinForms.Keys, int> _keyCooldownUntil;
         private readonly HashSet<WinForms.Keys> _heldKeys;
@@ -113,8 +132,10 @@ namespace LSOL
         private bool _pendingIndustryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
         private bool _pendingLicensingDifficultyEnabled;
+        private ModLanguage _language;
         private EconomyDifficultyPreset _economyDifficultyPreset;
         private EconomyDifficultyPreset _pendingEconomyDifficultyPreset;
+        private ColorblindMode _colorblindMode;
         private NpcWeeklyWageDifficulty _npcWeeklyWageDifficulty;
         private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
         private bool _vehicleFuelDifficultyEnabled;
@@ -186,6 +207,15 @@ namespace LSOL
                 AddProfit,
                 message => ShowStatus(message),
                 _territoryManager);
+            _industryRefuelService = new IndustryRefuelService(
+                _fleetManager,
+                _vehicleFuelSystem,
+                _industryManager,
+                _globalMarket,
+                () => _profit,
+                DeductProfit,
+                GetIndustryMarkerPosition,
+                IndustryInteractionDistance);
 
             _officeMenu = new LemonMenu("Office")
             {
@@ -231,6 +261,11 @@ namespace LSOL
                 Subtitle = "Enable or disable challenge options",
                 AlignRight = true,
             };
+            _optionsMenu = new LemonMenu("Options")
+            {
+                Subtitle = "Language and accessibility settings",
+                AlignRight = true,
+            };
             _debugMenu = new LemonMenu("Debug")
             {
                 Subtitle = "Runtime industry and vehicle tools",
@@ -242,14 +277,6 @@ namespace LSOL
                 _npcLogisticsManager,
                 OpenOfficeMenu,
                 message => ShowStatus(message));
-            _overviewMenuController = new OverviewMenuController(
-                _controls,
-                _industryManager,
-                CloseAllMenus,
-                () => _licensingDifficultyEnabled,
-                () => _profit,
-                PurchaseContractorPermitFromOverview,
-                message => ShowStatus(message));
             _companyMapController = new CompanyMapController(
                 _controls,
                 _territoryManager,
@@ -260,18 +287,6 @@ namespace LSOL
                 AssignSupportCrewFromOffice,
                 HireSupportStaffFromOffice,
                 message => ShowStatus(message));
-            _industryTabletController = new IndustryTabletController(
-                _fleetManager,
-                _industryManager,
-                _globalMarket,
-                GetIndustryMarkerPosition);
-            _industryTabletController.LoadRequested += HandleTabletLoadRequested;
-            _industryTabletController.LoadCommodityRequested += HandleTabletLoadCommodityRequested;
-            _industryTabletController.UnloadRequested += HandleTabletUnloadRequested;
-            _industryTabletController.UnloadModeRequested += HandleTabletUnloadModeRequested;
-            _industryTabletController.IndustryPurchaseRequested += HandleTabletIndustryPurchaseRequested;
-            _industryTabletController.UpgradeModuleRequested += HandleTabletUpgradeModuleRequested;
-            _industryTabletController.VehicleSpawnerRequested += HandleTabletVehicleSpawnerRequested;
             _tabletStateStore = new TabletStateStore(
                 _industryManager,
                 _fleetManager,
@@ -318,7 +333,9 @@ namespace LSOL
             _cargoDamageDifficultyEnabled = true;
             _industryPricingDifficultyEnabled = false;
             _licensingDifficultyEnabled = false;
+            _language = ModLanguage.English;
             _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
+            _colorblindMode = ColorblindMode.Off;
             _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
             _vehicleFuelDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
@@ -331,6 +348,7 @@ namespace LSOL
             _pendingSaveName = string.Empty;
             _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
             _saveSlotMenuAction = SaveSlotMenuAction.Load;
+            ApplyPresentationSettings(false);
             ApplyDifficultySettingsToSystems();
 
             if (_industryPersistenceEnabled)
@@ -341,6 +359,7 @@ namespace LSOL
             RebuildOfficeMenuItems();
             RebuildModControlMenuItems();
             RebuildDifficultyMenuItems();
+            RebuildOptionsMenuItems();
             RebuildDebugMenuItems();
 
             Tick += OnTick;
@@ -348,7 +367,7 @@ namespace LSOL
             KeyUp += OnKeyUp;
             Aborted += OnAborted;
 
-            Notification.PostTicker(MessagePrefix + "Loaded successfully.", false, false);
+            Notification.PostTicker(PrefixMessage(Text(ModTextKey.DetailLoadedSuccessfully)), false, false);
         }
 
         private bool AnyMenuOpen
@@ -364,11 +383,10 @@ namespace LSOL
                     || _saveSlotsMenu.IsOpen
                     || _industryPurchaseMenu.IsOpen
                     || _difficultyMenu.IsOpen
+                    || _optionsMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _npcLogisticsController.AnyMenuOpen
                     || _companyMapController.AnyMenuOpen
-                    || _overviewMenuController.AnyMenuOpen
-                    || _industryTabletController.IsOpen
                     || _tabletShellController.IsOpen;
             }
         }
@@ -502,16 +520,6 @@ namespace LSOL
                 return;
             }
 
-            if (HandleOverviewMenuKey(e.KeyCode))
-            {
-                return;
-            }
-
-            if (HandleTabletKey(e.KeyCode))
-            {
-                return;
-            }
-
             if (HandleMenuKey(e.KeyCode))
             {
                 return;
@@ -562,7 +570,8 @@ namespace LSOL
 
         private static bool IsDebugMenuHotkey(WinForms.KeyEventArgs e)
         {
-            return e != null
+            return System.Diagnostics.Debugger.IsAttached
+                && e != null
                 && e.KeyCode == WinForms.Keys.W
                 && e.Alt;
         }
@@ -575,27 +584,6 @@ namespace LSOL
         private bool HandleTabletShellKey(WinForms.Keys key)
         {
             return _tabletShellController != null && _tabletShellController.HandleKey(key);
-        }
-
-        private bool HandleTabletKey(WinForms.Keys key)
-        {
-            if (!_industryTabletController.IsOpen)
-            {
-                return false;
-            }
-
-            if (_industryTabletController.HandleKey(key, _controls))
-            {
-                return true;
-            }
-
-            if (key == _controls.Interact || key == _controls.MenuBack || key == WinForms.Keys.Escape)
-            {
-                CloseIndustryTablet();
-                return true;
-            }
-
-            return true;
         }
 
         private bool HandleMenuKey(WinForms.Keys key)
@@ -645,6 +633,18 @@ namespace LSOL
                 }
 
                 _savingOptionsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_optionsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToModControlMenu();
+                    return true;
+                }
+
+                _optionsMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -705,11 +705,6 @@ namespace LSOL
             return false;
         }
 
-        private bool HandleOverviewMenuKey(WinForms.Keys key)
-        {
-            return _overviewMenuController.HandleKey(key);
-        }
-
         private bool CanHandleKeyPress(WinForms.Keys key)
         {
             var now = Game.GameTime;
@@ -738,19 +733,14 @@ namespace LSOL
             _saveSlotsMenu.Draw();
             _industryPurchaseMenu.Draw();
             _difficultyMenu.Draw();
+            _optionsMenu.Draw();
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            _overviewMenuController.Draw();
-            if (_overviewMenuController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
-            {
-                return;
-            }
-
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1444,6 +1434,7 @@ namespace LSOL
             _saveSlotsMenu.Close();
             _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
+            _optionsMenu.Close();
             _debugMenu.Close();
             _officeMenu.Close();
             _vehicleCargoMenu.Close();
@@ -1453,8 +1444,8 @@ namespace LSOL
 
         private void RebuildModControlMenuItems()
         {
-            _modControlMenu.Title = "Game Mod Control";
-            _modControlMenu.Subtitle = "Activate mechanics and configure gameplay";
+            _modControlMenu.Title = Text(ModTextKey.MenuGameModControlTitle);
+            _modControlMenu.Subtitle = Text(ModTextKey.MenuGameModControlSubtitle);
 
             _modControlMenu.SetItems(new[]
             {
@@ -1467,19 +1458,25 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Saving Options",
+                    CaptionFactory = () => Text(ModTextKey.RowSavingOptions),
                     DetailFactory = CurrentSavingOptionsDetail,
                     OnActivate = OpenSavingOptionsMenu,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Difficulty settings",
+                    CaptionFactory = () => Text(ModTextKey.RowDifficultySettings),
                     DetailFactory = CurrentDifficultySettingsDetail,
                     OnActivate = OpenDifficultyMenu,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Close",
+                    CaptionFactory = () => Text(ModTextKey.RowOptions),
+                    DetailFactory = CurrentOptionsDetail,
+                    OnActivate = OpenOptionsMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.CommonClose),
                     OnActivate = () => _modControlMenu.Close(),
                 },
             });
@@ -1487,37 +1484,37 @@ namespace LSOL
 
         private void RebuildSavingOptionsMenuItems()
         {
-            _savingOptionsMenu.Title = "Saving Options";
-            _savingOptionsMenu.Subtitle = string.Format("Active save: {0}", GetCurrentSaveLabel());
+            _savingOptionsMenu.Title = Text(ModTextKey.MenuSavingOptionsTitle);
+            _savingOptionsMenu.Subtitle = Text(ModTextKey.MenuSavingOptionsSubtitle, GetCurrentSaveLabel());
             _savingOptionsMenu.SetItems(new[]
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Create new save",
-                    DetailFactory = () => string.Format("Creates {0}.state.ini in {1}", "<name>", SavegamesDirectoryName),
+                    CaptionFactory = () => Text(ModTextKey.RowCreateNewSave),
+                    DetailFactory = () => Text(ModTextKey.DetailCreateNewSave, "<name>", SavegamesDirectoryName),
                     OnActivate = PromptForNewSave,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Load save",
-                    DetailFactory = () => "Choose from all created savegames.",
+                    CaptionFactory = () => Text(ModTextKey.RowLoadSave),
+                    DetailFactory = () => Text(ModTextKey.DetailLoadSave),
                     OnActivate = () => OpenSaveSlotsMenu(SaveSlotMenuAction.Load),
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Delete save",
-                    DetailFactory = () => "Delete one of your created savegames.",
+                    CaptionFactory = () => Text(ModTextKey.RowDeleteSave),
+                    DetailFactory = () => Text(ModTextKey.DetailDeleteSave),
                     OnActivate = () => OpenSaveSlotsMenu(SaveSlotMenuAction.Delete),
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Save game",
+                    CaptionFactory = () => Text(ModTextKey.RowSaveGame),
                     DetailFactory = CurrentSaveGameDetail,
                     OnActivate = SaveCurrentNamedGame,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Back",
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
                     OnActivate = ReturnToModControlMenu,
                 },
             });
@@ -1525,14 +1522,14 @@ namespace LSOL
 
         private void RebuildNewSaveSetupMenuItems()
         {
-            _newSaveSetupMenu.Title = "Difficulty Settings";
-            _newSaveSetupMenu.Subtitle = string.Format("Configure '{0}' before starting", _pendingSaveName);
+            _newSaveSetupMenu.Title = Text(ModTextKey.MenuDifficultyTitle);
+            _newSaveSetupMenu.Subtitle = Text(ModTextKey.MenuNewSaveSetupSubtitle, _pendingSaveName);
             _newSaveSetupMenu.SetItems(new[]
             {
                 new OfficeMenuItem
                 {
                     CaptionFactory = CurrentStartingBalanceCaption,
-                    DetailFactory = () => "Choose the opening balance for the new save.",
+                    DetailFactory = () => Text(ModTextKey.DetailNewSaveStartingBalance),
                     OnLeft = () => ChangeStartingBalanceSelection(-1),
                     OnRight = () => ChangeStartingBalanceSelection(1),
                 },
@@ -1554,41 +1551,41 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Vehicle fuel",
-                    DetailFactory = () => "Enable vehicle fuel usage for this save.",
+                    CaptionFactory = () => Text(ModTextKey.RowVehicleFuel),
+                    DetailFactory = () => Text(ModTextKey.DetailVehicleFuel),
                     CheckboxStateFactory = () => _pendingVehicleFuelDifficultyEnabled,
                     OnActivate = TogglePendingVehicleFuelSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Cargo damage",
-                    DetailFactory = () => "Enable cargo loss and condition damage for this save.",
+                    CaptionFactory = () => Text(ModTextKey.RowCargoDamage),
+                    DetailFactory = () => Text(ModTextKey.DetailCargoDamage),
                     CheckboxStateFactory = () => _pendingCargoDamageDifficultyEnabled,
                     OnActivate = TogglePendingCargoDamageSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Industry price mechanic",
-                    DetailFactory = () => "Require industry purchases and apply owner cut until bought.",
+                    CaptionFactory = () => Text(ModTextKey.RowIndustryPriceMechanic),
+                    DetailFactory = () => Text(ModTextKey.DetailIndustryPriceMechanic),
                     CheckboxStateFactory = () => _pendingIndustryPricingDifficultyEnabled,
                     OnActivate = TogglePendingIndustryPricingSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Licensing system",
-                    DetailFactory = () => "Require contractor permits for industry cargo transport.",
+                    CaptionFactory = () => Text(ModTextKey.RowLicensingSystem),
+                    DetailFactory = () => Text(ModTextKey.DetailLicensingSystem),
                     CheckboxStateFactory = () => _pendingLicensingDifficultyEnabled,
                     OnActivate = TogglePendingLicensingSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Create save",
-                    DetailFactory = () => string.Format("Starts a fresh game as {0}.state.ini", _pendingSaveName),
+                    CaptionFactory = () => Text(ModTextKey.RowCreateSave),
+                    DetailFactory = () => Text(ModTextKey.DetailCreateSave, _pendingSaveName),
                     OnActivate = FinalizeNewSave,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Back",
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
                     OnActivate = CancelNewSaveSetup,
                 },
             });
@@ -1599,15 +1596,19 @@ namespace LSOL
             var entries = GetAvailableNamedSaves();
             var items = new List<OfficeMenuItem>();
 
-            _saveSlotsMenu.Title = _saveSlotMenuAction == SaveSlotMenuAction.Load ? "Load save" : "Delete save";
-            _saveSlotsMenu.Subtitle = entries.Count == 1 ? "1 savegame found" : string.Format("{0} savegames found", entries.Count);
+            _saveSlotsMenu.Title = _saveSlotMenuAction == SaveSlotMenuAction.Load
+                ? Text(ModTextKey.MenuSaveSlotsLoadTitle)
+                : Text(ModTextKey.MenuSaveSlotsDeleteTitle);
+            _saveSlotsMenu.Subtitle = entries.Count == 1
+                ? Text(ModTextKey.MenuSaveSlotsSingle)
+                : Text(ModTextKey.MenuSaveSlotsMany, entries.Count);
 
             if (entries.Count == 0)
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "No saves found",
-                    DetailFactory = () => string.Format("Create a save in {0} first.", SavegamesDirectoryName),
+                    CaptionFactory = () => Text(ModTextKey.RowNoSavesFound),
+                    DetailFactory = () => Text(ModTextKey.DetailNoSavesFound, SavegamesDirectoryName),
                 });
             }
             else
@@ -1629,11 +1630,41 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Back",
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
                 OnActivate = ReturnToSavingOptionsMenu,
             });
 
             _saveSlotsMenu.SetItems(items);
+        }
+
+        private void RebuildOptionsMenuItems()
+        {
+            _optionsMenu.Title = Text(ModTextKey.MenuOptionsTitle);
+            _optionsMenu.Subtitle = Text(ModTextKey.MenuOptionsSubtitle);
+            _optionsMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentLanguageCaption,
+                    DetailFactory = CurrentLanguageDetail,
+                    OnLeft = () => ChangeLanguage(-1),
+                    OnRight = () => ChangeLanguage(1),
+                    OnActivate = () => ChangeLanguage(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentColorblindModeCaption,
+                    DetailFactory = CurrentColorblindModeDetail,
+                    OnLeft = () => ChangeColorblindMode(-1),
+                    OnRight = () => ChangeColorblindMode(1),
+                    OnActivate = () => ChangeColorblindMode(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
+                    OnActivate = ReturnToModControlMenu,
+                },
+            });
         }
 
         private void OpenSavingOptionsMenu()
@@ -1641,6 +1672,13 @@ namespace LSOL
             _modControlMenu.Close();
             RebuildSavingOptionsMenuItems();
             _savingOptionsMenu.Open();
+        }
+
+        private void OpenOptionsMenu()
+        {
+            _modControlMenu.Close();
+            RebuildOptionsMenuItems();
+            _optionsMenu.Open();
         }
 
         private void OpenSaveSlotsMenu(SaveSlotMenuAction action)
@@ -1657,6 +1695,7 @@ namespace LSOL
             _savingOptionsMenu.Close();
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
+            _optionsMenu.Close();
             RebuildModControlMenuItems();
             _modControlMenu.Open();
         }
@@ -1837,10 +1876,10 @@ namespace LSOL
 
         private void RebuildDifficultyMenuItems()
         {
-            _difficultyMenu.Title = "Difficulty Settings";
+            _difficultyMenu.Title = Text(ModTextKey.MenuDifficultyTitle);
             _difficultyMenu.Subtitle = _difficultySettingsLocked
-                ? "Locked by the active save. Values are read-only."
-                : "Enable or disable challenge options";
+                ? Text(ModTextKey.MenuDifficultyLockedSubtitle)
+                : Text(ModTextKey.MenuDifficultySubtitle);
 
             _difficultyMenu.SetItems(new[]
             {
@@ -1862,35 +1901,35 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Vehicle fuel",
-                    DetailFactory = () => "Enable vehicle fuel usage for cargo operations.",
+                    CaptionFactory = () => Text(ModTextKey.RowVehicleFuel),
+                    DetailFactory = () => Text(ModTextKey.DetailVehicleFuel),
                     CheckboxStateFactory = () => _vehicleFuelDifficultyEnabled,
                     OnActivate = ToggleVehicleFuelSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Cargo damage",
-                    DetailFactory = () => "Enable cargo loss and condition damage from collisions.",
+                    CaptionFactory = () => Text(ModTextKey.RowCargoDamage),
+                    DetailFactory = () => Text(ModTextKey.DetailCargoDamage),
                     CheckboxStateFactory = () => _cargoDamageDifficultyEnabled,
                     OnActivate = ToggleCargoDamageSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Industry price mechanic",
-                    DetailFactory = () => "Require industry purchases and owner-cut payouts until bought.",
+                    CaptionFactory = () => Text(ModTextKey.RowIndustryPriceMechanic),
+                    DetailFactory = () => Text(ModTextKey.DetailIndustryPriceMechanic),
                     CheckboxStateFactory = () => _industryPricingDifficultyEnabled,
                     OnActivate = ToggleIndustryPricingSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Licensing system",
-                    DetailFactory = () => "Require contractor permits before transporting cargo to or from industries.",
+                    CaptionFactory = () => Text(ModTextKey.RowLicensingSystem),
+                    DetailFactory = () => Text(ModTextKey.DetailLicensingSystem),
                     CheckboxStateFactory = () => _licensingDifficultyEnabled,
                     OnActivate = ToggleLicensingSetting,
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Back",
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
                     OnActivate = ReturnToModControlMenu,
                 },
             });
@@ -1905,6 +1944,12 @@ namespace LSOL
 
         private void ToggleDebugMenu()
         {
+            if (!System.Diagnostics.Debugger.IsAttached)
+            {
+                ShowStatus(Text(ModTextKey.DetailDebugUnavailable));
+                return;
+            }
+
             if (_debugMenu.IsOpen)
             {
                 _debugMenu.Close();
@@ -1916,14 +1961,8 @@ namespace LSOL
             _debugMenu.Open();
         }
 
-        private void ToggleOverviewMenu()
-        {
-            OpenTabletNetworkApp();
-        }
-
         private void CloseOverviewMenus()
         {
-            _overviewMenuController.Close();
             _tabletShellController.Close();
         }
 
@@ -1941,26 +1980,72 @@ namespace LSOL
             _tabletShellController.OpenHome();
         }
 
+        private string Text(string key)
+        {
+            return ModLocalization.Service.Get(key);
+        }
+
+        private string Text(string key, params object[] args)
+        {
+            return ModLocalization.Service.Format(key, args);
+        }
+
+        private void ApplyPresentationSettings(bool rebuildMenus)
+        {
+            ModLocalization.Service.SetLanguage(_language);
+            AccessibilityTheme.Service.SetMode(_colorblindMode);
+
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
+            if (!rebuildMenus)
+            {
+                return;
+            }
+
+            RebuildModControlMenuItems();
+            RebuildSavingOptionsMenuItems();
+            RebuildNewSaveSetupMenuItems();
+            RebuildSaveSlotsMenuItems();
+            RebuildDifficultyMenuItems();
+            RebuildOptionsMenuItems();
+        }
+
+        private string FormatColoredToggle(bool enabled)
+        {
+            return enabled
+                ? string.Format("~g~{0}~s~", Text(ModTextKey.CommonOn))
+                : string.Format("~r~{0}~s~", Text(ModTextKey.CommonOff));
+        }
+
         private string CurrentActivationCaption()
         {
-            return string.Format("Activate: {0}", _modMechanicsEnabled ? "~g~On~s~" : "~r~Off~s~");
+            return Text(ModTextKey.RowActivate, FormatColoredToggle(_modMechanicsEnabled));
         }
+
         private string CurrentSavingOptionsDetail()
         {
-            return string.Format("Create, load, delete, or save named games. Active: {0}.", GetCurrentSaveLabel());
+            return Text(ModTextKey.DetailSavingOptions, GetCurrentSaveLabel());
         }
 
         private string CurrentDifficultySettingsDetail()
         {
             return _difficultySettingsLocked
-                ? string.Format(
-                    "Locked by the active save. Economy: {0} | NPC wages: {1}. Create a new save to change these settings.",
+                ? Text(
+                    ModTextKey.DetailDifficultyLocked,
                     FormatEconomyDifficultyPreset(_economyDifficultyPreset),
                     FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty))
-                : string.Format(
-                    "Change the economy preset, vehicle fuel, cargo damage, industry pricing, licensing, and NPC wages. Economy: {0} | wages: {1}.",
+                : Text(
+                    ModTextKey.DetailDifficultyUnlocked,
                     FormatEconomyDifficultyPreset(_economyDifficultyPreset),
                     FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
+        }
+
+        private string CurrentOptionsDetail()
+        {
+            return Text(ModTextKey.DetailOptions);
         }
 
         private string CurrentSaveGameDetail()
@@ -1968,30 +2053,30 @@ namespace LSOL
             NamedSaveEntry activeSave;
             if (!TryGetActiveNamedSave(out activeSave))
             {
-                return "Create or load a named save first.";
+                return Text(ModTextKey.DetailNeedNamedSave);
             }
 
-            return string.Format("Writes current progress to {0}.state.ini.", activeSave.DisplayName);
+            return Text(ModTextKey.DetailSaveGame, activeSave.DisplayName);
         }
 
         private string CurrentStartingBalanceCaption()
         {
-            return string.Format("Starting balance: {0}", ModFormatting.FormatMoney(GetSelectedStartingBalance()));
+            return Text(ModTextKey.RowStartingBalance, ModFormatting.FormatMoney(GetSelectedStartingBalance()));
         }
 
         private string CurrentVehicleFuelSettingCaption()
         {
-            return string.Format("Vehicle fuel: {0}", _vehicleFuelDifficultyEnabled ? "~g~On~s~" : "~r~Off~s~");
+            return string.Format("{0}: {1}", Text(ModTextKey.RowVehicleFuel), FormatColoredToggle(_vehicleFuelDifficultyEnabled));
         }
 
         private string CurrentNpcWeeklyWageDifficultyCaption()
         {
-            return string.Format("NPC weekly wages: < {0} >", FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
+            return Text(ModTextKey.RowNpcWeeklyWages, FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
         }
 
         private string CurrentEconomyDifficultyPresetCaption()
         {
-            return string.Format("Economy preset: < {0} >", FormatEconomyDifficultyPreset(_economyDifficultyPreset));
+            return Text(ModTextKey.RowEconomyPreset, FormatEconomyDifficultyPreset(_economyDifficultyPreset));
         }
 
         private string CurrentEconomyDifficultyPresetDetail()
@@ -2006,7 +2091,7 @@ namespace LSOL
 
         private string CurrentPendingEconomyDifficultyPresetCaption()
         {
-            return string.Format("Economy preset: < {0} >", FormatEconomyDifficultyPreset(_pendingEconomyDifficultyPreset));
+            return Text(ModTextKey.RowEconomyPreset, FormatEconomyDifficultyPreset(_pendingEconomyDifficultyPreset));
         }
 
         private string CurrentPendingEconomyDifficultyPresetDetail()
@@ -2016,12 +2101,34 @@ namespace LSOL
 
         private string CurrentPendingNpcWeeklyWageDifficultyCaption()
         {
-            return string.Format("NPC weekly wages: < {0} >", FormatWeeklyWageDifficulty(_pendingNpcWeeklyWageDifficulty));
+            return Text(ModTextKey.RowNpcWeeklyWages, FormatWeeklyWageDifficulty(_pendingNpcWeeklyWageDifficulty));
         }
 
         private string CurrentPendingNpcWeeklyWageDifficultyDetail()
         {
             return BuildNpcWeeklyWageDifficultyDetail(_pendingNpcWeeklyWageDifficulty);
+        }
+
+        private string CurrentLanguageCaption()
+        {
+            return Text(ModTextKey.RowLanguage, GetLanguageDisplayName(_language));
+        }
+
+        private string CurrentLanguageDetail()
+        {
+            return _language == ModLanguage.English
+                ? Text(ModTextKey.DetailLanguageEnglishFallback)
+                : Text(ModTextKey.DetailLanguage);
+        }
+
+        private string CurrentColorblindModeCaption()
+        {
+            return Text(ModTextKey.RowColorblindMode, GetColorblindModeDisplayName(_colorblindMode));
+        }
+
+        private string CurrentColorblindModeDetail()
+        {
+            return Text(ModTextKey.DetailColorblindMode);
         }
 
         private void ToggleMechanicsFromMenu()
@@ -2045,6 +2152,38 @@ namespace LSOL
 
             var count = StartingBalanceOptions.Length;
             _selectedStartingBalanceIndex = (_selectedStartingBalanceIndex + delta + count) % count;
+        }
+
+        private void ChangeLanguage(int delta)
+        {
+            if (SelectableLanguages.Length == 0)
+            {
+                return;
+            }
+
+            var currentIndex = Array.IndexOf(SelectableLanguages, _language);
+            var nextIndex = currentIndex < 0
+                ? (delta < 0 ? SelectableLanguages.Length - 1 : 0)
+                : (currentIndex + delta + SelectableLanguages.Length) % SelectableLanguages.Length;
+            _language = SelectableLanguages[nextIndex];
+            ApplyPresentationSettings(true);
+            ShowStatus(Text(ModTextKey.DetailLanguageChanged, GetLanguageDisplayName(_language)));
+        }
+
+        private void ChangeColorblindMode(int delta)
+        {
+            if (ColorblindModeOptions.Length == 0)
+            {
+                return;
+            }
+
+            var currentIndex = Array.IndexOf(ColorblindModeOptions, _colorblindMode);
+            var nextIndex = currentIndex < 0
+                ? 0
+                : (currentIndex + delta + ColorblindModeOptions.Length) % ColorblindModeOptions.Length;
+            _colorblindMode = ColorblindModeOptions[nextIndex];
+            ApplyPresentationSettings(true);
+            ShowStatus(Text(ModTextKey.DetailColorblindChanged, GetColorblindModeDisplayName(_colorblindMode)));
         }
 
         private void TogglePendingVehicleFuelSetting()
@@ -2149,7 +2288,7 @@ namespace LSOL
 
         private void ShowDifficultySettingsLockedStatus()
         {
-            ShowStatus("Difficulty settings are sealed for this save. Create a new save to change them.");
+            ShowStatus(Text(ModTextKey.DetailDifficultySettingsLockedStatus));
         }
 
         private void ToggleIndustryPersistenceFromMenu()
@@ -2160,12 +2299,12 @@ namespace LSOL
                 var restored = TryLoadIndustryPersistence(true);
                 if (!restored)
                 {
-                    ShowStatus("Industry persistence enabled.");
+                    ShowStatus(Text(ModTextKey.DetailPersistenceEnabled));
                 }
             }
             else
             {
-                ShowStatus("Industry persistence disabled.");
+                ShowStatus(Text(ModTextKey.DetailPersistenceDisabled));
             }
 
             RebuildModControlMenuItems();
@@ -2197,22 +2336,22 @@ namespace LSOL
             var veteran = _npcLogisticsManager.DriverTiers.FirstOrDefault(tier => string.Equals(tier.Id, "Veteran", StringComparison.OrdinalIgnoreCase));
 
             return string.Format(
-                "Weekly NPC payroll only. Rookie {0} | Pro {1} | Veteran {2}.",
+                Text(ModTextKey.DetailNpcWeeklyPayroll),
                 rookie != null ? ModFormatting.FormatMoney(rookie.GetWeeklyWage(difficulty)) : ModFormatting.FormatMoney(0f),
                 professional != null ? ModFormatting.FormatMoney(professional.GetWeeklyWage(difficulty)) : ModFormatting.FormatMoney(0f),
                 veteran != null ? ModFormatting.FormatMoney(veteran.GetWeeklyWage(difficulty)) : ModFormatting.FormatMoney(0f));
         }
 
-        private static string FormatWeeklyWageDifficulty(NpcWeeklyWageDifficulty difficulty)
+        private string FormatWeeklyWageDifficulty(NpcWeeklyWageDifficulty difficulty)
         {
             switch (difficulty)
             {
                 case NpcWeeklyWageDifficulty.Casual:
-                    return "Casual";
+                    return Text(ModTextKey.ValueDifficultyCasual);
                 case NpcWeeklyWageDifficulty.Hardcore:
-                    return "Hardcore";
+                    return Text(ModTextKey.ValueDifficultyHardcore);
                 default:
-                    return "Standard";
+                    return Text(ModTextKey.ValueDifficultyStandard);
             }
         }
 
@@ -2221,24 +2360,66 @@ namespace LSOL
             switch (preset)
             {
                 case EconomyDifficultyPreset.Casual:
-                    return "Industry price $200,000 | licence $8,000 | 180t input | 150t output | base 40 cyc/h. OmegaFactory x1.75, RecyclingCenter x3.00.";
+                    return Text(ModTextKey.DetailEconomyPresetCasual);
                 case EconomyDifficultyPreset.Hardcore:
-                    return "Industry price $800,000 | licence $18,000 | 80t input | 70t output | base 24 cyc/h. OmegaFactory x1.25, RecyclingCenter x2.00.";
+                    return Text(ModTextKey.DetailEconomyPresetHardcore);
                 default:
-                    return "Industry price $450,000 | licence $13,000 | 120t input | 100t output | base 32 cyc/h. OmegaFactory x1.50, RecyclingCenter x2.50.";
+                    return Text(ModTextKey.DetailEconomyPresetStandard);
             }
         }
 
-        private static string FormatEconomyDifficultyPreset(EconomyDifficultyPreset preset)
+        private string FormatEconomyDifficultyPreset(EconomyDifficultyPreset preset)
         {
             switch (preset)
             {
                 case EconomyDifficultyPreset.Casual:
-                    return "Casual";
+                    return Text(ModTextKey.ValueDifficultyCasual);
                 case EconomyDifficultyPreset.Hardcore:
-                    return "Hardcore";
+                    return Text(ModTextKey.ValueDifficultyHardcore);
                 default:
-                    return "Standard";
+                    return Text(ModTextKey.ValueDifficultyStandard);
+            }
+        }
+
+        private string GetLanguageDisplayName(ModLanguage language)
+        {
+            switch (language)
+            {
+                case ModLanguage.French:
+                    return Text(ModTextKey.ValueLanguageFrench);
+                case ModLanguage.Italian:
+                    return Text(ModTextKey.ValueLanguageItalian);
+                case ModLanguage.Spanish:
+                    return Text(ModTextKey.ValueLanguageSpanish);
+                case ModLanguage.Russian:
+                    return Text(ModTextKey.ValueLanguageRussian);
+                case ModLanguage.Japanese:
+                    return Text(ModTextKey.ValueLanguageJapanese);
+                case ModLanguage.Chinese:
+                    return Text(ModTextKey.ValueLanguageChinese);
+                case ModLanguage.Hindi:
+                    return Text(ModTextKey.ValueLanguageHindi);
+                case ModLanguage.Portuguese:
+                    return Text(ModTextKey.ValueLanguagePortuguese);
+                case ModLanguage.Turkish:
+                    return Text(ModTextKey.ValueLanguageTurkish);
+                default:
+                    return Text(ModTextKey.ValueLanguageEnglishFallback);
+            }
+        }
+
+        private string GetColorblindModeDisplayName(ColorblindMode mode)
+        {
+            switch (mode)
+            {
+                case ColorblindMode.Deuteranopia:
+                    return Text(ModTextKey.ValueColorblindDeuteranopia);
+                case ColorblindMode.Protanopia:
+                    return Text(ModTextKey.ValueColorblindProtanopia);
+                case ColorblindMode.Tritanopia:
+                    return Text(ModTextKey.ValueColorblindTritanopia);
+                default:
+                    return Text(ModTextKey.ValueColorblindOff);
             }
         }
 
@@ -2345,7 +2526,7 @@ namespace LSOL
                 _lastNearestProbeMs = 0;
                 _lastBlipRefreshMs = 0;
                 CreateMapBlips();
-                ShowStatus("Mod mechanics enabled.");
+                ShowStatus(Text(ModTextKey.DetailMechanicsEnabled));
                 return;
             }
 
@@ -2366,13 +2547,13 @@ namespace LSOL
                 _modControlMenu.Close();
             }
 
-            ShowStatus("Mod mechanics disabled.");
+            ShowStatus(Text(ModTextKey.DetailMechanicsDisabled));
         }
 
         private void RebuildDebugMenuItems()
         {
             _debugMenu.Title = "Debug";
-            _debugMenu.Subtitle = "ALT + RCTRL + C";
+            _debugMenu.Subtitle = "ALT + W (Debugger attached)";
 
             _debugMenu.SetItems(new[]
             {
@@ -3112,6 +3293,7 @@ namespace LSOL
                 return;
             }
 
+            _fleetManager.RegisterOwnedRig(truck, cargoVehicle);
             _vehicleFuelSystem.InitializeSpawnedVehicle(truck);
             _tabletStateStore.MarkCargoDirty();
 
@@ -3181,56 +3363,6 @@ namespace LSOL
             if (cargoState == null)
             {
                 error = "Unable to initialize cargo state.";
-                return false;
-            }
-
-            return true;
-        }
-
-        private bool TryGetIndustryRefuelContext(Industry industry, out Vehicle cargoVehicle, out Vehicle poweredVehicle, out VehicleFuelTelemetry fuelTelemetry, out string error)
-        {
-            cargoVehicle = null;
-            poweredVehicle = null;
-            fuelTelemetry = null;
-            error = string.Empty;
-
-            if (industry == null)
-            {
-                error = "No target industry.";
-                return false;
-            }
-
-            if (!industry.IsGasStation)
-            {
-                error = "Refueling is only available at petrol stations.";
-                return false;
-            }
-
-            var player = Game.Player.Character;
-            if (player == null || !player.Exists())
-            {
-                error = "Player unavailable.";
-                return false;
-            }
-
-            if (player.Position.DistanceTo(GetIndustryMarkerPosition(industry)) > IndustryInteractionDistance + 1.2f)
-            {
-                error = "Move closer to the petrol station marker.";
-                return false;
-            }
-
-            if (!_fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle)
-                || poweredVehicle == null
-                || !poweredVehicle.Exists())
-            {
-                error = "Bring a powered cargo vehicle close to the petrol station.";
-                return false;
-            }
-
-            fuelTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
-            if (fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f)
-            {
-                error = "No powered cargo vehicle with a fuel tank is in range.";
                 return false;
             }
 
@@ -3394,102 +3526,15 @@ namespace LSOL
                 return;
             }
 
-            Vehicle cargoVehicle;
-            Vehicle poweredVehicle;
-            VehicleFuelTelemetry fuelTelemetry;
-            string error;
-            if (!TryGetIndustryRefuelContext(industry, out cargoVehicle, out poweredVehicle, out fuelTelemetry, out error))
+            string message;
+            if (!_industryRefuelService.TryRefuel(industry, Game.Player.Character, out message))
             {
-                ShowStatus(error);
+                ShowStatus(message);
                 return;
             }
-
-            var litersNeeded = Math.Max(0f, fuelTelemetry.CapacityLiters - fuelTelemetry.CurrentLiters);
-            if (litersNeeded <= 0.05f)
-            {
-                ShowStatus(string.Format("Fuel tank already full ({0:0}/{1:0}L).", fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters));
-                return;
-            }
-
-            var availableStockLiters = Math.Max(0f, industry.GetStock("Fuel") * 1000f);
-            if (availableStockLiters <= 0.05f)
-            {
-                ShowStatus("Station out of fuel.");
-                return;
-            }
-
-            var pricePerTon = Math.Max(0f, _globalMarket.GetUnitPrice("Fuel"));
-            var affordableLiters = industry.RefuelIsFree || pricePerTon <= 0.001f
-                ? litersNeeded
-                : Math.Max(0f, (_profit / pricePerTon) * 1000f);
-
-            if (!industry.RefuelIsFree && affordableLiters <= 0.05f)
-            {
-                ShowStatus("Insufficient funds to refuel.");
-                return;
-            }
-
-            var litersToDispense = Math.Min(litersNeeded, availableStockLiters);
-            if (!industry.RefuelIsFree)
-            {
-                litersToDispense = Math.Min(litersToDispense, affordableLiters);
-            }
-
-            if (litersToDispense <= 0.05f)
-            {
-                ShowStatus(industry.RefuelIsFree ? "Station out of fuel." : "Insufficient funds to refuel.");
-                return;
-            }
-
-            float dispensedLiters;
-            if (!_industryManager.TryDispenseFuel(industry, litersToDispense, out dispensedLiters) || dispensedLiters <= 0.05f)
-            {
-                ShowStatus("Station out of fuel.");
-                return;
-            }
-
-            var addedLiters = _vehicleFuelSystem.AddFuel(poweredVehicle, dispensedLiters);
-            if (addedLiters <= 0.05f)
-            {
-                industry.AddInput("Fuel", dispensedLiters / 1000f);
-                ShowStatus("Fuel tank already full.");
-                return;
-            }
-
-            var pricePaid = industry.RefuelIsFree ? 0f : _industryManager.ComputeFuelRefillPrice(addedLiters, _globalMarket);
-            if (pricePaid > 0f)
-            {
-                DeductProfit(pricePaid);
-            }
-
-            var resultingTank = Math.Min(fuelTelemetry.CapacityLiters, fuelTelemetry.CurrentLiters + addedLiters);
-            var notes = new List<string>();
-            if (availableStockLiters + 0.05f < litersNeeded)
-            {
-                notes.Add("station out of fuel");
-            }
-
-            if (!industry.RefuelIsFree && affordableLiters + 0.05f < litersNeeded)
-            {
-                notes.Add("insufficient funds");
-            }
-
-            var priceText = industry.RefuelIsFree
-                ? "Free at office station"
-                : string.Format("Paid {0}", ModFormatting.FormatMoney(pricePaid));
-            var noteText = notes.Count > 0
-                ? string.Format(" | {0}", string.Join(" | ", notes))
-                : string.Empty;
 
             _tabletStateStore.MarkAllDirty();
-            ShowStatus(string.Format(
-                "Refueled {0:0}L. Tank {1:0}/{2:0}L | {3}{4}",
-                addedLiters,
-                resultingTank,
-                fuelTelemetry.CapacityLiters,
-                priceText,
-                noteText),
-                4500);
+            ShowStatus(message, 4500);
         }
 
         private void StartTabletLoadTransfer(Industry industry, Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleCargoType cargoType, string selectedProduct)
@@ -3869,7 +3914,6 @@ namespace LSOL
 
         private void CloseIndustryTablet()
         {
-            _industryTabletController.Close();
             _tabletShellController.Close();
         }
 
@@ -4163,13 +4207,6 @@ namespace LSOL
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
             CloseAllMenus();
-            _industryTabletController.LoadRequested -= HandleTabletLoadRequested;
-            _industryTabletController.LoadCommodityRequested -= HandleTabletLoadCommodityRequested;
-            _industryTabletController.UnloadRequested -= HandleTabletUnloadRequested;
-            _industryTabletController.UnloadModeRequested -= HandleTabletUnloadModeRequested;
-            _industryTabletController.IndustryPurchaseRequested -= HandleTabletIndustryPurchaseRequested;
-            _industryTabletController.UpgradeModuleRequested -= HandleTabletUpgradeModuleRequested;
-            _industryTabletController.VehicleSpawnerRequested -= HandleTabletVehicleSpawnerRequested;
             _heldKeys.Clear();
         }
 
