@@ -13,12 +13,35 @@ namespace LSOL
     {
         private void ResetSaveSessionState()
         {
+            _pendingOwnedFleetRestore = null;
+            _pendingSpecialMissionRestore = null;
+            _specialMissionManager.ResetState();
             _npcLogisticsManager.ClearAll();
             _fleetManager.DespawnOwnedFleet();
             _fleetManager.ClearAllStates();
             _vehicleFuelSystem.ClearAllStates();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
+            _tabletStateStore.MarkAllDirty();
+        }
+
+        private void RestorePendingWorldState()
+        {
+            if (_pendingOwnedFleetRestore == null && _pendingSpecialMissionRestore == null)
+            {
+                return;
+            }
+
+            var ownedFleetSnapshot = _pendingOwnedFleetRestore;
+            var specialMissionSnapshot = _pendingSpecialMissionRestore;
+            _pendingOwnedFleetRestore = null;
+            _pendingSpecialMissionRestore = null;
+
+            _fleetManager.RestoreOwnedFleet(
+                ownedFleetSnapshot,
+                _vehicleFuelSystem,
+                GetGroundPosition);
+            _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
             _tabletStateStore.MarkAllDirty();
         }
 
@@ -362,6 +385,7 @@ namespace LSOL
                 Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
                 OwnedFleet = _fleetManager.CreateOwnedFleetSnapshot(_vehicleFuelSystem),
                 NpcLogistics = _npcLogisticsManager.CreatePersistenceSnapshot(),
+                SpecialMissions = _specialMissionManager.CreatePersistenceSnapshot(),
             };
         }
 
@@ -404,10 +428,28 @@ namespace LSOL
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ApplyDifficultySettingsToSystems();
             _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
-            _fleetManager.RestoreOwnedFleet(
-                metadata != null ? metadata.OwnedFleet : null,
-                _vehicleFuelSystem,
-                GetGroundPosition);
+            var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;
+            var specialMissionSnapshot = metadata != null ? metadata.SpecialMissions : null;
+            if (_isConstructing)
+            {
+                _pendingOwnedFleetRestore = ownedFleetSnapshot != null && ownedFleetSnapshot.HasData
+                    ? ownedFleetSnapshot
+                    : null;
+                _pendingSpecialMissionRestore = specialMissionSnapshot != null && specialMissionSnapshot.HasData
+                    ? specialMissionSnapshot
+                    : null;
+            }
+            else
+            {
+                _pendingOwnedFleetRestore = null;
+                _pendingSpecialMissionRestore = null;
+                _fleetManager.RestoreOwnedFleet(
+                    ownedFleetSnapshot,
+                    _vehicleFuelSystem,
+                    GetGroundPosition);
+                _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
+            }
+
             _tabletStateStore.MarkAllDirty();
             RebuildModControlMenuItems();
             RebuildSavingOptionsMenuItems();

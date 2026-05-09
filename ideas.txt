@@ -8,5 +8,17 @@
 - loading heavy machinery
 - Vehicle, machies or Tractor parts deliver to industry to increase production
 - XP mechanism where player gain damage reduction
+- fuel tank module in office to buy and place
+- fuel npc refuel office fuel tank
+- spawn props/objects at office menu
+- property building where we can buy office building
 
 - You are a contractor at the start then with enough money you can start building your own empire
+
+
+Interiors:
+
+
+I was thinking about implementing those off-duty systems like hunger, barber, clothing, restaurant which are cool. Thos could also be enabled or disabled via the Difficulty options menu.
+I was also thinking about creating multiple office site which can be purchased by the player. So the player should start from a little one and climb his way up to get the latest office.
+Seapking of driving licence and permits, I was thinking to implement a price for trucks. I added a column "VehiclePrice"

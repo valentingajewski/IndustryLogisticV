@@ -1,0 +1,18 @@
+- When this mission must be generated : once player has min 40 % reputaion either in GrandSenora or Port District
+- Dock handler spawn coordinates:958.51,-2940,5.41
+- Dock handler spawn heading:0
+- Dock handler model name: handler
+- Docktug spawn coordinates:808.25,-3036.74,5.74
+- Docktug spawn heading:160
+- Docktug model name: docktug
+- Trailer target coordinates:937.16,-3155.35,5.90
+- Trailer spawn coordinates:937.16,-3155.35,5.90
+- Trailer spawn heading:180
+- Trailer model name: trflat
+- Container model hash:874602658
+- Container spawn coordinates:957,-2917,5.41
+- Container spawn heading:90
+- Trailer + container destination coordinates:166.82,2761.53,42.91
+- Truck spawn coordinates:858.12,-3130,5.41
+- Truck spawn heading:270
+- Truc model name: packer

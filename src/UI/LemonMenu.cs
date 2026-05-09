@@ -10,6 +10,13 @@ using MenuAlignment = GTA.UI.Alignment;
 
 namespace LSOL.UI
 {
+    public enum LemonMenuTheme
+    {
+        Default = 0,
+        Accent = 1,
+        Classic = 2,
+    }
+
     public sealed class LemonMenu
     {
         private const int DynamicRefreshIntervalMs = 200;
@@ -34,6 +41,7 @@ namespace LSOL.UI
             _menu.Buttons.Visible = false;
             Title = title;
             Subtitle = string.Empty;
+            Theme = LemonMenuTheme.Default;
             _refreshRequested = true;
             _lastRefreshMs = int.MinValue;
         }
@@ -62,6 +70,8 @@ namespace LSOL.UI
             get { return _menu.Alignment == MenuAlignment.Right; }
             set { _menu.Alignment = value ? MenuAlignment.Right : MenuAlignment.Left; }
         }
+
+        public LemonMenuTheme Theme { get; set; }
 
         public float Width
         {
@@ -221,7 +231,7 @@ namespace LSOL.UI
 
             for (int i = 0; i < _entries.Count; i++)
             {
-                _entries[i].Refresh();
+                _entries[i].Refresh(Theme);
             }
 
             _refreshRequested = false;
@@ -230,16 +240,35 @@ namespace LSOL.UI
 
         private void ApplyTheme()
         {
+            if (Theme == LemonMenuTheme.Default)
+            {
+                return;
+            }
+
             var palette = AccessibilityTheme.Service.Palette;
             if (_menu.Banner != null)
             {
-                _menu.Banner.Color = palette.Get(ModColorRole.AccentBlue, 228);
+                _menu.Banner.Color = BuildBannerColor(Theme, palette);
             }
 
             if (_menu.BannerText != null)
             {
                 _menu.BannerText.Color = palette.Get(ModColorRole.TextPrimary, 244);
             }
+        }
+
+        private static Color BuildBannerColor(LemonMenuTheme theme, AccessibilityPalette palette)
+        {
+            if (theme == LemonMenuTheme.Classic)
+            {
+                return BlendColors(
+                    palette.Get(ModColorRole.BackgroundHeader),
+                    palette.Get(ModColorRole.AccentGold),
+                    0.12f,
+                    228);
+            }
+
+            return palette.Get(ModColorRole.AccentBlue, 228);
         }
 
         private LemonMenuEntry GetSelectedEntry()
@@ -273,9 +302,46 @@ namespace LSOL.UI
             return index;
         }
 
-        private static ColorSet BuildColorSet()
+        private static ColorSet BuildColorSet(LemonMenuTheme theme)
         {
             var palette = AccessibilityTheme.Service.Palette;
+            if (theme == LemonMenuTheme.Classic)
+            {
+                return new ColorSet
+                {
+                    TitleNormal = palette.Get(ModColorRole.TextPrimary, 235),
+                    TitleHovered = palette.Get(ModColorRole.Highlight, 245),
+                    TitleDisabled = palette.Get(ModColorRole.TextMuted, 175),
+                    AltTitleNormal = palette.Get(ModColorRole.TextSecondary, 226),
+                    AltTitleHovered = palette.Get(ModColorRole.TextPrimary, 242),
+                    AltTitleDisabled = palette.Get(ModColorRole.TextMuted, 172),
+                    ArrowsNormal = palette.Get(ModColorRole.AccentGold, 236),
+                    ArrowsHovered = palette.Get(ModColorRole.Highlight, 244),
+                    ArrowsDisabled = palette.Get(ModColorRole.TextMuted, 168),
+                    BadgeLeftNormal = palette.Get(ModColorRole.AccentGold, 220),
+                    BadgeLeftHovered = palette.Get(ModColorRole.AccentGold, 236),
+                    BadgeLeftDisabled = palette.Get(ModColorRole.TextMuted, 168),
+                    BadgeRightNormal = palette.Get(ModColorRole.AccentGold, 220),
+                    BadgeRightHovered = palette.Get(ModColorRole.AccentGold, 236),
+                    BadgeRightDisabled = palette.Get(ModColorRole.TextMuted, 168),
+                    BackgroundNormal = BlendColors(
+                        palette.Get(ModColorRole.BackgroundHeader),
+                        palette.Get(ModColorRole.BackgroundCard),
+                        0.35f,
+                        194),
+                    BackgroundHovered = BlendColors(
+                        palette.Get(ModColorRole.BackgroundCard),
+                        palette.Get(ModColorRole.AccentGold),
+                        0.18f,
+                        228),
+                    BackgroundDisabled = BlendColors(
+                        palette.Get(ModColorRole.BackgroundHeader),
+                        palette.Get(ModColorRole.BackgroundPanel),
+                        0.45f,
+                        138),
+                };
+            }
+
             return new ColorSet
             {
                 TitleNormal = palette.Get(ModColorRole.TextPrimary, 235),
@@ -297,6 +363,17 @@ namespace LSOL.UI
                 BackgroundHovered = palette.Get(ModColorRole.BackgroundCardSelected, 226),
                 BackgroundDisabled = palette.Get(ModColorRole.BackgroundCard, 132),
             };
+        }
+
+        private static Color BlendColors(Color baseColor, Color tintColor, float tintRatio, int alpha)
+        {
+            tintRatio = Math.Max(0f, Math.Min(1f, tintRatio));
+            var baseWeight = 1f - tintRatio;
+            return Color.FromArgb(
+                Math.Max(0, Math.Min(255, alpha)),
+                (int)Math.Round((baseColor.R * baseWeight) + (tintColor.R * tintRatio)),
+                (int)Math.Round((baseColor.G * baseWeight) + (tintColor.G * tintRatio)),
+                (int)Math.Round((baseColor.B * baseWeight) + (tintColor.B * tintRatio)));
         }
 
         private sealed class LemonMenuEntry
@@ -323,7 +400,7 @@ namespace LSOL.UI
 
             public NativeItem Item { get; }
 
-            public void Refresh()
+            public void Refresh(LemonMenuTheme theme)
             {
                 Item.Title = InvokeString(_source.CaptionFactory);
 
@@ -335,7 +412,12 @@ namespace LSOL.UI
                     return;
                 }
 
-                Item.Colors = BuildColorSet();
+                Item.UseCustomBackground = theme != LemonMenuTheme.Default;
+                if (theme != LemonMenuTheme.Default)
+                {
+                    Item.Colors = BuildColorSet(theme);
+                }
+
                 Item.Description = ResolveDescription();
                 Item.AltTitle = ResolveAltTitle();
 

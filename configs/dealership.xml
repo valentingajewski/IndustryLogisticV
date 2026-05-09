@@ -1,0 +1,234 @@
+<Dealership>
+	<Models>
+		<!-- Compact -->
+		<Model name="Blista" model="blista" price="16000" category="Compact"/>
+		<Model name="Issi" model="issi2" price="18000" category="Compact"/>
+		<Model name="Prairie" model="prairie" price="25000" category="Compact"/>
+		<Model name="Panto" model="panto" price="85000" category="Compact"/>
+		<Model name="Brioso R/A" model="brioso" price="155000" category="Compact"/>
+		<Model name="Asbo" model="asbo" price="408000" category="Compact"/>
+		<!-- Coupe -->
+		<Model name="Sentinel XS" model="sentinel" price="60000" category="Coupe"/>
+		<Model name="Zion" model="zion" price="60000" category="Coupe"/>
+		<Model name="Jackal" model="jackal" price="60000" category="Coupe"/>
+		<Model name="Oracle" model="oracle2" price="80000" category="Coupe"/>
+		<Model name="Felon GT" model="felon2" price="95000" category="Coupe"/>
+		<Model name="Exemplar" model="exemplar" price="205000" category="Coupe"/>
+		<!-- Muscle -->
+		<Model name="Ruiner" model="ruiner" price="10000" category="Muscle"/>
+		<Model name="Vigero" model="vigero" price="21000" category="Muscle"/>
+		<Model name="Buccaneer" model="buccaneer" price="29000" category="Muscle"/>
+		<Model name="Dominator" model="dominator" price="35000" category="Muscle"/>
+		<Model name="Blade" model="blade" price="160000" category="Muscle"/>
+		<Model name="Chino Custom" model="chino2" price="180000" category="Muscle"/>
+		<Model name="Vigero ZX" model="vigero2" price="1947000" category="Muscle"/>
+		<!-- Offroad -->
+		<Model name="Rusty Rebel" model="rebel" price="3000" category="Offroad"/>
+		<Model name="Rancher XL" model="rancherxl" price="9000" category="Offroad"/>
+		<Model name="Sandking SWB" model="sandking2" price="38000" category="Offroad"/>
+		<Model name="Mesa" model="mesa3" price="87000" category="Offroad"/>
+		<Model name="Yosemite Rancher" model="yosemite3" price="700000" category="Offroad"/>
+		<Model name="Caracara 4x4" model="caracara2" price="875000" category="Offroad"/>
+		<Model name="Everon" model="everon" price="1475000" category="Offroad"/>
+		<!-- Sedan -->
+		<Model name="Emperor" model="emperor" price="8000" category="Sedan"/>
+		<Model name="Ingot" model="ingot" price="9000" category="Sedan"/>
+		<Model name="Primo" model="primo" price="9000" category="Sedan"/>
+		<Model name="Premier" model="premier" price="10000" category="Sedan"/>
+		<Model name="Asea" model="asea" price="12000" category="Sedan"/>
+		<Model name="Washington" model="washington" price="15000" category="Sedan"/>
+		<Model name="Fugitive" model="fugitive" price="24000" category="Sedan"/>
+		<Model name="Surge" model="surge" price="38000" category="Sedan"/>
+		<Model name="Tailgater" model="tailgater" price="55000" category="Sedan"/>
+		<Model name="Schafter" model="schafter2" price="65000" category="Sedan"/>
+		<!-- Sport -->
+		<Model name="Buffalo" model="buffalo" price="35000" category="Sport"/>
+		<Model name="Kuruma" model="kuruma" price="126350" category="Sport"/>
+		<Model name="9F Cabrio" model="ninef2" price="130000" category="Sport"/>
+		<Model name="Coquette" model="coquette" price="138000" category="Sport"/>
+		<Model name="Rapid GT" model="rapidgt2" price="140000" category="Sport"/>
+		<Model name="Surano" model="surano" price="99000" category="Sport"/>
+		<Model name="Schwarzer" model="schwarzer" price="80000" category="Sport"/>
+		<Model name="Carbonizzare" model="carbonizzare" price="195000" category="Sport"/>
+		<Model name="Jester" model="jester" price="240000" category="Sport"/>
+		<Model name="Jugular" model="jugular" price="1225000" category="Sport"/>
+		<Model name="Growler" model="growler" price="1627000" category="Sport"/>
+		<!-- SUV -->
+		<Model name="Granger" model="granger" price="35000" category="SUV"/>
+		<Model name="Patriot" model="patriot" price="50000" category="SUV"/>
+		<Model name="Serrano" model="serrano" price="60000" category="SUV"/>
+		<Model name="Dubsta" model="dubsta" price="70000" category="SUV"/>
+		<Model name="Cavalcade" model="cavalcade2" price="70000" category="SUV"/>
+		<Model name="Baller" model="baller2" price="90000" category="SUV"/>
+		<Model name="Landstalker XL" model="landstalker2" price="1220000" category="SUV"/>
+		<!-- Motorcycle -->
+		<Model name="Sanchez" model="sanchez" price="7000" category="Motorcycle"/>
+		<Model name="Akuma" model="akuma" price="9000" category="Motorcycle"/>
+		<Model name="PCJ 600" model="pcj" price="9000" category="Motorcycle"/>
+		<Model name="Bati 801" model="bati" price="15000" category="Motorcycle"/>
+		<Model name="Bagger" model="bagger" price="16000" category="Motorcycle"/>
+		<Model name="Enduro" model="enduro" price="48000" category="Motorcycle"/>
+	</Models>
+	<Colors>
+		<Color name="Metallic Black" id="0"/>
+		<Color name="Metallic Graphite Black" id="1"/>
+		<Color name="Metallic Black Steal" id="2"/>
+		<Color name="Metallic Dark Silver" id="3"/>
+		<Color name="Metallic Silver" id="4"/>
+		<Color name="Metallic Blue Silver" id="5"/>
+		<Color name="Metallic Steel Gray" id="6"/>
+		<Color name="Metallic Shadow Silver" id="7"/>
+		<Color name="Metallic Stone Silver" id="8"/>
+		<Color name="Metallic Midnight Silver" id="9"/>
+		<Color name="Metallic Gun Metal" id="10"/>
+		<Color name="Metallic Anthracite Grey" id="11"/>
+		<Color name="Matte Black" id="12"/>
+		<Color name="Matte Gray" id="13"/>
+		<Color name="Matte Light Grey" id="14"/>
+		<Color name="Util Black" id="15"/>
+		<Color name="Util Black Poly" id="16"/>
+		<Color name="Util Dark silver" id="17"/>
+		<Color name="Util Silver" id="18"/>
+		<Color name="Util Gun Metal" id="19"/>
+		<Color name="Util Shadow Silver" id="20"/>
+		<Color name="Worn Black" id="21"/>
+		<Color name="Worn Graphite" id="22"/>
+		<Color name="Worn Silver Grey" id="23"/>
+		<Color name="Worn Silver" id="24"/>
+		<Color name="Worn Blue Silver" id="25"/>
+		<Color name="Worn Shadow Silver" id="26"/>
+		<Color name="Metallic Red" id="27"/>
+		<Color name="Metallic Torino Red" id="28"/>
+		<Color name="Metallic Formula Red" id="29"/>
+		<Color name="Metallic Blaze Red" id="30"/>
+		<Color name="Metallic Graceful Red" id="31"/>
+		<Color name="Metallic Garnet Red" id="32"/>
+		<Color name="Metallic Desert Red" id="33"/>
+		<Color name="Metallic Cabernet Red" id="34"/>
+		<Color name="Metallic Candy Red" id="35"/>
+		<Color name="Metallic Sunrise Orange" id="36"/>
+		<Color name="Metallic Classic Gold" id="37"/>
+		<Color name="Metallic Orange" id="38"/>
+		<Color name="Matte Red" id="39"/>
+		<Color name="Matte Dark Red" id="40"/>
+		<Color name="Matte Orange" id="41"/>
+		<Color name="Matte Yellow" id="42"/>
+		<Color name="Util Red" id="43"/>
+		<Color name="Util Bright Red" id="44"/>
+		<Color name="Util Garnet Red" id="45"/>
+		<Color name="Worn Red" id="46"/>
+		<Color name="Worn Golden Red" id="47"/>
+		<Color name="Worn Dark Red" id="48"/>
+		<Color name="Metallic Dark Green" id="49"/>
+		<Color name="Metallic Racing Green" id="50"/>
+		<Color name="Metallic Sea Green" id="51"/>
+		<Color name="Metallic Olive Green" id="52"/>
+		<Color name="Metallic Green" id="53"/>
+		<Color name="Metallic Gasoline Blue Green" id="54"/>
+		<Color name="Matte Lime Green" id="55"/>
+		<Color name="Util Dark Green" id="56"/>
+		<Color name="Util Green" id="57"/>
+		<Color name="Worn Dark Green" id="58"/>
+		<Color name="Worn Green" id="59"/>
+		<Color name="Worn Sea Wash" id="60"/>
+		<Color name="Metallic Midnight Blue" id="61"/>
+		<Color name="Metallic Dark Blue" id="62"/>
+		<Color name="Metallic Saxony Blue" id="63"/>
+		<Color name="Metallic Blue" id="64"/>
+		<Color name="Metallic Mariner Blue" id="65"/>
+		<Color name="Metallic Harbor Blue" id="66"/>
+		<Color name="Metallic Diamond Blue" id="67"/>
+		<Color name="Metallic Surf Blue" id="68"/>
+		<Color name="Metallic Nautical Blue" id="69"/>
+		<Color name="Metallic Bright Blue" id="70"/>
+		<Color name="Metallic Purple Blue" id="71"/>
+		<Color name="Metallic Spinnaker Blue" id="72"/>
+		<Color name="Metallic Ultra Blue" id="73"/>
+		<Color name="Metallic Bright Blue" id="74"/>
+		<Color name="Util Dark Blue" id="75"/>
+		<Color name="Util Midnight Blue" id="76"/>
+		<Color name="Util Blue" id="77"/>
+		<Color name="Util Sea Foam Blue" id="78"/>
+		<Color name="Util Lightning blue" id="79"/>
+		<Color name="Util Maui Blue Poly" id="80"/>
+		<Color name="Util Bright Blue" id="81"/>
+		<Color name="Matte Dark Blue" id="82"/>
+		<Color name="Matte Blue" id="83"/>
+		<Color name="Matte Midnight Blue" id="84"/>
+		<Color name="Worn Dark blue" id="85"/>
+		<Color name="Worn Blue" id="86"/>
+		<Color name="Worn Light blue" id="87"/>
+		<Color name="Metallic Taxi Yellow" id="88"/>
+		<Color name="Metallic Race Yellow" id="89"/>
+		<Color name="Metallic Bronze" id="90"/>
+		<Color name="Metallic Yellow Bird" id="91"/>
+		<Color name="Metallic Lime" id="92"/>
+		<Color name="Metallic Champagne" id="93"/>
+		<Color name="Metallic Pueblo Beige" id="94"/>
+		<Color name="Metallic Dark Ivory" id="95"/>
+		<Color name="Metallic Choco Brown" id="96"/>
+		<Color name="Metallic Golden Brown" id="97"/>
+		<Color name="Metallic Light Brown" id="98"/>
+		<Color name="Metallic Straw Beige" id="99"/>
+		<Color name="Metallic Moss Brown" id="100"/>
+		<Color name="Metallic Biston Brown" id="101"/>
+		<Color name="Metallic Beechwood" id="102"/>
+		<Color name="Metallic Dark Beechwood" id="103"/>
+		<Color name="Metallic Choco Orange" id="104"/>
+		<Color name="Metallic Beach Sand" id="105"/>
+		<Color name="Metallic Sun Bleeched Sand" id="106"/>
+		<Color name="Metallic Cream" id="107"/>
+		<Color name="Util Brown" id="108"/>
+		<Color name="Util Medium Brown" id="109"/>
+		<Color name="Util Light Brown" id="110"/>
+		<Color name="Metallic White" id="111"/>
+		<Color name="Metallic Frost White" id="112"/>
+		<Color name="Worn Honey Beige" id="113"/>
+		<Color name="Worn Brown" id="114"/>
+		<Color name="Worn Dark Brown" id="115"/>
+		<Color name="Worn straw beige" id="116"/>
+		<Color name="Brushed Steel" id="117"/>
+		<Color name="Brushed Black steel" id="118"/>
+		<Color name="Brushed Aluminium" id="119"/>
+		<Color name="Chrome" id="120"/>
+		<Color name="Worn Off White" id="121"/>
+		<Color name="Util Off White" id="122"/>
+		<Color name="Worn Orange" id="123"/>
+		<Color name="Worn Light Orange" id="124"/>
+		<Color name="Metallic Securicor Green" id="125"/>
+		<Color name="Worn Taxi Yellow" id="126"/>
+		<Color name="police car blue" id="127"/>
+		<Color name="Matte Green" id="128"/>
+		<Color name="Matte Brown" id="129"/>
+		<Color name="Worn Orange" id="130"/>
+		<Color name="Matte White" id="131"/>
+		<Color name="Worn White" id="132"/>
+		<Color name="Worn Olive Army Green" id="133"/>
+		<Color name="Pure White" id="134"/>
+		<Color name="Hot Pink" id="135"/>
+		<Color name="Salmon pink" id="136"/>
+		<Color name="Metallic Vermillion Pink" id="137"/>
+		<Color name="Orange" id="138"/>
+		<Color name="Green" id="139"/>
+		<Color name="Blue" id="140"/>
+		<Color name="Mettalic Black Blue" id="141"/>
+		<Color name="Metallic Black Purple" id="142"/>
+		<Color name="Metallic Black Red" id="143"/>
+		<Color name="hunter green" id="144"/>
+		<Color name="Metallic Purple" id="145"/>
+		<Color name="Metaillic V Dark Blue" id="146"/>
+		<Color name="MODSHOP BLACK1" id="147"/>
+		<Color name="Matte Purple" id="148"/>
+		<Color name="Matte Dark Purple" id="149"/>
+		<Color name="Metallic Lava Red" id="150"/>
+		<Color name="Matte Forest Green" id="151"/>
+		<Color name="Matte Olive Drab" id="152"/>
+		<Color name="Matte Desert Brown" id="153"/>
+		<Color name="Matte Desert Tan" id="154"/>
+		<Color name="Matte Foilage Green" id="155"/>
+		<Color name="DEFAULT ALLOY COLOR" id="156"/>
+		<Color name="Epsilon Blue" id="157"/>
+		<Color name="Pure Gold" id="158"/>
+		<Color name="Brushed Gold" id="159"/>
+	</Colors>
+</Dealership>

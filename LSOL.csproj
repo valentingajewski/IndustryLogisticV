@@ -31,6 +31,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Update="missions\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="configs\*.ini">
       <LogicalName>LSOL.Configs.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>

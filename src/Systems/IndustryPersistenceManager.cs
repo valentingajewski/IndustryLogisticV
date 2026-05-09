@@ -165,6 +165,11 @@ namespace LSOL.Systems
                     persistenceVersion = 9;
                 }
 
+                if (metadata != null && HasSpecialMissionData(metadata.SpecialMissions))
+                {
+                    persistenceVersion = 11;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -247,6 +252,11 @@ namespace LSOL.Systems
                 {
                     WriteNpcLogisticsSnapshot(writer, metadata.NpcLogistics);
                 }
+
+                if (metadata != null && HasSpecialMissionData(metadata.SpecialMissions))
+                {
+                    WriteSpecialMissionSnapshot(writer, metadata.SpecialMissions);
+                }
             }
         }
 
@@ -293,6 +303,7 @@ namespace LSOL.Systems
             metadata.Analytics = ReadAnalyticsSnapshot(ini);
             metadata.OwnedFleet = ReadOwnedFleetSnapshot(ini);
             metadata.NpcLogistics = ReadNpcLogisticsSnapshot(ini);
+            metadata.SpecialMissions = ReadSpecialMissionSnapshot(ini);
             return metadata;
         }
 
@@ -643,6 +654,95 @@ namespace LSOL.Systems
             return snapshot.HasData ? snapshot : null;
         }
 
+        private static void WriteSpecialMissionSnapshot(StreamWriter writer, SpecialMissionPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            if (snapshot.ActiveMission != null && !string.IsNullOrWhiteSpace(snapshot.ActiveMission.MissionId))
+            {
+                writer.WriteLine("[SpecialMissions]");
+                writer.WriteLine("ActiveMissionId={0}", snapshot.ActiveMission.MissionId ?? string.Empty);
+                writer.WriteLine("ActiveStageIndex={0}", snapshot.ActiveMission.StageIndex);
+                writer.WriteLine("HandlerContainerPickedUp={0}", snapshot.ActiveMission.HandlerContainerPickedUp ? "true" : "false");
+                writer.WriteLine("HandlerContainerLoaded={0}", snapshot.ActiveMission.HandlerContainerLoaded ? "true" : "false");
+                writer.WriteLine();
+            }
+
+            if (snapshot.CompletedMissions == null)
+            {
+                return;
+            }
+
+            foreach (var entry in snapshot.CompletedMissions.OrderBy(x => x != null ? x.MissionId : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.MissionId) || entry.CompletionCount <= 0)
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildSpecialMissionProgressSectionName(entry.MissionId));
+                writer.WriteLine("CompletionCount={0}", entry.CompletionCount);
+                writer.WriteLine("LastCompletedInGameMinute={0}", entry.LastCompletedInGameMinute);
+                writer.WriteLine();
+            }
+        }
+
+        private static SpecialMissionPersistenceSnapshot ReadSpecialMissionSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new SpecialMissionPersistenceSnapshot();
+            if (ini.HasSection("SpecialMissions"))
+            {
+                var missionId = ini.GetString("SpecialMissions", "ActiveMissionId", string.Empty);
+                if (!string.IsNullOrWhiteSpace(missionId))
+                {
+                    snapshot.ActiveMission = new ActiveSpecialMissionPersistenceSnapshot
+                    {
+                        MissionId = missionId,
+                        StageIndex = ParseInt(ini.GetString("SpecialMissions", "ActiveStageIndex", "0"), 0),
+                        HandlerContainerPickedUp = ini.GetBool("SpecialMissions", "HandlerContainerPickedUp", false),
+                        HandlerContainerLoaded = ini.GetBool("SpecialMissions", "HandlerContainerLoaded", false),
+                    };
+                }
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("SpecialMissionProgress:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var missionId = section.Substring("SpecialMissionProgress:".Length).Trim();
+                if (string.IsNullOrWhiteSpace(missionId))
+                {
+                    continue;
+                }
+
+                var completionCount = ParseInt(ini.GetString(section, "CompletionCount", "0"), 0);
+                if (completionCount <= 0)
+                {
+                    continue;
+                }
+
+                snapshot.CompletedMissions.Add(new SpecialMissionCompletionSnapshot
+                {
+                    MissionId = missionId,
+                    CompletionCount = completionCount,
+                    LastCompletedInGameMinute = ParseInt(ini.GetString(section, "LastCompletedInGameMinute", "0"), 0),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
         private static TabletGraphTimeframe ParseGraphTimeframe(string raw, TabletGraphTimeframe fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -872,6 +972,11 @@ namespace LSOL.Systems
             return "NpcContract:" + Math.Max(1, contractId).ToString(CultureInfo.InvariantCulture);
         }
 
+        private static string BuildSpecialMissionProgressSectionName(string missionId)
+        {
+            return "SpecialMissionProgress:" + (missionId ?? string.Empty).Trim();
+        }
+
         private static string BuildTerritoryCorridorSectionName(string districtA, string districtB)
         {
             var left = districtA ?? string.Empty;
@@ -1000,6 +1105,11 @@ namespace LSOL.Systems
         {
             return snapshot != null && snapshot.HasData;
         }
+
+        private static bool HasSpecialMissionData(SpecialMissionPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
     }
 
     public sealed class IndustryPersistenceLoadResult
@@ -1025,5 +1135,6 @@ namespace LSOL.Systems
         public TabletAnalyticsPersistenceSnapshot Analytics { get; set; }
         public OwnedFleetPersistenceSnapshot OwnedFleet { get; set; }
         public NpcLogisticsPersistenceSnapshot NpcLogistics { get; set; }
+        public SpecialMissionPersistenceSnapshot SpecialMissions { get; set; }
     }
 }

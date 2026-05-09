@@ -536,12 +536,14 @@ namespace LSOL.UI
         private readonly Action _openCompanyMap;
         private readonly Action _openDistrictView;
         private readonly Action _openDepotView;
+        private readonly SpecialMissionManager _specialMissionManager;
 
-        public HomeTabletApp(Action openCompanyMap, Action openDistrictView, Action openDepotView)
+        public HomeTabletApp(Action openCompanyMap, Action openDistrictView, Action openDepotView, SpecialMissionManager specialMissionManager)
         {
             _openCompanyMap = openCompanyMap;
             _openDistrictView = openDistrictView;
             _openDepotView = openDepotView;
+            _specialMissionManager = specialMissionManager;
         }
 
         public string AppId
@@ -591,6 +593,18 @@ namespace LSOL.UI
             var permitDetail = permitSiteCount > 0
                 ? string.Format("{0}/{1} transport permits unlocked", unlockedPermitCount, permitSiteCount)
                 : "No contractor permits configured.";
+            var missionListings = _specialMissionManager != null
+                ? _specialMissionManager.GetMissionListings()
+                : Array.Empty<SpecialMissionListing>();
+            var availableMissionCount = missionListings.Count(listing => listing != null && listing.CanAccept);
+            var activeMission = missionListings.FirstOrDefault(listing => listing != null && listing.IsActive);
+            var missionDetail = activeMission != null
+                ? string.Format("{0}\n{1}", activeMission.Name, activeMission.Objective)
+                : missionListings.Count > 0
+                    ? (availableMissionCount > 0
+                        ? string.Format("{0} contracts ready\n{1} community missions loaded", availableMissionCount, missionListings.Count)
+                        : string.Format("{0} community missions loaded\nGrow district influence to unlock more contracts.", missionListings.Count))
+                    : "No mission packs loaded.\nAdd INI files to the missions folder next to LSOL.ini.";
             var siteAction = snapshot.HasNearestIndustry
                 ? (snapshot.CanInteractWithNearestIndustry
                     ? (Action)(() => context.Push(TabletAppIds.Industry, "main", snapshot.NearestIndustry))
@@ -670,6 +684,14 @@ namespace LSOL.UI
                 null,
                 "ANA"));
             items.Add(TabletUiHelpers.CreateActionItem(
+                "Missions",
+                missionDetail,
+                () => context.Push(TabletAppIds.Missions, "root"),
+                Color.FromArgb(186, 88, 58, 54),
+                Color.FromArgb(228, 208, 144, 112),
+                null,
+                "MIS"));
+            items.Add(TabletUiHelpers.CreateActionItem(
                 snapshot.HasNearestIndustry ? "Site" : "Sites",
                 siteDetail,
                 siteAction,
@@ -742,6 +764,340 @@ namespace LSOL.UI
                     value => ModFormatting.FormatMoney(value)),
                 Items = items,
             };
+        }
+    }
+
+    internal sealed class SpecialMissionsTabletApp : ITabletApp
+    {
+        private readonly SpecialMissionManager _missionManager;
+
+        public SpecialMissionsTabletApp(SpecialMissionManager missionManager)
+        {
+            _missionManager = missionManager;
+        }
+
+        public string AppId
+        {
+            get { return TabletAppIds.Missions; }
+        }
+
+        public TabletShellPage BuildPage(TabletShellContext context, TabletRoute route)
+        {
+            var pageId = route != null ? route.PageId : string.Empty;
+            if (string.Equals(pageId, "detail", StringComparison.OrdinalIgnoreCase))
+            {
+                return BuildDetailPage(context, route != null ? route.Payload as string : string.Empty);
+            }
+
+            return BuildRootPage(context);
+        }
+
+        private TabletShellPage BuildRootPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var items = new List<MenuItem>();
+
+            if (_missionManager == null || !_missionManager.HasDefinitions)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "No mission packs loaded",
+                    "Create or copy mission INI files into the missions folder next to LSOL.ini to publish community contracts."));
+            }
+            else
+            {
+                if (_missionManager.HasActiveMission)
+                {
+                    items.Add(TabletUiHelpers.CreateBannerItem(
+                        string.Format("ACTIVE | {0}", _missionManager.ActiveMissionName),
+                        string.Format("{0} | {1}", _missionManager.ActiveObjective, _missionManager.ActiveObjectiveDetail)));
+                }
+
+                if (_missionManager.Catalog != null && _missionManager.Catalog.ValidationMessages.Count > 0)
+                {
+                    items.Add(TabletUiHelpers.CreateBannerItem(
+                        "Mission Pack Warnings",
+                        string.Format("{0} pack validation message(s) found. Review the missions folder docs before publishing new contracts.", _missionManager.Catalog.ValidationMessages.Count)));
+                }
+
+                var listings = _missionManager.GetMissionListings();
+                for (int i = 0; i < listings.Count; i++)
+                {
+                    var listing = listings[i];
+                    var caption = BuildMissionCaption(listing);
+                    var detail = BuildMissionListDetail(listing);
+                    var idle = listing.IsActive
+                        ? Color.FromArgb(184, 82, 88, 52)
+                        : (listing.CanAccept
+                            ? Color.FromArgb(178, 60, 74, 56)
+                            : Color.FromArgb(176, 66, 56, 68));
+                    var active = listing.IsActive
+                        ? Color.FromArgb(226, 176, 212, 116)
+                        : (listing.CanAccept
+                            ? Color.FromArgb(222, 126, 182, 138)
+                            : Color.FromArgb(214, 154, 128, 154));
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        caption,
+                        detail,
+                        () => context.Push(TabletAppIds.Missions, "detail", listing.MissionId),
+                        idle,
+                        active,
+                        null,
+                        "JOB"));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the company hub.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Special Missions",
+                Subtitle = "Community contract board",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.92f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildDetailPage(TabletShellContext context, string missionId)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            if (_missionManager == null)
+            {
+                return BuildUnavailablePage(snapshot, "Mission manager unavailable.", () => context.GoBack());
+            }
+
+            var definition = _missionManager.GetDefinition(missionId);
+            var listing = _missionManager.GetMissionListings().FirstOrDefault(entry => entry != null && string.Equals(entry.MissionId, missionId, StringComparison.OrdinalIgnoreCase));
+            if (definition == null || listing == null)
+            {
+                return BuildUnavailablePage(snapshot, "Mission definition unavailable.", () => context.GoBack());
+            }
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateBannerItem(
+                    string.Format("{0} | Reward {1}", definition.Category, ModFormatting.FormatMoney(definition.Reward)),
+                    string.IsNullOrWhiteSpace(definition.Summary) ? definition.Description : definition.Summary),
+                TabletUiHelpers.CreateInfoItem(
+                    "Availability",
+                    listing.IsActive
+                        ? string.Format("Active mission | {0}", _missionManager.ActiveObjective)
+                        : listing.AvailabilityDetail),
+                TabletUiHelpers.CreateInfoItem(
+                    "Description",
+                    string.IsNullOrWhiteSpace(definition.Description)
+                        ? "No extended mission description configured for this contract."
+                        : definition.Description),
+                TabletUiHelpers.CreateInfoItem(
+                    "Completion",
+                    definition.Repeatable
+                        ? BuildMissionCompletionDetail(listing)
+                        : (listing.CompletionCount > 0 ? "One-off contract already completed on this save." : "One-off contract not completed yet.")),
+            };
+
+            if (listing.IsActive)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Cancel Mission",
+                    "Abandon the active contract and clean up its staged mission vehicles.",
+                    () =>
+                    {
+                        _missionManager.CancelActiveMission();
+                        context.Navigate(TabletAppIds.Missions, "root");
+                    },
+                    Color.FromArgb(182, 86, 54, 50),
+                    Color.FromArgb(224, 194, 112, 102),
+                    null,
+                    "X"));
+            }
+            else if (_missionManager.HasActiveMission)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Another mission is active",
+                    string.Format("Finish or cancel {0} before taking another special contract.", _missionManager.ActiveMissionName)));
+            }
+            else if (listing.CanAccept)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Accept Mission",
+                    string.Format("Stage the mission vehicles and begin {0}.", definition.Name),
+                    () =>
+                    {
+                        _missionManager.TryAcceptMission(definition.Id);
+                        context.Refresh();
+                    },
+                    Color.FromArgb(182, 58, 82, 60),
+                    Color.FromArgb(224, 128, 198, 150),
+                    null,
+                    "GO"));
+            }
+            else
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Contract locked",
+                    listing.AvailabilityDetail));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the mission board.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = definition.Name,
+                Subtitle = "Special mission detail",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.92f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private static TabletShellPage BuildUnavailablePage(TabletStateSnapshot snapshot, string detail, Action goBack)
+        {
+            return new TabletShellPage
+            {
+                Title = "Special Missions",
+                Subtitle = "Unavailable",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                Items = new[]
+                {
+                    TabletUiHelpers.CreateInfoItem("Unavailable", detail),
+                    TabletUiHelpers.CreateNavigationItem("Back", "Return to the mission board.", goBack, "BACK"),
+                },
+            };
+        }
+
+        private static string BuildMissionCaption(SpecialMissionListing listing)
+        {
+            if (listing == null)
+            {
+                return string.Empty;
+            }
+
+            if (listing.IsActive)
+            {
+                return string.Format("{0} ~y~[LIVE]~s~", listing.Name);
+            }
+
+            if (!listing.IsUnlocked)
+            {
+                return string.Format("{0} ~r~[LOCKED]~s~", listing.Name);
+            }
+
+            if (listing.CompletionCount > 0 && !listing.Repeatable)
+            {
+                return string.Format("{0} ~g~[DONE]~s~", listing.Name);
+            }
+
+            if (listing.RepeatCooldownRemainingMinutes > 0)
+            {
+                return string.Format("{0} ~r~[COOLDOWN]~s~", listing.Name);
+            }
+
+            if (listing.CompletionCount > 0 && listing.Repeatable)
+            {
+                return string.Format("{0} ~g~[x{1}]~s~", listing.Name, listing.CompletionCount);
+            }
+
+            return listing.Name;
+        }
+
+        private static string BuildMissionListDetail(SpecialMissionListing listing)
+        {
+            if (listing == null)
+            {
+                return string.Empty;
+            }
+
+            if (listing.IsActive)
+            {
+                return string.Format("{0} | {1}", listing.Objective, listing.AvailabilityDetail);
+            }
+
+            var summary = string.IsNullOrWhiteSpace(listing.Summary)
+                ? listing.Description
+                : listing.Summary;
+            var availability = string.IsNullOrWhiteSpace(listing.AvailabilityDetail)
+                ? string.Empty
+                : string.Format(" | {0}", listing.AvailabilityDetail);
+            return string.Format(
+                "Reward {0} | {1}{2}",
+                ModFormatting.FormatMoney(listing.Reward),
+                string.IsNullOrWhiteSpace(summary) ? "No briefing provided." : summary,
+                availability);
+        }
+
+        private static string BuildMissionCompletionDetail(SpecialMissionListing listing)
+        {
+            if (listing == null)
+            {
+                return "Repeatable contract.";
+            }
+
+            var detail = string.Format("Repeatable contract | Completed {0} time(s)", listing.CompletionCount);
+            if (listing.RepeatCooldownInGameMonths > 0 || listing.RepeatCooldownInGameMinutes > 0)
+            {
+                var cooldownLabel = FormatMissionCooldown(listing);
+                detail += listing.RepeatCooldownRemainingMinutes > 0
+                    ? string.Format(" | Next run in {0}", FormatMissionDuration(listing.RepeatCooldownRemainingMinutes))
+                    : string.Format(" | Cooldown {0}", cooldownLabel);
+            }
+
+            return detail;
+        }
+
+        private static string FormatMissionCooldown(SpecialMissionListing listing)
+        {
+            if (listing == null)
+            {
+                return string.Empty;
+            }
+
+            if (listing.RepeatCooldownInGameMonths > 0)
+            {
+                return listing.RepeatCooldownInGameMonths == 1
+                    ? "1 in-game month"
+                    : string.Format("{0} in-game months", listing.RepeatCooldownInGameMonths);
+            }
+
+            var totalMinutes = listing.RepeatCooldownInGameMinutes;
+            const int minutesPerWeek = 7 * 24 * 60;
+            if (totalMinutes > 0 && totalMinutes % minutesPerWeek == 0)
+            {
+                var weeks = totalMinutes / minutesPerWeek;
+                return weeks == 1
+                    ? "1 in-game week"
+                    : string.Format("{0} in-game weeks", weeks);
+            }
+
+            return FormatMissionDuration(totalMinutes);
+        }
+
+        private static string FormatMissionDuration(int totalMinutes)
+        {
+            totalMinutes = Math.Max(0, totalMinutes);
+            var days = totalMinutes / (24 * 60);
+            var remainingMinutes = totalMinutes % (24 * 60);
+            var hours = remainingMinutes / 60;
+            var minutes = remainingMinutes % 60;
+            var parts = new List<string>();
+
+            if (days > 0)
+            {
+                parts.Add(string.Format("{0}d", days));
+            }
+
+            if (hours > 0)
+            {
+                parts.Add(string.Format("{0}h", hours));
+            }
+
+            if (minutes > 0 || parts.Count == 0)
+            {
+                parts.Add(string.Format("{0}m", minutes));
+            }
+
+            return string.Join(" ", parts.ToArray());
         }
     }
 

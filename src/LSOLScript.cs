@@ -69,6 +69,7 @@ namespace LSOL
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
+        private readonly SpecialMissionManager _specialMissionManager;
         private readonly IndustryOutputPropManager _industryOutputPropManager;
 
         private readonly LemonMenu _officeMenu;
@@ -82,6 +83,7 @@ namespace LSOL
         private readonly LemonMenu _difficultyMenu;
         private readonly LemonMenu _optionsMenu;
         private readonly LemonMenu _debugMenu;
+        private readonly LemonMenu _debugMissionMenu;
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
@@ -141,9 +143,14 @@ namespace LSOL
         private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
+        private bool _isConstructing;
+
+        private OwnedFleetPersistenceSnapshot _pendingOwnedFleetRestore;
+        private SpecialMissionPersistenceSnapshot _pendingSpecialMissionRestore;
 
         public LSOLScript()
         {
+            _isConstructing = true;
             _configPath = ResolveConfigPath();
             _defaultIndustryStatePath = ResolveIndustryStatePath(_configPath);
             _savegamesDirectoryPath = ResolveSavegamesDirectoryPath(_configPath);
@@ -155,6 +162,20 @@ namespace LSOL
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _globalMarket = new GlobalMarketManager(Game.GameTime);
             _territoryManager = new TerritoryManager(_config, _industryManager);
+            _specialMissionManager = new SpecialMissionManager(
+                _configPath,
+                _territoryManager,
+                _fleetManager,
+                AddProfit,
+                ShowStatus,
+                () =>
+                {
+                    if (_tabletStateStore != null)
+                    {
+                        _tabletStateStore.MarkAllDirty();
+                    }
+                },
+                GetCurrentInGameWeekMinute);
             _industryOutputPropManager = new IndustryOutputPropManager(_industryManager.Industries);
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
@@ -238,21 +259,25 @@ namespace LSOL
             {
                 Subtitle = "Activate mechanics and configure gameplay",
                 AlignRight = true,
+                Theme = LemonMenuTheme.Default,
             };
             _savingOptionsMenu = new LemonMenu("Saving Options")
             {
                 Subtitle = "Create, load, delete, and save named games",
                 AlignRight = true,
+                Theme = LemonMenuTheme.Default,
             };
             _newSaveSetupMenu = new LemonMenu("Difficulty Settings")
             {
                 Subtitle = "Configure a new save before starting",
                 AlignRight = true,
+                Theme = LemonMenuTheme.Default,
             };
             _saveSlotsMenu = new LemonMenu("Save Slots")
             {
                 Subtitle = "Choose a saved game profile",
                 AlignRight = true,
+                Theme = LemonMenuTheme.Default,
             };
             _industryPurchaseMenu = new LemonMenu("Buy Industry")
             {
@@ -263,17 +288,27 @@ namespace LSOL
             {
                 Subtitle = "Enable or disable challenge options",
                 AlignRight = true,
+                Theme = LemonMenuTheme.Default,
             };
             _optionsMenu = new LemonMenu("Options")
             {
                 Subtitle = "Language and accessibility settings",
                 AlignRight = true,
+                Theme = LemonMenuTheme.Default,
             };
             _debugMenu = new LemonMenu("Debug")
             {
                 Subtitle = "Runtime industry and vehicle tools",
                 AlignRight = true,
                 MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _debugMissionMenu = new LemonMenu("Trigger Missions")
+            {
+                Subtitle = "Force-start loaded community contracts",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
             };
             _npcLogisticsController = new NpcLogisticsController(
                 _controls,
@@ -308,9 +343,10 @@ namespace LSOL
                 GetSecuredSupportSiteCount,
                 () => _territoryManager != null ? _territoryManager.DistrictStates : Enumerable.Empty<TerritoryDistrictState>());
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
-            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet));
+            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager));
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
             _tabletShellController.RegisterApp(new ContextTabletApp());
+            _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
             _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
                 IndustryInteractionDistance,
@@ -370,6 +406,8 @@ namespace LSOL
             KeyUp += OnKeyUp;
             Aborted += OnAborted;
 
+            _isConstructing = false;
+
             Notification.PostTicker(PrefixMessage(Text(ModTextKey.DetailLoadedSuccessfully)), false, false);
         }
 
@@ -388,6 +426,7 @@ namespace LSOL
                     || _difficultyMenu.IsOpen
                     || _optionsMenu.IsOpen
                     || _debugMenu.IsOpen
+                    || _debugMissionMenu.IsOpen
                     || _npcLogisticsController.AnyMenuOpen
                     || _companyMapController.AnyMenuOpen
                     || _tabletShellController.IsOpen;
@@ -401,6 +440,8 @@ namespace LSOL
             {
                 return;
             }
+
+            RestorePendingWorldState();
 
             var gameTime = Game.GameTime;
             if (_lastIndustryTickMs == 0)
@@ -455,6 +496,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkCargoDirty();
             }
+
+            _specialMissionManager.Update(player, gameTime);
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -565,6 +608,12 @@ namespace LSOL
                     {
                         _nearestIndustry = nearbyIndustry;
                         TryOpenIndustryTablet();
+                        return;
+                    }
+
+                    if (_specialMissionManager.HandleInteract(player))
+                    {
+                        return;
                     }
                 }
 
@@ -658,6 +707,18 @@ namespace LSOL
                 return true;
             }
 
+            if (_debugMissionMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToDebugMenu();
+                    return true;
+                }
+
+                _debugMissionMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_debugMenu.IsOpen)
             {
                 _debugMenu.HandleKey(key, _controls);
@@ -747,10 +808,11 @@ namespace LSOL
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
+            _debugMissionMenu.Draw();
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1430,6 +1492,7 @@ namespace LSOL
             _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
             _debugMenu.Close();
+            _debugMissionMenu.Close();
             CloseIndustryTablet();
         }
 
@@ -1446,6 +1509,7 @@ namespace LSOL
             _difficultyMenu.Close();
             _optionsMenu.Close();
             _debugMenu.Close();
+            _debugMissionMenu.Close();
             _officeMenu.Close();
             _vehicleCargoMenu.Close();
             _upgradeMenu.Close();
@@ -1954,13 +2018,28 @@ namespace LSOL
 
         private void ToggleDebugMenu()
         {
-            if (_debugMenu.IsOpen)
+            if (_debugMenu.IsOpen || _debugMissionMenu.IsOpen)
             {
                 _debugMenu.Close();
+                _debugMissionMenu.Close();
                 return;
             }
 
             CloseAllMenus();
+            RebuildDebugMenuItems();
+            _debugMenu.Open();
+        }
+
+        private void OpenDebugMissionMenu()
+        {
+            _debugMenu.Close();
+            RebuildDebugMissionMenuItems();
+            _debugMissionMenu.Open();
+        }
+
+        private void ReturnToDebugMenu()
+        {
+            _debugMissionMenu.Close();
             RebuildDebugMenuItems();
             _debugMenu.Open();
         }
@@ -2613,6 +2692,12 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "Trigger missions",
+                    DetailFactory = CurrentDebugMissionBoardDetail,
+                    OnActivate = OpenDebugMissionMenu,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => "Add money",
                     DetailFactory = () => string.Format("Adds {0} to your current balance.", ModFormatting.FormatMoney(GetSelectedDebugMoneyAmount())),
                     OnActivate = AddDebugMoney,
@@ -2671,6 +2756,125 @@ namespace LSOL
                     OnActivate = () => _debugMenu.Close(),
                 },
             });
+        }
+
+        private void RebuildDebugMissionMenuItems()
+        {
+            _debugMissionMenu.Title = "Trigger Missions";
+            _debugMissionMenu.Subtitle = "Force-start loaded community contracts";
+
+            var items = new List<OfficeMenuItem>();
+            if (_specialMissionManager == null || !_specialMissionManager.HasDefinitions)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No custom missions loaded",
+                    DetailFactory = () => "Add INI files to the missions folder next to LSOL.ini and reload the mod.",
+                });
+            }
+            else
+            {
+                var listingsById = _specialMissionManager.GetMissionListings()
+                    .Where(listing => listing != null && !string.IsNullOrWhiteSpace(listing.MissionId))
+                    .ToDictionary(listing => listing.MissionId, StringComparer.OrdinalIgnoreCase);
+
+                foreach (var definition in _specialMissionManager.Definitions)
+                {
+                    var capturedDefinition = definition;
+                    SpecialMissionListing listing;
+                    listingsById.TryGetValue(capturedDefinition.Id, out listing);
+                    var capturedListing = listing;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => BuildDebugMissionCaption(capturedDefinition, capturedListing),
+                        DetailFactory = () => BuildDebugMissionDetail(capturedDefinition, capturedListing),
+                        OnActivate = () => TriggerDebugMission(capturedDefinition.Id),
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = ReturnToDebugMenu,
+            });
+
+            _debugMissionMenu.SetItems(items);
+        }
+
+        private string CurrentDebugMissionBoardDetail()
+        {
+            if (_specialMissionManager == null)
+            {
+                return "Mission manager unavailable.";
+            }
+
+            var missionCount = _specialMissionManager.Definitions.Count();
+            if (missionCount <= 0)
+            {
+                return "No loaded mission packs. Add INI files to the missions folder next to LSOL.ini.";
+            }
+
+            var warningCount = _specialMissionManager.Catalog != null
+                ? _specialMissionManager.Catalog.ValidationMessages.Count
+                : 0;
+            if (_specialMissionManager.HasActiveMission)
+            {
+                return warningCount > 0
+                    ? string.Format("{0} mission pack(s) loaded | Active: {1} | {2} validation warning(s).", missionCount, _specialMissionManager.ActiveMissionName, warningCount)
+                    : string.Format("{0} mission pack(s) loaded | Active: {1}.", missionCount, _specialMissionManager.ActiveMissionName);
+            }
+
+            return warningCount > 0
+                ? string.Format("{0} mission pack(s) loaded | Force-start any mission | {1} validation warning(s).", missionCount, warningCount)
+                : string.Format("{0} mission pack(s) loaded. Force-start any mission regardless of unlock or cooldown.", missionCount);
+        }
+
+        private static string BuildDebugMissionCaption(SpecialMissionDefinition definition, SpecialMissionListing listing)
+        {
+            if (definition == null)
+            {
+                return "Unavailable mission";
+            }
+
+            return listing != null && listing.IsActive
+                ? string.Format("{0} ~y~[LIVE]~s~", definition.Name)
+                : definition.Name;
+        }
+
+        private static string BuildDebugMissionDetail(SpecialMissionDefinition definition, SpecialMissionListing listing)
+        {
+            if (definition == null)
+            {
+                return "Mission definition unavailable.";
+            }
+
+            var status = listing != null && listing.IsActive
+                ? "Currently active. Selecting here restarts the mission."
+                : listing != null && !listing.CanAccept && !string.IsNullOrWhiteSpace(listing.AvailabilityDetail)
+                    ? string.Format("{0} Selecting here ignores that restriction.", listing.AvailabilityDetail)
+                    : "Ready for testing. Selecting here ignores unlock and cooldown checks.";
+            return string.Format("{0} | Reward {1} | {2}", definition.Category, ModFormatting.FormatMoney(definition.Reward), status);
+        }
+
+        private void TriggerDebugMission(string missionId)
+        {
+            if (_specialMissionManager == null)
+            {
+                ShowStatus("Mission manager unavailable.");
+                return;
+            }
+
+            string detail;
+            if (_specialMissionManager.TryForceStartMission(missionId, out detail))
+            {
+                CloseAllMenus();
+                ShowStatus(detail, 4500);
+                return;
+            }
+
+            ShowStatus(detail, 4500);
+            RebuildDebugMissionMenuItems();
         }
 
         private string CurrentDebugIndustryCaption()
@@ -4226,6 +4430,7 @@ namespace LSOL
         private void OnAborted(object sender, EventArgs e)
         {
             TrySaveIndustryPersistence();
+            _specialMissionManager.Shutdown();
             _npcLogisticsManager.ClearAll();
             DestroyMapBlips();
             _cargoTransferController.ClearState();

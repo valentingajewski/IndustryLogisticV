@@ -258,6 +258,37 @@ namespace LSOL.Systems
                 : null;
         }
 
+        public bool TrySpawnVehicleByModelName(string modelName, Vector3 position, float heading, out Vehicle vehicle)
+        {
+            vehicle = null;
+            if (string.IsNullOrWhiteSpace(modelName))
+            {
+                return false;
+            }
+
+            var definition = FindDefinitionByModelName(modelName);
+            if (definition != null)
+            {
+                return TrySpawnVehicle(definition, position, heading, out vehicle);
+            }
+
+            var model = new Model(modelName);
+            if (!TryRequestModel(model, 1000))
+            {
+                return false;
+            }
+
+            vehicle = World.CreateVehicle(model, position, heading);
+            model.MarkAsNoLongerNeeded();
+            PlaceVehicleOnGround(vehicle);
+            return vehicle != null && vehicle.Exists();
+        }
+
+        public bool TryAttachVehicleToTrailer(Vehicle truck, Vehicle trailer, float heading)
+        {
+            return TryAttachTruckToTrailer(truck, trailer, heading);
+        }
+
         public void RegisterOwnedRig(Vehicle truck, Vehicle cargoVehicle)
         {
             if (truck == null || !truck.Exists())

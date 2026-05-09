@@ -6,3 +6,6 @@ D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSO
 D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.sourcelink.json
 D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.dll
 D:\Personal folders\Programmation\Games\gtav_industry_mgnt\obj\Release\net48\LSOL.pdb
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Release\net48\missions\port_container_handler.ini
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Release\net48\missions\README.md
+D:\Personal folders\Programmation\Games\gtav_industry_mgnt\bin\Release\net48\missions\quarry_heavy_machinery.ini

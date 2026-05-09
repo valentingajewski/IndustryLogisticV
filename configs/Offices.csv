@@ -1,0 +1,11 @@
+OfficeID	LegacyKey	SiteName	District	MarkerX	MarkerY	MarkerZ	SpawnAX	SpawnAY	SpawnAZ	SpawnAHeading	GateX	GateY	GateZ	BarrierModel	WorkerX	WorkerY	WorkerZ	OfficePrice	WeeklyOfficeRent	MaxNBVehicle	Description
+1	MainOffice	Elysian Island Logistic Office	Port	-56.85	-2520.17	7.4	-97.75	-2498.41	6	234	10.43	-2538.56	5.55	1286392437	-78.23	-2532	6	1000000	50000	50	
+2	LaMesaOffice	La Mesa Logistic Office	EastLosSantos	896.4	-1036.2	35	900.4	-1021.13	35	273								300000	15000	10	
+3	BanningOffice	Banning Logistic Office	SouthLosSantos	167.85	-2223	7.24	1757.74	-2232.35	6	267								700000	35000	20	
+4	StrawberryOffice	Strawberry Logistic Office	SouthLosSantos	-193	-1260.75	31.3	-172.67	-1252.3	31.3	87								500000	25000	15	
+5	VespucciOffice	Vespucci Logistic Office	WestLosSantos&	-1273.38	-1371.2	4.3	-1264.57	-1363.17	4.21	200								350000	15750	8	
+6	VinewoodOffice	Vinewood Logistic Office	Downtown	84.7	190.32	105.26	112.25	164.38	104.52	250								550000	35750	23	
+7	GrandSenoraOffice1	Grand Senora Logistic Office	GrandSenora	905.63	3586.89	33.4	916.12	3590.29	33.3	275								50000	2500	3	
+8	SandyShoresOffice	Sandy Shores Logistic Office	GrandSenora	1362.21	3616.75	34.89	1381	3593	34.85	197								75000	3750	5	
+9	SanChianskiOffice	San Chianski Logistic Office	GrandSenora	2931.61	4624.28	48.72	2934.87	4645	48.54	317								100000	5000	8	
+10	PaletoOffice	Paleto Bay Logistic Office	PaletoBay	-29.68	6458	31.46	-22.81	6452.63	31.31	313								200000	10000	10	
