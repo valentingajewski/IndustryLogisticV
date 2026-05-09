@@ -17,6 +17,9 @@ namespace LSOL.Config
             ResourcesByCommodity = new Dictionary<string, ExternalResourceConfig>(StringComparer.OrdinalIgnoreCase);
             ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             VehicleDefinitions = new List<VehicleDefinition>();
+            OfficeDefinitions = new List<OfficeDefinition>();
+            InteriorDefinitions = new List<InteriorDefinition>();
+            PersonalVehicleDefinitions = new List<DealershipVehicleDefinition>();
             ValidationMessages = new List<string>();
         }
 
@@ -26,6 +29,9 @@ namespace LSOL.Config
         public Dictionary<string, ExternalResourceConfig> ResourcesByCommodity { get; }
         public Dictionary<string, List<string>> ObjectModels { get; }
         public List<VehicleDefinition> VehicleDefinitions { get; }
+        public List<OfficeDefinition> OfficeDefinitions { get; }
+        public List<InteriorDefinition> InteriorDefinitions { get; }
+        public List<DealershipVehicleDefinition> PersonalVehicleDefinitions { get; }
         public List<string> ValidationMessages { get; }
 
         public IReadOnlyList<VehicleCargoType> CargoTypesInOrder
@@ -67,6 +73,9 @@ namespace LSOL.Config
             }
 
             CsvConfigImport.TryPopulateVehicles(configDirectory, catalog);
+            CsvConfigImport.TryPopulateOffices(configDirectory, catalog);
+            CsvConfigImport.TryPopulateInteriors(configDirectory, catalog);
+            XmlConfigImport.TryPopulateDealershipVehicles(configDirectory, catalog);
 
             return catalog;
         }

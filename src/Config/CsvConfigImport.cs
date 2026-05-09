@@ -240,6 +240,7 @@ namespace LSOL.Config
 
                 var capacity = Math.Max(0f, GetFloat(row, table, 0f, "VehicleCapacity", "Capacity"));
                 var fuelCapacityLiters = GetFloat(row, table, float.NaN, "VehicleFuelCapacity", "FuelCapacity");
+                var price = Math.Max(0f, GetFloat(row, table, 0f, "VehiclePrice", "Price"));
                 var isTrailer = vehicleType.IndexOf("Trailer", StringComparison.OrdinalIgnoreCase) >= 0;
                 var isTractor = capacity <= 0f
                     || vehicleType.IndexOf("Truck", StringComparison.OrdinalIgnoreCase) >= 0 && acceptedCommodities.Count == 0;
@@ -259,6 +260,7 @@ namespace LSOL.Config
                     AcceptedCommodities = acceptedCommodities,
                     CapacityTons = capacity,
                     FuelCapacityLiters = Math.Max(0f, fuelCapacityLiters),
+                    Price = price,
                     IsEnabled = capacity > 0f || isTractor,
                     IsTrailer = isTrailer && !isTractor,
                     IsTractor = isTractor,
@@ -271,6 +273,98 @@ namespace LSOL.Config
             }
 
             return catalog.VehicleDefinitions.Count > 0;
+        }
+
+        public static bool TryPopulateOffices(string configDirectory, ExternalConfigCatalog catalog)
+        {
+            if (catalog == null)
+            {
+                return false;
+            }
+
+            var table = LoadCsvTable(configDirectory, "Offices.csv", catalog.ValidationMessages);
+            if (table == null)
+            {
+                catalog.ValidationMessages.Add("Offices.csv missing. Office ownership progression will be unavailable.");
+                return false;
+            }
+
+            foreach (var row in table.Rows)
+            {
+                var officeId = row.GetString(table, "OfficeID", "OfficeId", "Id");
+                var siteName = row.GetString(table, "SiteName", "Name");
+                var markerPosition = TryGetVector3(row, table, "MarkerX", "MarkerY", "MarkerZ");
+                var spawnPosition = TryGetVector3(row, table, "SpawnAX", "SpawnAY", "SpawnAZ");
+                if (string.IsNullOrWhiteSpace(officeId) || string.IsNullOrWhiteSpace(siteName) || !markerPosition.HasValue || !spawnPosition.HasValue)
+                {
+                    catalog.ValidationMessages.Add(string.Format("Offices.csv line {0}: missing office id, site name, marker, or spawn coordinates.", row.LineNumber));
+                    continue;
+                }
+
+                catalog.OfficeDefinitions.Add(new OfficeDefinition
+                {
+                    OfficeId = officeId.Trim(),
+                    LegacyKey = row.GetString(table, "LegacyKey", "Key"),
+                    SiteName = siteName,
+                    DistrictName = row.GetString(table, "District", "DistrictName"),
+                    MarkerPosition = markerPosition.Value,
+                    SpawnPosition = spawnPosition.Value,
+                    SpawnHeading = GetFloat(row, table, 0f, "SpawnAHeading", "Heading"),
+                    GatePosition = TryGetVector3(row, table, "GateX", "GateY", "GateZ"),
+                    BarrierModelHash = GetOptionalInt(row, table, "BarrierModel"),
+                    WorkerPosition = TryGetVector3(row, table, "WorkerX", "WorkerY", "WorkerZ"),
+                    OfficePrice = Math.Max(0f, GetFloat(row, table, 0f, "OfficePrice", "Price")),
+                    WeeklyOfficeRent = Math.Max(0f, GetFloat(row, table, 0f, "WeeklyOfficeRent", "WeeklyRent")),
+                    MaxCommercialVehicles = Math.Max(0, GetOptionalInt(row, table, "MaxNBVehicle", "MaxVehicles") ?? 0),
+                    Description = row.GetString(table, "Description"),
+                });
+            }
+
+            return catalog.OfficeDefinitions.Count > 0;
+        }
+
+        public static bool TryPopulateInteriors(string configDirectory, ExternalConfigCatalog catalog)
+        {
+            if (catalog == null)
+            {
+                return false;
+            }
+
+            var table = LoadCsvTable(configDirectory, "Interiors.csv", catalog.ValidationMessages);
+            if (table == null)
+            {
+                catalog.ValidationMessages.Add("Interiors.csv missing. Apartment ownership progression will be unavailable.");
+                return false;
+            }
+
+            foreach (var row in table.Rows)
+            {
+                var interiorId = row.GetString(table, "InteriorID", "InteriorId", "Id");
+                var interiorName = row.GetString(table, "InteriorName", "Name");
+                var interiorPosition = TryGetVector3(row, table, "InteriorX", "InteriorY", "InteriorZ");
+                var exteriorPosition = TryGetVector3(row, table, "InteriorExtX", "InteriorExtY", "InteriorExtZ");
+                var garagePosition = TryGetVector3(row, table, "InteriorGarageX", "InteriorGarageY", "InteriorGarageZ");
+                if (string.IsNullOrWhiteSpace(interiorId) || string.IsNullOrWhiteSpace(interiorName) || !interiorPosition.HasValue || !exteriorPosition.HasValue || !garagePosition.HasValue)
+                {
+                    catalog.ValidationMessages.Add(string.Format("Interiors.csv line {0}: missing interior id, name, or coordinates.", row.LineNumber));
+                    continue;
+                }
+
+                catalog.InteriorDefinitions.Add(new InteriorDefinition
+                {
+                    InteriorId = interiorId.Trim(),
+                    InteriorName = interiorName,
+                    InteriorIgName = row.GetString(table, "InteriorIGName", "InteriorIgName", "InteriorNameLabel"),
+                    InteriorPosition = interiorPosition.Value,
+                    InteriorType = row.GetString(table, "InteriorType", "Type"),
+                    InteriorPrice = Math.Max(0f, GetFloat(row, table, 0f, "InteriorPrice", "Price")),
+                    InteriorWeeklyRent = Math.Max(0f, GetFloat(row, table, 0f, "InteriorWeeklyRent", "WeeklyRent")),
+                    ExteriorPosition = exteriorPosition.Value,
+                    GaragePosition = garagePosition.Value,
+                });
+            }
+
+            return catalog.InteriorDefinitions.Count > 0;
         }
 
         private static DelimitedTextTable LoadCsvTable(string configDirectory, string fileName, ICollection<string> validationMessages)

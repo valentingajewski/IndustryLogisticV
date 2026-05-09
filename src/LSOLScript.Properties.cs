@@ -1,0 +1,1208 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
+using GTA;
+using GTA.Math;
+using GTA.UI;
+using LSOL.Domain;
+using LSOL.Systems;
+using LSOL.UI;
+using OfficeMenuItem = LSOL.UI.MenuItem;
+using WinForms = System.Windows.Forms;
+
+namespace LSOL
+{
+    public sealed partial class LSOLScript
+    {
+        private const float ApartmentInteriorInteractionDistance = 3.2f;
+        private const float DealershipInteractionDistance = 4.6f;
+
+        private static readonly Vector3 CommercialDealershipMarker = new Vector3(-979.56f, -2232.48f, 8.86f);
+        private static readonly Vector3 PersonalDealershipMarker = new Vector3(38.68f, -1109.47f, 26.44f);
+
+        private LemonMenu _commercialGarageMenu;
+        private LemonMenu _apartmentMenu;
+        private LemonMenu _personalGarageMenu;
+        private LemonMenu _personalDealershipMenu;
+        private OfficeDefinition _menuOffice;
+        private InteriorDefinition _menuApartment;
+        private CommercialGarageMenuContext _commercialGarageMenuContext;
+
+        private void InitializePropertyMenus()
+        {
+            _commercialGarageMenu = new LemonMenu("Commercial Garage")
+            {
+                Subtitle = "Retrieve, store, and swap owned commercial vehicles",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _apartmentMenu = new LemonMenu("Apartment")
+            {
+                Subtitle = "Manage residence access and personal storage",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _personalGarageMenu = new LemonMenu("Personal Garage")
+            {
+                Subtitle = "Retrieve and store owned personal vehicles",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _personalDealershipMenu = new LemonMenu("Vehicle Dealership")
+            {
+                Subtitle = "Purchase personal vehicles for the active residence",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _commercialGarageMenuContext = CommercialGarageMenuContext.Office;
+        }
+
+        private bool HasPropertyMenuOpen()
+        {
+            return (_commercialGarageMenu != null && _commercialGarageMenu.IsOpen)
+                || (_apartmentMenu != null && _apartmentMenu.IsOpen)
+                || (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
+                || (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen);
+        }
+
+        private void DrawPropertyMenus()
+        {
+            if (_commercialGarageMenu != null)
+            {
+                _commercialGarageMenu.Draw();
+            }
+
+            if (_apartmentMenu != null)
+            {
+                _apartmentMenu.Draw();
+            }
+
+            if (_personalGarageMenu != null)
+            {
+                _personalGarageMenu.Draw();
+            }
+
+            if (_personalDealershipMenu != null)
+            {
+                _personalDealershipMenu.Draw();
+            }
+        }
+
+        private void ClosePropertyMenus()
+        {
+            if (_commercialGarageMenu != null)
+            {
+                _commercialGarageMenu.Close();
+            }
+
+            if (_apartmentMenu != null)
+            {
+                _apartmentMenu.Close();
+            }
+
+            if (_personalGarageMenu != null)
+            {
+                _personalGarageMenu.Close();
+            }
+
+            if (_personalDealershipMenu != null)
+            {
+                _personalDealershipMenu.Close();
+            }
+        }
+
+        private bool HandlePropertyMenuKey(WinForms.Keys key)
+        {
+            if (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen)
+            {
+                _personalDealershipMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToApartmentMenu();
+                    return true;
+                }
+
+                _personalGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_commercialGarageMenu != null && _commercialGarageMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnFromCommercialGarageMenu();
+                    return true;
+                }
+
+                _commercialGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_apartmentMenu != null && _apartmentMenu.IsOpen)
+            {
+                _apartmentMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            return false;
+        }
+
+        private void ProcessPropertyWeeklyCharges()
+        {
+            var balanceBefore = _profit;
+            var updatedBalance = _profit;
+            var messages = _propertyManager.ProcessWeeklyCharges(GetCurrentInGameWeekMinute(), ref updatedBalance);
+            if (Math.Abs(updatedBalance - _profit) > 0.001f)
+            {
+                _profit = updatedBalance;
+                _tabletStateStore.MarkBalanceDirty();
+            }
+
+            if (messages.Count > 0)
+            {
+                ShowStatus(messages[messages.Count - 1], 5000);
+                RebuildOfficeMenuItems();
+                RebuildApartmentMenuItems();
+            }
+        }
+
+        private void DrawPropertyMarkers(Ped player, bool canShowPrompts, ref bool promptShown)
+        {
+            var playerPos = player.Position;
+            var drawDistanceSq = IndustryMarkerDrawDistance * IndustryMarkerDrawDistance;
+            var activeOffice = _propertyManager.ActiveOffice;
+            var activeApartment = _propertyManager.ActiveApartment;
+
+            for (int i = 0; i < _propertyManager.Offices.Count; i++)
+            {
+                var office = _propertyManager.Offices[i];
+                if (office == null || playerPos.DistanceToSquared(office.MarkerPosition) > drawDistanceSq)
+                {
+                    continue;
+                }
+
+                var isActive = activeOffice != null && string.Equals(activeOffice.OfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase);
+                World.DrawMarker(
+                    MarkerType.Cylinder,
+                    office.MarkerPosition,
+                    Vector3.Zero,
+                    Vector3.Zero,
+                    new Vector3(_config.MarkerRadius * 1.4f, _config.MarkerRadius * 1.4f, _config.MarkerHeight),
+                    isActive ? Color.FromArgb(210, 98, 208, 132) : Color.FromArgb(200, 52, 170, 238),
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    false);
+
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(office.MarkerPosition) <= OfficeInteractionDistance)
+                {
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to manage {1}.", KeyName(_controls.Interact), office.DisplayName)));
+                    promptShown = true;
+                }
+            }
+
+            for (int i = 0; i < _propertyManager.Interiors.Count; i++)
+            {
+                var apartment = _propertyManager.Interiors[i];
+                if (apartment == null || playerPos.DistanceToSquared(apartment.ExteriorPosition) > drawDistanceSq)
+                {
+                    continue;
+                }
+
+                var isActive = activeApartment != null && string.Equals(activeApartment.InteriorId, apartment.InteriorId, StringComparison.OrdinalIgnoreCase);
+                World.DrawMarker(
+                    MarkerType.Cylinder,
+                    apartment.ExteriorPosition,
+                    Vector3.Zero,
+                    Vector3.Zero,
+                    new Vector3(_config.MarkerRadius * 1.3f, _config.MarkerRadius * 1.3f, _config.MarkerHeight),
+                    isActive ? Color.FromArgb(210, 220, 188, 84) : Color.FromArgb(205, 188, 134, 82),
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    false);
+
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(apartment.ExteriorPosition) <= OfficeInteractionDistance)
+                {
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to manage {1}.", KeyName(_controls.Interact), apartment.DisplayName)));
+                    promptShown = true;
+                }
+            }
+
+            if (activeApartment != null && playerPos.DistanceToSquared(activeApartment.InteriorPosition) <= drawDistanceSq)
+            {
+                World.DrawMarker(
+                    MarkerType.Cylinder,
+                    activeApartment.InteriorPosition,
+                    Vector3.Zero,
+                    Vector3.Zero,
+                    new Vector3(_config.MarkerRadius * 1.2f, _config.MarkerRadius * 1.2f, _config.MarkerHeight),
+                    Color.FromArgb(205, 234, 196, 110),
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    false);
+
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(activeApartment.InteriorPosition) <= ApartmentInteriorInteractionDistance)
+                {
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to leave the apartment.", KeyName(_controls.Interact))));
+                    promptShown = true;
+                }
+            }
+
+            DrawDealershipMarker(playerPos, CommercialDealershipMarker, Color.FromArgb(205, 94, 174, 220), canShowPrompts, ref promptShown, "browse the commercial dealership");
+            DrawDealershipMarker(playerPos, PersonalDealershipMarker, Color.FromArgb(205, 228, 156, 82), canShowPrompts, ref promptShown, "browse the personal vehicle dealership");
+        }
+
+        private void DrawDealershipMarker(Vector3 playerPosition, Vector3 markerPosition, Color color, bool canShowPrompts, ref bool promptShown, string promptDescription)
+        {
+            var drawDistanceSq = IndustryMarkerDrawDistance * IndustryMarkerDrawDistance;
+            if (playerPosition.DistanceToSquared(markerPosition) > drawDistanceSq)
+            {
+                return;
+            }
+
+            World.DrawMarker(
+                MarkerType.Cylinder,
+                markerPosition,
+                Vector3.Zero,
+                Vector3.Zero,
+                new Vector3(_config.MarkerRadius * 1.25f, _config.MarkerRadius * 1.25f, _config.MarkerHeight),
+                color,
+                false,
+                false,
+                false,
+                null,
+                null,
+                false);
+
+            if (canShowPrompts && !promptShown && playerPosition.DistanceTo(markerPosition) <= DealershipInteractionDistance)
+            {
+                Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to {1}.", KeyName(_controls.Interact), promptDescription)));
+                promptShown = true;
+            }
+        }
+
+        private bool HandlePropertyInteraction(Ped player)
+        {
+            var activeApartment = _propertyManager.ActiveApartment;
+            if (activeApartment != null && player.Position.DistanceTo(activeApartment.InteriorPosition) <= ApartmentInteriorInteractionDistance)
+            {
+                ExitActiveApartment();
+                return true;
+            }
+
+            var office = GetOfficeInInteractionRange(player.Position);
+            if (office != null)
+            {
+                OpenOfficeMenuFor(office);
+                return true;
+            }
+
+            var apartment = GetApartmentInInteractionRange(player.Position);
+            if (apartment != null)
+            {
+                OpenApartmentMenuFor(apartment);
+                return true;
+            }
+
+            if (IsNearCommercialDealership(player.Position))
+            {
+                OpenCommercialDealershipMenu();
+                return true;
+            }
+
+            if (IsNearPersonalDealership(player.Position))
+            {
+                OpenPersonalDealershipMenu();
+                return true;
+            }
+
+            return false;
+        }
+
+        private OfficeDefinition GetOfficeInInteractionRange(Vector3 position)
+        {
+            for (int i = 0; i < _propertyManager.Offices.Count; i++)
+            {
+                var office = _propertyManager.Offices[i];
+                if (office != null && position.DistanceTo(office.MarkerPosition) <= OfficeInteractionDistance)
+                {
+                    return office;
+                }
+            }
+
+            return null;
+        }
+
+        private InteriorDefinition GetApartmentInInteractionRange(Vector3 position)
+        {
+            for (int i = 0; i < _propertyManager.Interiors.Count; i++)
+            {
+                var apartment = _propertyManager.Interiors[i];
+                if (apartment != null && position.DistanceTo(apartment.ExteriorPosition) <= OfficeInteractionDistance)
+                {
+                    return apartment;
+                }
+            }
+
+            return null;
+        }
+
+        private bool IsNearCommercialDealership(Vector3 position)
+        {
+            return position.DistanceTo(CommercialDealershipMarker) <= DealershipInteractionDistance;
+        }
+
+        private bool IsNearPersonalDealership(Vector3 position)
+        {
+            return position.DistanceTo(PersonalDealershipMarker) <= DealershipInteractionDistance;
+        }
+
+        private void OpenOfficeMenuFor(OfficeDefinition office)
+        {
+            _menuOffice = office;
+            CloseIndustryTablet();
+            CloseNonOfficeMenus();
+            RebuildOfficeMenuItems();
+            _officeMenu.Open();
+        }
+
+        private string BuildOfficeMenuSubtitle()
+        {
+            if (_menuOffice == null)
+            {
+                return "Manage office access and commercial operations";
+            }
+
+            var officeState = _propertyManager.GetOfficeState(_menuOffice.OfficeId);
+            var stateLabel = officeState == null || (!officeState.IsOwned && !officeState.IsRented)
+                ? "Available"
+                : officeState.IsAccessSuspended || officeState.OutstandingRent > 0.01f
+                    ? string.Format("Arrears {0}", ModFormatting.FormatMoney(officeState.OutstandingRent))
+                    : officeState.IsOwned
+                        ? "Owned"
+                        : "Rented";
+            return string.Format("{0} | Rent {1} | Buy {2}", stateLabel, ModFormatting.FormatMoney(_menuOffice.WeeklyOfficeRent), ModFormatting.FormatMoney(_menuOffice.OfficePrice));
+        }
+
+        private IEnumerable<OfficeMenuItem> BuildOfficeMenuItems()
+        {
+            var items = new List<OfficeMenuItem>();
+            var office = _menuOffice;
+            var officeState = office != null ? _propertyManager.GetOfficeState(office.OfficeId) : null;
+            var isActiveOffice = office != null && string.Equals(_propertyManager.ActiveOfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase);
+            var hasAccess = office != null && officeState != null && (officeState.IsOwned || officeState.IsRented);
+            var hasArrears = officeState != null && officeState.OutstandingRent > 0.01f;
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
+                DetailFactory = () => office != null
+                    ? string.Format("{0} vehicle slots | {1}", Math.Max(0, office.MaxCommercialVehicles), office.DistrictName)
+                    : "No office selected.",
+            });
+
+            if (office == null)
+            {
+                return items;
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => office.DisplayName,
+                DetailFactory = () => string.Format("Weekly rent {0} | Purchase {1}", ModFormatting.FormatMoney(office.WeeklyOfficeRent), ModFormatting.FormatMoney(office.OfficePrice)),
+            });
+
+            if (!hasAccess)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Rent Office",
+                    DetailFactory = () => string.Format("Pay {0} to unlock access at this office.", ModFormatting.FormatMoney(office.WeeklyOfficeRent)),
+                    OnActivate = RentSelectedOffice,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Purchase Office",
+                    DetailFactory = () => string.Format("Pay {0} to own this office permanently.", ModFormatting.FormatMoney(office.OfficePrice)),
+                    OnActivate = PurchaseSelectedOffice,
+                });
+                return items;
+            }
+
+            if (hasArrears)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Settle Office Arrears",
+                    DetailFactory = () => string.Format("Outstanding balance: {0}", ModFormatting.FormatMoney(officeState.OutstandingRent)),
+                    OnActivate = PaySelectedOfficeArrears,
+                });
+            }
+
+            if (!isActiveOffice && !hasArrears)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Activate Office",
+                    DetailFactory = () => string.Format("Make {0} the active commercial garage.", office.DisplayName),
+                    OnActivate = ActivateSelectedOffice,
+                });
+            }
+            else if (!hasArrears)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => string.Format("Worker Model: < {0} >", _workerSpawnController.SelectedWorkerDisplayName),
+                    OnLeft = () => ChangeWorkerIndex(-1),
+                    OnRight = () => ChangeWorkerIndex(1),
+                    OnActivate = ApplyWorkerModel,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Commercial Garage",
+                    DetailFactory = BuildCommercialGarageSummary,
+                    OnActivate = OpenCommercialGarageMenu,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Hire NPC",
+                    DetailFactory = CurrentNpcHiringDetail,
+                    OnActivate = OpenNpcHiringMenu,
+                });
+            }
+
+            return items;
+        }
+
+        private string BuildCommercialGarageSummary()
+        {
+            var activeCount = _propertyManager.GetActiveCommercialGarageVehicles().Count();
+            var reserveCount = _propertyManager.GetReserveCommercialVehicles().Count();
+            var activeOffice = _propertyManager.ActiveOffice;
+            var capacity = activeOffice != null ? Math.Max(0, activeOffice.MaxCommercialVehicles) : 0;
+            return string.Format("Active {0}/{1} | Reserve {2}", activeCount, capacity, reserveCount);
+        }
+
+        private void RentSelectedOffice()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryRentOffice(_menuOffice.OfficeId, ref _profit, GetCurrentInGameWeekMinute(), out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildOfficeMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void PurchaseSelectedOffice()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryPurchaseOffice(_menuOffice.OfficeId, ref _profit, GetCurrentInGameWeekMinute(), out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildOfficeMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void ActivateSelectedOffice()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryActivateOffice(_menuOffice.OfficeId, out message))
+            {
+                RebuildOfficeMenuItems();
+                RebuildCommercialGarageMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void PaySelectedOfficeArrears()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryPayOfficeArrears(_menuOffice.OfficeId, ref _profit, out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildOfficeMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void OpenCommercialGarageMenu()
+        {
+            _commercialGarageMenuContext = CommercialGarageMenuContext.Office;
+            OpenCommercialGarageMenuInternal();
+        }
+
+        private void OpenIndustryCommercialGarageMenu()
+        {
+            _commercialGarageMenuContext = CommercialGarageMenuContext.Industry;
+            OpenCommercialGarageMenuInternal();
+        }
+
+        private void OpenCommercialGarageMenuInternal()
+        {
+            string reason;
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
+            _officeMenu.Close();
+            CloseIndustryTablet();
+            RebuildCommercialGarageMenuItems();
+            _commercialGarageMenu.Open();
+        }
+
+        private void RebuildCommercialGarageMenuItems()
+        {
+            var items = new List<OfficeMenuItem>
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => BuildCommercialGarageSummary(),
+                    DetailFactory = () => _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
+                        ? "Select an active garage vehicle to deploy at this industry."
+                        : "Enter retrieves or stores. Left/right sends active vehicles to reserve.",
+                }
+            };
+
+            var activeVehicles = _propertyManager.GetActiveCommercialGarageVehicles().ToList();
+            if (activeVehicles.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No active commercial vehicles",
+                    DetailFactory = () => "Purchase trucks and trailers at the commercial dealership.",
+                });
+            }
+            else
+            {
+                for (int i = 0; i < activeVehicles.Count; i++)
+                {
+                    var vehicle = activeVehicles[i];
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => BuildCommercialVehicleStatusCaption(vehicle),
+                        DetailFactory = () => BuildCommercialVehicleDetail(vehicle),
+                        OnActivate = () => HandleCommercialVehicleActivate(vehicle),
+                        OnLeft = _commercialGarageMenuContext == CommercialGarageMenuContext.Office ? (Action)(() => MoveCommercialVehicleToReserve(vehicle)) : null,
+                        OnRight = _commercialGarageMenuContext == CommercialGarageMenuContext.Office ? (Action)(() => MoveCommercialVehicleToReserve(vehicle)) : null,
+                    });
+                }
+            }
+
+            var reserveVehicles = _propertyManager.GetReserveCommercialVehicles().ToList();
+            if (reserveVehicles.Count > 0)
+            {
+                items.Add(new OfficeMenuItem { IsSeparator = true });
+                for (int i = 0; i < reserveVehicles.Count; i++)
+                {
+                    var vehicle = reserveVehicles[i];
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => BuildCommercialVehicleStatusCaption(vehicle),
+                        DetailFactory = () => BuildCommercialVehicleDetail(vehicle),
+                        OnActivate = () => ActivateCommercialReserveVehicle(vehicle),
+                    });
+                }
+            }
+
+            _commercialGarageMenu.Title = _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
+                ? "Industry Deployment"
+                : "Commercial Garage";
+            _commercialGarageMenu.Subtitle = _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
+                ? "Deploy owned commercial vehicles to the selected industry pad"
+                : "Retrieve, store, and swap owned commercial vehicles";
+            _commercialGarageMenu.SetItems(items);
+        }
+
+        private string BuildCommercialVehicleDetail(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return string.Empty;
+            }
+
+            var location = vehicle.InActiveGarage ? "Active garage" : "Reserve";
+            var deployed = _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId) ? "Deployed" : "Stored";
+            var cargo = string.IsNullOrWhiteSpace(vehicle.Commodity)
+                ? "Empty"
+                : string.Format("{0} {1:0.0}/{2:0.0}t", vehicle.Commodity, vehicle.WeightTons, Math.Max(0f, vehicle.CapacityTons));
+            return string.Format("{0} | {1} | {2}", location, deployed, cargo);
+        }
+
+        private string BuildCommercialVehicleStatusCaption(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return string.Empty;
+            }
+
+            return string.Format(
+                "[{0}] {1}",
+                _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId) ? "Out" : "Stored",
+                vehicle.DisplayName);
+        }
+
+        private void HandleCommercialVehicleActivate(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_commercialGarageMenuContext == CommercialGarageMenuContext.Industry)
+            {
+                if (_menuIndustry == null || !_menuIndustry.VehicleSpawnPosition.HasValue)
+                {
+                    ShowStatus("No vehicle spawn configured for this industry.");
+                    return;
+                }
+
+                _propertyManager.TryDeployCommercialVehicle(
+                    vehicle.AssetId,
+                    _fleetManager,
+                    _vehicleFuelSystem,
+                    GetGroundPosition,
+                    _menuIndustry.VehicleSpawnPosition.Value,
+                    _menuIndustry.VehicleSpawnHeading ?? _config.VehicleSpawnHeading,
+                    out message);
+            }
+            else
+            {
+                var activeOffice = _propertyManager.ActiveOffice;
+                if (activeOffice == null)
+                {
+                    ShowStatus("No active office selected.");
+                    return;
+                }
+
+                if (_propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId))
+                {
+                    _propertyManager.TryStoreCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, out message);
+                }
+                else
+                {
+                    _propertyManager.TryDeployCommercialVehicle(
+                        vehicle.AssetId,
+                        _fleetManager,
+                        _vehicleFuelSystem,
+                        GetGroundPosition,
+                        activeOffice.SpawnPosition,
+                        activeOffice.SpawnHeading,
+                        out message);
+                }
+            }
+
+            _tabletStateStore.MarkCargoDirty();
+            RebuildCommercialGarageMenuItems();
+            ShowStatus(message);
+        }
+
+        private void ActivateCommercialReserveVehicle(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TrySetCommercialVehicleActive(vehicle.AssetId, out message))
+            {
+                if (_commercialGarageMenuContext == CommercialGarageMenuContext.Industry)
+                {
+                    HandleCommercialVehicleActivate(vehicle);
+                    return;
+                }
+
+                RebuildCommercialGarageMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void MoveCommercialVehicleToReserve(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            _propertyManager.TrySetCommercialVehicleReserve(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, out message);
+            _tabletStateStore.MarkCargoDirty();
+            RebuildCommercialGarageMenuItems();
+            ShowStatus(message);
+        }
+
+        private void ReturnFromCommercialGarageMenu()
+        {
+            _commercialGarageMenu.Close();
+
+            if (_commercialGarageMenuContext == CommercialGarageMenuContext.Industry)
+            {
+                ReturnToIndustryTablet();
+                return;
+            }
+
+            RebuildOfficeMenuItems();
+            _officeMenu.Open();
+        }
+
+        private void OpenApartmentMenuFor(InteriorDefinition apartment)
+        {
+            _menuApartment = apartment;
+            CloseAllMenus();
+            RebuildApartmentMenuItems();
+            _apartmentMenu.Open();
+        }
+
+        private void RebuildApartmentMenuItems()
+        {
+            var items = new List<OfficeMenuItem>();
+            var apartment = _menuApartment;
+            var apartmentState = apartment != null ? _propertyManager.GetApartmentState(apartment.InteriorId) : null;
+            var isActiveApartment = apartment != null && string.Equals(_propertyManager.ActiveApartmentId, apartment.InteriorId, StringComparison.OrdinalIgnoreCase);
+            var hasAccess = apartmentState != null && apartmentState.IsOwned;
+            var hasArrears = apartmentState != null && apartmentState.OutstandingRent > 0.01f;
+
+            _apartmentMenu.Title = apartment != null ? apartment.DisplayName : "Apartment";
+            _apartmentMenu.Subtitle = apartment != null
+                ? string.Format("Weekly rent {0} | Purchase {1}", ModFormatting.FormatMoney(apartment.InteriorWeeklyRent), ModFormatting.FormatMoney(apartment.InteriorPrice))
+                : "Manage residence access and personal storage";
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
+                DetailFactory = () => apartment != null ? (apartment.InteriorIgName ?? apartment.InteriorType ?? string.Empty) : string.Empty,
+            });
+
+            if (apartment == null)
+            {
+                _apartmentMenu.SetItems(items);
+                return;
+            }
+
+            if (!hasAccess)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Purchase Apartment",
+                    DetailFactory = () => string.Format("Pay {0} to purchase this apartment.", ModFormatting.FormatMoney(apartment.InteriorPrice)),
+                    OnActivate = PurchaseSelectedApartment,
+                });
+                _apartmentMenu.SetItems(items);
+                return;
+            }
+
+            if (hasArrears)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Settle Apartment Arrears",
+                    DetailFactory = () => string.Format("Outstanding balance: {0}", ModFormatting.FormatMoney(apartmentState.OutstandingRent)),
+                    OnActivate = PaySelectedApartmentArrears,
+                });
+            }
+
+            if (!isActiveApartment && !hasArrears)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Activate Apartment",
+                    DetailFactory = () => "Make this the active personal residence and garage.",
+                    OnActivate = ActivateSelectedApartment,
+                });
+            }
+
+            if (isActiveApartment && !hasArrears)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Enter Apartment",
+                    DetailFactory = () => string.Format("Enter {0}.", apartment.InteriorIgName),
+                    OnActivate = EnterSelectedApartment,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Personal Garage",
+                    DetailFactory = BuildPersonalGarageSummary,
+                    OnActivate = OpenPersonalGarageMenu,
+                });
+            }
+
+            _apartmentMenu.SetItems(items);
+        }
+
+        private void PurchaseSelectedApartment()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryPurchaseApartment(_menuApartment.InteriorId, ref _profit, GetCurrentInGameWeekMinute(), out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildApartmentMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void ActivateSelectedApartment()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryActivateApartment(_menuApartment.InteriorId, out message))
+            {
+                RebuildApartmentMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void PaySelectedApartmentArrears()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryPayApartmentArrears(_menuApartment.InteriorId, ref _profit, out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildApartmentMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void EnterSelectedApartment()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return;
+            }
+
+            string reason;
+            if (!_propertyManager.CanUseApartmentSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
+            player.Position = _menuApartment.InteriorPosition;
+            CloseAllMenus();
+            ShowStatus(string.Format("Entered {0}.", _menuApartment.InteriorIgName));
+        }
+
+        private void ExitActiveApartment()
+        {
+            var apartment = _propertyManager.ActiveApartment;
+            var player = Game.Player.Character;
+            if (apartment == null || player == null || !player.Exists())
+            {
+                return;
+            }
+
+            player.Position = apartment.ExteriorPosition;
+            ShowStatus(string.Format("Exited {0}.", apartment.DisplayName));
+        }
+
+        private string BuildPersonalGarageSummary()
+        {
+            var count = _propertyManager.GetOwnedPersonalVehicles().Count();
+            return count == 1
+                ? "1 owned personal vehicle"
+                : string.Format("{0} owned personal vehicles", count);
+        }
+
+        private void OpenPersonalGarageMenu()
+        {
+            string reason;
+            if (!_propertyManager.CanUseApartmentSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
+            _apartmentMenu.Close();
+            RebuildPersonalGarageMenuItems();
+            _personalGarageMenu.Open();
+        }
+
+        private void RebuildPersonalGarageMenuItems()
+        {
+            var items = new List<OfficeMenuItem>
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = BuildPersonalGarageSummary,
+                    DetailFactory = () => "Enter retrieves or stores the selected personal vehicle.",
+                }
+            };
+
+            var vehicles = _propertyManager.GetOwnedPersonalVehicles().ToList();
+            if (vehicles.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No personal vehicles owned",
+                    DetailFactory = () => "Purchase personal vehicles at the dealership in Downtown Los Santos.",
+                });
+            }
+            else
+            {
+                for (int i = 0; i < vehicles.Count; i++)
+                {
+                    var vehicle = vehicles[i];
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => vehicle.DisplayName,
+                        DetailFactory = () => BuildPersonalVehicleDetail(vehicle),
+                        OnActivate = () => TogglePersonalVehicle(vehicle),
+                    });
+                }
+            }
+
+            _personalGarageMenu.SetItems(items);
+        }
+
+        private string BuildPersonalVehicleDetail(OwnedPersonalVehiclePersistenceEntry vehicle)
+        {
+            return string.Format(
+                "{0} | {1}",
+                _propertyManager.IsPersonalVehicleDeployed(vehicle.AssetId) ? "Deployed" : "Stored",
+                string.IsNullOrWhiteSpace(vehicle.Category) ? "Residence vehicle" : vehicle.Category);
+        }
+
+        private void TogglePersonalVehicle(OwnedPersonalVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            var apartment = _propertyManager.ActiveApartment;
+            if (apartment == null)
+            {
+                ShowStatus("No active apartment selected.");
+                return;
+            }
+
+            string message;
+            if (_propertyManager.IsPersonalVehicleDeployed(vehicle.AssetId))
+            {
+                _propertyManager.TryStorePersonalVehicle(vehicle.AssetId, out message);
+            }
+            else
+            {
+                _propertyManager.TryDeployPersonalVehicle(vehicle.AssetId, apartment.GaragePosition, 0f, out message);
+            }
+
+            RebuildPersonalGarageMenuItems();
+            ShowStatus(message);
+        }
+
+        private void ReturnToApartmentMenu()
+        {
+            _personalGarageMenu.Close();
+            RebuildApartmentMenuItems();
+            _apartmentMenu.Open();
+        }
+
+        private void OpenPersonalDealershipMenu()
+        {
+            CloseAllMenus();
+            RebuildPersonalDealershipMenuItems();
+            _personalDealershipMenu.Open();
+        }
+
+        private void RebuildPersonalDealershipMenuItems()
+        {
+            var items = new List<OfficeMenuItem>
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
+                    DetailFactory = () => string.IsNullOrWhiteSpace(_propertyManager.ActiveApartmentId)
+                        ? "Purchase and activate an apartment before storing personal vehicles."
+                        : string.Format("Active apartment: {0}", _propertyManager.ActiveApartment != null ? _propertyManager.ActiveApartment.DisplayName : "n/a"),
+                }
+            };
+
+            for (int i = 0; i < _propertyManager.PersonalVehicleCatalog.Count; i++)
+            {
+                var definition = _propertyManager.PersonalVehicleCatalog[i];
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => string.Format("{0} - {1}", definition.DisplayName, ModFormatting.FormatMoney(definition.Price)),
+                    DetailFactory = () => string.IsNullOrWhiteSpace(definition.Category) ? "Personal vehicle" : definition.Category,
+                    OnActivate = () => PurchasePersonalVehicle(definition),
+                });
+            }
+
+            if (_propertyManager.PersonalVehicleCatalog.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No dealership catalog loaded",
+                    DetailFactory = () => "dealership.xml is missing or invalid.",
+                });
+            }
+
+            _personalDealershipMenu.SetItems(items);
+        }
+
+        private void PurchasePersonalVehicle(DealershipVehicleDefinition definition)
+        {
+            string message;
+            if (_propertyManager.TryPurchasePersonalVehicle(definition, ref _profit, out _, out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildPersonalDealershipMenuItems();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void OpenCommercialDealershipMenu()
+        {
+            CloseAllMenus();
+            OpenVehicleCargoMenu(VehicleCargoMenuContext.CommercialDealership);
+        }
+
+        private string CurrentVehicleSpawnerActionCaption()
+        {
+            return _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
+                ? "~b~Purchase Vehicle~s~"
+                : "~b~Spawn Vehicle~s~";
+        }
+
+        private string BuildCommercialDealershipVehicleSelectionDetail()
+        {
+            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            if (selectedVehicle == null)
+            {
+                return "No vehicle available in this cargo filter.";
+            }
+
+            var vehiclePrice = ModFormatting.FormatMoney(Math.Max(0f, selectedVehicle.Price));
+            if (!selectedVehicle.IsTrailer)
+            {
+                return string.Format("Vehicle price {0}.", vehiclePrice);
+            }
+
+            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
+            if (selectedTractor == null)
+            {
+                return string.Format("Trailer price {0}. Select a truck to complete the purchase.", vehiclePrice);
+            }
+
+            var totalPrice = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor.Price);
+            return string.Format(
+                "Trailer price {0} | Total with truck {1}.",
+                vehiclePrice,
+                ModFormatting.FormatMoney(totalPrice));
+        }
+
+        private string BuildCommercialDealershipTruckSelectionDetail()
+        {
+            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            if (selectedVehicle == null)
+            {
+                return "No vehicle available in this cargo filter.";
+            }
+
+            if (!selectedVehicle.IsTrailer)
+            {
+                return "No truck tractor needed for the selected vehicle.";
+            }
+
+            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
+            if (selectedTractor == null)
+            {
+                return "No truck tractor available for the selected trailer.";
+            }
+
+            var tractorPrice = Math.Max(0f, selectedTractor.Price);
+            var totalPrice = Math.Max(0f, selectedVehicle.Price) + tractorPrice;
+            return string.Format(
+                "Truck price {0} | Total purchase {1}.",
+                ModFormatting.FormatMoney(tractorPrice),
+                ModFormatting.FormatMoney(totalPrice));
+        }
+
+        private string BuildCommercialDealershipPurchaseDetail()
+        {
+            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
+            if (selectedVehicle == null)
+            {
+                return "No vehicle available in this cargo filter.";
+            }
+
+            var price = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
+            return string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price));
+        }
+
+        private enum CommercialGarageMenuContext
+        {
+            Office = 0,
+            Industry = 1,
+        }
+    }
+}

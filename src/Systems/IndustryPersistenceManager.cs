@@ -169,6 +169,10 @@ namespace LSOL.Systems
                 {
                     persistenceVersion = 11;
                 }
+                if (metadata != null && HasPropertyOwnershipData(metadata.PropertyOwnership))
+                {
+                    persistenceVersion = 12;
+                }
 
                 writer.WriteLine(
                     "Version={0}",
@@ -257,6 +261,10 @@ namespace LSOL.Systems
                 {
                     WriteSpecialMissionSnapshot(writer, metadata.SpecialMissions);
                 }
+                if (metadata != null && HasPropertyOwnershipData(metadata.PropertyOwnership))
+                {
+                    WritePropertyOwnershipSnapshot(writer, metadata.PropertyOwnership);
+                }
             }
         }
 
@@ -304,6 +312,7 @@ namespace LSOL.Systems
             metadata.OwnedFleet = ReadOwnedFleetSnapshot(ini);
             metadata.NpcLogistics = ReadNpcLogisticsSnapshot(ini);
             metadata.SpecialMissions = ReadSpecialMissionSnapshot(ini);
+            metadata.PropertyOwnership = ReadPropertyOwnershipSnapshot(ini);
             return metadata;
         }
 
@@ -582,6 +591,213 @@ namespace LSOL.Systems
                     SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
                     CurrentFuelLiters = ini.GetFloat(section, "CurrentFuelLiters", 0f),
                 });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+        private static void WritePropertyOwnershipSnapshot(StreamWriter writer, PropertyOwnershipPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Properties]");
+            writer.WriteLine("ActiveOfficeId={0}", snapshot.ActiveOfficeId ?? string.Empty);
+            writer.WriteLine("ActiveApartmentId={0}", snapshot.ActiveApartmentId ?? string.Empty);
+            writer.WriteLine();
+
+            foreach (var office in snapshot.Offices.OrderBy(entry => entry != null ? entry.OfficeId : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (office == null || string.IsNullOrWhiteSpace(office.OfficeId))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPropertyOfficeSectionName(office.OfficeId));
+                writer.WriteLine("IsOwned={0}", office.IsOwned ? "true" : "false");
+                writer.WriteLine("IsRented={0}", office.IsRented ? "true" : "false");
+                writer.WriteLine("IsAccessSuspended={0}", office.IsAccessSuspended ? "true" : "false");
+                writer.WriteLine("OutstandingRent={0}", FormatFloat(office.OutstandingRent));
+                writer.WriteLine("LastChargedWeekIndex={0}", office.LastChargedWeekIndex);
+                writer.WriteLine();
+            }
+
+            foreach (var apartment in snapshot.Apartments.OrderBy(entry => entry != null ? entry.InteriorId : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (apartment == null || string.IsNullOrWhiteSpace(apartment.InteriorId))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPropertyApartmentSectionName(apartment.InteriorId));
+                writer.WriteLine("IsOwned={0}", apartment.IsOwned ? "true" : "false");
+                writer.WriteLine("IsAccessSuspended={0}", apartment.IsAccessSuspended ? "true" : "false");
+                writer.WriteLine("OutstandingRent={0}", FormatFloat(apartment.OutstandingRent));
+                writer.WriteLine("LastChargedWeekIndex={0}", apartment.LastChargedWeekIndex);
+                writer.WriteLine();
+            }
+
+            foreach (var vehicle in snapshot.CommercialVehicles.OrderBy(entry => entry != null ? entry.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.AssetId) || string.IsNullOrWhiteSpace(vehicle.PoweredModelName))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPropertyCommercialVehicleSectionName(vehicle.AssetId));
+                writer.WriteLine("DisplayName={0}", vehicle.DisplayName ?? string.Empty);
+                writer.WriteLine("PoweredModelName={0}", vehicle.PoweredModelName ?? string.Empty);
+                writer.WriteLine("CargoModelName={0}", vehicle.CargoModelName ?? string.Empty);
+                writer.WriteLine("HasSeparateCargoVehicle={0}", vehicle.HasSeparateCargoVehicle ? "true" : "false");
+                writer.WriteLine("PurchasePrice={0}", FormatFloat(vehicle.PurchasePrice));
+                writer.WriteLine("AssignedOfficeId={0}", vehicle.AssignedOfficeId ?? string.Empty);
+                writer.WriteLine("InActiveGarage={0}", vehicle.InActiveGarage ? "true" : "false");
+                writer.WriteLine("IsDeployed={0}", vehicle.IsDeployed ? "true" : "false");
+                writer.WriteLine("PoweredPosition={0}", FormatVector3(vehicle.PoweredPosition));
+                writer.WriteLine("PoweredHeading={0}", FormatFloat(vehicle.PoweredHeading));
+                writer.WriteLine("CargoType={0}", vehicle.CargoType);
+                writer.WriteLine("CapacityTons={0}", FormatFloat(vehicle.CapacityTons));
+                writer.WriteLine("Commodity={0}", vehicle.Commodity ?? string.Empty);
+                writer.WriteLine("WeightTons={0}", FormatFloat(vehicle.WeightTons));
+                writer.WriteLine("CargoCondition={0}", FormatFloat(vehicle.CargoCondition));
+                writer.WriteLine("TotalLostTons={0}", FormatFloat(vehicle.TotalLostTons));
+                writer.WriteLine("SourceIndustryId={0}", vehicle.SourceIndustryId ?? string.Empty);
+                writer.WriteLine("SourceDistrictName={0}", vehicle.SourceDistrictName ?? string.Empty);
+                writer.WriteLine("CurrentFuelLiters={0}", FormatFloat(vehicle.CurrentFuelLiters));
+                writer.WriteLine();
+            }
+
+            foreach (var vehicle in snapshot.PersonalVehicles.OrderBy(entry => entry != null ? entry.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.AssetId) || string.IsNullOrWhiteSpace(vehicle.ModelName))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPropertyPersonalVehicleSectionName(vehicle.AssetId));
+                writer.WriteLine("DisplayName={0}", vehicle.DisplayName ?? string.Empty);
+                writer.WriteLine("ModelName={0}", vehicle.ModelName ?? string.Empty);
+                writer.WriteLine("Category={0}", vehicle.Category ?? string.Empty);
+                writer.WriteLine("PurchasePrice={0}", FormatFloat(vehicle.PurchasePrice));
+                writer.WriteLine("AssignedApartmentId={0}", vehicle.AssignedApartmentId ?? string.Empty);
+                writer.WriteLine("IsDeployed={0}", vehicle.IsDeployed ? "true" : "false");
+                writer.WriteLine("Position={0}", FormatVector3(vehicle.Position));
+                writer.WriteLine("Heading={0}", FormatFloat(vehicle.Heading));
+                writer.WriteLine();
+            }
+        }
+
+        private static PropertyOwnershipPersistenceSnapshot ReadPropertyOwnershipSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new PropertyOwnershipPersistenceSnapshot();
+            if (ini.HasSection("Properties"))
+            {
+                snapshot.ActiveOfficeId = ini.GetString("Properties", "ActiveOfficeId", string.Empty);
+                snapshot.ActiveApartmentId = ini.GetString("Properties", "ActiveApartmentId", string.Empty);
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section))
+                {
+                    continue;
+                }
+
+                if (section.StartsWith("PropertyOffice:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var officeId = section.Substring("PropertyOffice:".Length).Trim();
+                    if (!string.IsNullOrWhiteSpace(officeId))
+                    {
+                        snapshot.Offices.Add(new OfficeOwnershipPersistenceEntry
+                        {
+                            OfficeId = officeId,
+                            IsOwned = ini.GetBool(section, "IsOwned", false),
+                            IsRented = ini.GetBool(section, "IsRented", false),
+                            IsAccessSuspended = ini.GetBool(section, "IsAccessSuspended", false),
+                            OutstandingRent = ini.GetFloat(section, "OutstandingRent", 0f),
+                            LastChargedWeekIndex = ParseInt(ini.GetString(section, "LastChargedWeekIndex", "-1"), -1),
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("PropertyApartment:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var interiorId = section.Substring("PropertyApartment:".Length).Trim();
+                    if (!string.IsNullOrWhiteSpace(interiorId))
+                    {
+                        snapshot.Apartments.Add(new ApartmentOwnershipPersistenceEntry
+                        {
+                            InteriorId = interiorId,
+                            IsOwned = ini.GetBool(section, "IsOwned", false),
+                            IsAccessSuspended = ini.GetBool(section, "IsAccessSuspended", false),
+                            OutstandingRent = ini.GetFloat(section, "OutstandingRent", 0f),
+                            LastChargedWeekIndex = ParseInt(ini.GetString(section, "LastChargedWeekIndex", "-1"), -1),
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("PropertyCommercialVehicle:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var assetId = section.Substring("PropertyCommercialVehicle:".Length).Trim();
+                    if (!string.IsNullOrWhiteSpace(assetId))
+                    {
+                        snapshot.CommercialVehicles.Add(new OwnedCommercialVehiclePersistenceEntry
+                        {
+                            AssetId = assetId,
+                            DisplayName = ini.GetString(section, "DisplayName", string.Empty),
+                            PoweredModelName = ini.GetString(section, "PoweredModelName", string.Empty),
+                            CargoModelName = ini.GetString(section, "CargoModelName", string.Empty),
+                            HasSeparateCargoVehicle = ini.GetBool(section, "HasSeparateCargoVehicle", false),
+                            PurchasePrice = ini.GetFloat(section, "PurchasePrice", 0f),
+                            AssignedOfficeId = ini.GetString(section, "AssignedOfficeId", string.Empty),
+                            InActiveGarage = ini.GetBool(section, "InActiveGarage", false),
+                            IsDeployed = ini.GetBool(section, "IsDeployed", false),
+                            PoweredPosition = ParseVector3(ini.GetString(section, "PoweredPosition", string.Empty), Vector3.Zero),
+                            PoweredHeading = ini.GetFloat(section, "PoweredHeading", 0f),
+                            CargoType = ParseVehicleCargoType(ini.GetString(section, "CargoType", VehicleCargoType.Unknown.ToString()), VehicleCargoType.Unknown),
+                            CapacityTons = ini.GetFloat(section, "CapacityTons", 0f),
+                            Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                            WeightTons = ini.GetFloat(section, "WeightTons", 0f),
+                            CargoCondition = ini.GetFloat(section, "CargoCondition", 1f),
+                            TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
+                            SourceIndustryId = ini.GetString(section, "SourceIndustryId", string.Empty),
+                            SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
+                            CurrentFuelLiters = ini.GetFloat(section, "CurrentFuelLiters", 0f),
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("PropertyPersonalVehicle:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var assetId = section.Substring("PropertyPersonalVehicle:".Length).Trim();
+                    if (!string.IsNullOrWhiteSpace(assetId))
+                    {
+                        snapshot.PersonalVehicles.Add(new OwnedPersonalVehiclePersistenceEntry
+                        {
+                            AssetId = assetId,
+                            DisplayName = ini.GetString(section, "DisplayName", string.Empty),
+                            ModelName = ini.GetString(section, "ModelName", string.Empty),
+                            Category = ini.GetString(section, "Category", string.Empty),
+                            PurchasePrice = ini.GetFloat(section, "PurchasePrice", 0f),
+                            AssignedApartmentId = ini.GetString(section, "AssignedApartmentId", string.Empty),
+                            IsDeployed = ini.GetBool(section, "IsDeployed", false),
+                            Position = ParseVector3(ini.GetString(section, "Position", string.Empty), Vector3.Zero),
+                            Heading = ini.GetFloat(section, "Heading", 0f),
+                        });
+                    }
+                }
             }
 
             return snapshot.HasData ? snapshot : null;
@@ -972,6 +1188,26 @@ namespace LSOL.Systems
             return "NpcContract:" + Math.Max(1, contractId).ToString(CultureInfo.InvariantCulture);
         }
 
+        private static string BuildPropertyOfficeSectionName(string officeId)
+        {
+            return "PropertyOffice:" + (officeId ?? string.Empty).Trim();
+        }
+
+        private static string BuildPropertyApartmentSectionName(string apartmentId)
+        {
+            return "PropertyApartment:" + (apartmentId ?? string.Empty).Trim();
+        }
+
+        private static string BuildPropertyCommercialVehicleSectionName(string assetId)
+        {
+            return "PropertyCommercialVehicle:" + (assetId ?? string.Empty).Trim();
+        }
+
+        private static string BuildPropertyPersonalVehicleSectionName(string assetId)
+        {
+            return "PropertyPersonalVehicle:" + (assetId ?? string.Empty).Trim();
+        }
+
         private static string BuildSpecialMissionProgressSectionName(string missionId)
         {
             return "SpecialMissionProgress:" + (missionId ?? string.Empty).Trim();
@@ -1110,6 +1346,10 @@ namespace LSOL.Systems
         {
             return snapshot != null && snapshot.HasData;
         }
+        private static bool HasPropertyOwnershipData(PropertyOwnershipPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
     }
 
     public sealed class IndustryPersistenceLoadResult
@@ -1136,5 +1376,6 @@ namespace LSOL.Systems
         public OwnedFleetPersistenceSnapshot OwnedFleet { get; set; }
         public NpcLogisticsPersistenceSnapshot NpcLogistics { get; set; }
         public SpecialMissionPersistenceSnapshot SpecialMissions { get; set; }
+        public PropertyOwnershipPersistenceSnapshot PropertyOwnership { get; set; }
     }
 }

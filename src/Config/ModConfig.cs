@@ -35,6 +35,9 @@ namespace LSOL.Config
         public ControlBindings Controls { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
+        public List<OfficeDefinition> OfficeDefinitions { get; private set; }
+        public List<InteriorDefinition> InteriorDefinitions { get; private set; }
+        public List<DealershipVehicleDefinition> PersonalVehicleDefinitions { get; private set; }
         public ExternalConfigCatalog ExternalCatalog { get; private set; }
         public List<VehicleCargoType> CargoTypes { get; private set; }
         public Dictionary<string, List<string>> ObjectModels { get; private set; }
@@ -62,6 +65,9 @@ namespace LSOL.Config
                 ExternalCatalog = externalCatalog,
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
+                OfficeDefinitions = new List<OfficeDefinition>(),
+                InteriorDefinitions = new List<InteriorDefinition>(),
+                PersonalVehicleDefinitions = new List<DealershipVehicleDefinition>(),
                 CargoTypes = new List<VehicleCargoType>(),
                 ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
                 WorkerModels = new List<string>(),
@@ -87,6 +93,21 @@ namespace LSOL.Config
             else
             {
                 ParseVehicles(ini, config);
+            }
+
+            if (externalCatalog.OfficeDefinitions.Count > 0)
+            {
+                config.OfficeDefinitions.AddRange(CloneOfficeDefinitions(externalCatalog.OfficeDefinitions));
+            }
+
+            if (externalCatalog.InteriorDefinitions.Count > 0)
+            {
+                config.InteriorDefinitions.AddRange(CloneInteriorDefinitions(externalCatalog.InteriorDefinitions));
+            }
+
+            if (externalCatalog.PersonalVehicleDefinitions.Count > 0)
+            {
+                config.PersonalVehicleDefinitions.AddRange(CloneDealershipVehicleDefinitions(externalCatalog.PersonalVehicleDefinitions));
             }
 
             ParseObjects(ini, config);
@@ -427,6 +448,7 @@ namespace LSOL.Config
                         CargoType = cargoType,
                         CapacityTons = Math.Max(0f, capacityTons),
                         FuelCapacityLiters = ResolveLegacyFuelCapacityLiters(ini, section, modelName, cargoType, Math.Max(0f, capacityTons), isTractor, isTrailer),
+                        Price = Math.Max(0f, ini.GetFloat(section, "VehiclePrice", 0f)),
                         IsEnabled = true,
                         IsTrailer = isTrailer,
                         IsTractor = isTractor,
@@ -522,12 +544,77 @@ namespace LSOL.Config
                         : new HashSet<string>(x.AcceptedCommodities, StringComparer.OrdinalIgnoreCase),
                     CapacityTons = x.CapacityTons,
                     FuelCapacityLiters = x.FuelCapacityLiters,
+                    Price = x.Price,
                     IsEnabled = x.IsEnabled,
                     IsTrailer = x.IsTrailer,
                     IsTractor = x.IsTractor,
                 })
                 .ToList();
         }
+
+            private static IEnumerable<OfficeDefinition> CloneOfficeDefinitions(IEnumerable<OfficeDefinition> source)
+            {
+                return source == null
+                    ? new OfficeDefinition[0]
+                    : source
+                        .Where(x => x != null)
+                        .Select(x => new OfficeDefinition
+                        {
+                            OfficeId = x.OfficeId,
+                            LegacyKey = x.LegacyKey,
+                            SiteName = x.SiteName,
+                            DistrictName = x.DistrictName,
+                            MarkerPosition = x.MarkerPosition,
+                            SpawnPosition = x.SpawnPosition,
+                            SpawnHeading = x.SpawnHeading,
+                            GatePosition = x.GatePosition,
+                            BarrierModelHash = x.BarrierModelHash,
+                            WorkerPosition = x.WorkerPosition,
+                            OfficePrice = x.OfficePrice,
+                            WeeklyOfficeRent = x.WeeklyOfficeRent,
+                            MaxCommercialVehicles = x.MaxCommercialVehicles,
+                            Description = x.Description,
+                        })
+                        .ToList();
+            }
+
+            private static IEnumerable<InteriorDefinition> CloneInteriorDefinitions(IEnumerable<InteriorDefinition> source)
+            {
+                return source == null
+                    ? new InteriorDefinition[0]
+                    : source
+                        .Where(x => x != null)
+                        .Select(x => new InteriorDefinition
+                        {
+                            InteriorId = x.InteriorId,
+                            InteriorName = x.InteriorName,
+                            InteriorIgName = x.InteriorIgName,
+                            InteriorPosition = x.InteriorPosition,
+                            InteriorType = x.InteriorType,
+                            InteriorPrice = x.InteriorPrice,
+                            InteriorWeeklyRent = x.InteriorWeeklyRent,
+                            ExteriorPosition = x.ExteriorPosition,
+                            GaragePosition = x.GaragePosition,
+                        })
+                        .ToList();
+            }
+
+            private static IEnumerable<DealershipVehicleDefinition> CloneDealershipVehicleDefinitions(IEnumerable<DealershipVehicleDefinition> source)
+            {
+                return source == null
+                    ? new DealershipVehicleDefinition[0]
+                    : source
+                        .Where(x => x != null)
+                        .Select(x => new DealershipVehicleDefinition
+                        {
+                            VehicleId = x.VehicleId,
+                            DisplayName = x.DisplayName,
+                            ModelName = x.ModelName,
+                            Category = x.Category,
+                            Price = x.Price,
+                        })
+                        .ToList();
+            }
 
         private static float ResolveLegacyFuelCapacityLiters(IniFile ini, string section, string modelName, VehicleCargoType cargoType, float capacityTons, bool isTractor, bool isTrailer)
         {

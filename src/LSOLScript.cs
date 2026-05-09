@@ -66,6 +66,7 @@ namespace LSOL
         private readonly ControlBindings _controls;
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
+        private readonly PropertyManager _propertyManager;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
@@ -95,6 +96,7 @@ namespace LSOL
         private readonly CompanyMapController _companyMapController;
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
+        private readonly Dictionary<string, Blip> _commercialVehicleBlips;
 
         private readonly Dictionary<WinForms.Keys, int> _keyCooldownUntil;
         private readonly HashSet<WinForms.Keys> _heldKeys;
@@ -146,6 +148,7 @@ namespace LSOL
         private bool _isConstructing;
 
         private OwnedFleetPersistenceSnapshot _pendingOwnedFleetRestore;
+        private PropertyOwnershipPersistenceSnapshot _pendingPropertyRestore;
         private SpecialMissionPersistenceSnapshot _pendingSpecialMissionRestore;
 
         public LSOLScript()
@@ -159,6 +162,7 @@ namespace LSOL
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
+            _propertyManager = new PropertyManager(_config);
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _globalMarket = new GlobalMarketManager(Game.GameTime);
             _territoryManager = new TerritoryManager(_config, _industryManager);
@@ -183,8 +187,14 @@ namespace LSOL
             _barrierInteractionHandler = new BarrierInteractionHandler();
             _blipLifecycleManager = new BlipLifecycleManager(
                 _industryManager,
-                _mainOfficeMarkerSeed,
-                _vehicleSpawnMarkerSeed,
+                () => _propertyManager != null ? _propertyManager.Offices : new OfficeDefinition[0],
+                () => _propertyManager != null ? _propertyManager.ActiveOfficeId : string.Empty,
+                () => _propertyManager != null ? _propertyManager.Interiors : new InteriorDefinition[0],
+                () => _propertyManager != null ? _propertyManager.ActiveApartmentId : string.Empty,
+                ResolveOfficeBlipSeed,
+                ResolveVehicleSpawnBlipSeed,
+                CommercialDealershipMarker,
+                PersonalDealershipMarker,
                 GetGroundPosition,
                 GetIndustryMarkerPosition,
                 IsPetrolServiceStation,
@@ -220,6 +230,7 @@ namespace LSOL
                 cargoFilterOrder,
                 defaultCargoFilter);
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
+            _commercialVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
             _npcLogisticsManager = new NpcLogisticsManager(
                 _configPath,
                 _industryManager,
@@ -310,6 +321,7 @@ namespace LSOL
                 MaxVisibleItems = 10,
                 Theme = LemonMenuTheme.Default,
             };
+            InitializePropertyMenus();
             _npcLogisticsController = new NpcLogisticsController(
                 _controls,
                 _npcLogisticsManager,
@@ -427,6 +439,7 @@ namespace LSOL
                     || _optionsMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _debugMissionMenu.IsOpen
+                    || HasPropertyMenuOpen()
                     || _npcLogisticsController.AnyMenuOpen
                     || _companyMapController.AnyMenuOpen
                     || _tabletShellController.IsOpen;
@@ -483,13 +496,14 @@ namespace LSOL
                 _tabletStateStore.MarkCargoDirty();
             }
 
-            if (gameTime - _lastBlipRefreshMs >= 6000)
+            if (gameTime - _lastBlipRefreshMs >= 1000)
             {
                 _lastBlipRefreshMs = gameTime;
-                _blipLifecycleManager.Refresh();
+                RefreshBlipPositions();
             }
 
             _npcLogisticsManager.Update(gameTime, GetCurrentInGameWeekMinute());
+            ProcessPropertyWeeklyCharges();
             _tabletStateStore.CaptureHistory(gameTime);
 
             if (_vehicleFuelSystem.Update(player, gameTime))
@@ -597,9 +611,8 @@ namespace LSOL
                 var player = Game.Player.Character;
                 if (player != null && player.Exists())
                 {
-                    if (IsNearMainOffice(player.Position))
+                    if (HandlePropertyInteraction(player))
                     {
-                        OpenOfficeMenu();
                         return;
                     }
 
@@ -749,6 +762,11 @@ namespace LSOL
                 return true;
             }
 
+            if (HandlePropertyMenuKey(key))
+            {
+                return true;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.HandleKey(key, _controls);
@@ -809,10 +827,11 @@ namespace LSOL
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
             _debugMissionMenu.Draw();
+            DrawPropertyMenus();
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -831,32 +850,10 @@ namespace LSOL
         private void DrawMarkers(Ped player)
         {
             var playerPos = player.Position;
-            var officePos = GetGroundPosition(_mainOfficeMarkerSeed);
             var canShowPrompts = !AnyMenuOpen;
             var promptShown = false;
 
-            if (playerPos.DistanceToSquared(officePos) <= IndustryMarkerDrawDistance * IndustryMarkerDrawDistance)
-            {
-                World.DrawMarker(
-                    MarkerType.Cylinder,
-                    officePos,
-                    Vector3.Zero,
-                    Vector3.Zero,
-                    new Vector3(_config.MarkerRadius * 1.45f, _config.MarkerRadius * 1.45f, _config.MarkerHeight),
-                    Color.FromArgb(200, 52, 170, 238),
-                    false,
-                    false,
-                    false,
-                    null,
-                    null,
-                    false);
-
-                if (canShowPrompts && IsNearMainOffice(playerPos))
-                {
-                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to open Logistics Main Office.", KeyName(_controls.Interact))));
-                    promptShown = true;
-                }
-            }
+            DrawPropertyMarkers(player, canShowPrompts, ref promptShown);
 
             var drawDistanceSq = IndustryMarkerDrawDistance * IndustryMarkerDrawDistance;
             for (int i = 0; i < _industryManager.Industries.Count; i++)
@@ -1459,10 +1456,16 @@ namespace LSOL
 
         private void OpenOfficeMenu()
         {
-            CloseIndustryTablet();
-            CloseNonOfficeMenus();
-            RebuildOfficeMenuItems();
-            _officeMenu.Open();
+            var player = Game.Player.Character;
+            var office = player != null && player.Exists()
+                ? GetOfficeInInteractionRange(player.Position)
+                : null;
+            if (office == null)
+            {
+                office = _propertyManager.ActiveOffice ?? _propertyManager.Offices.FirstOrDefault();
+            }
+
+            OpenOfficeMenuFor(office);
         }
 
         private void ToggleModControlMenu()
@@ -1483,6 +1486,7 @@ namespace LSOL
             CloseOverviewMenus();
             _companyMapController.Close();
             _npcLogisticsController.Close();
+            ClosePropertyMenus();
             _vehicleCargoMenu.Close();
             _upgradeMenu.Close();
             _modControlMenu.Close();
@@ -1501,6 +1505,7 @@ namespace LSOL
             CloseOverviewMenus();
             _companyMapController.Close();
             _npcLogisticsController.Close();
+            ClosePropertyMenus();
             _modControlMenu.Close();
             _savingOptionsMenu.Close();
             _newSaveSetupMenu.Close();
@@ -2935,38 +2940,9 @@ namespace LSOL
 
         private void RebuildOfficeMenuItems()
         {
-            _officeMenu.SetItems(new[]
-            {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => string.Format("Worker Model: < {0} >", _workerSpawnController.SelectedWorkerDisplayName),
-                    OnLeft = () => ChangeWorkerIndex(-1),
-                    OnRight = () => ChangeWorkerIndex(1),
-                    OnActivate = ApplyWorkerModel,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Vehicle & Cargo Type",
-                    DetailFactory = CurrentVehicleSpawnerSelectionDetail,
-                    OnActivate = OpenVehicleCargoMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Hire NPC",
-                    DetailFactory = CurrentNpcHiringDetail,
-                    OnActivate = OpenNpcHiringMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Company Map",
-                    DetailFactory = CurrentCompanyMapDetail,
-                    OnActivate = OpenCompanyMapMenu,
-                },
-            });
+            _officeMenu.Title = _menuOffice != null ? _menuOffice.DisplayName : "Office";
+            _officeMenu.Subtitle = BuildOfficeMenuSubtitle();
+            _officeMenu.SetItems(BuildOfficeMenuItems());
         }
 
         private string CurrentNpcHiringDetail()
@@ -2996,12 +2972,26 @@ namespace LSOL
 
         private void OpenNpcHiringMenu()
         {
+            string reason;
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
             _officeMenu.Close();
             _npcLogisticsController.OpenRootMenu();
         }
 
         private void OpenCompanyMapMenu()
         {
+            string reason;
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
             CloseAllMenus();
             _companyMapController.Open();
         }
@@ -3110,12 +3100,18 @@ namespace LSOL
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => string.Format("Vehicle: < {0} >", _vehicleSpawnController.CurrentVehicleCaption),
+                    DetailFactory = _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
+                        ? (Func<string>)BuildCommercialDealershipVehicleSelectionDetail
+                        : null,
                     OnLeft = () => ChangeVehicleSelection(-1),
                     OnRight = () => ChangeVehicleSelection(1),
                 },
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => string.Format("Truck: < {0} >", _vehicleSpawnController.CurrentTractorCaption),
+                    DetailFactory = _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
+                        ? (Func<string>)BuildCommercialDealershipTruckSelectionDetail
+                        : null,
                     OnLeft = () => ChangeTractorSelection(-1),
                     OnRight = () => ChangeTractorSelection(1),
                 },
@@ -3125,7 +3121,7 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => "~b~Spawn Vehicle~s~",
+                    CaptionFactory = CurrentVehicleSpawnerActionCaption,
                     DetailFactory = CurrentVehicleSpawnerActionDetail,
                     OnActivate = SpawnSelectedVehicle,
                 },
@@ -3149,8 +3145,15 @@ namespace LSOL
             {
                 CloseIndustryTablet();
             }
+            else if (context == VehicleCargoMenuContext.CommercialDealership)
+            {
+                _vehicleCargoMenu.Title = "Commercial Dealership";
+                _vehicleCargoMenu.Subtitle = "Purchase trucks and trailers for the active office";
+            }
             else
             {
+                _vehicleCargoMenu.Title = "Vehicle & Cargo Type";
+                _vehicleCargoMenu.Subtitle = "Choose cargo filter, vehicle, and spawn";
                 _officeMenu.Close();
             }
 
@@ -3170,6 +3173,12 @@ namespace LSOL
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
             {
                 ReturnToIndustryTablet();
+                return;
+            }
+
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
+            {
+                _vehicleCargoMenu.Close();
                 return;
             }
 
@@ -3206,6 +3215,11 @@ namespace LSOL
 
         private string CurrentVehicleSpawnerActionDetail()
         {
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
+            {
+                return BuildCommercialDealershipPurchaseDetail();
+            }
+
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
             {
                 return "Spawn the selected fleet vehicle at this industry pad.";
@@ -3503,6 +3517,23 @@ namespace LSOL
 
         private void SpawnSelectedVehicle()
         {
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
+            {
+                string purchaseMessage;
+                if (_propertyManager.TryPurchaseCommercialVehicle(
+                    _vehicleSpawnController.SelectedVehicleDefinition,
+                    _vehicleSpawnController.SelectedTractorDefinition,
+                    ref _profit,
+                    out _,
+                    out purchaseMessage))
+                {
+                    _tabletStateStore.MarkBalanceDirty();
+                }
+
+                ShowStatus(purchaseMessage);
+                return;
+            }
+
             Vector3 spawnPosition;
             float spawnHeading;
             string error;
@@ -3868,8 +3899,14 @@ namespace LSOL
                 return;
             }
 
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
             _menuIndustry = industry;
-            OpenIndustryVehicleSpawnerMenu();
+            OpenIndustryCommercialGarageMenu();
         }
 
         private static string GetPreferredOreCommodity(List<string> products)
@@ -3910,8 +3947,15 @@ namespace LSOL
                 return true;
             }
 
-            spawnPosition = _config.VehicleSpawnPosition;
-            spawnHeading = _config.VehicleSpawnHeading;
+            var activeOffice = _propertyManager.ActiveOffice;
+            if (activeOffice == null)
+            {
+                error = "No active office selected.";
+                return false;
+            }
+
+            spawnPosition = activeOffice.SpawnPosition;
+            spawnHeading = activeOffice.SpawnHeading;
             return true;
         }
 
@@ -4148,16 +4192,119 @@ namespace LSOL
         private void CreateMapBlips()
         {
             _blipLifecycleManager.Create();
+            RefreshCommercialVehicleBlips();
         }
 
         private void RefreshBlipPositions()
         {
             _blipLifecycleManager.Refresh();
+            RefreshCommercialVehicleBlips();
         }
 
         private void DestroyMapBlips()
         {
+            DestroyCommercialVehicleBlips();
             _blipLifecycleManager.Destroy();
+        }
+
+        private void RefreshCommercialVehicleBlips()
+        {
+            var visibleAssetIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var player = Game.Player.Character;
+            var playerVehicleHandle = player != null && player.Exists() && player.CurrentVehicle != null && player.CurrentVehicle.Exists()
+                ? player.CurrentVehicle.Handle
+                : 0;
+            var vehicleInfos = _propertyManager != null ? _propertyManager.GetCommercialVehicleBlipInfos() : null;
+            if (vehicleInfos != null)
+            {
+                for (int i = 0; i < vehicleInfos.Count; i++)
+                {
+                    var info = vehicleInfos[i];
+                    if (info == null || string.IsNullOrWhiteSpace(info.AssetId))
+                    {
+                        continue;
+                    }
+
+                    var truck = Entity.FromHandle(info.TruckHandle) as Vehicle;
+                    if (truck == null || !truck.Exists())
+                    {
+                        continue;
+                    }
+
+                    if (playerVehicleHandle != 0 && truck.Handle == playerVehicleHandle)
+                    {
+                        continue;
+                    }
+
+                    visibleAssetIds.Add(info.AssetId);
+                    Blip blip;
+                    if (!_commercialVehicleBlips.TryGetValue(info.AssetId, out blip) || blip == null || !blip.Exists())
+                    {
+                        blip = World.CreateBlip(truck.Position);
+                        if (blip == null || !blip.Exists())
+                        {
+                            continue;
+                        }
+
+                        blip.Sprite = BlipSprite.Truck;
+                        blip.Color = BlipColor.Blue;
+                        blip.Scale = 0.85f;
+                        blip.IsShortRange = false;
+                        blip.IsHiddenOnLegend = false;
+                        _commercialVehicleBlips[info.AssetId] = blip;
+                    }
+
+                    blip.Position = truck.Position;
+                    blip.Name = string.Format("Office Truck: {0}", info.DisplayName ?? string.Empty);
+                }
+            }
+
+            var staleAssetIds = _commercialVehicleBlips.Keys
+                .Where(assetId => !visibleAssetIds.Contains(assetId))
+                .ToList();
+            for (int i = 0; i < staleAssetIds.Count; i++)
+            {
+                Blip blip;
+                if (_commercialVehicleBlips.TryGetValue(staleAssetIds[i], out blip) && blip != null && blip.Exists())
+                {
+                    blip.Delete();
+                }
+
+                _commercialVehicleBlips.Remove(staleAssetIds[i]);
+            }
+        }
+
+        private void DestroyCommercialVehicleBlips()
+        {
+            var assetIds = _commercialVehicleBlips.Keys.ToList();
+            for (int i = 0; i < assetIds.Count; i++)
+            {
+                Blip blip;
+                if (_commercialVehicleBlips.TryGetValue(assetIds[i], out blip) && blip != null && blip.Exists())
+                {
+                    blip.Delete();
+                }
+            }
+
+            _commercialVehicleBlips.Clear();
+        }
+
+        private Vector3 ResolveOfficeBlipSeed()
+        {
+            var activeOffice = _propertyManager != null ? _propertyManager.ActiveOffice : null;
+            if (activeOffice != null)
+            {
+                return activeOffice.MarkerPosition;
+            }
+
+            var fallbackOffice = _propertyManager != null ? _propertyManager.Offices.FirstOrDefault() : null;
+            return fallbackOffice != null ? fallbackOffice.MarkerPosition : _mainOfficeMarkerSeed;
+        }
+
+        private Vector3 ResolveVehicleSpawnBlipSeed()
+        {
+            var activeOffice = _propertyManager != null ? _propertyManager.ActiveOffice : null;
+            return activeOffice != null ? activeOffice.SpawnPosition : _vehicleSpawnMarkerSeed;
         }
 
         private bool IsNearMainOffice(Vector3 position)
@@ -4444,6 +4591,7 @@ namespace LSOL
         {
             Office = 0,
             Industry = 1,
+            CommercialDealership = 2,
         }
 
         private enum GameModMode

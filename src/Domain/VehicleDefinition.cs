@@ -13,6 +13,7 @@ namespace LSOL.Domain
         public HashSet<string> AcceptedCommodities { get; set; }
         public float CapacityTons { get; set; }
         public float FuelCapacityLiters { get; set; }
+        public float Price { get; set; }
         public bool IsEnabled { get; set; }
         public bool IsTrailer { get; set; }
         public bool IsTractor { get; set; }

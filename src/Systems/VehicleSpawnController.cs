@@ -69,6 +69,16 @@ namespace LSOL.Systems
             }
         }
 
+        public VehicleDefinition SelectedVehicleDefinition
+        {
+            get
+            {
+                return _filteredVehicles.Count == 0
+                    ? null
+                    : _filteredVehicles[_selectedVehicleIndex];
+            }
+        }
+
         public string CurrentTractorCaption
         {
             get
@@ -89,6 +99,20 @@ namespace LSOL.Systems
                 }
 
                 return string.Format("{0}", _tractorVehicles[_selectedTractorIndex].ModelName);
+            }
+        }
+
+        public VehicleDefinition SelectedTractorDefinition
+        {
+            get
+            {
+                var selectedVehicle = SelectedVehicleDefinition;
+                if (selectedVehicle == null || !selectedVehicle.IsTrailer || _tractorVehicles.Count == 0)
+                {
+                    return null;
+                }
+
+                return _tractorVehicles[_selectedTractorIndex];
             }
         }
 

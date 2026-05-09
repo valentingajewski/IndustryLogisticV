@@ -14,9 +14,11 @@ namespace LSOL
         private void ResetSaveSessionState()
         {
             _pendingOwnedFleetRestore = null;
+            _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
             _specialMissionManager.ResetState();
             _npcLogisticsManager.ClearAll();
+            _propertyManager.ResetState();
             _fleetManager.DespawnOwnedFleet();
             _fleetManager.ClearAllStates();
             _vehicleFuelSystem.ClearAllStates();
@@ -27,20 +29,33 @@ namespace LSOL
 
         private void RestorePendingWorldState()
         {
-            if (_pendingOwnedFleetRestore == null && _pendingSpecialMissionRestore == null)
+            if (_pendingOwnedFleetRestore == null && _pendingPropertyRestore == null && _pendingSpecialMissionRestore == null)
             {
                 return;
             }
 
             var ownedFleetSnapshot = _pendingOwnedFleetRestore;
+            var propertySnapshot = _pendingPropertyRestore;
             var specialMissionSnapshot = _pendingSpecialMissionRestore;
             _pendingOwnedFleetRestore = null;
+            _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
 
-            _fleetManager.RestoreOwnedFleet(
-                ownedFleetSnapshot,
-                _vehicleFuelSystem,
-                GetGroundPosition);
+            if (propertySnapshot != null && propertySnapshot.HasData)
+            {
+                _propertyManager.RestoreWorldState(
+                    _fleetManager,
+                    _vehicleFuelSystem,
+                    GetGroundPosition);
+            }
+            else
+            {
+                _fleetManager.RestoreOwnedFleet(
+                    ownedFleetSnapshot,
+                    _vehicleFuelSystem,
+                    GetGroundPosition);
+            }
+
             _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
             _tabletStateStore.MarkAllDirty();
         }
@@ -384,6 +399,7 @@ namespace LSOL
                 DifficultySettingsLocked = _difficultySettingsLocked,
                 Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
                 OwnedFleet = _fleetManager.CreateOwnedFleetSnapshot(_vehicleFuelSystem),
+                PropertyOwnership = _propertyManager.CreateSnapshot(_fleetManager, _vehicleFuelSystem),
                 NpcLogistics = _npcLogisticsManager.CreatePersistenceSnapshot(),
                 SpecialMissions = _specialMissionManager.CreatePersistenceSnapshot(),
             };
@@ -429,11 +445,25 @@ namespace LSOL
             ApplyDifficultySettingsToSystems();
             _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
             var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;
+            var propertySnapshot = metadata != null ? metadata.PropertyOwnership : null;
             var specialMissionSnapshot = metadata != null ? metadata.SpecialMissions : null;
+            if ((propertySnapshot == null || !propertySnapshot.HasData) && ownedFleetSnapshot != null && ownedFleetSnapshot.HasData)
+            {
+                propertySnapshot = _propertyManager.CreateLegacyMigrationSnapshot(ownedFleetSnapshot, GetCurrentInGameWeekMinute());
+                if (propertySnapshot != null && propertySnapshot.HasData)
+                {
+                    ownedFleetSnapshot = null;
+                }
+            }
+
+            _propertyManager.ApplySnapshot(propertySnapshot, GetCurrentInGameWeekMinute());
             if (_isConstructing)
             {
                 _pendingOwnedFleetRestore = ownedFleetSnapshot != null && ownedFleetSnapshot.HasData
                     ? ownedFleetSnapshot
+                    : null;
+                _pendingPropertyRestore = propertySnapshot != null && propertySnapshot.HasData
+                    ? propertySnapshot
                     : null;
                 _pendingSpecialMissionRestore = specialMissionSnapshot != null && specialMissionSnapshot.HasData
                     ? specialMissionSnapshot
@@ -442,11 +472,23 @@ namespace LSOL
             else
             {
                 _pendingOwnedFleetRestore = null;
+                _pendingPropertyRestore = null;
                 _pendingSpecialMissionRestore = null;
-                _fleetManager.RestoreOwnedFleet(
-                    ownedFleetSnapshot,
-                    _vehicleFuelSystem,
-                    GetGroundPosition);
+                if (propertySnapshot != null && propertySnapshot.HasData)
+                {
+                    _propertyManager.RestoreWorldState(
+                        _fleetManager,
+                        _vehicleFuelSystem,
+                        GetGroundPosition);
+                }
+                else
+                {
+                    _fleetManager.RestoreOwnedFleet(
+                        ownedFleetSnapshot,
+                        _vehicleFuelSystem,
+                        GetGroundPosition);
+                }
+
                 _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
             }
 
