@@ -45,7 +45,7 @@ namespace LSOL.Systems
                 _defaultIndustryConfigs[runtimeConfig.Id] = CloneIndustryConfig(runtimeConfig);
 
                 var supportsOmegaBoost = ShouldUseOmegaBoost(runtimeConfig);
-                var recipes = RecipeRegistry.BuildRecipes(runtimeConfig, supportsOmegaBoost);
+                var recipes = BuildRecipes(runtimeConfig, supportsOmegaBoost);
                 var industry = new Industry(runtimeConfig, recipes, supportsOmegaBoost, config.IndustryOmegaCapacityMultiplier);
                 SeedIndustryStartingState(industry, runtimeConfig);
                 _industries.Add(industry);
@@ -464,7 +464,7 @@ namespace LSOL.Systems
             {
                 if (market != null)
                 {
-                    market.RegisterDelivery(gameTimeMs);
+                    market.RegisterDelivery(commodity, gameTimeMs);
                 }
 
                 payout = deliveredTons * unitPrice;
@@ -624,6 +624,48 @@ namespace LSOL.Systems
             }
 
             return 2.25f;
+        }
+
+        private static List<ProductionRecipe> BuildRecipes(IndustryConfig config, bool supportsOmegaBoost)
+        {
+            var recipes = new List<ProductionRecipe>();
+            if (config == null || config.SiteRole == SiteRole.Warehouse || config.Outputs == null || config.Outputs.Count == 0)
+            {
+                return recipes;
+            }
+
+            var effectiveInputs = config.Inputs
+                .Where(x => !supportsOmegaBoost || !x.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (effectiveInputs.Count == 0)
+            {
+                var outputOnly = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                foreach (var output in config.Outputs)
+                {
+                    outputOnly[output] = 1f;
+                }
+
+                recipes.Add(new ProductionRecipe(
+                    new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase),
+                    outputOnly));
+                return recipes;
+            }
+
+            var genericInputs = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < effectiveInputs.Count; i++)
+            {
+                genericInputs[effectiveInputs[i]] = 1f;
+            }
+
+            var genericOutputs = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            foreach (var output in config.Outputs)
+            {
+                genericOutputs[output] = 1f;
+            }
+
+            recipes.Add(new ProductionRecipe(genericInputs, genericOutputs));
+            return recipes;
         }
 
         private static IndustryConfig CloneIndustryConfig(IndustryConfig source)

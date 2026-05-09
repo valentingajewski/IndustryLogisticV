@@ -236,29 +236,29 @@ namespace LSOL.UI
             DrawRect(resolution.Width, resolution.Height, x, y, width, 5f, palette.Get(ModColorRole.AccentGold, 238));
             DrawRect(resolution.Width, resolution.Height, x, y + 5f, width, headerHeight - 5f, palette.Get(ModColorRole.BackgroundHeader, 194));
 
-            new TextElement(
-                    Title,
-                    ToScriptTextCoords(resolution, x + 12f, y + 8f),
-                    0.40f,
-                    palette.Get(ModColorRole.TextPrimary),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawTextBlock(
+                resolution,
+                Title,
+                x + 12f,
+                y + 8f,
+                0.40f,
+                palette.Get(ModColorRole.TextPrimary),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                14f);
 
             if (!string.IsNullOrWhiteSpace(Subtitle))
             {
-                new TextElement(
-                        Subtitle,
-                        ToScriptTextCoords(resolution, x + 12f, y + 30f),
-                        0.27f,
-                        palette.Get(ModColorRole.TextSecondary, 236),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left,
-                        true,
-                        false)
-                    .Draw();
+                DrawTextBlock(
+                    resolution,
+                    Subtitle,
+                    x + 12f,
+                    y + 30f,
+                    0.27f,
+                    palette.Get(ModColorRole.TextSecondary, 236),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    12f);
             }
 
             var rowY = y + headerHeight;
@@ -285,32 +285,32 @@ namespace LSOL.UI
                 var captionFactory = item.CaptionFactory;
                 var caption = captionFactory != null ? captionFactory() : string.Empty;
                 var color = itemIndex == SelectedIndex ? palette.Get(ModColorRole.TextPrimary) : palette.Get(ModColorRole.TextSecondary, 235);
-                new TextElement(
-                        caption,
-                        ToScriptTextCoords(resolution, x + 11f, rowY + 6f),
-                        0.30f,
-                        color,
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left,
-                        true,
-                        false)
-                    .Draw();
+                DrawTextBlock(
+                    resolution,
+                    caption,
+                    x + 11f,
+                    rowY + 6f,
+                    0.30f,
+                    color,
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    14f);
 
                 if (!string.IsNullOrWhiteSpace(detail))
                 {
                     var detailColor = itemIndex == SelectedIndex
                         ? palette.Get(ModColorRole.TextPrimary, 232)
                         : palette.Get(ModColorRole.TextMuted, 214);
-                    new TextElement(
-                            detail,
-                            ToScriptTextCoords(resolution, x + 11f, rowY + 28f),
-                            0.225f,
-                            detailColor,
-                            GTA.UI.Font.ChaletLondon,
-                            Alignment.Left,
-                            true,
-                            false)
-                        .Draw();
+                    DrawTextBlock(
+                        resolution,
+                        detail,
+                        x + 11f,
+                        rowY + 28f,
+                        0.225f,
+                        detailColor,
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Left,
+                        12f);
                 }
 
                 DrawProgressBarIfNeeded(
@@ -328,16 +328,16 @@ namespace LSOL.UI
             var footerY = y + headerHeight + contentHeight;
             DrawRect(resolution.Width, resolution.Height, x, footerY, width, footerHeight, palette.Get(ModColorRole.BackgroundPanel, 185));
             var footerText = GetFooterText("Navigate | Edit | Select | Close");
-            new TextElement(
-                    footerText,
-                    ToScriptTextCoords(resolution, x + 12f, footerY + 4f),
-                    0.255f,
-                    palette.Get(ModColorRole.TextSecondary, 228),
-                    GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawTextBlock(
+                resolution,
+                footerText,
+                x + 12f,
+                footerY + 4f,
+                0.255f,
+                palette.Get(ModColorRole.TextSecondary, 228),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                12f);
         }
 
         private void DrawTabletTheme()
@@ -377,44 +377,44 @@ namespace LSOL.UI
             DrawTabletWallpaper(resolution, screenX, screenY, screenWidth, screenHeight);
             DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, headerHeight + 8f, palette.Get(ModColorRole.BackgroundOuter, 94));
 
-            new TextElement(
-                    Title,
-                    ToScriptTextCoords(resolution, screenX + 20f, screenY + 16f),
-                    0.43f,
-                    palette.Get(ModColorRole.TextPrimary, 236),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+            DrawTextBlock(
+                resolution,
+                Title,
+                screenX + 20f,
+                screenY + 16f,
+                0.43f,
+                palette.Get(ModColorRole.TextPrimary, 236),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                14f);
 
             if (!string.IsNullOrWhiteSpace(Subtitle))
             {
-                new TextElement(
-                        Subtitle,
-                        ToScriptTextCoords(resolution, screenX + 20f, screenY + 42f),
-                        0.275f,
-                        palette.Get(ModColorRole.TextSecondary, 222),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left,
-                        true,
-                        false)
-                    .Draw();
+                DrawTextBlock(
+                    resolution,
+                    Subtitle,
+                    screenX + 20f,
+                    screenY + 42f,
+                    0.275f,
+                    palette.Get(ModColorRole.TextSecondary, 222),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    12f);
             }
 
             var headerRightText = GetHeaderRightText();
             if (!string.IsNullOrWhiteSpace(headerRightText))
             {
-                new TextElement(
-                        headerRightText,
-                        ToScriptTextCoords(resolution, screenX + screenWidth - 20f, screenY + 18f),
-                        0.255f,
-                        palette.Get(ModColorRole.TextSecondary, 230),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Right,
-                        true,
-                        false)
-                    .Draw();
+                DrawTextBlock(
+                    resolution,
+                    headerRightText,
+                    screenX + screenWidth - 20f,
+                    screenY + 18f,
+                    0.255f,
+                    palette.Get(ModColorRole.TextSecondary, 230),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right,
+                    12f);
             }
 
             var customContentRenderer = TabletContentRenderer;
@@ -1275,17 +1275,35 @@ namespace LSOL.UI
                     continue;
                 }
 
-                new TextElement(
-                        lines[i],
-                        ToScriptTextCoords(resolution, x, y + (i * lineSpacing)),
-                        scale,
-                        color,
-                        font,
-                        alignment,
-                        true,
-                        false)
-                    .Draw();
+                DrawHudTextLine(
+                    resolution,
+                    lines[i],
+                    x,
+                    y + (i * lineSpacing),
+                    scale,
+                    color,
+                    font,
+                    alignment);
             }
+        }
+
+        private static void DrawHudTextLine(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment)
+        {
+            var coords = ToScriptTextCoords(resolution, x, y);
+            var normalizedX = coords.X / 1280f;
+            var normalizedY = coords.Y / 720f;
+            var wrapEnd = alignment == Alignment.Right ? normalizedX : 1f;
+
+            Function.Call(Hash.SET_TEXT_FONT, (int)font);
+            Function.Call(Hash.SET_TEXT_SCALE, 0f, scale);
+            Function.Call(Hash.SET_TEXT_COLOUR, color.R, color.G, color.B, color.A);
+            Function.Call(Hash.SET_TEXT_CENTRE, alignment == Alignment.Center);
+            Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, alignment == Alignment.Right);
+            Function.Call(Hash.SET_TEXT_WRAP, 0f, wrapEnd);
+            Function.Call(Hash.SET_TEXT_DROPSHADOW, 0, 0, 0, 0, 0);
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text ?? string.Empty);
+            Function.Call(Hash.END_TEXT_COMMAND_DISPLAY_TEXT, normalizedX, normalizedY, 0);
         }
 
         private static int GetLineCount(string text)

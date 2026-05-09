@@ -433,17 +433,36 @@ namespace LSOL.UI
                     continue;
                 }
 
-                new TextElement(
-                        lines[i],
-                        ToScriptTextCoords(resolution, x, y + (i * lineSpacing)),
-                        scale,
-                        color,
-                        font,
-                        alignment,
-                        true,
-                        false)
-                    .Draw();
+                DrawHudTextLine(
+                    resolution,
+                    lines[i],
+                    x,
+                    y + (i * lineSpacing),
+                    scale,
+                    color,
+                    font,
+                    alignment);
             }
+        }
+
+        private static void DrawHudTextLine(Size resolution, string text, float x, float y, float scale, Color color, UiFont font, Alignment alignment)
+        {
+            var coords = ToScriptTextCoords(resolution, x, y);
+            var normalizedX = coords.X / 1280f;
+            var normalizedY = coords.Y / 720f;
+            var wrapEnd = alignment == Alignment.Right ? normalizedX : 1f;
+
+            Function.Call(Hash.SET_TEXT_FONT, (int)font);
+            Function.Call(Hash.SET_TEXT_SCALE, 0f, scale);
+            Function.Call(Hash.SET_TEXT_COLOUR, color.R, color.G, color.B, color.A);
+            Function.Call(Hash.SET_TEXT_CENTRE, alignment == Alignment.Center);
+            Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, alignment == Alignment.Right);
+            Function.Call(Hash.SET_TEXT_WRAP, 0f, wrapEnd);
+            Function.Call(Hash.SET_TEXT_DROPSHADOW, 0, 0, 0, 0, 0);
+            Function.Call(Hash.SET_TEXT_OUTLINE);
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text ?? string.Empty);
+            Function.Call(Hash.END_TEXT_COMMAND_DISPLAY_TEXT, normalizedX, normalizedY, 0);
         }
 
         private static PointF ToScriptTextCoords(Size resolution, float x, float y)

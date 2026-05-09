@@ -7,5 +7,6 @@
 - Loading container on a flatbed with 
 - loading heavy machinery
 - Vehicle, machies or Tractor parts deliver to industry to increase production
+- XP mechanism where player gain damage reduction
 
 - You are a contractor at the start then with enough money you can start building your own empire
