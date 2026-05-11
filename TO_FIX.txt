@@ -4,6 +4,7 @@
 - Commercial garage -> description too large
 - Modify garage selection (a truck can be solo)
 - Cannot buy the office after rented it
+- Add a NPC route viewer
 
 ### F7 MENU ###
 - When pressing difficulty options and bacspace, the menu closed
@@ -15,13 +16,13 @@
 
 ### VEHICLES ###
 - Fuel consumption too high
+- Increase tank capacity by x2
 - Rocks props for tipper and brute trucks
 - Loading bar when refueling
-- Change "Cond Ready" by "Cargo cond"
-- Cargo consition should be 0 when no cargo
-- Increase tank capacity of all trucks
+- Change "Cond" by "Cargo cond"
+- Cargo condition should be 0 when no cargo
 - Props:
-    - Bricks increase number of props
+    - Bricks increase number of props on trailer
 
 ### COMPANY HUB / F8 MENU ###
 - Change color from blue to something darker
@@ -30,7 +31,7 @@
 - Think about a filter option in Industries (not owned/owned)
 - Section less bigger
 - Button "Services" with Refueling, repair options
-- Analytics > Site Utilization -> use the same slection choice as Market for industry
+- Analytics > Site Utilization -> use the same selection choice as Market for industry
 
 ### INDUSTRIES ###
 - Section less bigger
@@ -53,12 +54,15 @@
 - Increase Tank trailer capacity by x100
 - NPC uses 1 office's garage vehicle
 - Add a loan system
-- Add a vehicle rent mechanism
+- Add a company vehicle rent mechanism
 - NPC rework:
     - Hire a NPC >> From the company hub choose starting point and destination
     - Assign it a truck from the company garage
     - Captain of industry mechanism: Choose the resource and the trigger (when he needs to get resources)
         - E.G. 0% output means the NPC with get resources as long as there is resources from starting point
+    - Message when NPC delivers cargo
+    - Find a way so taht NPC can change same cargo type afer each delivery
+    - Find a way so that NPC can change its destination but keep the same cargo type
 
 ### F7 MENU ###
 - Confirm option when deleting a save
