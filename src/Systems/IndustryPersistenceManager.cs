@@ -196,6 +196,7 @@ namespace LSOL.Systems
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("CorridorRestrictionDifficultyEnabled={0}", metadata.CorridorRestrictionDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("EconomyDifficultyPreset={0}", metadata.EconomyDifficultyPreset);
                     writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
                     writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
@@ -285,6 +286,7 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
                 ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
                 ini.HasKey("Meta", "LicensingDifficultyEnabled") ||
+                ini.HasKey("Meta", "CorridorRestrictionDifficultyEnabled") ||
                 ini.HasKey("Meta", "EconomyDifficultyPreset") ||
                 ini.HasKey("Meta", "NpcWeeklyWageDifficulty") ||
                 ini.HasKey("Meta", "DifficultySettingsLocked");
@@ -301,6 +303,7 @@ namespace LSOL.Systems
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
             metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
             metadata.LicensingDifficultyEnabled = ini.GetBool("Meta", "LicensingDifficultyEnabled", false);
+            metadata.CorridorRestrictionDifficultyEnabled = ini.GetBool("Meta", "CorridorRestrictionDifficultyEnabled", true);
             metadata.EconomyDifficultyPreset = ParseEconomyDifficultyPreset(
                 ini.GetString("Meta", "EconomyDifficultyPreset", EconomyDifficultyPreset.Standard.ToString()),
                 EconomyDifficultyPreset.Standard);
@@ -1369,6 +1372,7 @@ namespace LSOL.Systems
         public bool CargoDamageDifficultyEnabled { get; set; }
         public bool IndustryPricingDifficultyEnabled { get; set; }
         public bool LicensingDifficultyEnabled { get; set; }
+        public bool CorridorRestrictionDifficultyEnabled { get; set; } = true;
         public EconomyDifficultyPreset EconomyDifficultyPreset { get; set; } = EconomyDifficultyPreset.Standard;
         public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
         public bool DifficultySettingsLocked { get; set; }

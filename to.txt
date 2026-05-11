@@ -1,1 +1,0 @@
-- when player saves his game mod, player coordinates are saved. When loading the save, player are teleorted were he was before.

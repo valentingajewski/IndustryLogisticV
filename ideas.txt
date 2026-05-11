@@ -1,5 +1,6 @@
 # Gameplay fetaures
 
+- Motel mechanism (player can pay to rent a room. Doing that cut the time)
 - oversived cargo (machines, bigger vehicle, houses)
 - torque engine regarding the cargo
 - event mission (tranformers)
@@ -11,14 +12,20 @@
 - fuel tank module in office to buy and place
 - fuel npc refuel office fuel tank
 - spawn props/objects at office menu
-- property building where we can buy office building
+- cruise control
+
 
 - You are a contractor at the start then with enough money you can start building your own empire
 
+- Player Statistics
+- Success:
+    - Gain 10,0000,000$
+    - Cumulate 1,000,000$ whithout recruiting a NPC
+    - Nb of delivery (100,500,1000,5000,10000,1000000)
+    - Nb of resources transported
+    - Buy the Port Terminal
 
-Interiors:
+- Discord
+- Web site
 
-
-I was thinking about implementing those off-duty systems like hunger, barber, clothing, restaurant which are cool. Thos could also be enabled or disabled via the Difficulty options menu.
-I was also thinking about creating multiple office site which can be purchased by the player. So the player should start from a little one and climb his way up to get the latest office.
-Seapking of driving licence and permits, I was thinking to implement a price for trucks. I added a column "VehiclePrice"
+- Big concrete pipe: "3984769111"

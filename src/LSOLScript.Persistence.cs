@@ -89,6 +89,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
 
@@ -116,6 +117,7 @@ namespace LSOL
             _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
             _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
             _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
+            _corridorRestrictionDifficultyEnabled = _pendingCorridorRestrictionDifficultyEnabled;
             _economyDifficultyPreset = _pendingEconomyDifficultyPreset;
             _npcWeeklyWageDifficulty = _pendingNpcWeeklyWageDifficulty;
             _difficultySettingsLocked = true;
@@ -140,6 +142,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ReturnToSavingOptionsMenu();
@@ -223,6 +226,7 @@ namespace LSOL
                     _cargoDamageDifficultyEnabled = true;
                     _industryPricingDifficultyEnabled = false;
                     _licensingDifficultyEnabled = false;
+                    _corridorRestrictionDifficultyEnabled = true;
                     _language = ModLanguage.English;
                     _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                     _colorblindMode = ColorblindMode.Off;
@@ -243,6 +247,7 @@ namespace LSOL
                 _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
                 _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
                 _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+                _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
                 _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
                 _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             }
@@ -394,6 +399,7 @@ namespace LSOL
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
                 IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
                 LicensingDifficultyEnabled = _licensingDifficultyEnabled,
+                CorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled,
                 EconomyDifficultyPreset = _economyDifficultyPreset,
                 NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
                 DifficultySettingsLocked = _difficultySettingsLocked,
@@ -416,6 +422,7 @@ namespace LSOL
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
                 _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
                 _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
+                _corridorRestrictionDifficultyEnabled = metadata.CorridorRestrictionDifficultyEnabled;
                 _economyDifficultyPreset = metadata.EconomyDifficultyPreset;
                 _colorblindMode = metadata.ColorblindMode ?? ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = metadata.NpcWeeklyWageDifficulty;
@@ -426,6 +433,7 @@ namespace LSOL
                 _language = ModLanguage.English;
                 _industryPricingDifficultyEnabled = false;
                 _licensingDifficultyEnabled = false;
+                _corridorRestrictionDifficultyEnabled = true;
                 _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                 _colorblindMode = ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
@@ -440,6 +448,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             ApplyDifficultySettingsToSystems();

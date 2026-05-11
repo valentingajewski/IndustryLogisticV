@@ -564,7 +564,7 @@ namespace LSOL.UI
         {
             if (_originOptions.Count == 0)
             {
-                return "No industry with available outputs is currently accessible.";
+                return _manager.BuildOriginAvailabilityDetail();
             }
 
             var industry = GetSelectedOriginIndustry();
@@ -582,7 +582,7 @@ namespace LSOL.UI
         {
             if (_destinationOptions.Count == 0)
             {
-                return "No compatible destination is available for the selected starting point.";
+                return _manager.BuildDestinationAvailabilityDetail(GetSelectedOriginIndustry());
             }
 
             var destination = GetSelectedDestinationIndustry();

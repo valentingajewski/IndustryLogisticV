@@ -1,0 +1,76 @@
+### OFFICE MENU ###
+- Title menu too large
+- Replace "Commercial Garage" by "Garage"
+- Commercial garage -> description too large
+- Modify garage selection (a truck can be solo)
+- Cannot buy the office after rented it
+
+### F7 MENU ###
+- When pressing difficulty options and bacspace, the menu closed
+
+### TRUCK DEALERSHIP MENU ###
+
+### SPECIAL MISSION ###
+- Heavy machinery is already available
+
+### VEHICLES ###
+- Fuel consumption too high
+- Rocks props for tipper and brute trucks
+- Loading bar when refueling
+- Change "Cond Ready" by "Cargo cond"
+- Cargo consition should be 0 when no cargo
+- Increase tank capacity of all trucks
+- Props:
+    - Bricks increase number of props
+
+### COMPANY HUB / F8 MENU ###
+- Change color from blue to something darker
+- Text in LIVE panel outside of frame
+- Add a Construction site button
+- Think about a filter option in Industries (not owned/owned)
+- Section less bigger
+- Button "Services" with Refueling, repair options
+- Analytics > Site Utilization -> use the same slection choice as Market for industry
+
+### INDUSTRIES ###
+- Section less bigger
+
+
+## QUARRY ##
+- Barrier
+
+## CEMENT ##
+- Cement props coordinate to move closer to industry marker
+
+### MAP ###
+- Color blips
+
+### GENERAL GAMEPLAY ###
+- Office catalog somewhere
+- Option to choose either a truck or a trailer
+- Fuel Stations can be filled by NPC
+- Other company's NPC can deliver and take resources
+- Increase Tank trailer capacity by x100
+- NPC uses 1 office's garage vehicle
+- Add a loan system
+- Add a vehicle rent mechanism
+- NPC rework:
+    - Hire a NPC >> From the company hub choose starting point and destination
+    - Assign it a truck from the company garage
+    - Captain of industry mechanism: Choose the resource and the trigger (when he needs to get resources)
+        - E.G. 0% output means the NPC with get resources as long as there is resources from starting point
+
+### F7 MENU ###
+- Confirm option when deleting a save
+
+### WAREHOUSES ###
+- Shouldn't receive money when dropping cargo
+
+### GAS STATION ###
+- Increase tank capacity by x100
+
+### CONSTRUCTION SITES ###
+- Mirror Park is already owned
+
+### APARTMENTS ###
+- Change blip icon

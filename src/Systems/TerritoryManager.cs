@@ -47,8 +47,10 @@ namespace LSOL.Systems
         private readonly Dictionary<string, TerritorySiteState> _sitesById;
         private readonly Dictionary<string, TerritoryDistrictState> _districtsByName;
         private readonly Dictionary<string, TerritoryCorridorState> _corridorsById;
+        private readonly Dictionary<string, float> _districtReputationDebugOffsets;
 
         private int _lastRepossessionEvaluationMs;
+        private bool _corridorRestrictionEnabled;
 
         public TerritoryManager(ModConfig config, IndustryManager industryManager)
         {
@@ -58,7 +60,9 @@ namespace LSOL.Systems
             _sitesById = new Dictionary<string, TerritorySiteState>(StringComparer.OrdinalIgnoreCase);
             _districtsByName = new Dictionary<string, TerritoryDistrictState>(StringComparer.OrdinalIgnoreCase);
             _corridorsById = new Dictionary<string, TerritoryCorridorState>(StringComparer.OrdinalIgnoreCase);
+            _districtReputationDebugOffsets = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             _lastRepossessionEvaluationMs = int.MinValue;
+            _corridorRestrictionEnabled = true;
 
             if (config != null && config.DistrictConfigs != null)
             {
@@ -98,11 +102,17 @@ namespace LSOL.Systems
             RefreshComputedState();
         }
 
+        public void SetCorridorRestrictionEnabled(bool enabled)
+        {
+            _corridorRestrictionEnabled = enabled;
+        }
+
         public void Reset()
         {
             _industriesById.Clear();
             _sitesById.Clear();
             _corridorsById.Clear();
+            _districtReputationDebugOffsets.Clear();
 
             if (_industryManager != null && _industryManager.Industries != null)
             {
@@ -175,6 +185,40 @@ namespace LSOL.Systems
                 : null;
         }
 
+        public float GetDistrictReputationDebugOffset(string districtName)
+        {
+            if (string.IsNullOrWhiteSpace(districtName))
+            {
+                return 0f;
+            }
+
+            float offset;
+            return _districtReputationDebugOffsets.TryGetValue(districtName.Trim(), out offset)
+                ? offset
+                : 0f;
+        }
+
+        public void AdjustDistrictReputationDebug(string districtName, float delta)
+        {
+            if (string.IsNullOrWhiteSpace(districtName) || Math.Abs(delta) <= 0.001f)
+            {
+                return;
+            }
+
+            var normalized = districtName.Trim();
+            var updated = GetDistrictReputationDebugOffset(normalized) + delta;
+            if (Math.Abs(updated) <= 0.001f)
+            {
+                _districtReputationDebugOffsets.Remove(normalized);
+            }
+            else
+            {
+                _districtReputationDebugOffsets[normalized] = updated;
+            }
+
+            RefreshComputedState();
+        }
+
         public IEnumerable<Industry> GetDepotIndustries()
         {
             return _industriesById.Values
@@ -193,21 +237,60 @@ namespace LSOL.Systems
             return _corridorsById.Values.Count(x => x != null && x.RightLevel != CorridorRightLevel.None);
         }
 
+        public bool IsDistrictEstablishedForNpc(string districtName)
+        {
+            var districtState = GetDistrictState(districtName);
+            return districtState != null && GetReputationTier(districtState.ReputationLabel) >= 2;
+        }
+
+        public string GetNpcDistrictRequirementSummary(string districtName)
+        {
+            var districtState = GetDistrictState(districtName);
+            if (districtState == null)
+            {
+                return "District influence data is unavailable.";
+            }
+
+            if (IsDistrictEstablishedForNpc(districtName))
+            {
+                return string.Empty;
+            }
+
+            var label = string.IsNullOrWhiteSpace(districtState.ReputationLabel)
+                ? "Unknown"
+                : districtState.ReputationLabel.Trim();
+            return string.Format(
+                "{0} is currently {1}. Reach Established before assigning NPC routes there.",
+                districtState.DistrictName,
+                label);
+        }
+
         public string GetActivationSummary(Industry industry)
         {
-            var siteState = GetSiteState(industry);
-            return siteState != null && !string.IsNullOrWhiteSpace(siteState.ActivationSummary)
-                ? siteState.ActivationSummary
-                : "No strategic state";
+            return GetActivationSummary(industry, true);
+        }
+
+        public string GetNpcActivationSummary(Industry industry)
+        {
+            return GetActivationSummary(industry, false);
         }
 
         public bool IsAutomationReady(Industry industry)
         {
-            var siteState = GetSiteState(industry);
-            return siteState != null && siteState.IsOperational;
+            return IsAutomationReady(industry, true);
+        }
+
+        public bool IsNpcAutomationReady(Industry industry)
+        {
+            return IsAutomationReady(industry, false);
         }
 
         public bool CanCreateNpcRoute(Industry originIndustry, Industry destinationIndustry, out string reason)
+        {
+            return CanCreateNpcRoute(originIndustry, destinationIndustry, out reason, true);
+        }
+
+        public bool CanCreateNpcRouteWithPermits(Industry originIndustry, Industry destinationIndustry, out string reason)
         {
             reason = string.Empty;
             if (originIndustry == null || destinationIndustry == null)
@@ -216,15 +299,50 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (!IsAutomationReady(originIndustry))
+            if (!HasCorridorAccess(originIndustry.DistrictName, destinationIndustry.DistrictName))
             {
-                reason = string.Format("{0} is not operational yet. {1}.", originIndustry.Name, GetActivationSummary(originIndustry));
+                reason = string.Format(
+                    "The corridor between {0} and {1} is not licensed yet. Establish it with player deliveries first.",
+                    originIndustry.DistrictName,
+                    destinationIndustry.DistrictName);
                 return false;
             }
 
-            if (!IsAutomationReady(destinationIndustry))
+            return true;
+        }
+
+        private string GetActivationSummary(Industry industry, bool requireOwnership)
+        {
+            var siteState = GetSiteState(industry);
+            return siteState != null
+                ? BuildActivationSummary(industry, siteState, requireOwnership)
+                : "No strategic state";
+        }
+
+        private bool IsAutomationReady(Industry industry, bool requireOwnership)
+        {
+            var siteState = GetSiteState(industry);
+            return siteState != null && ResolveOperationalState(industry, siteState, requireOwnership);
+        }
+
+        private bool CanCreateNpcRoute(Industry originIndustry, Industry destinationIndustry, out string reason, bool requireOwnership)
+        {
+            reason = string.Empty;
+            if (originIndustry == null || destinationIndustry == null)
             {
-                reason = string.Format("{0} is not operational yet. {1}.", destinationIndustry.Name, GetActivationSummary(destinationIndustry));
+                reason = "Route endpoints are incomplete.";
+                return false;
+            }
+
+            if (!IsAutomationReady(originIndustry, requireOwnership))
+            {
+                reason = string.Format("{0} is not operational yet. {1}.", originIndustry.Name, GetActivationSummary(originIndustry, requireOwnership));
+                return false;
+            }
+
+            if (!IsAutomationReady(destinationIndustry, requireOwnership))
+            {
+                reason = string.Format("{0} is not operational yet. {1}.", destinationIndustry.Name, GetActivationSummary(destinationIndustry, requireOwnership));
                 return false;
             }
 
@@ -606,7 +724,7 @@ namespace LSOL.Systems
 
                 adjusted *= 1f - Math.Min(0.18f, GetDistrictSupportFactor(originIndustry.DistrictName) + GetDistrictSupportFactor(destinationIndustry.DistrictName));
 
-                if (!IsAutomationReady(originIndustry) || !IsAutomationReady(destinationIndustry))
+                if (!IsNpcAutomationReady(originIndustry) || !IsNpcAutomationReady(destinationIndustry))
                 {
                     adjusted *= 1.15f;
                 }
@@ -901,6 +1019,13 @@ namespace LSOL.Systems
                 districtState.InfluenceRatio = target <= 0.001f
                     ? 0f
                     : Math.Max(0f, Math.Min(1.5f, districtState.InfluenceScore / target));
+
+                float debugOffset;
+                if (_districtReputationDebugOffsets.TryGetValue(districtState.DistrictName ?? string.Empty, out debugOffset))
+                {
+                    districtState.ReputationScore += debugOffset;
+                }
+
                 districtState.ReputationLabel = ResolveReputationLabel(districtState.InfluenceRatio, districtState.ReputationScore);
             }
         }
@@ -996,6 +1121,11 @@ namespace LSOL.Systems
 
         private bool ResolveOperationalState(Industry industry, TerritorySiteState siteState)
         {
+            return ResolveOperationalState(industry, siteState, true);
+        }
+
+        private bool ResolveOperationalState(Industry industry, TerritorySiteState siteState, bool requireOwnership)
+        {
             if (industry == null || siteState == null)
             {
                 return false;
@@ -1011,7 +1141,7 @@ namespace LSOL.Systems
                 return siteState.ControlLevel != TerritoryControlLevel.None && siteState.CrewAssigned;
             }
 
-            if (_industryManager.RequiresIndustryPurchase(industry) && !industry.IsOwned)
+            if (requireOwnership && _industryManager.RequiresIndustryPurchase(industry) && !industry.IsOwned)
             {
                 return false;
             }
@@ -1035,6 +1165,11 @@ namespace LSOL.Systems
         }
 
         private string BuildActivationSummary(Industry industry, TerritorySiteState siteState)
+        {
+            return BuildActivationSummary(industry, siteState, true);
+        }
+
+        private string BuildActivationSummary(Industry industry, TerritorySiteState siteState, bool requireOwnership)
         {
             if (industry == null || siteState == null)
             {
@@ -1061,7 +1196,7 @@ namespace LSOL.Systems
                 return "Operational support base";
             }
 
-            if (_industryManager.RequiresIndustryPurchase(industry) && !industry.IsOwned)
+            if (requireOwnership && _industryManager.RequiresIndustryPurchase(industry) && !industry.IsOwned)
             {
                 return "Purchase site ownership";
             }
@@ -1090,9 +1225,7 @@ namespace LSOL.Systems
         {
             return industry != null
                 && (industry.IsSink
-                    || industry.Inputs.Count > 0
-                    || industry.OptionalInputs.Count > 0
-                    || industry.SupportsOmegaBoost);
+                    || industry.Inputs.Count > 0);
         }
 
         private static bool RequiresOutboundActivation(Industry industry)
@@ -1110,6 +1243,11 @@ namespace LSOL.Systems
             }
 
             if (string.Equals(districtA, districtB, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (!_corridorRestrictionEnabled)
             {
                 return true;
             }
@@ -1234,6 +1372,23 @@ namespace LSOL.Systems
             }
 
             return "Unknown";
+        }
+
+        private static int GetReputationTier(string reputationLabel)
+        {
+            switch ((reputationLabel ?? string.Empty).Trim().ToUpperInvariant())
+            {
+                case "DOMINANT":
+                    return 4;
+                case "ANCHORED":
+                    return 3;
+                case "ESTABLISHED":
+                    return 2;
+                case "EMERGING":
+                    return 1;
+                default:
+                    return 0;
+            }
         }
 
         private static TerritoryFranchiseLevel ResolveFranchiseLevel(int deliveryCount, float deliveredTons)

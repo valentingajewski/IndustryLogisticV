@@ -106,6 +106,55 @@ namespace LSOL.Systems
                 .ToList();
         }
 
+        public string BuildOriginAvailabilityDetail()
+        {
+            var candidates = GetOriginAvailabilityCandidates();
+            if (candidates.Count == 0)
+            {
+                return "No industry with available outputs is configured.";
+            }
+
+            var blocked = candidates
+                .Select(industry => BuildOriginAvailabilityMessage(industry))
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Take(3)
+                .ToList();
+
+            return blocked.Count == 0
+                ? "No industry with available outputs is currently accessible."
+                : string.Format("Blocked origins: {0}", string.Join(" | ", blocked));
+        }
+
+        public string BuildDestinationAvailabilityDetail(Industry originIndustry)
+        {
+            if (originIndustry == null)
+            {
+                return "No compatible destination is available because no starting point is currently accessible.";
+            }
+
+            var originBlocker = BuildAutomationBlockReason(originIndustry);
+            if (!string.IsNullOrWhiteSpace(originBlocker))
+            {
+                return string.Format("{0} is not ready for automation: {1}.", originIndustry.Name, originBlocker.TrimEnd('.'));
+            }
+
+            var candidates = GetDestinationAvailabilityCandidates(originIndustry);
+            if (candidates.Count == 0)
+            {
+                return string.Format("No compatible destination accepts outputs from {0}.", originIndustry.Name);
+            }
+
+            var blocked = candidates
+                .Select(destinationIndustry => BuildDestinationAvailabilityMessage(originIndustry, destinationIndustry))
+                .Where(message => !string.IsNullOrWhiteSpace(message))
+                .Take(3)
+                .ToList();
+
+            return blocked.Count == 0
+                ? "No compatible destination is currently accessible."
+                : string.Format("Blocked destinations: {0}", string.Join(" | ", blocked));
+        }
+
         public List<string> GetResourceOptions(Industry originIndustry, Industry destinationIndustry)
         {
             if (originIndustry == null)
@@ -363,6 +412,20 @@ namespace LSOL.Systems
             if (!HasGameplayAccess(originIndustry) || !HasGameplayAccess(destinationIndustry))
             {
                 message = "Unlock the required industry permits before assigning this route.";
+                return false;
+            }
+
+            var originBlocker = BuildAutomationBlockReason(originIndustry);
+            if (!string.IsNullOrWhiteSpace(originBlocker))
+            {
+                message = string.Format("{0}: {1}", originIndustry.Name, originBlocker.TrimEnd('.'));
+                return false;
+            }
+
+            var destinationBlocker = BuildAutomationBlockReason(destinationIndustry);
+            if (!string.IsNullOrWhiteSpace(destinationBlocker))
+            {
+                message = string.Format("{0}: {1}", destinationIndustry.Name, destinationBlocker.TrimEnd('.'));
                 return false;
             }
 
@@ -955,7 +1018,7 @@ namespace LSOL.Systems
                 && industry.Outputs != null
                 && industry.Outputs.Count > 0
                 && HasGameplayAccess(industry)
-                && (_territoryManager == null || _territoryManager.IsAutomationReady(industry));
+                && MeetsDistrictNpcRequirement(industry);
         }
 
         private bool CanUseAsDestination(Industry originIndustry, Industry destinationIndustry)
@@ -965,13 +1028,127 @@ namespace LSOL.Systems
                 && originIndustry != null
                 && !string.Equals(originIndustry.Id, destinationIndustry.Id, StringComparison.OrdinalIgnoreCase)
                 && HasGameplayAccess(destinationIndustry)
+                && MeetsDistrictNpcRequirement(destinationIndustry)
                 && GetResourceOptions(originIndustry, destinationIndustry).Count > 0
-                && (_territoryManager == null || _territoryManager.CanCreateNpcRoute(originIndustry, destinationIndustry, out reason));
+                && (_territoryManager == null || _territoryManager.CanCreateNpcRouteWithPermits(originIndustry, destinationIndustry, out reason));
         }
 
         private bool HasGameplayAccess(Industry industry)
         {
             return industry != null && !_industryManager.RequiresContractorPermit(industry);
+        }
+
+        private bool MeetsDistrictNpcRequirement(Industry industry)
+        {
+            return industry != null
+                && (_territoryManager == null || _territoryManager.IsDistrictEstablishedForNpc(industry.DistrictName));
+        }
+
+        private List<Industry> GetOriginAvailabilityCandidates()
+        {
+            return _industryManager.Industries
+                .Where(industry => industry != null && industry.Outputs != null && industry.Outputs.Count > 0)
+                .OrderByDescending(GetAvailabilityPriority)
+                .ThenBy(industry => industry.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private List<Industry> GetDestinationAvailabilityCandidates(Industry originIndustry)
+        {
+            if (originIndustry == null)
+            {
+                return new List<Industry>();
+            }
+
+            return _industryManager.Industries
+                .Where(destinationIndustry =>
+                    destinationIndustry != null
+                    && !string.Equals(originIndustry.Id, destinationIndustry.Id, StringComparison.OrdinalIgnoreCase)
+                    && GetResourceOptions(originIndustry, destinationIndustry).Count > 0)
+                .OrderByDescending(GetAvailabilityPriority)
+                .ThenBy(destinationIndustry => destinationIndustry.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private string BuildOriginAvailabilityMessage(Industry industry)
+        {
+            var blocker = BuildAutomationBlockReason(industry);
+            return string.IsNullOrWhiteSpace(blocker)
+                ? string.Empty
+                : string.Format("{0}: {1}", industry.Name, blocker.TrimEnd('.'));
+        }
+
+        private string BuildDestinationAvailabilityMessage(Industry originIndustry, Industry destinationIndustry)
+        {
+            var blocker = BuildAutomationBlockReason(destinationIndustry);
+            if (!string.IsNullOrWhiteSpace(blocker))
+            {
+                return string.Format("{0}: {1}", destinationIndustry.Name, blocker.TrimEnd('.'));
+            }
+
+            if (_territoryManager == null)
+            {
+                return string.Empty;
+            }
+
+            string routeReason;
+            if (_territoryManager.CanCreateNpcRouteWithPermits(originIndustry, destinationIndustry, out routeReason))
+            {
+                return string.Empty;
+            }
+
+            return string.IsNullOrWhiteSpace(routeReason)
+                ? string.Empty
+                : string.Format("{0}: {1}", destinationIndustry.Name, routeReason.TrimEnd('.'));
+        }
+
+        private string BuildAutomationBlockReason(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            if (_industryManager.RequiresContractorPermit(industry))
+            {
+                return "Purchase contractor permit";
+            }
+
+            if (_territoryManager != null)
+            {
+                var districtBlocker = _territoryManager.GetNpcDistrictRequirementSummary(industry.DistrictName);
+                if (!string.IsNullOrWhiteSpace(districtBlocker))
+                {
+                    return districtBlocker;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private int GetAvailabilityPriority(Industry industry)
+        {
+            if (industry == null)
+            {
+                return 0;
+            }
+
+            var score = 0;
+            if (industry.HasContractorPermit)
+            {
+                score += 2;
+            }
+
+            if (_territoryManager != null)
+            {
+                var siteState = _territoryManager.GetSiteState(industry);
+                if (siteState != null && (siteState.LoadRuns > 0 || siteState.UnloadRuns > 0 || siteState.TotalDeliveries > 0))
+                {
+                    score += 1;
+                }
+            }
+
+            return score;
         }
 
         private Industry FindIndustryById(string industryId)

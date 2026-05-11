@@ -6,6 +6,10 @@ You start small, move cargo between industries, earn money from deliveries, expa
 
 This README is written for players first. It explains what the mod does, how to install it, and how to get started without needing to read the code.
 
+Additional player guide:
+
+- [DISTRICTS_AND_CORRIDORS.md](DISTRICTS_AND_CORRIDORS.md) explains district influence, reputation labels, corridor progression, and why NPC logistics may still be gated in a region.
+
 ## What LSOL Adds To GTA V
 
 LSOL adds a full business-management loop on top of GTA V free roam:

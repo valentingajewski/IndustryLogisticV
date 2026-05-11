@@ -34,6 +34,7 @@ namespace LSOL
         private const float DefaultStartingBalance = 20000f;
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
         private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
+        private static readonly float[] DebugDistrictReputationAmountOptions = { 5f, 10f, 25f, 50f, 100f, 250f };
         private static readonly float[] StartingBalanceOptions = BuildStartingBalanceOptions();
         private static readonly ModLanguage[] SelectableLanguages =
         {
@@ -113,6 +114,8 @@ namespace LSOL
         private int _selectedDebugResourceIndex;
         private int _selectedDebugResourceAmountIndex;
         private int _selectedDebugMoneyAmountIndex;
+        private int _selectedDebugDistrictIndex;
+        private int _selectedDebugDistrictReputationAmountIndex;
         private int _selectedStartingBalanceIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
@@ -137,6 +140,8 @@ namespace LSOL
         private bool _pendingIndustryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
         private bool _pendingLicensingDifficultyEnabled;
+        private bool _corridorRestrictionDifficultyEnabled;
+        private bool _pendingCorridorRestrictionDifficultyEnabled;
         private ModLanguage _language;
         private EconomyDifficultyPreset _economyDifficultyPreset;
         private EconomyDifficultyPreset _pendingEconomyDifficultyPreset;
@@ -384,6 +389,7 @@ namespace LSOL
             _cargoDamageDifficultyEnabled = true;
             _industryPricingDifficultyEnabled = false;
             _licensingDifficultyEnabled = false;
+            _corridorRestrictionDifficultyEnabled = true;
             _language = ModLanguage.English;
             _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
             _colorblindMode = ColorblindMode.Off;
@@ -392,6 +398,7 @@ namespace LSOL
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
+            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
@@ -1658,6 +1665,13 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => Text(ModTextKey.RowCorridorRestriction),
+                    DetailFactory = () => Text(ModTextKey.DetailCorridorRestriction),
+                    CheckboxStateFactory = () => _pendingCorridorRestrictionDifficultyEnabled,
+                    OnActivate = TogglePendingCorridorRestrictionSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => Text(ModTextKey.RowCreateSave),
                     DetailFactory = () => Text(ModTextKey.DetailCreateSave, _pendingSaveName),
                     OnActivate = FinalizeNewSave,
@@ -2008,6 +2022,13 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => Text(ModTextKey.RowCorridorRestriction),
+                    DetailFactory = () => Text(ModTextKey.DetailCorridorRestriction),
+                    CheckboxStateFactory = () => _corridorRestrictionDifficultyEnabled,
+                    OnActivate = ToggleCorridorRestrictionSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => Text(ModTextKey.CommonBack),
                     OnActivate = ReturnToModControlMenu,
                 },
@@ -2294,6 +2315,11 @@ namespace LSOL
             _pendingLicensingDifficultyEnabled = !_pendingLicensingDifficultyEnabled;
         }
 
+        private void TogglePendingCorridorRestrictionSetting()
+        {
+            _pendingCorridorRestrictionDifficultyEnabled = !_pendingCorridorRestrictionDifficultyEnabled;
+        }
+
         private void ChangePendingEconomyDifficultyPreset(int delta)
         {
             _pendingEconomyDifficultyPreset = OffsetEconomyDifficultyPreset(_pendingEconomyDifficultyPreset, delta);
@@ -2347,6 +2373,18 @@ namespace LSOL
             }
 
             _licensingDifficultyEnabled = !_licensingDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
+        }
+
+        private void ToggleCorridorRestrictionSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _corridorRestrictionDifficultyEnabled = !_corridorRestrictionDifficultyEnabled;
             ApplyDifficultySettingsToSystems();
         }
 
@@ -2405,6 +2443,7 @@ namespace LSOL
             _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
             _vehicleFuelSystem.SetDifficultyEnabled(_vehicleFuelDifficultyEnabled);
             _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
+            _territoryManager.SetCorridorRestrictionEnabled(_corridorRestrictionDifficultyEnabled);
             _territoryManager.RefreshState();
             if (_modMechanicsEnabled)
             {
@@ -2693,6 +2732,20 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = CurrentDebugDistrictCaption,
+                    DetailFactory = CurrentDebugDistrictDetail,
+                    OnLeft = () => ChangeDebugDistrictSelection(-1),
+                    OnRight = () => ChangeDebugDistrictSelection(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentDebugDistrictReputationAmountCaption,
+                    DetailFactory = () => "Used by the district reputation debug actions.",
+                    OnLeft = () => ChangeDebugDistrictReputationAmountSelection(-1),
+                    OnRight = () => ChangeDebugDistrictReputationAmountSelection(1),
+                },
+                new OfficeMenuItem
+                {
                     IsSeparator = true,
                 },
                 new OfficeMenuItem
@@ -2706,6 +2759,18 @@ namespace LSOL
                     CaptionFactory = () => "Add money",
                     DetailFactory = () => string.Format("Adds {0} to your current balance.", ModFormatting.FormatMoney(GetSelectedDebugMoneyAmount())),
                     OnActivate = AddDebugMoney,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Increase district reputation",
+                    DetailFactory = () => string.Format("Adds +{0:0.#} reputation score to the selected district.", GetSelectedDebugDistrictReputationAmount()),
+                    OnActivate = () => AdjustDebugDistrictReputation(1f),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Decrease district reputation",
+                    DetailFactory = () => string.Format("Applies -{0:0.#} reputation score to the selected district.", GetSelectedDebugDistrictReputationAmount()),
+                    OnActivate = () => AdjustDebugDistrictReputation(-1f),
                 },
                 new OfficeMenuItem
                 {
@@ -2993,13 +3058,13 @@ namespace LSOL
             }
 
             CloseAllMenus();
-            _companyMapController.Open();
+            _companyMapController.OpenNetworkView();
         }
 
         private void OpenCompanyMapMenuFromTablet()
         {
             CloseAllMenus();
-            _companyMapController.Open(ReturnToTabletHomeFromCompanyMap);
+            _companyMapController.OpenNetworkView(ReturnToTabletHomeFromCompanyMap);
         }
 
         private void OpenCompanyDistrictViewFromTablet()
@@ -3307,6 +3372,47 @@ namespace LSOL
             return string.Format("Money amount: < {0} >", ModFormatting.FormatMoney(GetSelectedDebugMoneyAmount()));
         }
 
+        private string CurrentDebugDistrictCaption()
+        {
+            var district = GetSelectedDebugDistrict();
+            return string.IsNullOrWhiteSpace(district)
+                ? "District: < none >"
+                : string.Format("District: < {0} >", district);
+        }
+
+        private string CurrentDebugDistrictDetail()
+        {
+            if (_territoryManager == null)
+            {
+                return "Territory manager unavailable.";
+            }
+
+            var districtName = GetSelectedDebugDistrict();
+            if (string.IsNullOrWhiteSpace(districtName))
+            {
+                return "No district data is loaded.";
+            }
+
+            var district = _territoryManager.GetDistrictState(districtName);
+            if (district == null)
+            {
+                return "Selected district state is unavailable.";
+            }
+
+            var debugOffset = _territoryManager.GetDistrictReputationDebugOffset(districtName);
+            return string.Format(
+                "{0} | Influence {1:0}% | Reputation {2:0.0} | Debug offset {3:+0.0;-0.0;0.0}",
+                string.IsNullOrWhiteSpace(district.ReputationLabel) ? "Unknown" : district.ReputationLabel,
+                district.InfluenceRatio * 100f,
+                district.ReputationScore,
+                debugOffset);
+        }
+
+        private string CurrentDebugDistrictReputationAmountCaption()
+        {
+            return string.Format("District rep amount: < {0:0.#} >", GetSelectedDebugDistrictReputationAmount());
+        }
+
         private void ChangeDebugResourceAmountSelection(int delta)
         {
             _selectedDebugResourceAmountIndex = (_selectedDebugResourceAmountIndex + delta + DebugResourceAmountOptionsTons.Length) % DebugResourceAmountOptionsTons.Length;
@@ -3315,6 +3421,60 @@ namespace LSOL
         private void ChangeDebugMoneyAmountSelection(int delta)
         {
             _selectedDebugMoneyAmountIndex = (_selectedDebugMoneyAmountIndex + delta + DebugMoneyAmountOptions.Length) % DebugMoneyAmountOptions.Length;
+        }
+
+        private void ChangeDebugDistrictSelection(int delta)
+        {
+            var districtOptions = GetDebugDistrictOptions();
+            if (districtOptions.Count == 0)
+            {
+                _selectedDebugDistrictIndex = 0;
+                return;
+            }
+
+            _selectedDebugDistrictIndex = (_selectedDebugDistrictIndex + delta + districtOptions.Count) % districtOptions.Count;
+        }
+
+        private void ChangeDebugDistrictReputationAmountSelection(int delta)
+        {
+            _selectedDebugDistrictReputationAmountIndex = (_selectedDebugDistrictReputationAmountIndex + delta + DebugDistrictReputationAmountOptions.Length) % DebugDistrictReputationAmountOptions.Length;
+        }
+
+        private void AdjustDebugDistrictReputation(float direction)
+        {
+            if (_territoryManager == null)
+            {
+                ShowStatus("Territory manager unavailable.");
+                return;
+            }
+
+            var districtName = GetSelectedDebugDistrict();
+            if (string.IsNullOrWhiteSpace(districtName))
+            {
+                ShowStatus("No district selected.");
+                return;
+            }
+
+            var amount = GetSelectedDebugDistrictReputationAmount();
+            if (amount <= 0.001f)
+            {
+                ShowStatus("Select a valid district reputation amount first.");
+                return;
+            }
+
+            _territoryManager.AdjustDistrictReputationDebug(districtName, amount * direction);
+            _tabletStateStore.MarkAllDirty();
+
+            var district = _territoryManager.GetDistrictState(districtName);
+            var label = district != null && !string.IsNullOrWhiteSpace(district.ReputationLabel)
+                ? district.ReputationLabel
+                : "Unknown";
+            ShowStatus(string.Format(
+                "{0} reputation {1}{2:0.#}. New label: {3}.",
+                districtName,
+                direction >= 0f ? "+" : string.Empty,
+                amount * direction,
+                label));
         }
 
         private void AddSelectedDebugResourceToNearbyIndustry()
@@ -4480,6 +4640,49 @@ namespace LSOL
             }
 
             return DebugMoneyAmountOptions[_selectedDebugMoneyAmountIndex];
+        }
+
+        private float GetSelectedDebugDistrictReputationAmount()
+        {
+            if (_selectedDebugDistrictReputationAmountIndex < 0 || _selectedDebugDistrictReputationAmountIndex >= DebugDistrictReputationAmountOptions.Length)
+            {
+                _selectedDebugDistrictReputationAmountIndex = 0;
+            }
+
+            return DebugDistrictReputationAmountOptions[_selectedDebugDistrictReputationAmountIndex];
+        }
+
+        private List<string> GetDebugDistrictOptions()
+        {
+            return _territoryManager != null
+                ? _territoryManager.DistrictStates
+                    .Where(district => district != null && !string.IsNullOrWhiteSpace(district.DistrictName))
+                    .OrderBy(district => district.DistrictName, StringComparer.OrdinalIgnoreCase)
+                    .Select(district => district.DistrictName)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList()
+                : new List<string>();
+        }
+
+        private string GetSelectedDebugDistrict()
+        {
+            var districtOptions = GetDebugDistrictOptions();
+            if (districtOptions.Count == 0)
+            {
+                _selectedDebugDistrictIndex = 0;
+                return string.Empty;
+            }
+
+            if (_selectedDebugDistrictIndex >= districtOptions.Count)
+            {
+                _selectedDebugDistrictIndex = districtOptions.Count - 1;
+            }
+            else if (_selectedDebugDistrictIndex < 0)
+            {
+                _selectedDebugDistrictIndex = 0;
+            }
+
+            return districtOptions[_selectedDebugDistrictIndex];
         }
 
         private void CancelPendingTransferForDebug()
