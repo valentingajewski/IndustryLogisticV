@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Xml.Linq;
 using GTA.Math;
 using LSOL.Domain;
 
@@ -22,26 +23,23 @@ namespace LSOL.Config
 
         public List<string> ValidationMessages { get; }
 
-        public static string ResolveMissionDirectory(string configPath)
+        public static string ResolveMissionDirectory(string configDirectory)
         {
-            var configDirectory = string.IsNullOrWhiteSpace(configPath)
-                ? string.Empty
-                : Path.GetDirectoryName(configPath) ?? string.Empty;
             return string.IsNullOrWhiteSpace(configDirectory)
                 ? string.Empty
                 : Path.Combine(configDirectory, "missions");
         }
 
-        public static SpecialMissionCatalog Load(string configPath)
+        public static SpecialMissionCatalog Load(string configDirectory)
         {
             var catalog = new SpecialMissionCatalog();
-            var missionDirectory = ResolveMissionDirectory(configPath);
+            var missionDirectory = ResolveMissionDirectory(configDirectory);
             if (string.IsNullOrWhiteSpace(missionDirectory) || !Directory.Exists(missionDirectory))
             {
                 return catalog;
             }
 
-            var files = Directory.GetFiles(missionDirectory, "*.ini", SearchOption.TopDirectoryOnly)
+            var files = Directory.GetFiles(missionDirectory, "*.xml", SearchOption.TopDirectoryOnly)
                 .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
@@ -60,25 +58,44 @@ namespace LSOL.Config
                 return;
             }
 
-            var ini = IniFile.Load(filePath);
+            XDocument document;
+            try
+            {
+                document = XDocument.Load(filePath, LoadOptions.None);
+            }
+            catch (Exception ex)
+            {
+                catalog.ValidationMessages.Add(string.Format("{0}: could not load mission XML: {1}", Path.GetFileName(filePath), ex.Message));
+                return;
+            }
+
+            if (document.Root == null)
+            {
+                catalog.ValidationMessages.Add(string.Format("{0}: mission XML is empty.", Path.GetFileName(filePath)));
+                return;
+            }
+
+            var mission = document.Root;
             var definition = new SpecialMissionDefinition
             {
-                Id = NormalizeId(ini.GetString("Meta", "Id", Path.GetFileNameWithoutExtension(filePath))),
-                Type = ParseMissionType(ini.GetString("Meta", "Type", string.Empty)),
-                Category = ini.GetString("Meta", "Category", "Special Mission"),
-                Name = ini.GetString("Meta", "Name", Path.GetFileNameWithoutExtension(filePath)),
-                Summary = ini.GetString("Meta", "Summary", string.Empty),
-                Description = ini.GetString("Meta", "Description", string.Empty),
-                Reward = Math.Max(0f, ini.GetFloat("Meta", "Reward", 0f)),
-                Repeatable = ini.GetBool("Meta", "Repeatable", true),
-                RepeatCooldownInGameMinutes = ParseRepeatCooldownInGameMinutes(ini),
-                RepeatCooldownInGameMonths = Math.Max(0, ParseInt(ini.GetString("Meta", "RepeatCooldownInGameMonths", string.Empty), 0)),
+                Id = NormalizeId(ReadAttribute(mission, "id", Path.GetFileNameWithoutExtension(filePath))),
+                Type = ParseMissionType(ReadAttribute(mission, "type")),
+                Category = ReadAttribute(mission, "category", "Special Mission"),
+                Name = ReadAttribute(mission, "name", Path.GetFileNameWithoutExtension(filePath)),
+                Summary = ReadAttribute(mission, "summary"),
+                Description = ReadAttribute(mission, "description"),
+                Reward = Math.Max(0f, ReadFloatAttribute(mission, "reward", 0f)),
+                Repeatable = ReadBoolAttribute(mission, "repeatable", true),
+                RepeatCooldownInGameMinutes = ParseRepeatCooldownInGameMinutes(mission),
+                RepeatCooldownInGameMonths = Math.Max(0, ReadIntAttribute(mission, "repeatCooldownInGameMonths", 0)),
+                AvailabilityDelayInGameMinutes = ParseAvailabilityDelayInGameMinutes(mission),
+                AvailabilityDelayInGameMonths = Math.Max(0, ReadIntAttribute(mission, "availabilityDelayInGameMonths", 0)),
             };
 
-            PopulateUnlockRequirement(ini, definition.Unlock);
-            PopulateVehicleSpawns(ini, definition);
-            PopulatePropSpawns(ini, definition);
-            PopulateZones(ini, definition);
+            PopulateUnlockRequirement(mission.Element("Unlock"), definition.Unlock);
+            PopulateVehicleSpawns(mission.Element("Vehicles"), definition);
+            PopulatePropSpawns(mission.Element("Props"), definition);
+            PopulateZones(mission.Element("Zones"), definition);
             ValidateDefinition(filePath, definition, catalog.ValidationMessages);
 
             if (!string.IsNullOrWhiteSpace(definition.Id))
@@ -87,18 +104,26 @@ namespace LSOL.Config
             }
         }
 
-        private static void PopulateUnlockRequirement(IniFile ini, SpecialMissionUnlockRequirement unlock)
+        private static void PopulateUnlockRequirement(XElement element, SpecialMissionUnlockRequirement unlock)
         {
-            if (ini == null || unlock == null)
+            if (element == null || unlock == null)
             {
                 return;
             }
 
-            unlock.MinInfluenceRatio = Clamp01(ini.GetFloat("Unlock", "MinInfluenceRatio", 0f));
-            var districts = ini.GetStringList("Unlock", "Districts");
-            for (int i = 0; i < districts.Count; i++)
+            unlock.MinInfluenceRatio = Clamp01(ReadFloatAttribute(element, "minInfluenceRatio", 0f));
+
+            foreach (var district in SplitCsv(ReadAttribute(element, "districts")))
             {
-                var districtName = districts[i];
+                if (!unlock.DistrictNames.Contains(district, StringComparer.OrdinalIgnoreCase))
+                {
+                    unlock.DistrictNames.Add(district);
+                }
+            }
+
+            foreach (var district in element.Elements("District"))
+            {
+                var districtName = ReadAttribute(district, "name");
                 if (string.IsNullOrWhiteSpace(districtName))
                 {
                     continue;
@@ -111,21 +136,16 @@ namespace LSOL.Config
             }
         }
 
-        private static void PopulateVehicleSpawns(IniFile ini, SpecialMissionDefinition definition)
+        private static void PopulateVehicleSpawns(XElement element, SpecialMissionDefinition definition)
         {
-            if (ini == null || definition == null)
+            if (element == null || definition == null)
             {
                 return;
             }
 
-            foreach (var section in ini.Sections)
+            foreach (var vehicle in element.Elements("Vehicle"))
             {
-                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("Vehicle.", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var roleId = section.Substring("Vehicle.".Length).Trim();
+                var roleId = ReadAttribute(vehicle, "role");
                 if (string.IsNullOrWhiteSpace(roleId))
                 {
                     continue;
@@ -134,29 +154,24 @@ namespace LSOL.Config
                 definition.Vehicles[roleId] = new SpecialMissionVehicleSpawn
                 {
                     RoleId = roleId,
-                    ModelName = ini.GetString(section, "Model", string.Empty),
-                    Position = ini.GetVector3(section, "Position", Vector3.Zero),
-                    Heading = ini.GetFloat(section, "Heading", 0f),
-                    Required = ini.GetBool(section, "Required", true),
+                    ModelName = ReadAttribute(vehicle, "model"),
+                    Position = ReadVector3(vehicle, Vector3.Zero),
+                    Heading = ReadFloatAttribute(vehicle, "heading", 0f),
+                    Required = ReadBoolAttribute(vehicle, "required", true),
                 };
             }
         }
 
-        private static void PopulatePropSpawns(IniFile ini, SpecialMissionDefinition definition)
+        private static void PopulatePropSpawns(XElement element, SpecialMissionDefinition definition)
         {
-            if (ini == null || definition == null)
+            if (element == null || definition == null)
             {
                 return;
             }
 
-            foreach (var section in ini.Sections)
+            foreach (var prop in element.Elements("Prop"))
             {
-                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("Prop.", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var roleId = section.Substring("Prop.".Length).Trim();
+                var roleId = ReadAttribute(prop, "role");
                 if (string.IsNullOrWhiteSpace(roleId))
                 {
                     continue;
@@ -165,33 +180,28 @@ namespace LSOL.Config
                 definition.Props[roleId] = new SpecialMissionPropSpawn
                 {
                     RoleId = roleId,
-                    ModelName = ini.GetString(section, "Model", string.Empty),
-                    ModelHash = ParseInt(ini.GetString(section, "ModelHash", string.Empty), 0),
-                    Position = ini.GetVector3(section, "Position", Vector3.Zero),
-                    Heading = ini.GetFloat(section, "Heading", 0f),
-                    AttachTargetRoleId = ini.GetString(section, "AttachTargetRole", string.Empty),
-                    AttachOffset = ini.GetVector3(section, "AttachOffset", Vector3.Zero),
-                    AttachRotation = ini.GetVector3(section, "AttachRotation", Vector3.Zero),
-                    Required = ini.GetBool(section, "Required", true),
+                    ModelName = ReadAttribute(prop, "model"),
+                    ModelHash = ReadIntAttribute(prop, "modelHash", 0),
+                    Position = ReadVector3(prop, Vector3.Zero),
+                    Heading = ReadFloatAttribute(prop, "heading", 0f),
+                    AttachTargetRoleId = ReadAttribute(prop, "attachTargetRole"),
+                    AttachOffset = ReadVector3(ReadAttribute(prop, "attachOffset"), Vector3.Zero),
+                    AttachRotation = ReadVector3(ReadAttribute(prop, "attachRotation"), Vector3.Zero),
+                    Required = ReadBoolAttribute(prop, "required", true),
                 };
             }
         }
 
-        private static void PopulateZones(IniFile ini, SpecialMissionDefinition definition)
+        private static void PopulateZones(XElement element, SpecialMissionDefinition definition)
         {
-            if (ini == null || definition == null)
+            if (element == null || definition == null)
             {
                 return;
             }
 
-            foreach (var section in ini.Sections)
+            foreach (var zone in element.Elements("Zone"))
             {
-                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("Zone.", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var zoneId = section.Substring("Zone.".Length).Trim();
+                var zoneId = ReadAttribute(zone, "id");
                 if (string.IsNullOrWhiteSpace(zoneId))
                 {
                     continue;
@@ -200,8 +210,8 @@ namespace LSOL.Config
                 definition.Zones[zoneId] = new SpecialMissionZone
                 {
                     ZoneId = zoneId,
-                    Position = ini.GetVector3(section, "Position", Vector3.Zero),
-                    Radius = Math.Max(1f, ini.GetFloat(section, "Radius", 8f)),
+                    Position = ReadVector3(zone, Vector3.Zero),
+                    Radius = Math.Max(1f, ReadFloatAttribute(zone, "radius", 8f)),
                 };
             }
         }
@@ -281,20 +291,36 @@ namespace LSOL.Config
                 : raw.Trim();
         }
 
-        private static int ParseRepeatCooldownInGameMinutes(IniFile ini)
+        private static int ParseRepeatCooldownInGameMinutes(XElement mission)
         {
-            if (ini == null)
+            if (mission == null)
             {
                 return 0;
             }
 
-            var cooldownWeeks = Math.Max(0f, ini.GetFloat("Meta", "RepeatCooldownInGameWeeks", 0f));
+            var cooldownWeeks = Math.Max(0f, ReadFloatAttribute(mission, "repeatCooldownInGameWeeks", 0f));
             if (cooldownWeeks > 0.001f)
             {
                 return Math.Max(0, (int)Math.Round(cooldownWeeks * InGameMinutesPerWeek));
             }
 
-            return Math.Max(0, ParseInt(ini.GetString("Meta", "RepeatCooldownInGameMinutes", string.Empty), 0));
+            return Math.Max(0, ReadIntAttribute(mission, "repeatCooldownInGameMinutes", 0));
+        }
+
+        private static int ParseAvailabilityDelayInGameMinutes(XElement mission)
+        {
+            if (mission == null)
+            {
+                return 0;
+            }
+
+            var availabilityWeeks = Math.Max(0f, ReadFloatAttribute(mission, "availabilityDelayInGameWeeks", 0f));
+            if (availabilityWeeks > 0.001f)
+            {
+                return Math.Max(0, (int)Math.Round(availabilityWeeks * InGameMinutesPerWeek));
+            }
+
+            return Math.Max(0, ReadIntAttribute(mission, "availabilityDelayInGameMinutes", 0));
         }
 
         private static SpecialMissionType ParseMissionType(string raw)
@@ -329,6 +355,88 @@ namespace LSOL.Config
             return int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)
                 ? parsed
                 : defaultValue;
+        }
+
+        private static string ReadAttribute(XElement element, string name, string fallback = "")
+        {
+            return element != null && element.Attribute(name) != null
+                ? (element.Attribute(name).Value ?? string.Empty).Trim()
+                : fallback;
+        }
+
+        private static float ReadFloatAttribute(XElement element, string name, float fallback)
+        {
+            float parsed;
+            return float.TryParse(ReadAttribute(element, name), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)
+                || float.TryParse(ReadAttribute(element, name), NumberStyles.Float, CultureInfo.CurrentCulture, out parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private static int ReadIntAttribute(XElement element, string name, int fallback)
+        {
+            int parsed;
+            return int.TryParse(ReadAttribute(element, name), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private static bool ReadBoolAttribute(XElement element, string name, bool fallback)
+        {
+            bool parsed;
+            return bool.TryParse(ReadAttribute(element, name), out parsed)
+                ? parsed
+                : fallback;
+        }
+
+        private static Vector3 ReadVector3(XElement element, Vector3 fallback)
+        {
+            float x;
+            float y;
+            float z;
+            if (element == null
+                || !float.TryParse(ReadAttribute(element, "x"), NumberStyles.Float, CultureInfo.InvariantCulture, out x)
+                || !float.TryParse(ReadAttribute(element, "y"), NumberStyles.Float, CultureInfo.InvariantCulture, out y)
+                || !float.TryParse(ReadAttribute(element, "z"), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
+            {
+                return fallback;
+            }
+
+            return new Vector3(x, y, z);
+        }
+
+        private static Vector3 ReadVector3(string raw, Vector3 fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            var parts = raw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3)
+            {
+                return fallback;
+            }
+
+            float x;
+            float y;
+            float z;
+            if (!float.TryParse(parts[0].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out x)
+                || !float.TryParse(parts[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out y)
+                || !float.TryParse(parts[2].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out z))
+            {
+                return fallback;
+            }
+
+            return new Vector3(x, y, z);
+        }
+
+        private static IEnumerable<string> SplitCsv(string raw)
+        {
+            return (raw ?? string.Empty)
+                .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(value => (value ?? string.Empty).Trim())
+                .Where(value => !string.IsNullOrWhiteSpace(value));
         }
 
         private static float Clamp01(float value)

@@ -10,16 +10,16 @@ namespace LSOL.UI
 {
     internal static class TabletUiHelpers
     {
-        private static readonly Color InfoIdle = Color.FromArgb(170, 46, 60, 76);
-        private static readonly Color InfoActive = Color.FromArgb(205, 92, 124, 152);
-        private static readonly Color ActionIdle = Color.FromArgb(170, 50, 64, 50);
-        private static readonly Color ActionActive = Color.FromArgb(205, 96, 132, 102);
-        private static readonly Color WarningIdle = Color.FromArgb(178, 78, 54, 42);
-        private static readonly Color WarningActive = Color.FromArgb(208, 136, 96, 84);
-        private static readonly Color NavigationIdle = Color.FromArgb(170, 56, 45, 61);
-        private static readonly Color NavigationActive = Color.FromArgb(210, 132, 86, 158);
-        private static readonly Color SelectorIdle = Color.FromArgb(178, 54, 66, 96);
-        private static readonly Color SelectorActive = Color.FromArgb(222, 122, 166, 228);
+        private static readonly Color InfoIdle = Color.FromArgb(170, 38, 42, 46);
+        private static readonly Color InfoActive = Color.FromArgb(205, 82, 94, 100);
+        private static readonly Color ActionIdle = Color.FromArgb(170, 42, 48, 42);
+        private static readonly Color ActionActive = Color.FromArgb(205, 88, 104, 90);
+        private static readonly Color WarningIdle = Color.FromArgb(178, 64, 48, 40);
+        private static readonly Color WarningActive = Color.FromArgb(208, 118, 88, 74);
+        private static readonly Color NavigationIdle = Color.FromArgb(170, 48, 42, 52);
+        private static readonly Color NavigationActive = Color.FromArgb(210, 106, 92, 126);
+        private static readonly Color SelectorIdle = Color.FromArgb(178, 44, 50, 60);
+        private static readonly Color SelectorActive = Color.FromArgb(222, 98, 112, 132);
 
         public static MenuItem CreateInfoItem(string caption, string detail, float? progress = null)
         {
@@ -347,6 +347,7 @@ namespace LSOL.UI
             }
 
             return context.Snapshot.IndustrySummaries
+                .Concat(context.Snapshot.ConstructionSiteSummaries)
                 .Concat(context.Snapshot.WarehouseSummaries)
                 .Concat(context.Snapshot.StoreSummaries)
                 .Concat(context.Snapshot.GasStationSummaries)
@@ -554,28 +555,22 @@ namespace LSOL.UI
         public TabletShellPage BuildPage(TabletShellContext context, TabletRoute route)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var dispatchOverview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
             var items = new List<MenuItem>();
-            var totalTrackedSites = snapshot.IndustrySummaries.Count + snapshot.WarehouseSummaries.Count + snapshot.StoreSummaries.Count + snapshot.GasStationSummaries.Count;
+            var totalTrackedSites = snapshot.IndustrySummaries.Count + snapshot.ConstructionSiteSummaries.Count + snapshot.WarehouseSummaries.Count + snapshot.StoreSummaries.Count + snapshot.GasStationSummaries.Count;
             var warehouseCount = snapshot.WarehouseSummaries.Count;
             var industryCount = snapshot.IndustrySummaries.Count;
-            var permitSiteCount = snapshot.IndustrySummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit);
-            var unlockedPermitCount = snapshot.IndustrySummaries.Count(summary => summary != null && summary.HasContractorPermitForGameplay);
-            var statusLine = snapshot.TransferInProgress
-                ? "Transfer active"
-                : !string.IsNullOrWhiteSpace(snapshot.StatusBanner)
-                    ? snapshot.StatusBanner
-                    : !string.IsNullOrWhiteSpace(snapshot.NearestIndustryProductionWarning)
-                        ? snapshot.NearestIndustryProductionWarning
-                        : snapshot.HasCargoVehicle
-                            ? TabletUiHelpers.BuildCargoSummary(snapshot)
-                            : "No cargo vehicle linked.";
+            var constructionSiteCount = snapshot.ConstructionSiteSummaries.Count;
+            var permitSummaries = snapshot.IndustrySummaries.Concat(snapshot.ConstructionSiteSummaries).ToList();
+            var permitSiteCount = permitSummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit);
+            var unlockedPermitCount = permitSummaries.Count(summary => summary != null && summary.HasContractorPermitForGameplay);
             var operationsHeadline = snapshot.HasNearestIndustry
                 ? string.Format("{0} | {1:0.0}m", snapshot.NearestIndustryName, snapshot.NearestIndustryDistance)
                 : "No nearby site";
             var operationsDetail = string.Format(
                 "{0}\n{1}",
                 operationsHeadline,
-                statusLine);
+                BuildHomeOperationsStatus(snapshot));
             var marketDetail = snapshot.MarketHighlights != null && snapshot.MarketHighlights.Count > 0
                 ? string.Format(
                     "{0} ${1:0}/t\n{2} market highlights cached",
@@ -604,7 +599,7 @@ namespace LSOL.UI
                     ? (availableMissionCount > 0
                         ? string.Format("{0} contracts ready\n{1} community missions loaded", availableMissionCount, missionListings.Count)
                         : string.Format("{0} community missions loaded\nGrow district influence to unlock more contracts.", missionListings.Count))
-                    : "No mission packs loaded.\nAdd INI files to the missions folder next to LSOL.ini.";
+                    : "No mission packs loaded.\nAdd XML mission packs to scripts/LSOL_Config/missions.";
             var siteAction = snapshot.HasNearestIndustry
                 ? (snapshot.CanInteractWithNearestIndustry
                     ? (Action)(() => context.Push(TabletAppIds.Industry, "main", snapshot.NearestIndustry))
@@ -613,74 +608,100 @@ namespace LSOL.UI
 
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Company",
-                string.Format("{0}\n{1} sites | {2} NPC routes", TabletUiHelpers.BuildBalanceChrome(snapshot), totalTrackedSites, snapshot.ActiveNpcRouteCount),
+                string.Format("{0}\n{1} sites | {2} hired | {3} ambient", TabletUiHelpers.BuildBalanceChrome(snapshot), totalTrackedSites, snapshot.ActiveNpcRouteCount, dispatchOverview.ActiveJobCount),
                 () => context.Push(TabletAppIds.Network, "root"),
-                Color.FromArgb(176, 30, 46, 74),
-                Color.FromArgb(220, 90, 142, 204),
+                Color.FromArgb(176, 28, 32, 38),
+                Color.FromArgb(220, 88, 106, 118),
                 null,
                 "HQ"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Operations",
                 operationsDetail,
                 siteAction,
-                Color.FromArgb(176, 42, 54, 80),
-                Color.FromArgb(220, 102, 132, 188),
+                Color.FromArgb(176, 34, 38, 42),
+                Color.FromArgb(220, 96, 108, 118),
                 null,
                 "LIVE"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Context",
                 "Cargo vehicle telemetry\nNearby industry context.",
                 () => context.Push(TabletAppIds.Context, "root"),
-                Color.FromArgb(184, 36, 60, 94),
-                Color.FromArgb(226, 102, 162, 236),
+                Color.FromArgb(184, 34, 44, 54),
+                Color.FromArgb(226, 92, 114, 128),
                 null,
                 "CTX"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Industries",
                 string.Format("{0} tracked production sites", industryCount),
                 () => context.Push(TabletAppIds.Network, "industries"),
-                Color.FromArgb(184, 46, 82, 72),
-                Color.FromArgb(226, 108, 186, 160),
+                Color.FromArgb(184, 40, 52, 46),
+                Color.FromArgb(226, 98, 124, 108),
                 null,
                 "IND"));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Construction",
+                constructionSiteCount > 0
+                    ? string.Format("{0} tracked construction delivery sites", constructionSiteCount)
+                    : "No construction delivery sites are currently configured.",
+                () => context.Push(TabletAppIds.Network, "construction"),
+                Color.FromArgb(184, 58, 50, 40),
+                Color.FromArgb(226, 124, 104, 84),
+                null,
+                "CON"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Permits",
                 permitDetail,
                 () => context.Push(TabletAppIds.Network, "permits"),
-                Color.FromArgb(188, 92, 64, 34),
-                Color.FromArgb(228, 214, 164, 92),
+                Color.FromArgb(188, 70, 56, 38),
+                Color.FromArgb(228, 154, 126, 82),
                 null,
                 "PER"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Stores",
                 string.Format("{0} retail delivery locations", snapshot.StoreSummaries.Count),
                 () => context.Push(TabletAppIds.Network, "stores"),
-                Color.FromArgb(188, 62, 72, 92),
-                Color.FromArgb(228, 132, 166, 208),
+                Color.FromArgb(188, 46, 52, 60),
+                Color.FromArgb(228, 104, 118, 132),
                 null,
                 "STR"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Stations",
                 string.Format("{0} fuel service stops", snapshot.GasStationSummaries.Count),
                 () => context.Push(TabletAppIds.Network, "stations"),
-                Color.FromArgb(188, 42, 86, 92),
-                Color.FromArgb(228, 92, 186, 194),
+                Color.FromArgb(188, 36, 56, 58),
+                Color.FromArgb(228, 88, 128, 130),
                 null,
                 "GAS"));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Services",
+                "Refuel or repair the active company vehicle from the hub.",
+                () => context.Push(TabletAppIds.Network, "services"),
+                Color.FromArgb(188, 44, 48, 52),
+                Color.FromArgb(228, 102, 112, 120),
+                null,
+                "SRV"));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Dispatch",
+                string.Format("{0}\n{1}", dispatchOverview.DispatchHeadline ?? "World dispatch idle", dispatchOverview.DispatchDetail ?? "No priority bias active."),
+                () => context.Push(TabletAppIds.Network, "dispatch"),
+                Color.FromArgb(188, 52, 46, 58),
+                Color.FromArgb(228, 118, 108, 134),
+                null,
+                "DSP"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Market",
                 marketDetail,
                 () => context.Push(TabletAppIds.Network, "market"),
-                Color.FromArgb(188, 74, 48, 86),
-                Color.FromArgb(228, 174, 120, 206),
+                Color.FromArgb(188, 54, 44, 58),
+                Color.FromArgb(228, 132, 110, 144),
                 null,
                 "MKT"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Analytics",
                 "Profit, market, site, district, and NPC trend surfaces.",
                 () => context.Push(TabletAppIds.Analytics, "root"),
-                Color.FromArgb(186, 62, 72, 108),
-                Color.FromArgb(228, 144, 170, 234),
+                Color.FromArgb(186, 48, 52, 66),
+                Color.FromArgb(228, 112, 124, 148),
                 null,
                 "ANA"));
             items.Add(TabletUiHelpers.CreateActionItem(
@@ -695,8 +716,8 @@ namespace LSOL.UI
                 snapshot.HasNearestIndustry ? "Site" : "Sites",
                 siteDetail,
                 siteAction,
-                Color.FromArgb(188, 54, 94, 74),
-                Color.FromArgb(228, 112, 196, 152),
+                Color.FromArgb(188, 44, 60, 50),
+                Color.FromArgb(228, 100, 136, 112),
                 null,
                 "SITE"));
             items.Add(TabletUiHelpers.CreateActionItem(
@@ -705,8 +726,8 @@ namespace LSOL.UI
                     ? string.Format("{0} storage sites | {1} support-enabled", warehouseCount, snapshot.SecuredSupportSiteCount)
                     : "No warehouse sites are configured.",
                 () => context.Push(TabletAppIds.Network, "warehouses"),
-                Color.FromArgb(188, 58, 84, 110),
-                Color.FromArgb(228, 126, 178, 232),
+                Color.FromArgb(188, 46, 56, 64),
+                Color.FromArgb(228, 110, 126, 142),
                 null,
                 "WH"));
             items.Add(TabletUiHelpers.CreateActionItem(
@@ -717,24 +738,24 @@ namespace LSOL.UI
                     snapshot.ActiveCorridorCount,
                     snapshot.SecuredSupportSiteCount),
                 _openCompanyMap,
-                Color.FromArgb(184, 48, 70, 96),
-                Color.FromArgb(224, 118, 168, 220),
+                Color.FromArgb(184, 40, 50, 62),
+                Color.FromArgb(224, 96, 116, 136),
                 null,
                 "FPT"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "District View",
                 "Inspect district influence, reputation, and coverage.",
                 _openDistrictView,
-                Color.FromArgb(184, 64, 82, 78),
-                Color.FromArgb(224, 134, 184, 170),
+                Color.FromArgb(184, 52, 60, 56),
+                Color.FromArgb(224, 110, 132, 122),
                 null,
                 "DST"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Depot / Yard",
                 "Lease or buy support sites and grow local crews.",
                 _openDepotView,
-                Color.FromArgb(184, 78, 62, 78),
-                Color.FromArgb(224, 194, 138, 186),
+                Color.FromArgb(184, 58, 48, 60),
+                Color.FromArgb(224, 134, 108, 130),
                 null,
                 "DPT"));
             items.Add(TabletUiHelpers.CreateNavigationItem(
@@ -764,6 +785,44 @@ namespace LSOL.UI
                     value => ModFormatting.FormatMoney(value)),
                 Items = items,
             };
+        }
+
+        private static string BuildHomeOperationsStatus(TabletStateSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                return "No cargo vehicle linked.";
+            }
+
+            if (snapshot.TransferInProgress)
+            {
+                return "Transfer active";
+            }
+
+            if (!string.IsNullOrWhiteSpace(snapshot.StatusBanner))
+            {
+                return snapshot.StatusBanner;
+            }
+
+            if (!string.IsNullOrWhiteSpace(snapshot.NearestIndustryProductionWarning))
+            {
+                return snapshot.NearestIndustryProductionWarning;
+            }
+
+            if (!snapshot.HasCargoVehicle)
+            {
+                return "No cargo vehicle linked.";
+            }
+
+            var cargoLabel = snapshot.CargoIsEmpty
+                ? "Empty"
+                : string.Format("{0} {1:0.0}/{2:0.0}t", snapshot.CargoCommodity, snapshot.CargoWeightTons, snapshot.CargoCapacityTons);
+            if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
+            {
+                return cargoLabel;
+            }
+
+            return string.Format("{0} | Fuel {1:0}/{2:0}L", cargoLabel, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
         }
     }
 
@@ -801,7 +860,7 @@ namespace LSOL.UI
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     "No mission packs loaded",
-                    "Create or copy mission INI files into the missions folder next to LSOL.ini to publish community contracts."));
+                    "Create or copy mission XML files into scripts/LSOL_Config/missions to publish community contracts."));
             }
             else
             {
@@ -1197,13 +1256,17 @@ namespace LSOL.UI
         private readonly Func<Industry, string> _purchasePermit;
         private readonly Action<Industry> _addGpsRoute;
         private readonly Action _clearGpsRoute;
+        private readonly Action _requestRefuelService;
+        private readonly Action _requestRepairService;
 
-        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute)
+        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService)
         {
             _interactionDistance = interactionDistance;
             _purchasePermit = purchasePermit;
             _addGpsRoute = addGpsRoute;
             _clearGpsRoute = clearGpsRoute;
+            _requestRefuelService = requestRefuelService;
+            _requestRepairService = requestRepairService;
         }
 
         public string AppId
@@ -1217,10 +1280,16 @@ namespace LSOL.UI
             {
                 case "industries":
                     return BuildIndustryListPage(context);
+                case "construction":
+                    return BuildLocationListPage(context, "Construction Sites", "Delivery sinks and build-site detail pages", context.Snapshot.ConstructionSiteSummaries, true, false);
+                case "dispatch":
+                    return BuildDispatchPage(context);
                 case "stores":
                     return BuildLocationListPage(context, "Stores", "Retail demand, storage, and detail pages", context.Snapshot.StoreSummaries, true, false);
                 case "stations":
                     return BuildLocationListPage(context, "Gas Stations", "Fuel storage coverage across service stations", context.Snapshot.GasStationSummaries, true, false);
+                case "services":
+                    return BuildServicesPage(context);
                 case "market":
                     return BuildMarketPage(context);
                 case "prices":
@@ -1243,6 +1312,8 @@ namespace LSOL.UI
         private static TabletShellPage BuildRootPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var dispatchOverview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
+            var permitSummaries = snapshot.IndustrySummaries.Concat(snapshot.ConstructionSiteSummaries).ToList();
             var items = new List<MenuItem>();
             if (!string.IsNullOrWhiteSpace(snapshot.StatusBanner))
             {
@@ -1254,10 +1325,14 @@ namespace LSOL.UI
                 string.Format("{0} tracked industry sites with permits, warnings, and detail pages.", snapshot.IndustrySummaries.Count),
                 () => context.Push(TabletAppIds.Network, "industries")));
             items.Add(TabletUiHelpers.CreateActionItem(
+                "Construction Sites",
+                string.Format("{0} delivery and build sink locations.", snapshot.ConstructionSiteSummaries.Count),
+                () => context.Push(TabletAppIds.Network, "construction")));
+            items.Add(TabletUiHelpers.CreateActionItem(
                 "Contractor Permits",
                 string.Format(
-                    "{0} industries require contractor access.",
-                    snapshot.IndustrySummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit)),
+                    "{0} tracked sites require contractor access.",
+                    permitSummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit)),
                 () => context.Push(TabletAppIds.Network, "permits")));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Stores",
@@ -1274,6 +1349,14 @@ namespace LSOL.UI
                     snapshot.WarehouseSummaries.Count),
                 () => context.Push(TabletAppIds.Network, "warehouses")));
             items.Add(TabletUiHelpers.CreateActionItem(
+                "Dispatch",
+                string.Format("{0}\n{1}", dispatchOverview.DispatchHeadline ?? "World dispatch idle", dispatchOverview.DispatchDetail ?? "No priority bias active."),
+                () => context.Push(TabletAppIds.Network, "dispatch")));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Services",
+                "Refuel or repair the active company vehicle from the hub.",
+                () => context.Push(TabletAppIds.Network, "services")));
+            items.Add(TabletUiHelpers.CreateActionItem(
                 "Market",
                 TabletUiHelpers.BuildMarketSummary(snapshot),
                 () => context.Push(TabletAppIds.Network, "market")));
@@ -1282,7 +1365,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Network",
-                Subtitle = "Directory, permits, stores, stations, and price board",
+                Subtitle = "Directory, construction, permits, services, and price board",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.84f,
                 MaxVisibleItems = 6,
@@ -1324,6 +1407,156 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.94f,
                 MaxVisibleItems = 5,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildServicesPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateActionItem(
+                    "Refuel Current Vehicle",
+                    "Immediate support refuel for the currently active company truck while ambient dispatch stabilizes regional service demand.",
+                    () => _requestRefuelService?.Invoke(),
+                    iconLabel: "FUEL"),
+                TabletUiHelpers.CreateActionItem(
+                    "Repair Current Vehicle",
+                    "Restore the currently active vehicle and trailer to working order from the hub.",
+                    () => _requestRepairService?.Invoke(),
+                    iconLabel: "FIX"),
+                TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"),
+            };
+
+            return new TabletShellPage
+            {
+                Title = "Services",
+                Subtitle = "Remote refuel and repair actions for the active company vehicle",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.88f,
+                MaxVisibleItems = 5,
+                Items = items,
+            };
+        }
+
+        private static TabletShellPage BuildDispatchPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var overview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
+            var jobs = context.StateStore.GetWorldDispatchJobs()
+                .OrderByDescending(job => job != null && job.IsSpotOpportunity)
+                .ThenByDescending(job => job != null && job.IsRivalJob)
+                .ThenBy(job => job != null ? job.RemainingInGameMinutes : int.MaxValue)
+                .ToList();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    overview.DispatchHeadline ?? "World dispatch idle",
+                    overview.DispatchDetail ?? "No priority bias active."),
+                TabletUiHelpers.CreateSelectorItem(
+                    () => string.Format("Policy: < {0} >", FormatWorldDispatchPolicy(overview.DispatchPolicy)),
+                    () => "Left/right changes whether ambient freight chases overflow, shortages, or the highest-value lanes.",
+                    () =>
+                    {
+                        context.StateStore.CycleWorldDispatchPolicy(-1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleWorldDispatchPolicy(1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleWorldDispatchPolicy(1);
+                        context.Refresh();
+                    },
+                    "POL"),
+                TabletUiHelpers.CreateSelectorItem(
+                    () => string.Format("Commodity: < {0} >", string.IsNullOrWhiteSpace((context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview()).PriorityCommodity) ? "Any" : (context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview()).PriorityCommodity),
+                    () => "Bias ambient dispatch toward one resource without disabling the rest of the network.",
+                    () =>
+                    {
+                        context.StateStore.CycleWorldPriorityCommodity(-1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleWorldPriorityCommodity(1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleWorldPriorityCommodity(1);
+                        context.Refresh();
+                    },
+                    "COM"),
+                TabletUiHelpers.CreateSelectorItem(
+                    () => string.Format("District: < {0} >", string.IsNullOrWhiteSpace((context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview()).PriorityDistrict) ? "All" : (context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview()).PriorityDistrict),
+                    () => "Bias dispatch toward a district when you want support fleets to lean into one corridor cluster.",
+                    () =>
+                    {
+                        context.StateStore.CycleWorldPriorityDistrict(-1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleWorldPriorityDistrict(1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleWorldPriorityDistrict(1);
+                        context.Refresh();
+                    },
+                    "DST"),
+                TabletUiHelpers.CreateActionItem(
+                    overview.PremiumDispatchEnabled ? "Premium Dispatch: ON" : "Premium Dispatch: OFF",
+                    "When enabled, jobs matching your current policy or manual priority selections dispatch faster but charge a premium service fee.",
+                    () =>
+                    {
+                        context.StateStore.TogglePremiumDispatch();
+                        context.Refresh();
+                    },
+                    iconLabel: "PRM"),
+            };
+
+            if (jobs.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem("No ambient jobs queued", "Overflow rescues, shortage runs, rival hauls, and spot market windows will appear here as the economy shifts."));
+            }
+            else
+            {
+                for (int i = 0; i < jobs.Count; i++)
+                {
+                    var job = jobs[i];
+                    var label = job.Label;
+                    if (job.IsSpotOpportunity)
+                    {
+                        label += " ~g~[SPOT]~s~";
+                    }
+                    else if (job.IsRivalJob)
+                    {
+                        label += " ~r~[RIVAL]~s~";
+                    }
+
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        label,
+                        string.Format("{0} | {1:0.0}t | {2}m remaining", job.Detail, job.Tons, Math.Max(0, job.RemainingInGameMinutes))));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Dispatch",
+                Subtitle = "Ambient freight jobs, rival traffic, and player priority controls",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
+                WidthScale = 0.94f,
+                MaxVisibleItems = 6,
                 Items = items,
             };
         }
@@ -1404,6 +1637,21 @@ namespace LSOL.UI
                 },
                 Items = items,
             };
+        }
+
+        private static string FormatWorldDispatchPolicy(NpcWorldDispatchPolicy policy)
+        {
+            switch (policy)
+            {
+                case NpcWorldDispatchPolicy.OverflowRescue:
+                    return "Overflow Rescue";
+                case NpcWorldDispatchPolicy.ShortageRelief:
+                    return "Shortage Relief";
+                case NpcWorldDispatchPolicy.MarketPriority:
+                    return "Market Priority";
+                default:
+                    return "Balanced";
+            }
         }
 
         private static TabletShellPage BuildResourcePricesPage(TabletShellContext context)
@@ -1566,12 +1814,13 @@ namespace LSOL.UI
         private TabletShellPage BuildPermitPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var permitSummaries = snapshot.IndustrySummaries.Concat(snapshot.ConstructionSiteSummaries).ToList();
             var items = new List<MenuItem>();
-            for (int i = 0; i < snapshot.IndustrySummaries.Count; i++)
+            for (int i = 0; i < permitSummaries.Count; i++)
             {
-                var summary = snapshot.IndustrySummaries[i];
+                var summary = permitSummaries[i];
                 var detail = !summary.RequiresContractorPermit
-                    ? "~g~OPEN~s~ | No permit required for this industry."
+                    ? "~g~OPEN~s~ | No permit required for this site."
                     : string.Format(
                         "{0} | Permit {1}{2}",
                         summary.HasContractorPermitForGameplay ? "~g~PERMIT~s~" : "~r~LOCKED~s~",
@@ -1764,14 +2013,18 @@ namespace LSOL.UI
 
             var title = industry.IsGasStation
                 ? "Petrol Station"
-                : (industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : (industry.IsStore ? "Store" : "Industry"));
+                : (industry.SiteRole == SiteRole.Warehouse
+                    ? "Warehouse"
+                    : (industry.SiteRole == SiteRole.ConstructionSiteSink ? "Construction Site" : (industry.IsStore ? "Store" : "Industry")));
             var statisticsDetail = industry.SiteRole == SiteRole.Warehouse
                 ? "Open storage, accepted resources, and purchase status for this warehouse."
                 : (industry.IsGasStation
                     ? "Open fuel-site storage and delivery statistics for this station."
-                    : (industry.IsStore
+                    : (industry.SiteRole == SiteRole.ConstructionSiteSink
+                        ? "Open storage, utilization, and delivery statistics for this construction site."
+                        : (industry.IsStore
                         ? "Open stockpile, utilization, and retail delivery statistics for this store."
-                        : "Open stockpile, utilization, and per-commodity statistics for this industry."));
+                        : "Open stockpile, utilization, and per-commodity statistics for this industry.")));
 
             var items = new List<MenuItem>
             {
@@ -1787,7 +2040,7 @@ namespace LSOL.UI
                     "Clear GPS Route",
                     "Remove the current waypoint from the map.",
                     () => _clearGpsRoute?.Invoke()),
-                TabletUiHelpers.CreateNavigationItem("Back", "Return to the industry list.", () => context.GoBack(), "BACK"),
+                TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous site list.", () => context.GoBack(), "BACK"),
             };
 
             return new TabletShellPage

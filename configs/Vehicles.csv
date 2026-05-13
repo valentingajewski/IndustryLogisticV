@@ -1,36 +1,36 @@
-VehicleID,VehicleName,ModelName,VehiceType,AcceptedResources,VehicleCapacity,VehicleFuelCapacity,VehiclePrice
-1,Burrito,burrito3,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,50,5000
-2,Rumpo,rumpo,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,50,5000
-3,Commercial Rumpo,rumpo2,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,50,5000
-4,Speedo,peedo,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,50,5000
-5,Speedo,speedo4,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,50,5000
-6,Speedo,speedo5,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,50,5000
-7,Boxville,boxville2,Van,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",5,110,10000
-8,Boxville (Humane Lab),boxville3,Van,Medecine,5,110,10000
-9,Boxvile (Post OP),boxville4,Van,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",5,110,10000
-10,Benson,benson,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,150,20000
-11,Benson (Cluckin' Bell),benson2,LightTruck,ProcessedFood,10,150,20000
-12,Biff,biff,Dumper,Recyclable,20,200,50000
-13,Hauler,hauler,Truck,None,0,400,100000
-14,Mule,mule,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,150,30000
-15,Mule,mule2,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,150,30000
-16,Mule,mule3,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,150,30000
-17,Mule,mule4,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,150,30000
-18,Mule,mule5,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,150,30000
-19,Packer,packer,Truck,None,0,400,100000
-20,Phantom,phantom3,Truck,None,0,400,100000
-21,Pounder,pounder,BigTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",20,200,40000
-23,Ron Tanker,tanker,Trailer,"Oil,Fuel,Omega,LiquidFertilizer",30,0,10000
-24,Tanker,tanker2,Trailer,"Oil,Fuel,Omega,LiquidFertilizer",30,0,10000
-25,Car Trailer,tr2,Trailer,Vehicles,4,0,20000
-26,Log Trailer,trailerlogs,Trailer,Wood,30,0,12000
-27,Trailer,trailers,Trailer,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",30,0,10000
-28,Refrigerated Trailer,trailers2,Trailer,Meat,30,0,15000
-29,Trailer (with ad),trailers3,Trailer,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",30,0,10000
-30,Container Trailer,trailers4,Trailer,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",30,0,10000
-31,Open Trailer,trflat,Trailer,"Bricks,Lumber,Steel,Alloy",20,0,8000
-32,Mixer,mixer,Mixer,"Asphalt,Cement,Concrete",20,150,0
-33,Mixer,mixer2,Mixer,"Asphalt,Cement,Concrete",20,150,0
-34,Rubble,rubble,Dumper,"Coal,Gravel,Ore,Crops",30,300,20000
-35,Tipper,tiptruck,Dumper,"Coal,Gravel,Ore,Crops",20,200,0
-36,Tipper,tiptruck2,Dumper,"Coal,Gravel,Ore,Crops",20,200,0
+VehicleID,VehicleName,ModelName,VehiceType,AcceptedResources,VehicleCapacity,VehicleFuelCapacity,VehiclePrice,VehicleDailyRent
+1,Burrito,burrito3,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,100,5000,250
+2,Rumpo,rumpo,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,100,5000,250
+3,Commercial Rumpo,rumpo2,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,100,5000,250
+4,Speedo,peedo,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,100,5000,250
+5,Speedo,speedo4,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,100,5000,250
+6,Speedo,speedo5,LightVan,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",3,100,5000,250
+7,Boxville,boxville2,Van,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",5,200,10000,500
+8,Boxville (Humane Lab),boxville3,Van,Medecine,5,200,10000,500
+9,Boxvile (Post OP),boxville4,Van,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",5,200,10000,500
+10,Benson,benson,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,300,20000,1000
+11,Benson (Cluckin' Bell),benson2,LightTruck,ProcessedFood,10,300,20000,1000
+12,Biff,biff,Dumper,Recyclable,20,400,50000,2500
+13,Hauler,hauler,Truck,None,0,800,100000,5000
+14,Mule,mule,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,300,30000,1500
+15,Mule,mule2,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,300,30000,1500
+16,Mule,mule3,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,300,30000,1500
+17,Mule,mule4,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,300,30000,1500
+18,Mule,mule5,LightTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",10,300,30000,1500
+19,Packer,packer,Truck,None,0,800,100000,5000
+20,Phantom,phantom3,Truck,None,0,800,100000,5000
+21,Pounder,pounder,BigTruck,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",20,400,40000,2000
+23,Ron Tanker,tanker,Trailer,"Oil,Fuel,Omega,LiquidFertilizer",30000,0,10000,500
+24,Tanker,tanker2,Trailer,"Oil,Fuel,Omega,LiquidFertilizer",30000,0,10000,500
+25,Car Trailer,tr2,Trailer,Vehicles,4,0,20000,1000
+26,Log Trailer,trailerlogs,Trailer,Wood,30,0,12000,600
+27,Trailer,trailers,Trailer,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",30,0,10000,500
+28,Refrigerated Trailer,trailers2,Trailer,Meat,30,0,15000,750
+29,Trailer (with ad),trailers3,Trailer,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",30,0,10000,500
+30,Container Trailer,trailers4,Trailer,"Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer,Processors",30,0,10000,500
+31,Open Trailer,trflat,Trailer,"Bricks,Lumber,Steel,Alloy",20,0,8000,400
+32,Mixer,mixer,Mixer,"Asphalt,Cement,Concrete",20,400,0,0
+33,Mixer,mixer2,Mixer,"Asphalt,Cement,Concrete",20,400,0,0
+34,Rubble,rubble,Dumper,"Coal,Gravel,Ore,Crops",30,500,20000,1000
+35,Tipper,tiptruck,Dumper,"Coal,Gravel,Ore,Crops",20,300,0,0
+36,Tipper,tiptruck2,Dumper,"Coal,Gravel,Ore,Crops",20,300,0,0

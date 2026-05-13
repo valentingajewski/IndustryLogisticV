@@ -862,7 +862,16 @@ namespace LSOL.Systems
             }
 
             var count = (int)Math.Ceiling(cargoState.WeightTons / 2f);
-            return Math.Max(1, Math.Min(6, count));
+            var isBrickTrailerLoad = definition != null
+                && definition.IsTrailer
+                && CommodityCatalog.Normalize(cargoState.Commodity).Equals("Bricks", StringComparison.OrdinalIgnoreCase);
+            if (isBrickTrailerLoad)
+            {
+                count += 2;
+            }
+
+            var maxCount = isBrickTrailerLoad ? 8 : 6;
+            return Math.Max(1, Math.Min(maxCount, count));
         }
 
         private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, out List<string> modelNames, out int count, out bool forceCenteredPlacement)

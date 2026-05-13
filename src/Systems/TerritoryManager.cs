@@ -219,6 +219,42 @@ namespace LSOL.Systems
             RefreshComputedState();
         }
 
+        public int ApplyDistrictReputationDebugStateToAll(string reputationLabel)
+        {
+            float targetScore;
+            if (!TryResolveDistrictDebugTargetScore(reputationLabel, out targetScore))
+            {
+                return 0;
+            }
+
+            var updatedDistrictCount = 0;
+            foreach (var districtState in _districtsByName.Values)
+            {
+                if (districtState == null || string.IsNullOrWhiteSpace(districtState.DistrictName))
+                {
+                    continue;
+                }
+
+                var normalizedName = districtState.DistrictName.Trim();
+                var currentOffset = GetDistrictReputationDebugOffset(normalizedName);
+                var baseReputationScore = districtState.ReputationScore - currentOffset;
+                var requiredOffset = targetScore - (districtState.InfluenceRatio * 100f) - baseReputationScore;
+                if (Math.Abs(requiredOffset) <= 0.001f)
+                {
+                    _districtReputationDebugOffsets.Remove(normalizedName);
+                }
+                else
+                {
+                    _districtReputationDebugOffsets[normalizedName] = requiredOffset;
+                }
+
+                updatedDistrictCount += 1;
+            }
+
+            RefreshComputedState();
+            return updatedDistrictCount;
+        }
+
         public IEnumerable<Industry> GetDepotIndustries()
         {
             return _industriesById.Values
@@ -1469,6 +1505,28 @@ namespace LSOL.Systems
         private static bool IsServiceSink(Industry industry)
         {
             return industry != null && (industry.IsStore || industry.IsGasStation || industry.IsConstructionSink);
+        }
+
+        private static bool TryResolveDistrictDebugTargetScore(string reputationLabel, out float targetScore)
+        {
+            switch ((reputationLabel ?? string.Empty).Trim().ToUpperInvariant())
+            {
+                case "DOMINANT":
+                    targetScore = 130f;
+                    return true;
+                case "ESTABLISHED":
+                    targetScore = 75f;
+                    return true;
+                case "EMERGING":
+                    targetScore = 44f;
+                    return true;
+                case "UNKNOWN":
+                    targetScore = 10f;
+                    return true;
+                default:
+                    targetScore = 0f;
+                    return false;
+            }
         }
 
         private static float GetTierWeight(SiteOwnershipTier tier)

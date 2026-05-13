@@ -45,6 +45,10 @@ namespace LSOL.Domain
 
         public int RepeatCooldownInGameMonths { get; set; }
 
+        public int AvailabilityDelayInGameMinutes { get; set; }
+
+        public int AvailabilityDelayInGameMonths { get; set; }
+
         public SpecialMissionUnlockRequirement Unlock { get; set; }
 
         public Dictionary<string, SpecialMissionVehicleSpawn> Vehicles { get; }
@@ -80,6 +84,11 @@ namespace LSOL.Domain
         public bool HasRepeatCooldown
         {
             get { return RepeatCooldownInGameMinutes > 0 || RepeatCooldownInGameMonths > 0; }
+        }
+
+        public bool HasAvailabilityDelay
+        {
+            get { return AvailabilityDelayInGameMinutes > 0 || AvailabilityDelayInGameMonths > 0; }
         }
     }
 

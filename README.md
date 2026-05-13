@@ -22,7 +22,7 @@ LSOL adds a full business-management loop on top of GTA V free roam:
 - Company management menus, a company hub, analytics screens, and industry menus.
 - NPC logistics drivers that can run routes for you.
 - Save files, named profiles, and persistent world/company progression.
-- Optional custom special missions loaded from the `missions` folder.
+- Optional custom special missions loaded from `LSOL_Config/missions/*.xml`.
 
 In short: you are building a logistics company inside GTA V.
 
@@ -169,8 +169,8 @@ If those dependencies are missing, LSOL will not load correctly.
 3. Make sure `LemonUI.SHVDN3.dll` is available in your GTA V `scripts` setup.
 4. Copy `LSOL.dll` into your GTA V `scripts` folder.
 5. Put `LSOL.ini` next to the mod so the script can find it.
-6. Copy the full `configs` folder next to `LSOL.ini`.
-7. If you want special missions, copy the `missions` folder next to `LSOL.ini`.
+6. Copy the full `LSOL_Config` folder next to `LSOL.ini`.
+7. If you distribute custom missions, place their `.xml` files under `LSOL_Config/missions`.
 
 ### Supported `LSOL.ini` Locations
 
@@ -186,7 +186,7 @@ Recommended location:
 
 ### Important Folder Layout
 
-If `LSOL.ini` is in `GTA V/scripts/`, the mod expects these folders beside it:
+If `LSOL.ini` is in `GTA V/scripts/`, the mod expects this content beside it:
 
 ```text
 GTA V/
@@ -194,24 +194,29 @@ GTA V/
     LSOL.dll
     LSOL.ini
     LemonUI.SHVDN3.dll
-    configs/
-      dealership.xml
-      Districts.csv
-      Offices.csv
-      Interiors.csv
-      Vehicles.csv
-      ...
-    missions/
-      README.md
-      port_container_handler.ini
-      quarry_heavy_machinery.ini
+    LSOL_Config/
+      Core.xml
+      Dealership.xml
+      Districts.xml
+      HiringNPC.xml
+      Interiors.xml
+      Objects.xml
+      Offices.xml
+      Resources.xml
+      Sites.xml
+      Vehicles.xml
+      WorldNpcLogistics.xml
+      missions/
+        README.md
+        port_container_handler.xml
+        quarry_heavy_machinery.xml
 ```
 
 Notes:
 
-- `configs/dealership.xml` is required for the personal vehicle dealership.
-- The loose `configs` folder is where LSOL reads player-editable data from.
-- Mission packs are loaded from the `missions` folder next to `LSOL.ini`.
+- `LSOL_Config/Dealership.xml` is required for the personal vehicle dealership.
+- `LSOL_Config` is the runtime content root for player-editable XML data.
+- Mission packs are loaded only from `LSOL_Config/missions/*.xml`.
 
 ## Controls
 
@@ -401,13 +406,13 @@ Creating a new named save resets the gameplay world and starts a fresh profile.
 
 ## Special Missions
 
-Mission packs are loaded from the `missions` folder next to `LSOL.ini`.
+Mission packs are loaded only from `LSOL_Config/missions/*.xml` next to `LSOL.ini`.
 
 If no mission packs are installed, the company hub mission area will simply show no mission content.
 
-The included mission documentation in `missions/README.md` is mainly for mission authors, but as a player you only need to know this:
+The included mission documentation in `LSOL_Config/missions/README.md` is mainly for mission authors, but as a player you only need to know this:
 
-- mission packs are `.ini` files,
+- mission packs are `.xml` files,
 - they load automatically on startup,
 - they can unlock new jobs and rewards,
 - their progress is saved with your company.
@@ -446,14 +451,14 @@ Check these first:
 
 ### Property or dealership systems are missing
 
-- Make sure the `configs` folder is next to `LSOL.ini`.
-- Make sure `configs/dealership.xml` exists if you want the personal vehicle dealership.
+- Make sure the `LSOL_Config` folder is next to `LSOL.ini`.
+- Make sure `LSOL_Config/Dealership.xml` exists if you want the personal vehicle dealership.
 - If map blips seem wrong, confirm the external config files were copied with the mod.
 
 ### No special missions appear
 
-- Make sure the `missions` folder is next to `LSOL.ini`.
-- Make sure it contains valid `.ini` mission pack files.
+- Make sure `LSOL_Config/missions` exists next to `LSOL.ini`.
+- Make sure it contains valid `.xml` mission pack files.
 
 ### Build succeeds but the DLL is not updated
 

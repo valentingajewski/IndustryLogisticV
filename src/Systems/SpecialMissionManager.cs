@@ -170,6 +170,13 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var availabilityDelayRemainingMinutes = GetAvailabilityDelayRemainingMinutes(definition);
+            if (availabilityDelayRemainingMinutes > 0)
+            {
+                detail = BuildAvailabilityDelayDetail(definition, availabilityDelayRemainingMinutes);
+                return false;
+            }
+
             if (!IsMissionUnlocked(definition, out detail))
             {
                 return false;
@@ -191,6 +198,12 @@ namespace LSOL.Systems
             foreach (var definition in Definitions)
             {
                 var unlocked = IsMissionUnlocked(definition, out var availabilityDetail);
+                var availabilityDelayRemainingMinutes = GetAvailabilityDelayRemainingMinutes(definition);
+                if (availabilityDelayRemainingMinutes > 0)
+                {
+                    unlocked = false;
+                    availabilityDetail = BuildAvailabilityDelayDetail(definition, availabilityDelayRemainingMinutes);
+                }
                 var completionCount = GetCompletionCount(definition.Id);
                 var cooldownRemainingMinutes = unlocked
                     ? GetRepeatCooldownRemainingMinutes(definition)
@@ -537,6 +550,60 @@ namespace LSOL.Systems
 
             var elapsedInGameMinutes = Math.Max(0, GetCurrentInGameMinute() - lastCompletedInGameMinute);
             return Math.Max(0, definition.RepeatCooldownInGameMinutes - elapsedInGameMinutes);
+        }
+
+        private int GetAvailabilityDelayRemainingMinutes(SpecialMissionDefinition definition)
+        {
+            if (definition == null || !definition.HasAvailabilityDelay)
+            {
+                return 0;
+            }
+
+            if (definition.AvailabilityDelayInGameMonths > 0)
+            {
+                var availableAt = ConvertInGameMinuteToDateTime(0).AddMonths(definition.AvailabilityDelayInGameMonths);
+                var remainingMonthsMinutes = (int)Math.Ceiling((availableAt - ConvertInGameMinuteToDateTime(GetCurrentInGameMinute())).TotalMinutes);
+                return Math.Max(0, remainingMonthsMinutes);
+            }
+
+            return Math.Max(0, definition.AvailabilityDelayInGameMinutes - GetCurrentInGameMinute());
+        }
+
+        private string BuildAvailabilityDelayDetail(SpecialMissionDefinition definition, int remainingMinutes)
+        {
+            if (definition == null)
+            {
+                return string.Format("Available in {0}.", FormatMissionDuration(remainingMinutes));
+            }
+
+            return string.Format("Available in {0}.", FormatMissionDuration(remainingMinutes));
+        }
+
+        private static string FormatMissionDuration(int totalMinutes)
+        {
+            totalMinutes = Math.Max(0, totalMinutes);
+            var days = totalMinutes / InGameMinutesPerDay;
+            var remainingMinutes = totalMinutes % InGameMinutesPerDay;
+            var hours = remainingMinutes / 60;
+            var minutes = remainingMinutes % 60;
+            var parts = new List<string>();
+
+            if (days > 0)
+            {
+                parts.Add(string.Format("{0}d", days));
+            }
+
+            if (hours > 0)
+            {
+                parts.Add(string.Format("{0}h", hours));
+            }
+
+            if (minutes > 0 || parts.Count == 0)
+            {
+                parts.Add(string.Format("{0}m", minutes));
+            }
+
+            return string.Join(" ", parts.ToArray());
         }
 
         private int GetCurrentInGameMinute()

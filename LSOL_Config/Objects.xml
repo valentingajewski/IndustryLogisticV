@@ -1,0 +1,26 @@
+﻿<Objects>
+  <Group key="TinyBox" models="prop_rub_boxpile_02" />
+  <Group key="LittleBox" models="prop_boxpile_07d" />
+  <Group key="LittleMeatBox" models="v_ind_cf_meatbox" />
+  <Group key="Box" models="prop_boxpile_05a" />
+  <Group key="TV" models="ex_prop_crate_elec_sc" />
+  <Group key="Alcohol" models="ex_prop_crate_tob_sc" />
+  <Group key="Alloy" models="prop_pipes_01b" />
+  <Group key="Metal" models="prop_pipes_04a" />
+  <Group key="Lumber" models="prop_woodpile_01b" />
+  <Group key="Concrete" models="prop_conc_blocks01a" />
+  <Group key="Cement" models="xm3_prop_xm3_cem_bags_01a" />
+  <Group key="Bricks" models="prop_conc_blocks01c" />
+  <Group key="Medicine" models="ex_prop_crate_med_bc" />
+  <Group key="Chemicals" models="prop_ch_chemset_01a" />
+  <Group key="Fabric" models="prop_boxpile_02c" />
+  <Group key="Paper" models="v_ind_cf_boxes" />
+  <Group key="Meat" models="v_ind_meatpacks" />
+  <Group key="Vehicles" models="stanier" />
+  <Group key="Beam" models="prop_railstack05" />
+  <Group key="Aircooler" models="prop_cs_aircon_01" />
+  <Group key="Aircon" models="vw_prop_vw_aircon_m_01" />
+  <Group key="Elecbox" models="vw_prop_vw_elecbox_01a" />
+  <Group key="Dieseltank" models="prop_ind_deiseltank" />
+  <Group key="Railtrack" models="prop_railstack04" />
+</Objects>

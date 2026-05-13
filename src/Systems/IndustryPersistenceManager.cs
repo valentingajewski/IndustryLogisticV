@@ -174,6 +174,11 @@ namespace LSOL.Systems
                     persistenceVersion = 12;
                 }
 
+                if (metadata != null && HasNpcWorldDispatchData(metadata.NpcLogistics))
+                {
+                    persistenceVersion = 13;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -655,6 +660,9 @@ namespace LSOL.Systems
                 writer.WriteLine("HasSeparateCargoVehicle={0}", vehicle.HasSeparateCargoVehicle ? "true" : "false");
                 writer.WriteLine("PurchasePrice={0}", FormatFloat(vehicle.PurchasePrice));
                 writer.WriteLine("AssignedOfficeId={0}", vehicle.AssignedOfficeId ?? string.Empty);
+                writer.WriteLine("IsRental={0}", vehicle.IsRental ? "true" : "false");
+                writer.WriteLine("DailyRent={0}", FormatFloat(vehicle.DailyRent));
+                writer.WriteLine("LastChargedDayIndex={0}", vehicle.LastChargedDayIndex);
                 writer.WriteLine("InActiveGarage={0}", vehicle.InActiveGarage ? "true" : "false");
                 writer.WriteLine("IsDeployed={0}", vehicle.IsDeployed ? "true" : "false");
                 writer.WriteLine("PoweredPosition={0}", FormatVector3(vehicle.PoweredPosition));
@@ -763,6 +771,9 @@ namespace LSOL.Systems
                             HasSeparateCargoVehicle = ini.GetBool(section, "HasSeparateCargoVehicle", false),
                             PurchasePrice = ini.GetFloat(section, "PurchasePrice", 0f),
                             AssignedOfficeId = ini.GetString(section, "AssignedOfficeId", string.Empty),
+                            IsRental = ini.GetBool(section, "IsRental", false),
+                            DailyRent = ini.GetFloat(section, "DailyRent", 0f),
+                            LastChargedDayIndex = ParseInt(ini.GetString(section, "LastChargedDayIndex", "-1"), -1),
                             InActiveGarage = ini.GetBool(section, "InActiveGarage", false),
                             IsDeployed = ini.GetBool(section, "IsDeployed", false),
                             PoweredPosition = ParseVector3(ini.GetString(section, "PoweredPosition", string.Empty), Vector3.Zero),
@@ -808,9 +819,21 @@ namespace LSOL.Systems
 
         private static void WriteNpcLogisticsSnapshot(StreamWriter writer, NpcLogisticsPersistenceSnapshot snapshot)
         {
-            if (writer == null || snapshot == null || snapshot.Contracts == null || snapshot.Contracts.Count == 0)
+            if (writer == null || snapshot == null || !snapshot.HasData)
             {
                 return;
+            }
+
+            if (HasNpcWorldDispatchData(snapshot))
+            {
+                writer.WriteLine("[NpcWorldDispatch]");
+                writer.WriteLine("DispatchPolicy={0}", snapshot.DispatchPolicy);
+                writer.WriteLine("PriorityCommodity={0}", snapshot.PriorityCommodity ?? string.Empty);
+                writer.WriteLine("PriorityDistrict={0}", snapshot.PriorityDistrict ?? string.Empty);
+                writer.WriteLine("PremiumDispatchEnabled={0}", snapshot.PremiumDispatchEnabled ? "true" : "false");
+                writer.WriteLine("LastWorldEvaluationClockMinute={0}", snapshot.LastWorldEvaluationClockMinute);
+                writer.WriteLine("CompletedWorldDispatches={0}", snapshot.CompletedWorldDispatches);
+                writer.WriteLine();
             }
 
             foreach (var contract in snapshot.Contracts.OrderBy(entry => entry != null ? entry.Id : 0))
@@ -835,6 +858,40 @@ namespace LSOL.Systems
                 writer.WriteLine("LastJourneyLossRatio={0}", FormatFloat(contract.LastJourneyLossRatio));
                 writer.WriteLine();
             }
+
+            if (snapshot.WorldJobs == null)
+            {
+                return;
+            }
+
+            foreach (var job in snapshot.WorldJobs.OrderBy(entry => entry != null ? entry.Id : 0))
+            {
+                if (job == null)
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildNpcWorldJobSectionName(job.Id));
+                writer.WriteLine("Type={0}", job.Type);
+                writer.WriteLine("Phase={0}", job.Phase);
+                writer.WriteLine("Commodity={0}", job.Commodity ?? string.Empty);
+                writer.WriteLine("SourceLabel={0}", job.SourceLabel ?? string.Empty);
+                writer.WriteLine("DestinationLabel={0}", job.DestinationLabel ?? string.Empty);
+                writer.WriteLine("OriginIndustryId={0}", job.OriginIndustryId ?? string.Empty);
+                writer.WriteLine("DestinationIndustryId={0}", job.DestinationIndustryId ?? string.Empty);
+                writer.WriteLine("Tons={0}", FormatFloat(job.Tons));
+                writer.WriteLine("RemainingInGameMinutes={0}", job.RemainingInGameMinutes);
+                writer.WriteLine("TotalInGameMinutes={0}", job.TotalInGameMinutes);
+                writer.WriteLine("CreatedClockMinute={0}", job.CreatedClockMinute);
+                writer.WriteLine("IsSpotOpportunity={0}", job.IsSpotOpportunity ? "true" : "false");
+                writer.WriteLine("UsesPremiumDispatch={0}", job.UsesPremiumDispatch ? "true" : "false");
+                writer.WriteLine("IsPriorityMatch={0}", job.IsPriorityMatch ? "true" : "false");
+                writer.WriteLine("HasVisibleConvoy={0}", job.HasVisibleConvoy ? "true" : "false");
+                writer.WriteLine("IsRivalJob={0}", job.IsRivalJob ? "true" : "false");
+                writer.WriteLine("BackhaulDepth={0}", job.BackhaulDepth);
+                writer.WriteLine("StatusText={0}", job.StatusText ?? string.Empty);
+                writer.WriteLine();
+            }
         }
 
         private static NpcLogisticsPersistenceSnapshot ReadNpcLogisticsSnapshot(IniFile ini)
@@ -845,28 +902,73 @@ namespace LSOL.Systems
             }
 
             var snapshot = new NpcLogisticsPersistenceSnapshot();
+            if (ini.HasSection("NpcWorldDispatch"))
+            {
+                snapshot.DispatchPolicy = ParseNpcWorldDispatchPolicy(
+                    ini.GetString("NpcWorldDispatch", "DispatchPolicy", NpcWorldDispatchPolicy.Balanced.ToString()),
+                    NpcWorldDispatchPolicy.Balanced);
+                snapshot.PriorityCommodity = CommodityCatalog.Normalize(ini.GetString("NpcWorldDispatch", "PriorityCommodity", string.Empty));
+                snapshot.PriorityDistrict = ini.GetString("NpcWorldDispatch", "PriorityDistrict", string.Empty);
+                snapshot.PremiumDispatchEnabled = ini.GetBool("NpcWorldDispatch", "PremiumDispatchEnabled", false);
+                snapshot.LastWorldEvaluationClockMinute = ParseInt(ini.GetString("NpcWorldDispatch", "LastWorldEvaluationClockMinute", "-1"), -1);
+                snapshot.CompletedWorldDispatches = ParseInt(ini.GetString("NpcWorldDispatch", "CompletedWorldDispatches", "0"), 0);
+            }
+
             foreach (var section in ini.Sections)
             {
-                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("NpcContract:", StringComparison.OrdinalIgnoreCase))
+                if (string.IsNullOrWhiteSpace(section))
                 {
                     continue;
                 }
 
-                snapshot.Contracts.Add(new NpcLogisticsContractSnapshot
+                if (section.StartsWith("NpcContract:", StringComparison.OrdinalIgnoreCase))
                 {
-                    Id = ParseInt(section.Substring("NpcContract:".Length).Trim(), 0),
+                    snapshot.Contracts.Add(new NpcLogisticsContractSnapshot
+                    {
+                        Id = ParseInt(section.Substring("NpcContract:".Length).Trim(), 0),
+                        OriginIndustryId = ini.GetString(section, "OriginIndustryId", string.Empty),
+                        DestinationIndustryId = ini.GetString(section, "DestinationIndustryId", string.Empty),
+                        Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                        TierId = ini.GetString(section, "TierId", string.Empty),
+                        ContractCost = ini.GetFloat(section, "ContractCost", 0f),
+                        PayrollElapsedInGameMinutes = ParseInt(ini.GetString(section, "PayrollElapsedInGameMinutes", "0"), 0),
+                        CompletedPayrollCycles = ParseInt(ini.GetString(section, "CompletedPayrollCycles", "0"), 0),
+                        TotalWeeklyWagesPaid = ini.GetFloat(section, "TotalWeeklyWagesPaid", 0f),
+                        CompletedDeliveries = ParseInt(ini.GetString(section, "CompletedDeliveries", "0"), 0),
+                        TotalDeliveredTons = ini.GetFloat(section, "TotalDeliveredTons", 0f),
+                        TotalProfitEarned = ini.GetFloat(section, "TotalProfitEarned", 0f),
+                        LastJourneyLossRatio = ini.GetFloat(section, "LastJourneyLossRatio", 0f),
+                    });
+
+                    continue;
+                }
+
+                if (!section.StartsWith("NpcWorldJob:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                snapshot.WorldJobs.Add(new NpcWorldLogisticsJobSnapshot
+                {
+                    Id = ParseInt(section.Substring("NpcWorldJob:".Length).Trim(), 0),
+                    Type = ParseNpcWorldJobType(ini.GetString(section, "Type", NpcWorldJobType.OverflowRescue.ToString()), NpcWorldJobType.OverflowRescue),
+                    Phase = ParseNpcWorldJobPhase(ini.GetString(section, "Phase", NpcWorldJobPhase.Listed.ToString()), NpcWorldJobPhase.Listed),
+                    Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                    SourceLabel = ini.GetString(section, "SourceLabel", string.Empty),
+                    DestinationLabel = ini.GetString(section, "DestinationLabel", string.Empty),
                     OriginIndustryId = ini.GetString(section, "OriginIndustryId", string.Empty),
                     DestinationIndustryId = ini.GetString(section, "DestinationIndustryId", string.Empty),
-                    Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
-                    TierId = ini.GetString(section, "TierId", string.Empty),
-                    ContractCost = ini.GetFloat(section, "ContractCost", 0f),
-                    PayrollElapsedInGameMinutes = ParseInt(ini.GetString(section, "PayrollElapsedInGameMinutes", "0"), 0),
-                    CompletedPayrollCycles = ParseInt(ini.GetString(section, "CompletedPayrollCycles", "0"), 0),
-                    TotalWeeklyWagesPaid = ini.GetFloat(section, "TotalWeeklyWagesPaid", 0f),
-                    CompletedDeliveries = ParseInt(ini.GetString(section, "CompletedDeliveries", "0"), 0),
-                    TotalDeliveredTons = ini.GetFloat(section, "TotalDeliveredTons", 0f),
-                    TotalProfitEarned = ini.GetFloat(section, "TotalProfitEarned", 0f),
-                    LastJourneyLossRatio = ini.GetFloat(section, "LastJourneyLossRatio", 0f),
+                    Tons = ini.GetFloat(section, "Tons", 0f),
+                    RemainingInGameMinutes = ParseInt(ini.GetString(section, "RemainingInGameMinutes", "0"), 0),
+                    TotalInGameMinutes = ParseInt(ini.GetString(section, "TotalInGameMinutes", "0"), 0),
+                    CreatedClockMinute = ParseInt(ini.GetString(section, "CreatedClockMinute", "0"), 0),
+                    IsSpotOpportunity = ini.GetBool(section, "IsSpotOpportunity", false),
+                    UsesPremiumDispatch = ini.GetBool(section, "UsesPremiumDispatch", false),
+                    IsPriorityMatch = ini.GetBool(section, "IsPriorityMatch", false),
+                    HasVisibleConvoy = ini.GetBool(section, "HasVisibleConvoy", false),
+                    IsRivalJob = ini.GetBool(section, "IsRivalJob", false),
+                    BackhaulDepth = ParseInt(ini.GetString(section, "BackhaulDepth", "0"), 0),
+                    StatusText = ini.GetString(section, "StatusText", string.Empty),
                 });
             }
 
@@ -1025,6 +1127,39 @@ namespace LSOL.Systems
             }
 
             NpcWeeklyWageDifficulty parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static NpcWorldDispatchPolicy ParseNpcWorldDispatchPolicy(string raw, NpcWorldDispatchPolicy fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            NpcWorldDispatchPolicy parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static NpcWorldJobType ParseNpcWorldJobType(string raw, NpcWorldJobType fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            NpcWorldJobType parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static NpcWorldJobPhase ParseNpcWorldJobPhase(string raw, NpcWorldJobPhase fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            NpcWorldJobPhase parsed;
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 
@@ -1191,6 +1326,11 @@ namespace LSOL.Systems
             return "NpcContract:" + Math.Max(1, contractId).ToString(CultureInfo.InvariantCulture);
         }
 
+        private static string BuildNpcWorldJobSectionName(int jobId)
+        {
+            return "NpcWorldJob:" + Math.Max(1, jobId).ToString(CultureInfo.InvariantCulture);
+        }
+
         private static string BuildPropertyOfficeSectionName(string officeId)
         {
             return "PropertyOffice:" + (officeId ?? string.Empty).Trim();
@@ -1343,6 +1483,18 @@ namespace LSOL.Systems
         private static bool HasNpcLogisticsData(NpcLogisticsPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
+        }
+
+        private static bool HasNpcWorldDispatchData(NpcLogisticsPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && ((snapshot.WorldJobs != null && snapshot.WorldJobs.Count > 0)
+                    || snapshot.DispatchPolicy != NpcWorldDispatchPolicy.Balanced
+                    || !string.IsNullOrWhiteSpace(snapshot.PriorityCommodity)
+                    || !string.IsNullOrWhiteSpace(snapshot.PriorityDistrict)
+                    || snapshot.PremiumDispatchEnabled
+                    || snapshot.CompletedWorldDispatches > 0
+                    || snapshot.LastWorldEvaluationClockMinute >= 0);
         }
 
         private static bool HasSpecialMissionData(SpecialMissionPersistenceSnapshot snapshot)

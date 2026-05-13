@@ -10,3 +10,8 @@ images/
 other_mods/
 TO_DO.txt
 LemonUI*
+bin/
+obj/
+.vs/
+*.user
+*.suo

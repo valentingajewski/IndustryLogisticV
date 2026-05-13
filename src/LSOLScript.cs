@@ -28,6 +28,9 @@ namespace LSOL
         private const float CargoDamageGraceHealth = 40f;
         private const float CargoConditionLossPerDamageRatio = 0.75f;
         private const float CargoLossPerDamageRatio = 0.35f;
+        private const float IndustryObjectDeletionRadius = 100f;
+        private const float IndustryObjectDeletionActivationRange = 250f;
+        private const int IndustryObjectDeletionSweepIntervalMs = 5000;
         private const float DebugFillTons = 1000000f;
         private const string SavegamesDirectoryName = "LSOLSaves";
         private const int MaxSaveNameLength = 40;
@@ -35,6 +38,7 @@ namespace LSOL
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
         private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
         private static readonly float[] DebugDistrictReputationAmountOptions = { 5f, 10f, 25f, 50f, 100f, 250f };
+        private static readonly string[] DebugDistrictStateOptions = { "Unknown", "Emerging", "Established", "Dominant" };
         private static readonly float[] StartingBalanceOptions = BuildStartingBalanceOptions();
         private static readonly ModLanguage[] SelectableLanguages =
         {
@@ -61,7 +65,7 @@ namespace LSOL
         private static extern short GetAsyncKeyState(int vKey);
 
         private readonly ModConfig _config;
-        private readonly string _configPath;
+        private readonly string _configDirectory;
         private readonly string _defaultIndustryStatePath;
         private readonly string _savegamesDirectoryPath;
         private readonly ControlBindings _controls;
@@ -86,6 +90,7 @@ namespace LSOL
         private readonly LemonMenu _optionsMenu;
         private readonly LemonMenu _debugMenu;
         private readonly LemonMenu _debugMissionMenu;
+        private readonly DebugMenuProvider _debugMenuProvider;
         private readonly BarrierInteractionHandler _barrierInteractionHandler;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
@@ -116,6 +121,7 @@ namespace LSOL
         private int _selectedDebugMoneyAmountIndex;
         private int _selectedDebugDistrictIndex;
         private int _selectedDebugDistrictReputationAmountIndex;
+        private int _selectedDebugDistrictStateIndex;
         private int _selectedStartingBalanceIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
@@ -123,6 +129,7 @@ namespace LSOL
         private int _statusMessageUntil;
 
         private string _pendingSaveName;
+        private string _pendingDeleteSavePath;
         private string _statusMessage;
 
         private float _profit;
@@ -151,6 +158,7 @@ namespace LSOL
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
         private bool _isConstructing;
+        private int _lastIndustryObjectDeletionSweepMs;
 
         private OwnedFleetPersistenceSnapshot _pendingOwnedFleetRestore;
         private PropertyOwnershipPersistenceSnapshot _pendingPropertyRestore;
@@ -159,11 +167,11 @@ namespace LSOL
         public LSOLScript()
         {
             _isConstructing = true;
-            _configPath = ResolveConfigPath();
-            _defaultIndustryStatePath = ResolveIndustryStatePath(_configPath);
-            _savegamesDirectoryPath = ResolveSavegamesDirectoryPath(_configPath);
+            _configDirectory = ResolveConfigDirectory();
+            _defaultIndustryStatePath = ResolveIndustryStatePath();
+            _savegamesDirectoryPath = ResolveSavegamesDirectoryPath();
             _industryStatePath = _defaultIndustryStatePath;
-            _config = ModConfig.Load(_configPath);
+            _config = ModConfig.Load(_configDirectory);
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
@@ -172,7 +180,7 @@ namespace LSOL
             _globalMarket = new GlobalMarketManager(Game.GameTime);
             _territoryManager = new TerritoryManager(_config, _industryManager);
             _specialMissionManager = new SpecialMissionManager(
-                _configPath,
+                _configDirectory,
                 _territoryManager,
                 _fleetManager,
                 AddProfit,
@@ -237,7 +245,7 @@ namespace LSOL
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
             _commercialVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
             _npcLogisticsManager = new NpcLogisticsManager(
-                _configPath,
+                _configDirectory,
                 _industryManager,
                 _fleetManager,
                 _globalMarket,
@@ -326,6 +334,7 @@ namespace LSOL
                 MaxVisibleItems = 10,
                 Theme = LemonMenuTheme.Default,
             };
+            _debugMenuProvider = new DebugMenuProvider();
             InitializePropertyMenus();
             _npcLogisticsController = new NpcLogisticsController(
                 _controls,
@@ -364,7 +373,7 @@ namespace LSOL
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
             _tabletShellController.RegisterApp(new ContextTabletApp());
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
-            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet));
+            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
                 IndustryInteractionDistance,
                 HandleTabletLoadRequested,
@@ -464,6 +473,8 @@ namespace LSOL
             RestorePendingWorldState();
 
             var gameTime = Game.GameTime;
+            SweepIndustryObjectDeletions(player, gameTime);
+
             if (_lastIndustryTickMs == 0)
             {
                 _lastIndustryTickMs = gameTime;
@@ -753,6 +764,12 @@ namespace LSOL
 
             if (_difficultyMenu.IsOpen)
             {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToModControlMenu();
+                    return true;
+                }
+
                 _difficultyMenu.HandleKey(key, _controls);
                 return true;
             }
@@ -1152,7 +1169,9 @@ namespace LSOL
                     : (fuelRatio >= 0.2f
                         ? Color.FromArgb(224, 220, 180, 80)
                         : Color.FromArgb(224, 214, 92, 78)));
-            var conditionColor = ResolveCargoConditionColor(conditionRatio);
+            var conditionColor = isEmpty
+                ? Color.FromArgb(186, 122, 140, 156)
+                : ResolveCargoConditionColor(conditionRatio);
             var commodityLabel = isEmpty ? "No cargo loaded" : cargoState.Commodity;
             var quantityLabel = isEmpty
                 ? "Qty 0% | Empty"
@@ -1166,8 +1185,8 @@ namespace LSOL
                     fuelTelemetry.CapacityLiters,
                     fuelTelemetry.UsesSeparatePoweredVehicle ? " | Tractor" : string.Empty);
             var conditionLabel = isEmpty
-                ? "Cond Ready | 100%"
-                : string.Format("Cond {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f);
+                ? "Cond n/a"
+                : string.Format("Cargo Condition {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f);
             var contentX = x + 8f;
             var titleY = y + 5f;
             var commodityY = y + (height * 0.17f);
@@ -1716,7 +1735,7 @@ namespace LSOL
                         DetailFactory = () => detail,
                         OnActivate = _saveSlotMenuAction == SaveSlotMenuAction.Load
                             ? (Action)(() => LoadNamedSave(entry))
-                            : (() => DeleteNamedSave(entry)),
+                            : (() => ConfirmOrDeleteNamedSave(entry)),
                     });
                 }
             }
@@ -1777,6 +1796,7 @@ namespace LSOL
         private void OpenSaveSlotsMenu(SaveSlotMenuAction action)
         {
             _saveSlotMenuAction = action;
+            _pendingDeleteSavePath = null;
             _savingOptionsMenu.Close();
             RebuildSaveSlotsMenuItems();
             _saveSlotsMenu.Open();
@@ -1795,6 +1815,7 @@ namespace LSOL
 
         private void ReturnToSavingOptionsMenu()
         {
+            _pendingDeleteSavePath = null;
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
             RebuildModControlMenuItems();
@@ -2699,177 +2720,62 @@ namespace LSOL
 
         private void RebuildDebugMenuItems()
         {
-            _debugMenu.Title = "Debug";
-            _debugMenu.Subtitle = "ALT + W (Debugger attached)";
-
-            _debugMenu.SetItems(new[]
+            _debugMenuProvider.PopulateRootMenu(_debugMenu, new DebugMenuCallbacks
             {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentDebugIndustryCaption,
-                    DetailFactory = CurrentDebugIndustryDetail,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentDebugResourceCaption,
-                    DetailFactory = CurrentDebugResourceDetail,
-                    OnLeft = () => ChangeDebugResourceSelection(-1),
-                    OnRight = () => ChangeDebugResourceSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentDebugResourceAmountCaption,
-                    DetailFactory = () => "Used by the add-resource action.",
-                    OnLeft = () => ChangeDebugResourceAmountSelection(-1),
-                    OnRight = () => ChangeDebugResourceAmountSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentDebugMoneyAmountCaption,
-                    DetailFactory = () => "Used by the add-money action.",
-                    OnLeft = () => ChangeDebugMoneyAmountSelection(-1),
-                    OnRight = () => ChangeDebugMoneyAmountSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentDebugDistrictCaption,
-                    DetailFactory = CurrentDebugDistrictDetail,
-                    OnLeft = () => ChangeDebugDistrictSelection(-1),
-                    OnRight = () => ChangeDebugDistrictSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentDebugDistrictReputationAmountCaption,
-                    DetailFactory = () => "Used by the district reputation debug actions.",
-                    OnLeft = () => ChangeDebugDistrictReputationAmountSelection(-1),
-                    OnRight = () => ChangeDebugDistrictReputationAmountSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    IsSeparator = true,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Trigger missions",
-                    DetailFactory = CurrentDebugMissionBoardDetail,
-                    OnActivate = OpenDebugMissionMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Add money",
-                    DetailFactory = () => string.Format("Adds {0} to your current balance.", ModFormatting.FormatMoney(GetSelectedDebugMoneyAmount())),
-                    OnActivate = AddDebugMoney,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Increase district reputation",
-                    DetailFactory = () => string.Format("Adds +{0:0.#} reputation score to the selected district.", GetSelectedDebugDistrictReputationAmount()),
-                    OnActivate = () => AdjustDebugDistrictReputation(1f),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Decrease district reputation",
-                    DetailFactory = () => string.Format("Applies -{0:0.#} reputation score to the selected district.", GetSelectedDebugDistrictReputationAmount()),
-                    OnActivate = () => AdjustDebugDistrictReputation(-1f),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Add selected resource",
-                    DetailFactory = () => "Adds the selected tonnage to the highlighted nearby industry resource.",
-                    OnActivate = AddSelectedDebugResourceToNearbyIndustry,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Delete vehicle cargo",
-                    DetailFactory = () => "Clears cargo and visuals from your current or nearest cargo vehicle.",
-                    OnActivate = DeleteResolvedVehicleCargo,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Delete current vehicle",
-                    DetailFactory = () => "Deletes your current vehicle and its attached trailer if present.",
-                    OnActivate = DeleteCurrentVehicle,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Fill all inputs",
-                    DetailFactory = () => "Fills every accepted input buffer for the nearby industry.",
-                    OnActivate = FillNearbyIndustryInputs,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Empty all inputs",
-                    DetailFactory = () => "Clears every accepted input buffer for the nearby industry.",
-                    OnActivate = EmptyNearbyIndustryInputs,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Fill all outputs",
-                    DetailFactory = () => "Fills every output buffer for the nearby industry.",
-                    OnActivate = FillNearbyIndustryOutputs,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Empty all outputs",
-                    DetailFactory = () => "Clears every output buffer for the nearby industry.",
-                    OnActivate = EmptyNearbyIndustryOutputs,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Boost production x1000",
-                    DetailFactory = () => "Multiplies the nearby industry's production rate by 1000.",
-                    OnActivate = MultiplyNearbyIndustryProductionRate,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Close",
-                    OnActivate = () => _debugMenu.Close(),
-                },
+                IndustryCaption = CurrentDebugIndustryCaption,
+                IndustryDetail = CurrentDebugIndustryDetail,
+                ResourceCaption = CurrentDebugResourceCaption,
+                ResourceDetail = CurrentDebugResourceDetail,
+                ResourceAmountCaption = CurrentDebugResourceAmountCaption,
+                SelectPreviousResourceAmount = () => ChangeDebugResourceAmountSelection(-1),
+                SelectNextResourceAmount = () => ChangeDebugResourceAmountSelection(1),
+                SelectPreviousResource = () => ChangeDebugResourceSelection(-1),
+                SelectNextResource = () => ChangeDebugResourceSelection(1),
+                MoneyAmountCaption = CurrentDebugMoneyAmountCaption,
+                SelectPreviousMoneyAmount = () => ChangeDebugMoneyAmountSelection(-1),
+                SelectNextMoneyAmount = () => ChangeDebugMoneyAmountSelection(1),
+                DistrictCaption = CurrentDebugDistrictCaption,
+                DistrictDetail = CurrentDebugDistrictDetail,
+                SelectPreviousDistrict = () => ChangeDebugDistrictSelection(-1),
+                SelectNextDistrict = () => ChangeDebugDistrictSelection(1),
+                DistrictReputationAmountCaption = CurrentDebugDistrictReputationAmountCaption,
+                SelectPreviousDistrictReputationAmount = () => ChangeDebugDistrictReputationAmountSelection(-1),
+                SelectNextDistrictReputationAmount = () => ChangeDebugDistrictReputationAmountSelection(1),
+                DistrictStateCaption = CurrentDebugDistrictStateCaption,
+                SelectPreviousDistrictState = () => ChangeDebugDistrictStateSelection(-1),
+                SelectNextDistrictState = () => ChangeDebugDistrictStateSelection(1),
+                MissionBoardDetail = CurrentDebugMissionBoardDetail,
+                OpenMissionMenu = OpenDebugMissionMenu,
+                SelectedMoneyAmount = GetSelectedDebugMoneyAmount,
+                SelectedDistrictState = GetSelectedDebugDistrictState,
+                SelectedDistrictReputationAmount = GetSelectedDebugDistrictReputationAmount,
+                AddMoney = AddDebugMoney,
+                ApplyDistrictStateToAll = ApplySelectedDebugDistrictStateToAll,
+                IncreaseDistrictReputation = () => AdjustDebugDistrictReputation(1f),
+                DecreaseDistrictReputation = () => AdjustDebugDistrictReputation(-1f),
+                AddSelectedResourceToNearbyIndustry = AddSelectedDebugResourceToNearbyIndustry,
+                DeleteResolvedVehicleCargo = DeleteResolvedVehicleCargo,
+                DeleteCurrentVehicle = DeleteCurrentVehicle,
+                FillNearbyIndustryInputs = FillNearbyIndustryInputs,
+                EmptyNearbyIndustryInputs = EmptyNearbyIndustryInputs,
+                FillNearbyIndustryOutputs = FillNearbyIndustryOutputs,
+                EmptyNearbyIndustryOutputs = EmptyNearbyIndustryOutputs,
+                MultiplyNearbyIndustryProductionRate = MultiplyNearbyIndustryProductionRate,
+                CloseMenu = () => _debugMenu.Close(),
             });
         }
 
         private void RebuildDebugMissionMenuItems()
         {
-            _debugMissionMenu.Title = "Trigger Missions";
-            _debugMissionMenu.Subtitle = "Force-start loaded community contracts";
-
-            var items = new List<OfficeMenuItem>();
-            if (_specialMissionManager == null || !_specialMissionManager.HasDefinitions)
+            _debugMenuProvider.PopulateMissionMenu(_debugMissionMenu, new DebugMissionMenuCallbacks
             {
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "No custom missions loaded",
-                    DetailFactory = () => "Add INI files to the missions folder next to LSOL.ini and reload the mod.",
-                });
-            }
-            else
-            {
-                var listingsById = _specialMissionManager.GetMissionListings()
-                    .Where(listing => listing != null && !string.IsNullOrWhiteSpace(listing.MissionId))
-                    .ToDictionary(listing => listing.MissionId, StringComparer.OrdinalIgnoreCase);
-
-                foreach (var definition in _specialMissionManager.Definitions)
-                {
-                    var capturedDefinition = definition;
-                    SpecialMissionListing listing;
-                    listingsById.TryGetValue(capturedDefinition.Id, out listing);
-                    var capturedListing = listing;
-                    items.Add(new OfficeMenuItem
-                    {
-                        CaptionFactory = () => BuildDebugMissionCaption(capturedDefinition, capturedListing),
-                        DetailFactory = () => BuildDebugMissionDetail(capturedDefinition, capturedListing),
-                        OnActivate = () => TriggerDebugMission(capturedDefinition.Id),
-                    });
-                }
-            }
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => "Back",
-                OnActivate = ReturnToDebugMenu,
+                Definitions = _specialMissionManager != null ? _specialMissionManager.Definitions : Enumerable.Empty<SpecialMissionDefinition>(),
+                Listings = _specialMissionManager != null ? _specialMissionManager.GetMissionListings() : Enumerable.Empty<SpecialMissionListing>(),
+                MissionCaptionFactory = BuildDebugMissionCaption,
+                MissionDetailFactory = BuildDebugMissionDetail,
+                TriggerMission = TriggerDebugMission,
+                ReturnToDebugMenu = ReturnToDebugMenu,
             });
-
-            _debugMissionMenu.SetItems(items);
         }
 
         private string CurrentDebugMissionBoardDetail()
@@ -2882,7 +2788,7 @@ namespace LSOL
             var missionCount = _specialMissionManager.Definitions.Count();
             if (missionCount <= 0)
             {
-                return "No loaded mission packs. Add INI files to the missions folder next to LSOL.ini.";
+                return "No loaded mission packs. Add XML mission packs to scripts/LSOL_Config/missions.";
             }
 
             var warningCount = _specialMissionManager.Catalog != null
@@ -3005,7 +2911,7 @@ namespace LSOL
 
         private void RebuildOfficeMenuItems()
         {
-            _officeMenu.Title = _menuOffice != null ? _menuOffice.DisplayName : "Office";
+            _officeMenu.Title = "Office Menu";
             _officeMenu.Subtitle = BuildOfficeMenuSubtitle();
             _officeMenu.SetItems(BuildOfficeMenuItems());
         }
@@ -3153,7 +3059,7 @@ namespace LSOL
 
         private void RebuildVehicleCargoMenuItems()
         {
-            _vehicleCargoMenu.SetItems(new[]
+            var items = new List<OfficeMenuItem>
             {
                 new OfficeMenuItem
                 {
@@ -3180,17 +3086,32 @@ namespace LSOL
                     OnLeft = () => ChangeTractorSelection(-1),
                     OnRight = () => ChangeTractorSelection(1),
                 },
-                new OfficeMenuItem
+            };
+
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
+            {
+                items.Add(new OfficeMenuItem
                 {
-                    IsSeparator = true,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentVehicleSpawnerActionCaption,
-                    DetailFactory = CurrentVehicleSpawnerActionDetail,
-                    OnActivate = SpawnSelectedVehicle,
-                },
+                    CaptionFactory = CurrentCommercialDealershipAcquisitionCaption,
+                    DetailFactory = BuildCommercialDealershipAcquisitionModeDetail,
+                    OnLeft = () => ChangeCommercialDealershipAcquisitionMode(-1),
+                    OnRight = () => ChangeCommercialDealershipAcquisitionMode(1),
+                    OnActivate = () => ChangeCommercialDealershipAcquisitionMode(1),
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                IsSeparator = true,
             });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = CurrentVehicleSpawnerActionCaption,
+                DetailFactory = CurrentVehicleSpawnerActionDetail,
+                OnActivate = SpawnSelectedVehicle,
+            });
+
+            _vehicleCargoMenu.SetItems(items);
         }
 
         private void OpenVehicleCargoMenu()
@@ -3413,6 +3334,11 @@ namespace LSOL
             return string.Format("District rep amount: < {0:0.#} >", GetSelectedDebugDistrictReputationAmount());
         }
 
+        private string CurrentDebugDistrictStateCaption()
+        {
+            return string.Format("All districts state: < {0} >", GetSelectedDebugDistrictState());
+        }
+
         private void ChangeDebugResourceAmountSelection(int delta)
         {
             _selectedDebugResourceAmountIndex = (_selectedDebugResourceAmountIndex + delta + DebugResourceAmountOptionsTons.Length) % DebugResourceAmountOptionsTons.Length;
@@ -3440,6 +3366,11 @@ namespace LSOL
             _selectedDebugDistrictReputationAmountIndex = (_selectedDebugDistrictReputationAmountIndex + delta + DebugDistrictReputationAmountOptions.Length) % DebugDistrictReputationAmountOptions.Length;
         }
 
+        private void ChangeDebugDistrictStateSelection(int delta)
+        {
+            _selectedDebugDistrictStateIndex = (_selectedDebugDistrictStateIndex + delta + DebugDistrictStateOptions.Length) % DebugDistrictStateOptions.Length;
+        }
+
         private void AdjustDebugDistrictReputation(float direction)
         {
             if (_territoryManager == null)
@@ -3463,7 +3394,7 @@ namespace LSOL
             }
 
             _territoryManager.AdjustDistrictReputationDebug(districtName, amount * direction);
-            _tabletStateStore.MarkAllDirty();
+            _tabletStateStore.MarkNetworkDirty();
 
             var district = _territoryManager.GetDistrictState(districtName);
             var label = district != null && !string.IsNullOrWhiteSpace(district.ReputationLabel)
@@ -3475,6 +3406,36 @@ namespace LSOL
                 direction >= 0f ? "+" : string.Empty,
                 amount * direction,
                 label));
+        }
+
+        private void ApplySelectedDebugDistrictStateToAll()
+        {
+            if (_territoryManager == null)
+            {
+                ShowStatus("Territory manager unavailable.");
+                return;
+            }
+
+            var districtState = GetSelectedDebugDistrictState();
+            if (string.IsNullOrWhiteSpace(districtState))
+            {
+                ShowStatus("Select a valid district state first.");
+                return;
+            }
+
+            var updatedDistrictCount = _territoryManager.ApplyDistrictReputationDebugStateToAll(districtState);
+            if (updatedDistrictCount <= 0)
+            {
+                ShowStatus("No district data is loaded.");
+                return;
+            }
+
+            _tabletStateStore.MarkNetworkDirty();
+            ShowStatus(string.Format(
+                "Applied {0} to {1} district{2}.",
+                districtState,
+                updatedDistrictCount,
+                updatedDistrictCount == 1 ? string.Empty : "s"));
         }
 
         private void AddSelectedDebugResourceToNearbyIndustry()
@@ -3680,12 +3641,21 @@ namespace LSOL
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
             {
                 string purchaseMessage;
-                if (_propertyManager.TryPurchaseCommercialVehicle(
-                    _vehicleSpawnController.SelectedVehicleDefinition,
-                    _vehicleSpawnController.SelectedTractorDefinition,
-                    ref _profit,
-                    out _,
-                    out purchaseMessage))
+                var acquired = IsCommercialDealershipRentMode
+                    ? _propertyManager.TryRentCommercialVehicle(
+                        _vehicleSpawnController.SelectedVehicleDefinition,
+                        _vehicleSpawnController.SelectedTractorDefinition,
+                        ref _profit,
+                        GetCurrentInGameWeekMinute(),
+                        out _,
+                        out purchaseMessage)
+                    : _propertyManager.TryPurchaseCommercialVehicle(
+                        _vehicleSpawnController.SelectedVehicleDefinition,
+                        _vehicleSpawnController.SelectedTractorDefinition,
+                        ref _profit,
+                        out _,
+                        out purchaseMessage);
+                if (acquired)
                 {
                     _tabletStateStore.MarkBalanceDirty();
                 }
@@ -3945,15 +3915,83 @@ namespace LSOL
                 return;
             }
 
-            string message;
-            if (!_industryRefuelService.TryRefuel(industry, Game.Player.Character, out message))
+            _cargoTransferController.StartTimedTransfer(
+                "Refueling 0%...",
+                2200,
+                () =>
+                {
+                    CloseIndustryTablet();
+                },
+                () =>
+                {
+                    string message;
+                    if (!_industryRefuelService.TryRefuel(industry, Game.Player.Character, out message))
+                    {
+                        ShowStatus(message);
+                        return;
+                    }
+
+                    _tabletStateStore.MarkCargoDirty();
+                    _tabletStateStore.MarkNetworkDirty();
+                    ShowStatus(message, 4500);
+                },
+                progress => string.Format("Refueling {0:0}%...", ModMath.Clamp01(progress) * 100f));
+        }
+
+        private void HandleCompanyServiceRefuelRequested()
+        {
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists() || !player.IsInVehicle())
             {
-                ShowStatus(message);
+                ShowStatus("Enter a company vehicle to request refueling.");
                 return;
             }
 
-            _tabletStateStore.MarkAllDirty();
-            ShowStatus(message, 4500);
+            var telemetry = _vehicleFuelSystem.GetActiveTelemetry(player);
+            if (telemetry == null || telemetry.PoweredVehicle == null || !telemetry.PoweredVehicle.Exists() || telemetry.CapacityLiters <= 0.001f)
+            {
+                ShowStatus("No active company truck is available for remote refueling.");
+                return;
+            }
+
+            var litersNeeded = Math.Max(0f, telemetry.CapacityLiters - telemetry.CurrentLiters);
+            if (litersNeeded <= 0.01f)
+            {
+                ShowStatus("The active company truck is already full.");
+                return;
+            }
+
+            var addedLiters = _vehicleFuelSystem.AddFuel(telemetry.PoweredVehicle, litersNeeded);
+            _tabletStateStore.MarkCargoDirty();
+            ShowStatus(string.Format("Remote refuel completed: +{0:0}L.", addedLiters), 4500);
+        }
+
+        private void HandleCompanyServiceRepairRequested()
+        {
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists() || !player.IsInVehicle())
+            {
+                ShowStatus("Enter a vehicle to request repairs.");
+                return;
+            }
+
+            var currentVehicle = player.CurrentVehicle;
+            if (currentVehicle == null || !currentVehicle.Exists())
+            {
+                ShowStatus("No vehicle available to repair.");
+                return;
+            }
+
+            currentVehicle.Repair();
+            var trailer = currentVehicle.TowedVehicle;
+            if (trailer != null && trailer.Exists())
+            {
+                trailer.Repair();
+            }
+
+            ShowStatus(trailer != null && trailer.Exists()
+                ? "Remote repair completed for the truck and trailer."
+                : "Remote repair completed.", 4500);
         }
 
         private void StartTabletLoadTransfer(Industry industry, Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleCargoType cargoType, string selectedProduct)
@@ -4652,6 +4690,16 @@ namespace LSOL
             return DebugDistrictReputationAmountOptions[_selectedDebugDistrictReputationAmountIndex];
         }
 
+        private string GetSelectedDebugDistrictState()
+        {
+            if (_selectedDebugDistrictStateIndex < 0 || _selectedDebugDistrictStateIndex >= DebugDistrictStateOptions.Length)
+            {
+                _selectedDebugDistrictStateIndex = 0;
+            }
+
+            return DebugDistrictStateOptions[_selectedDebugDistrictStateIndex];
+        }
+
         private List<string> GetDebugDistrictOptions()
         {
             return _territoryManager != null
@@ -4721,8 +4769,96 @@ namespace LSOL
             var prefixed = PrefixMessage(message);
             _statusMessage = prefixed;
             _statusMessageUntil = Game.GameTime + durationMs;
-            _tabletStateStore.MarkAllDirty();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkStatusDirty();
+            }
+
             Notification.PostTicker(prefixed, false, false);
+        }
+
+        private void SweepIndustryObjectDeletions(Ped player, int gameTime)
+        {
+            if (player == null || !player.Exists() || _industryManager == null || gameTime - _lastIndustryObjectDeletionSweepMs < IndustryObjectDeletionSweepIntervalMs)
+            {
+                return;
+            }
+
+            _lastIndustryObjectDeletionSweepMs = gameTime;
+            var playerPosition = player.Position;
+            var activationRangeSquared = IndustryObjectDeletionActivationRange * IndustryObjectDeletionActivationRange;
+            var industries = _industryManager.Industries;
+            for (int i = 0; i < industries.Count; i++)
+            {
+                var industry = industries[i];
+                if (industry == null || industry.ObjectToDeleteModelHashes == null || industry.ObjectToDeleteModelHashes.Count == 0)
+                {
+                    continue;
+                }
+
+                if (industry.Position.DistanceToSquared(playerPosition) > activationRangeSquared)
+                {
+                    continue;
+                }
+
+                DeleteConfiguredIndustryObjects(industry);
+            }
+        }
+
+        private static void DeleteConfiguredIndustryObjects(Industry industry)
+        {
+            if (industry == null || industry.ObjectToDeleteModelHashes == null || industry.ObjectToDeleteModelHashes.Count == 0)
+            {
+                return;
+            }
+
+            Prop[] nearbyProps;
+            try
+            {
+                nearbyProps = World.GetNearbyProps(industry.Position, IndustryObjectDeletionRadius);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (nearbyProps == null || nearbyProps.Length == 0)
+            {
+                return;
+            }
+
+            var hashesToDelete = new HashSet<int>(industry.ObjectToDeleteModelHashes);
+            for (int i = 0; i < nearbyProps.Length; i++)
+            {
+                var prop = nearbyProps[i];
+                if (prop == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (!prop.Exists() || prop.IsPersistent || !hashesToDelete.Contains(prop.Model.Hash))
+                    {
+                        continue;
+                    }
+
+                    Function.Call(Hash.SET_ENTITY_AS_MISSION_ENTITY, prop.Handle, true, true);
+                    prop.Delete();
+
+                    if (prop.Exists())
+                    {
+                        prop.IsVisible = false;
+                        var position = prop.Position;
+                        prop.Position = new Vector3(position.X, position.Y, position.Z - 250f);
+                        prop.Delete();
+                    }
+                }
+                catch
+                {
+                    // Keep deletion resilient: one bad streamed prop should not block the remaining cleanup pass.
+                }
+            }
         }
 
         private string GetActiveStatusMessage()

@@ -37,7 +37,7 @@ namespace LSOL.Systems
 
     public sealed class VehicleFuelSystem
     {
-        private const float BaseThrottleConsumptionLitersPerSecond = 0.18f;
+        private const float BaseThrottleConsumptionLitersPerSecond = 0.09f;
         private const float ReverseThrottleMultiplier = 0.9f;
         private const float TractorConsumptionMultiplier = 1.35f;
         private const float HeavyTruckConsumptionMultiplier = 1.15f;

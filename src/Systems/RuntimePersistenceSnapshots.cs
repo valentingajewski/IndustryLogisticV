@@ -55,13 +55,36 @@ namespace LSOL.Systems
         public NpcLogisticsPersistenceSnapshot()
         {
             Contracts = new List<NpcLogisticsContractSnapshot>();
+            WorldJobs = new List<NpcWorldLogisticsJobSnapshot>();
         }
 
         public List<NpcLogisticsContractSnapshot> Contracts { get; }
 
+        public List<NpcWorldLogisticsJobSnapshot> WorldJobs { get; }
+
+        public NpcWorldDispatchPolicy DispatchPolicy { get; set; } = NpcWorldDispatchPolicy.Balanced;
+
+        public string PriorityCommodity { get; set; }
+
+        public string PriorityDistrict { get; set; }
+
+        public bool PremiumDispatchEnabled { get; set; }
+
+        public int LastWorldEvaluationClockMinute { get; set; } = -1;
+
+        public int CompletedWorldDispatches { get; set; }
+
         public bool HasData
         {
-            get { return Contracts.Count > 0; }
+            get
+            {
+                return Contracts.Count > 0
+                    || WorldJobs.Count > 0
+                    || !string.IsNullOrWhiteSpace(PriorityCommodity)
+                    || !string.IsNullOrWhiteSpace(PriorityDistrict)
+                    || PremiumDispatchEnabled
+                    || CompletedWorldDispatches > 0;
+            }
         }
     }
 
@@ -92,5 +115,46 @@ namespace LSOL.Systems
         public float TotalProfitEarned { get; set; }
 
         public float LastJourneyLossRatio { get; set; }
+    }
+
+    public sealed class NpcWorldLogisticsJobSnapshot
+    {
+        public int Id { get; set; }
+
+        public NpcWorldJobType Type { get; set; }
+
+        public NpcWorldJobPhase Phase { get; set; }
+
+        public string Commodity { get; set; }
+
+        public string SourceLabel { get; set; }
+
+        public string DestinationLabel { get; set; }
+
+        public string OriginIndustryId { get; set; }
+
+        public string DestinationIndustryId { get; set; }
+
+        public float Tons { get; set; }
+
+        public int RemainingInGameMinutes { get; set; }
+
+        public int TotalInGameMinutes { get; set; }
+
+        public int CreatedClockMinute { get; set; }
+
+        public bool IsSpotOpportunity { get; set; }
+
+        public bool UsesPremiumDispatch { get; set; }
+
+        public bool IsPriorityMatch { get; set; }
+
+        public bool HasVisibleConvoy { get; set; }
+
+        public bool IsRivalJob { get; set; }
+
+        public int BackhaulDepth { get; set; }
+
+        public string StatusText { get; set; }
     }
 }

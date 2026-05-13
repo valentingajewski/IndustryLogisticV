@@ -151,6 +151,8 @@ namespace LSOL
 
         private void LoadNamedSave(NamedSaveEntry entry)
         {
+            _pendingDeleteSavePath = null;
+
             if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
             {
                 ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
@@ -175,8 +177,31 @@ namespace LSOL
             ShowStatus(Text(ModTextKey.DetailSaveLoaded, entry.DisplayName), 4000);
         }
 
+        private void ConfirmOrDeleteNamedSave(NamedSaveEntry entry)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
+            {
+                _pendingDeleteSavePath = null;
+                ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
+                RebuildSaveSlotsMenuItems();
+                return;
+            }
+
+            if (!PathsEqual(_pendingDeleteSavePath, entry.FilePath))
+            {
+                _pendingDeleteSavePath = entry.FilePath;
+                RebuildSaveSlotsMenuItems();
+                ShowStatus(string.Format("Press Enter again to delete {0}.", entry.DisplayName), 4000);
+                return;
+            }
+
+            DeleteNamedSave(entry);
+        }
+
         private void DeleteNamedSave(NamedSaveEntry entry)
         {
+            _pendingDeleteSavePath = null;
+
             if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
             {
                 ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
@@ -508,53 +533,53 @@ namespace LSOL
             RebuildOptionsMenuItems();
         }
 
-        private string ResolveConfigPath()
+        private string ResolveRuntimeDirectory()
         {
-            var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) ?? BaseDirectory;
+            var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            var scriptsDirectory = Path.Combine(BaseDirectory, "scripts");
             var candidates = new[]
             {
-                Path.Combine(assemblyDir, "LSOL.ini"),
-                Path.Combine(BaseDirectory, "LSOL.ini"),
-                Path.Combine(BaseDirectory, "scripts", "LSOL.ini"),
-            };
+                assemblyDir,
+                scriptsDirectory,
+                BaseDirectory,
+            }
+                .Where(path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
 
-            for (int i = 0; i < candidates.Length; i++)
+            for (int i = 0; i < candidates.Count; i++)
             {
-                if (File.Exists(candidates[i]))
+                var configDirectory = Path.Combine(candidates[i], "LSOL_Config");
+                if (Directory.Exists(configDirectory))
                 {
                     return candidates[i];
                 }
             }
 
-            return candidates[0];
-        }
-
-        private string ResolveIndustryStatePath(string configPath)
-        {
-            var configDirectory = string.IsNullOrWhiteSpace(configPath)
-                ? string.Empty
-                : Path.GetDirectoryName(configPath) ?? string.Empty;
-
-            if (!string.IsNullOrWhiteSpace(configDirectory))
+            for (int i = 0; i < candidates.Count; i++)
             {
-                return Path.Combine(configDirectory, "LSOL.state.ini");
+                if (Directory.Exists(candidates[i]))
+                {
+                    return candidates[i];
+                }
             }
 
-            return Path.Combine(BaseDirectory, "LSOL.state.ini");
+            return BaseDirectory;
         }
 
-        private string ResolveSavegamesDirectoryPath(string configPath)
+        private string ResolveConfigDirectory()
         {
-            var configDirectory = string.IsNullOrWhiteSpace(configPath)
-                ? string.Empty
-                : Path.GetDirectoryName(configPath) ?? string.Empty;
+            return Path.Combine(ResolveRuntimeDirectory(), "LSOL_Config");
+        }
 
-            if (!string.IsNullOrWhiteSpace(configDirectory))
-            {
-                return Path.Combine(configDirectory, SavegamesDirectoryName);
-            }
+        private string ResolveIndustryStatePath()
+        {
+            return Path.Combine(ResolveRuntimeDirectory(), "LSOL.state.ini");
+        }
 
-            return Path.Combine(BaseDirectory, SavegamesDirectoryName);
+        private string ResolveSavegamesDirectoryPath()
+        {
+            return Path.Combine(ResolveRuntimeDirectory(), SavegamesDirectoryName);
         }
 
         private List<NamedSaveEntry> GetAvailableNamedSaves()
@@ -585,6 +610,15 @@ namespace LSOL
             if (PathsEqual(entry.FilePath, _industryStatePath))
             {
                 action = "Currently active save. " + action;
+            }
+
+            if (_saveSlotMenuAction == SaveSlotMenuAction.Delete && PathsEqual(_pendingDeleteSavePath, entry.FilePath))
+            {
+                action = "Press Enter again to confirm deletion. ";
+                if (PathsEqual(entry.FilePath, _industryStatePath))
+                {
+                    action = "Currently active save. " + action;
+                }
             }
 
             try

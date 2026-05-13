@@ -293,7 +293,7 @@ namespace LSOL.Systems
                     && string.Equals(apartment.InteriorId, activeApartmentId, StringComparison.OrdinalIgnoreCase);
                 var blip = CreateStaticBlip(
                     _getGroundPosition(apartment.ExteriorPosition),
-                    BlipSprite.Garage2,
+                    BlipSprite.Safehouse,
                     isActive ? BlipColor.Blue : BlipColor.White,
                     ResolveApartmentBlipName(apartment, isActive),
                     isActive ? 0.95f : 0.85f);
@@ -422,38 +422,54 @@ namespace LSOL.Systems
 
         private BlipColor ResolveIndustryBlipColor(Industry industry, bool isPetrolStation)
         {
-            if (_territoryManager == null || industry == null)
+            if (industry == null)
             {
-                if (industry != null && industry.IsStarterHeadquarters)
+                return BlipColor.White;
+            }
+
+            if (industry.IsStarterHeadquarters)
+            {
+                return BlipColor.Green;
+            }
+
+            if (_territoryManager == null)
+            {
+                if (industry.IsOwned)
                 {
                     return BlipColor.Green;
                 }
 
-                return isPetrolStation
+                return industry.HasContractorPermit
                     ? BlipColor.Yellow
-                    : (industry != null && industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
+                    : BlipColor.Red;
             }
 
             var siteState = _territoryManager.GetSiteState(industry);
             if (siteState == null)
             {
-                if (industry.IsStarterHeadquarters)
+                if (industry.IsOwned)
                 {
                     return BlipColor.Green;
                 }
 
-                return isPetrolStation
+                return industry.HasContractorPermit
                     ? BlipColor.Yellow
-                    : (industry.IsSink ? BlipColor.Yellow : BlipColor.Green);
+                    : BlipColor.Red;
             }
 
-            var isCompanyControlled = industry.IsStarterHeadquarters || siteState.ControlLevel != TerritoryControlLevel.None;
-            if (isCompanyControlled)
+            if (siteState.ControlLevel == TerritoryControlLevel.Owned)
             {
-                return siteState.IsOperational ? BlipColor.Green : BlipColor.Blue;
+                return BlipColor.Green;
             }
 
-            return siteState.IsOperational ? BlipColor.Yellow : BlipColor.Red;
+            if (siteState.ControlLevel == TerritoryControlLevel.Leased)
+            {
+                return BlipColor.Blue;
+            }
+
+            return industry.HasContractorPermit
+                ? BlipColor.Yellow
+                : BlipColor.Red;
         }
 
         private string ResolveIndustryBlipName(Industry industry)

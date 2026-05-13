@@ -22,18 +22,27 @@ namespace LSOL
         private static readonly Vector3 PersonalDealershipMarker = new Vector3(38.68f, -1109.47f, 26.44f);
 
         private LemonMenu _commercialGarageMenu;
+        private LemonMenu _commercialGarageActionMenu;
         private LemonMenu _apartmentMenu;
         private LemonMenu _personalGarageMenu;
         private LemonMenu _personalDealershipMenu;
         private OfficeDefinition _menuOffice;
         private InteriorDefinition _menuApartment;
         private CommercialGarageMenuContext _commercialGarageMenuContext;
+        private OwnedCommercialVehiclePersistenceEntry _selectedCommercialGarageVehicle;
+        private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
 
         private void InitializePropertyMenus()
         {
             _commercialGarageMenu = new LemonMenu("Commercial Garage")
             {
-                Subtitle = "Retrieve, store, and swap owned commercial vehicles",
+                Subtitle = "Retrieve, store, and swap vehicles",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _commercialGarageActionMenu = new LemonMenu("Garage Vehicle")
+            {
+                Subtitle = "Retrieve, store, reserve, or close the contract",
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
@@ -56,11 +65,13 @@ namespace LSOL
                 MaxVisibleItems = 10,
             };
             _commercialGarageMenuContext = CommercialGarageMenuContext.Office;
+            _commercialDealershipAcquisitionMode = CommercialDealershipAcquisitionMode.Purchase;
         }
 
         private bool HasPropertyMenuOpen()
         {
             return (_commercialGarageMenu != null && _commercialGarageMenu.IsOpen)
+                || (_commercialGarageActionMenu != null && _commercialGarageActionMenu.IsOpen)
                 || (_apartmentMenu != null && _apartmentMenu.IsOpen)
                 || (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
                 || (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen);
@@ -71,6 +82,11 @@ namespace LSOL
             if (_commercialGarageMenu != null)
             {
                 _commercialGarageMenu.Draw();
+            }
+
+            if (_commercialGarageActionMenu != null)
+            {
+                _commercialGarageActionMenu.Draw();
             }
 
             if (_apartmentMenu != null)
@@ -94,6 +110,11 @@ namespace LSOL
             if (_commercialGarageMenu != null)
             {
                 _commercialGarageMenu.Close();
+            }
+
+            if (_commercialGarageActionMenu != null)
+            {
+                _commercialGarageActionMenu.Close();
             }
 
             if (_apartmentMenu != null)
@@ -141,6 +162,18 @@ namespace LSOL
                 }
 
                 _commercialGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_commercialGarageActionMenu != null && _commercialGarageActionMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToCommercialGarageMenu();
+                    return true;
+                }
+
+                _commercialGarageActionMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -404,6 +437,7 @@ namespace LSOL
             var office = _menuOffice;
             var officeState = office != null ? _propertyManager.GetOfficeState(office.OfficeId) : null;
             var isActiveOffice = office != null && string.Equals(_propertyManager.ActiveOfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase);
+            var isOwned = officeState != null && officeState.IsOwned;
             var hasAccess = office != null && officeState != null && (officeState.IsOwned || officeState.IsRented);
             var hasArrears = officeState != null && officeState.OutstandingRent > 0.01f;
 
@@ -434,12 +468,20 @@ namespace LSOL
                     DetailFactory = () => string.Format("Pay {0} to unlock access at this office.", ModFormatting.FormatMoney(office.WeeklyOfficeRent)),
                     OnActivate = RentSelectedOffice,
                 });
+            }
+
+            if (!isOwned && !hasArrears)
+            {
                 items.Add(new OfficeMenuItem
                 {
                     CaptionFactory = () => "Purchase Office",
                     DetailFactory = () => string.Format("Pay {0} to own this office permanently.", ModFormatting.FormatMoney(office.OfficePrice)),
                     OnActivate = PurchaseSelectedOffice,
                 });
+            }
+
+            if (!hasAccess)
+            {
                 return items;
             }
 
@@ -473,7 +515,7 @@ namespace LSOL
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Commercial Garage",
+                    CaptionFactory = () => "Garage",
                     DetailFactory = BuildCommercialGarageSummary,
                     OnActivate = OpenCommercialGarageMenu,
                 });
@@ -601,7 +643,7 @@ namespace LSOL
                     CaptionFactory = () => BuildCommercialGarageSummary(),
                     DetailFactory = () => _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
                         ? "Select an active garage vehicle to deploy at this industry."
-                        : "Enter retrieves or stores. Left/right sends active vehicles to reserve.",
+                        : "Enter opens vehicle actions for retrieve, storage, reserve, sale, or rental return.",
                 }
             };
 
@@ -624,8 +666,6 @@ namespace LSOL
                         CaptionFactory = () => BuildCommercialVehicleStatusCaption(vehicle),
                         DetailFactory = () => BuildCommercialVehicleDetail(vehicle),
                         OnActivate = () => HandleCommercialVehicleActivate(vehicle),
-                        OnLeft = _commercialGarageMenuContext == CommercialGarageMenuContext.Office ? (Action)(() => MoveCommercialVehicleToReserve(vehicle)) : null,
-                        OnRight = _commercialGarageMenuContext == CommercialGarageMenuContext.Office ? (Action)(() => MoveCommercialVehicleToReserve(vehicle)) : null,
                     });
                 }
             }
@@ -641,17 +681,19 @@ namespace LSOL
                     {
                         CaptionFactory = () => BuildCommercialVehicleStatusCaption(vehicle),
                         DetailFactory = () => BuildCommercialVehicleDetail(vehicle),
-                        OnActivate = () => ActivateCommercialReserveVehicle(vehicle),
+                        OnActivate = _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
+                            ? (Action)(() => ActivateCommercialReserveVehicle(vehicle))
+                            : (Action)(() => OpenCommercialGarageActionMenu(vehicle)),
                     });
                 }
             }
 
             _commercialGarageMenu.Title = _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
                 ? "Industry Deployment"
-                : "Commercial Garage";
+                : "Garage";
             _commercialGarageMenu.Subtitle = _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
                 ? "Deploy owned commercial vehicles to the selected industry pad"
-                : "Retrieve, store, and swap owned commercial vehicles";
+                : "Retrieve, store, and swap vehicles";
             _commercialGarageMenu.SetItems(items);
         }
 
@@ -664,10 +706,13 @@ namespace LSOL
 
             var location = vehicle.InActiveGarage ? "Active garage" : "Reserve";
             var deployed = _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId) ? "Deployed" : "Stored";
+            var acquisition = vehicle.IsRental
+                ? string.Format("Rent {0}/day", ModFormatting.FormatMoney(vehicle.DailyRent))
+                : "Owned";
             var cargo = string.IsNullOrWhiteSpace(vehicle.Commodity)
                 ? "Empty"
                 : string.Format("{0} {1:0.0}/{2:0.0}t", vehicle.Commodity, vehicle.WeightTons, Math.Max(0f, vehicle.CapacityTons));
-            return string.Format("{0} | {1} | {2}", location, deployed, cargo);
+            return string.Format("{0} | {1} | {2} | {3}", location, deployed, acquisition, cargo);
         }
 
         private string BuildCommercialVehicleStatusCaption(OwnedCommercialVehiclePersistenceEntry vehicle)
@@ -678,8 +723,9 @@ namespace LSOL
             }
 
             return string.Format(
-                "[{0}] {1}",
+                "[{0}{1}] {2}",
                 _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId) ? "Out" : "Stored",
+                vehicle.IsRental ? "/Rent" : string.Empty,
                 vehicle.DisplayName);
         }
 
@@ -710,28 +756,8 @@ namespace LSOL
             }
             else
             {
-                var activeOffice = _propertyManager.ActiveOffice;
-                if (activeOffice == null)
-                {
-                    ShowStatus("No active office selected.");
-                    return;
-                }
-
-                if (_propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId))
-                {
-                    _propertyManager.TryStoreCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, out message);
-                }
-                else
-                {
-                    _propertyManager.TryDeployCommercialVehicle(
-                        vehicle.AssetId,
-                        _fleetManager,
-                        _vehicleFuelSystem,
-                        GetGroundPosition,
-                        activeOffice.SpawnPosition,
-                        activeOffice.SpawnHeading,
-                        out message);
-                }
+                OpenCommercialGarageActionMenu(vehicle);
+                return;
             }
 
             _tabletStateStore.MarkCargoDirty();
@@ -771,6 +797,10 @@ namespace LSOL
             string message;
             _propertyManager.TrySetCommercialVehicleReserve(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, out message);
             _tabletStateStore.MarkCargoDirty();
+            if (_commercialGarageActionMenu != null && _commercialGarageActionMenu.IsOpen)
+            {
+                RebuildCommercialGarageActionMenuItems();
+            }
             RebuildCommercialGarageMenuItems();
             ShowStatus(message);
         }
@@ -778,6 +808,7 @@ namespace LSOL
         private void ReturnFromCommercialGarageMenu()
         {
             _commercialGarageMenu.Close();
+            _selectedCommercialGarageVehicle = null;
 
             if (_commercialGarageMenuContext == CommercialGarageMenuContext.Industry)
             {
@@ -787,6 +818,211 @@ namespace LSOL
 
             RebuildOfficeMenuItems();
             _officeMenu.Open();
+        }
+
+        private void OpenCommercialGarageActionMenu(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            _selectedCommercialGarageVehicle = vehicle;
+            RebuildCommercialGarageActionMenuItems();
+            _commercialGarageMenu.Close();
+            _commercialGarageActionMenu.Open();
+        }
+
+        private void RebuildCommercialGarageActionMenuItems()
+        {
+            var vehicle = _selectedCommercialGarageVehicle;
+            var items = new List<OfficeMenuItem>();
+
+            if (vehicle == null)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No vehicle selected",
+                    DetailFactory = () => "Return to the garage list and choose a valid vehicle.",
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    OnActivate = ReturnToCommercialGarageMenu,
+                });
+                _commercialGarageActionMenu.Title = "Garage Vehicle";
+                _commercialGarageActionMenu.Subtitle = "Vehicle actions";
+                _commercialGarageActionMenu.SetItems(items);
+                return;
+            }
+
+            var isDeployed = _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId);
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => vehicle.DisplayName,
+                DetailFactory = () => BuildCommercialVehicleDetail(vehicle),
+            });
+
+            if (!isDeployed)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Retrieve Vehicle",
+                    DetailFactory = () => vehicle.InActiveGarage
+                        ? "Deploy this vehicle at the active office spawn."
+                        : "Move the vehicle into the active garage and deploy it at the office spawn.",
+                    OnActivate = () => RetrieveCommercialVehicleFromGarage(vehicle),
+                });
+            }
+            else
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Put In Storage",
+                    DetailFactory = () => "Store the deployed vehicle back in the company garage.",
+                    OnActivate = () => StoreCommercialVehicleFromGarage(vehicle),
+                });
+            }
+
+            if (vehicle.InActiveGarage)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Move To Reserve",
+                    DetailFactory = () => "Free an active garage slot by sending this vehicle to reserve storage.",
+                    OnActivate = () => MoveCommercialVehicleToReserve(vehicle),
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => vehicle.IsRental ? "End Rent" : "Sell Vehicle",
+                DetailFactory = () => vehicle.IsRental
+                    ? string.Format("Close the rental and refund {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.DailyRent * 2f)))
+                    : string.Format("Sell this vehicle back for {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.PurchasePrice * 0.5f))),
+                OnActivate = () =>
+                {
+                    if (vehicle.IsRental)
+                    {
+                        EndCommercialVehicleRentalFromGarage(vehicle);
+                    }
+                    else
+                    {
+                        SellCommercialVehicleFromGarage(vehicle);
+                    }
+                },
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Back",
+                DetailFactory = () => "Return to the garage list.",
+                OnActivate = ReturnToCommercialGarageMenu,
+            });
+
+            _commercialGarageActionMenu.Title = vehicle.DisplayName;
+            _commercialGarageActionMenu.Subtitle = vehicle.IsRental
+                ? string.Format("Rental {0}/day", ModFormatting.FormatMoney(vehicle.DailyRent))
+                : "Owned company vehicle";
+            _commercialGarageActionMenu.SetItems(items);
+        }
+
+        private void RetrieveCommercialVehicleFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (!vehicle.InActiveGarage)
+            {
+                if (!_propertyManager.TrySetCommercialVehicleActive(vehicle.AssetId, out message))
+                {
+                    ShowStatus(message);
+                    return;
+                }
+            }
+
+            var activeOffice = _propertyManager.ActiveOffice;
+            if (activeOffice == null)
+            {
+                ShowStatus("No active office selected.");
+                return;
+            }
+
+            _propertyManager.TryDeployCommercialVehicle(
+                vehicle.AssetId,
+                _fleetManager,
+                _vehicleFuelSystem,
+                GetGroundPosition,
+                activeOffice.SpawnPosition,
+                activeOffice.SpawnHeading,
+                out message);
+            _tabletStateStore.MarkCargoDirty();
+            RebuildCommercialGarageActionMenuItems();
+            RebuildCommercialGarageMenuItems();
+            ShowStatus(message);
+        }
+
+        private void StoreCommercialVehicleFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            _propertyManager.TryStoreCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, out message);
+            _tabletStateStore.MarkCargoDirty();
+            RebuildCommercialGarageActionMenuItems();
+            RebuildCommercialGarageMenuItems();
+            ShowStatus(message);
+        }
+
+        private void SellCommercialVehicleFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TrySellCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, ref _profit, out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                _tabletStateStore.MarkCargoDirty();
+                _selectedCommercialGarageVehicle = null;
+                ReturnToCommercialGarageMenu();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void EndCommercialVehicleRentalFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryEndCommercialVehicleRental(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, ref _profit, out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                _tabletStateStore.MarkCargoDirty();
+                _selectedCommercialGarageVehicle = null;
+                ReturnToCommercialGarageMenu();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void ReturnToCommercialGarageMenu()
+        {
+            _commercialGarageActionMenu.Close();
+            _selectedCommercialGarageVehicle = null;
+            RebuildCommercialGarageMenuItems();
+            _commercialGarageMenu.Open();
         }
 
         private void OpenApartmentMenuFor(InteriorDefinition apartment)
@@ -1125,10 +1361,63 @@ namespace LSOL
             OpenVehicleCargoMenu(VehicleCargoMenuContext.CommercialDealership);
         }
 
+        private bool IsCommercialDealershipRentMode
+        {
+            get { return _commercialDealershipAcquisitionMode == CommercialDealershipAcquisitionMode.Rent; }
+        }
+
+        private string CurrentCommercialDealershipAcquisitionCaption()
+        {
+            return string.Format("Acquisition: < {0} >", IsCommercialDealershipRentMode ? "Rent" : "Purchase");
+        }
+
+        private void ChangeCommercialDealershipAcquisitionMode(int delta)
+        {
+            if (delta == 0)
+            {
+                delta = 1;
+            }
+
+            _commercialDealershipAcquisitionMode = _commercialDealershipAcquisitionMode == CommercialDealershipAcquisitionMode.Purchase
+                ? CommercialDealershipAcquisitionMode.Rent
+                : CommercialDealershipAcquisitionMode.Purchase;
+            RebuildVehicleCargoMenuItems();
+        }
+
+        private string BuildCommercialDealershipAcquisitionModeDetail()
+        {
+            var dailyRent = GetSelectedCommercialVehicleDailyRent();
+            if (!IsCommercialDealershipRentMode)
+            {
+                return "Left/right switches to rental pricing. Purchase adds the vehicle permanently to the company garage.";
+            }
+
+            if (dailyRent <= 0.001f)
+            {
+                return "Rental is not configured for the selected vehicle.";
+            }
+
+            return string.Format(
+                "Rent charges {0}/day. First day plus a refundable 2-day deposit is collected upfront.",
+                ModFormatting.FormatMoney(dailyRent));
+        }
+
+        private float GetSelectedCommercialVehicleDailyRent()
+        {
+            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            if (selectedVehicle == null)
+            {
+                return 0f;
+            }
+
+            var selectedTractor = selectedVehicle.IsTrailer ? _vehicleSpawnController.SelectedTractorDefinition : null;
+            return Math.Max(0f, selectedVehicle.DailyRent) + Math.Max(0f, selectedTractor != null ? selectedTractor.DailyRent : 0f);
+        }
+
         private string CurrentVehicleSpawnerActionCaption()
         {
             return _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
-                ? "~b~Purchase Vehicle~s~"
+                ? (IsCommercialDealershipRentMode ? "~b~Rent Vehicle~s~" : "~b~Purchase Vehicle~s~")
                 : "~b~Spawn Vehicle~s~";
         }
 
@@ -1141,22 +1430,33 @@ namespace LSOL
             }
 
             var vehiclePrice = ModFormatting.FormatMoney(Math.Max(0f, selectedVehicle.Price));
+            var dailyRent = GetSelectedCommercialVehicleDailyRent();
             if (!selectedVehicle.IsTrailer)
             {
-                return string.Format("Vehicle price {0}.", vehiclePrice);
+                return dailyRent > 0.001f
+                    ? string.Format("Vehicle price {0} | Rent {1}/day.", vehiclePrice, ModFormatting.FormatMoney(dailyRent))
+                    : string.Format("Vehicle price {0}.", vehiclePrice);
             }
 
             var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
             if (selectedTractor == null)
             {
-                return string.Format("Trailer price {0}. Select a truck to complete the purchase.", vehiclePrice);
+                return dailyRent > 0.001f
+                    ? string.Format("Trailer price {0} | Rent {1}/day. Select a truck to complete the setup.", vehiclePrice, ModFormatting.FormatMoney(dailyRent))
+                    : string.Format("Trailer price {0}. Select a truck to complete the purchase.", vehiclePrice);
             }
 
             var totalPrice = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor.Price);
-            return string.Format(
-                "Trailer price {0} | Total with truck {1}.",
-                vehiclePrice,
-                ModFormatting.FormatMoney(totalPrice));
+            return dailyRent > 0.001f
+                ? string.Format(
+                    "Trailer price {0} | Total with truck {1} | Rent {2}/day.",
+                    vehiclePrice,
+                    ModFormatting.FormatMoney(totalPrice),
+                    ModFormatting.FormatMoney(dailyRent))
+                : string.Format(
+                    "Trailer price {0} | Total with truck {1}.",
+                    vehiclePrice,
+                    ModFormatting.FormatMoney(totalPrice));
         }
 
         private string BuildCommercialDealershipTruckSelectionDetail()
@@ -1180,10 +1480,17 @@ namespace LSOL
 
             var tractorPrice = Math.Max(0f, selectedTractor.Price);
             var totalPrice = Math.Max(0f, selectedVehicle.Price) + tractorPrice;
-            return string.Format(
-                "Truck price {0} | Total purchase {1}.",
-                ModFormatting.FormatMoney(tractorPrice),
-                ModFormatting.FormatMoney(totalPrice));
+            var dailyRent = GetSelectedCommercialVehicleDailyRent();
+            return dailyRent > 0.001f
+                ? string.Format(
+                    "Truck price {0} | Total purchase {1} | Total rent {2}/day.",
+                    ModFormatting.FormatMoney(tractorPrice),
+                    ModFormatting.FormatMoney(totalPrice),
+                    ModFormatting.FormatMoney(dailyRent))
+                : string.Format(
+                    "Truck price {0} | Total purchase {1}.",
+                    ModFormatting.FormatMoney(tractorPrice),
+                    ModFormatting.FormatMoney(totalPrice));
         }
 
         private string BuildCommercialDealershipPurchaseDetail()
@@ -1196,7 +1503,28 @@ namespace LSOL
             }
 
             var price = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
-            return string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price));
+            if (!IsCommercialDealershipRentMode)
+            {
+                return string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price));
+            }
+
+            var dailyRent = GetSelectedCommercialVehicleDailyRent();
+            if (dailyRent <= 0.001f)
+            {
+                return "Rental is not configured for this vehicle.";
+            }
+
+            var upfrontCost = dailyRent * 3f;
+            return string.Format(
+                "Rent for {0}/day. First day plus a refundable deposit totals {1} upfront.",
+                ModFormatting.FormatMoney(dailyRent),
+                ModFormatting.FormatMoney(upfrontCost));
+        }
+
+        private enum CommercialDealershipAcquisitionMode
+        {
+            Purchase = 0,
+            Rent = 1,
         }
 
         private enum CommercialGarageMenuContext

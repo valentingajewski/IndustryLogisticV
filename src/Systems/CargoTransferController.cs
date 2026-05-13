@@ -266,12 +266,23 @@ namespace LSOL.Systems
                             _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
                         }
 
-                        _showStatus(string.Format(
-                            "Unloaded {0:0.0}t {1}. Profit +${2:0} | Condition {3:0}%",
-                            accepted,
-                            commodity,
-                            revenue,
-                            conditionRatio * 100f));
+                        if (industry != null && industry.IsWarehouse)
+                        {
+                            _showStatus(string.Format(
+                                "Stored {0:0.0}t {1} | Condition {2:0}%",
+                                accepted,
+                                commodity,
+                                conditionRatio * 100f));
+                        }
+                        else
+                        {
+                            _showStatus(string.Format(
+                                "Unloaded {0:0.0}t {1}. Profit +${2:0} | Condition {3:0}%",
+                                accepted,
+                                commodity,
+                                revenue,
+                                conditionRatio * 100f));
+                        }
                     }
                     finally
                     {
@@ -439,7 +450,14 @@ namespace LSOL.Systems
                             _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
                         }
 
-                        _showStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
+                        if (industry != null && industry.IsWarehouse)
+                        {
+                            _showStatus(string.Format("Stored {0:0.0}t {1}", accepted, commodity));
+                        }
+                        else
+                        {
+                            _showStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
+                        }
                     }
                     finally
                     {
@@ -531,6 +549,24 @@ namespace LSOL.Systems
                 OnComplete = complete,
                 OnProgress = onProgress,
             };
+        }
+
+        public void StartTimedTransfer(string label, int durationMs, Action beforeStart, Action complete, Func<float, string> progressLabelFactory = null)
+        {
+            beforeStart?.Invoke();
+            StartTransfer(
+                label,
+                durationMs,
+                complete,
+                progress =>
+                {
+                    if (progressLabelFactory == null || _pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    _pendingTransfer.Label = progressLabelFactory(ModMath.Clamp01(progress));
+                });
         }
 
         private static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)

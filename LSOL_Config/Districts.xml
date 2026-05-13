@@ -1,0 +1,68 @@
+﻿<Districts>
+  <District id="10000" name="GrandSenora">
+    <Point x="2881" y="1298" />
+    <Point x="3698" y="3923" />
+    <Point x="-86" y="3758" />
+    <Point x="543" y="1526" />
+  </District>
+  <District id="10001" name="Port">
+    <Point x="-370" y="-2358" />
+    <Point x="529" y="-2380" />
+    <Point x="1611" y="-3377" />
+    <Point x="-506" y="-3360" />
+  </District>
+  <District id="10002" name="EastLosSantos">
+    <Point x="625" y="-2567" />
+    <Point x="691" y="5" />
+    <Point x="2875" y="-192" />
+    <Point x="2680" y="-2675" />
+  </District>
+  <District id="10003" name="Airport">
+    <Point x="-2002" y="-3043" />
+    <Point x="-1314" y="-1778" />
+    <Point x="-418" y="-2281" />
+    <Point x="-991" y="-3633" />
+  </District>
+  <District id="10004" name="WestLosSantos">
+    <Point x="-1218" y="-1906" />
+    <Point x="-2285" y="-387" />
+    <Point x="-1396" y="191" />
+    <Point x="-428" y="-1138" />
+  </District>
+  <District id="10005" name="SouthLosSantos">
+    <Point x="-379" y="-2282" />
+    <Point x="-369" y="-1290" />
+    <Point x="644" y="-1268" />
+    <Point x="611" y="-2313" />
+  </District>
+  <District id="10006" name="PaletoBay">
+    <Point x="-1024" y="5252" />
+    <Point x="-1003" y="7136" />
+    <Point x="1831" y="7209" />
+    <Point x="1178" y="5377" />
+  </District>
+  <District id="10007" name="Grapeseed">
+    <Point x="1700" y="4232" />
+    <Point x="1606" y="5316" />
+    <Point x="3000" y="5458" />
+    <Point x="3087" y="4112" />
+  </District>
+  <District id="10008" name="Downtown">
+    <Point x="-397" y="-1203" />
+    <Point x="-402" y="-521" />
+    <Point x="534" y="-537" />
+    <Point x="517" y="-1191" />
+  </District>
+  <District id="10009" name="Vinewood">
+    <Point x="625" y="-492" />
+    <Point x="-644" y="459" />
+    <Point x="857" y="257" />
+    <Point x="454" y="-500" />
+  </District>
+  <District id="10011" name="NorthLosSantos">
+    <Point x="-3429" y="819" />
+    <Point x="-3432" y="2593" />
+    <Point x="-840" y="2828" />
+    <Point x="-771" y="938" />
+  </District>
+</Districts>

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.IO;
 using GTA.Math;
 using LSOL.Domain;
 
@@ -10,21 +9,6 @@ namespace LSOL.Config
 {
     public sealed class ModConfig
     {
-        private static readonly string[] ReservedSections =
-        {
-            "Global",
-            "General",
-            "Controls",
-            "DensityProfiles",
-            "GasStationDensityProfiles",
-            "StoreDensityProfiles",
-            "Markers",
-            "MainOffice",
-            "VehicleSpawn",
-            "Objects",
-            "Workers",
-        };
-
         public float OmegaMultiplier { get; private set; }
         public float IndustryOmegaCapacityMultiplier { get; private set; }
         public float MarkerRadius { get; private set; }
@@ -45,23 +29,24 @@ namespace LSOL.Config
         public Dictionary<string, DistrictConfig> DistrictConfigs { get; private set; }
         public List<string> ValidationMessages { get; private set; }
 
-        public static ModConfig Load(string path)
+        public static ModConfig Load(string configDirectory)
         {
-            var ini = IniFile.Load(path);
-            var configDirectory = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, "configs");
+            var coreValidationMessages = new List<string>();
+            var coreConfig = XmlConfigImport.LoadCoreConfig(configDirectory, coreValidationMessages);
             var externalCatalog = ExternalConfigCatalog.Load(configDirectory);
             CommodityCatalog.Configure(externalCatalog.ResourceGroups);
+            externalCatalog.ValidationMessages.InsertRange(0, coreValidationMessages);
 
             var config = new ModConfig
             {
-                OmegaMultiplier = Math.Max(1f, ini.GetFloat("General", "OmegaMultiplier", 2f)),
-                IndustryOmegaCapacityMultiplier = Math.Max(0.01f, ini.GetFloat("General", "IndustryOmegaCapacityMultiplier", 0.2f)),
-                MarkerRadius = Math.Max(0.2f, ini.GetFloat("Markers", "MarkerRadius", 1.0f)),
-                MarkerHeight = Math.Max(0.5f, ini.GetFloat("Markers", "MarkerHeight", 1.0f)),
-                MainOfficePosition = ini.GetVector3("MainOffice", "Coordinates", new Vector3(-333.33f, -2778.94f, 5.15f)),
-                VehicleSpawnPosition = ini.GetVector3("VehicleSpawn", "Coordinates", new Vector3(-360.04f, -2763.21f, 6f)),
-                VehicleSpawnHeading = ini.GetFloat("VehicleSpawn", "VehicleSpawnHeading", ini.GetFloat("VehicleSpawn", "Heading", 230f)),
-                Controls = ParseControls(ini),
+                OmegaMultiplier = Math.Max(1f, coreConfig.OmegaMultiplier),
+                IndustryOmegaCapacityMultiplier = Math.Max(0.01f, coreConfig.IndustryOmegaCapacityMultiplier),
+                MarkerRadius = Math.Max(0.2f, coreConfig.MarkerRadius),
+                MarkerHeight = Math.Max(0.5f, coreConfig.MarkerHeight),
+                MainOfficePosition = coreConfig.MainOfficePosition,
+                VehicleSpawnPosition = coreConfig.VehicleSpawnPosition,
+                VehicleSpawnHeading = coreConfig.VehicleSpawnHeading,
+                Controls = coreConfig.Controls ?? new ControlBindings(),
                 ExternalCatalog = externalCatalog,
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
@@ -79,20 +64,12 @@ namespace LSOL.Config
 
             if (externalCatalog.Locations.Count > 0)
             {
-                MergeExternalLocations(ini, externalCatalog, config);
-            }
-            else
-            {
-                ParseIndustries(ini, config);
+                MergeExternalLocations(coreConfig, externalCatalog, config);
             }
 
             if (externalCatalog.VehicleDefinitions.Count > 0)
             {
                 config.VehicleDefinitions.AddRange(CloneVehicleDefinitions(externalCatalog.VehicleDefinitions));
-            }
-            else
-            {
-                ParseVehicles(ini, config);
             }
 
             if (externalCatalog.OfficeDefinitions.Count > 0)
@@ -110,9 +87,8 @@ namespace LSOL.Config
                 config.PersonalVehicleDefinitions.AddRange(CloneDealershipVehicleDefinitions(externalCatalog.PersonalVehicleDefinitions));
             }
 
-            ParseObjects(ini, config);
             MergeExternalObjects(externalCatalog, config);
-            ParseWorkers(ini, config);
+            config.WorkerModels.AddRange(coreConfig.WorkerModels);
 
             if (config.CargoTypes.Count == 0)
             {
@@ -122,163 +98,9 @@ namespace LSOL.Config
             return config;
         }
 
-        private static void ParseIndustries(IniFile legacyIni, ExternalConfigCatalog externalCatalog, ModConfig config)
+        private static void MergeExternalLocations(CoreXmlConfig coreConfig, ExternalConfigCatalog externalCatalog, ModConfig config)
         {
-            foreach (var pair in externalCatalog.Locations)
-            {
-                var location = pair.Value;
-                if (location == null || !location.Enabled)
-                {
-                    continue;
-                }
-
-                var standardValues = location.StandardEconomy ?? SiteEconomyPresetValues.Create(0f, 0f, location.IndustryPrice, 0f, 0f, location.FactoryProductionRatio, false);
-                var ratio = Math.Max(0.1f, standardValues.ProductionRatio > 0f ? standardValues.ProductionRatio : location.FactoryProductionRatio);
-                var industryPrice = Math.Max(0f, standardValues.PurchasePrice);
-                var industryLicencePrice = standardValues.PermitRequired ? Math.Max(0f, standardValues.LicencePrice) : 0f;
-                var industryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut));
-                var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(location.SiteRole);
-                var hasStarterPermitAccess = SiteMetadataParser.GrantsStarterPermitAccess(location.SiteRole, location.OwnershipTier);
-
-                config.IndustryConfigs[pair.Key] = new IndustryConfig
-                {
-                    CatalogId = location.CatalogId,
-                    Id = location.Id,
-                    LegacyKey = location.LegacyKey ?? location.Id,
-                    LocationKind = location.Kind,
-                    SiteRole = location.SiteRole,
-                    OwnershipTier = location.OwnershipTier,
-                    DistrictName = location.DistrictName,
-                    Name = location.Name,
-                    Company = location.Company,
-                    Position = location.Position,
-                    SpawnedVehiclePosition = location.SpawnedVehiclePosition,
-                    SpawnedVehicleHeading = location.SpawnedVehicleHeading,
-                    GatePosition = location.GatePosition,
-                    BarrierModelHash = location.BarrierModelHash,
-                    WorkerPosition = location.WorkerPosition,
-                    DisplayObjectModelHash = location.DisplayObjectModelHash,
-                    DisplayObjectsAtGroundLevel = location.DisplayObjectsAtGroundLevel,
-                    MaxDisplayObjectLine = location.MaxSpawnedVehiclesLine,
-                    MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
-                    Inputs = new HashSet<string>(location.Inputs, StringComparer.OrdinalIgnoreCase),
-                    OptionalInputs = new HashSet<string>(location.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
-                    Outputs = new HashSet<string>(location.Outputs, StringComparer.OrdinalIgnoreCase),
-                    FactoryProductionRatio = ratio,
-                    InputCapacityTons = standardValues.InputCapacityTons > 0f ? standardValues.InputCapacityTons : Math.Max(10f, ResolveInputCapacityTons(legacyIni, location)),
-                    OutputCapacityTons = standardValues.OutputCapacityTons > 0f ? standardValues.OutputCapacityTons : Math.Max(10f, ResolveOutputCapacityTons(legacyIni, location)),
-                    ProductionRate = standardValues.ProductionRate > 0f ? standardValues.ProductionRate * ratio : ResolveProductionRate(legacyIni, location),
-                    StartingTankRatio = location.StartingTankRatio,
-                    Density = location.Density,
-                    EmptyingRate = location.EmptyingRate,
-                    HasConfiguredEmptyingRate = location.HasConfiguredEmptyingRate,
-                    RefuelIsFree = location.RefuelIsFree,
-                    IndustryPrice = industryPrice,
-                    IndustryLicencePrice = industryLicencePrice,
-                    IndustryOwnerCut = industryOwnerCut,
-                    IsOwned = hasStarterOwnership,
-                    HasContractorPermit = hasStarterPermitAccess || !standardValues.PermitRequired || industryLicencePrice <= 0f,
-                    IsCsvBacked = true,
-                    CasualEconomy = location.CasualEconomy,
-                    StandardEconomy = location.StandardEconomy,
-                    HardcoreEconomy = location.HardcoreEconomy,
-                };
-            }
-        }
-
-        private static void ParseIndustries(IniFile ini, ModConfig config)
-        {
-            foreach (var section in ini.Sections)
-            {
-                if (ReservedSections.Contains(section, StringComparer.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (!ini.HasKey(section, "Inputs"))
-                {
-                    continue;
-                }
-
-                if (ini.HasKey(section, "Enabled") && !ini.GetBool(section, "Enabled", true))
-                {
-                    continue;
-                }
-
-                var name = ini.GetString(section, "Name", section);
-                var position = ini.GetVector3(section, "Coordinates", Vector3.Zero);
-                var inputs = new HashSet<string>(
-                    ini.GetStringList(section, "Inputs")
-                        .Where(x => !x.Equals("None", StringComparison.OrdinalIgnoreCase)),
-                    StringComparer.OrdinalIgnoreCase);
-
-                var outputs = new HashSet<string>(
-                    ini.GetStringList(section, "Outputs")
-                        .Where(x => !x.Equals("None", StringComparison.OrdinalIgnoreCase)),
-                    StringComparer.OrdinalIgnoreCase);
-
-                var inputCapRaw = ini.GetFloat(section, "IndustryInputCapacity", 50000f);
-                var outputCapRaw = ini.GetFloat(section, "IndustryOutputCapacity", 50000f);
-                var inputCapTons = inputCapRaw / 1000f;
-                var outputCapTons = outputCapRaw / 1000f;
-                var startingTankRatio = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "StartingTank", 0f)));
-                var density = ini.GetString(section, "Density", "medium");
-                var industryPrice = Math.Max(0f, ini.GetFloat(section, "IndustryPrice", 0f));
-                var industryLicencePrice = Math.Max(0f, ini.GetFloat(section, "IndustryLicencePrice", 0f));
-                var industryOwnerCut = Math.Max(0f, Math.Min(1f, ini.GetFloat(section, "IndustryOwnerCut", 0.5f)));
-
-                var productionRate = ResolveConfiguredProductionRate(ini, section, 30f);
-
-                config.IndustryConfigs[section] = new IndustryConfig
-                {
-                    CatalogId = section,
-                    Id = section,
-                    LegacyKey = section,
-                    LocationKind = InferLocationKind(section, inputs, outputs),
-                    SiteRole = InferLegacySiteRole(section, inputs, outputs),
-                    OwnershipTier = SiteOwnershipTier.Unknown,
-                    DistrictName = string.Empty,
-                    Name = name,
-                    Company = string.Empty,
-                    Position = position,
-                    VehicleSpawnPosition = ini.HasKey(section, "VehicleSpawningCoordinates")
-                        ? (Vector3?)ini.GetVector3(section, "VehicleSpawningCoordinates", Vector3.Zero)
-                        : null,
-                    VehicleSpawnHeading = ini.HasKey(section, "VehicleSpawningHeading")
-                        ? (float?)ini.GetFloat(section, "VehicleSpawningHeading", 0f)
-                        : null,
-                    SpawnedVehiclePosition = ini.HasKey(section, "SpawnedVehicleCoordinates")
-                        ? (Vector3?)ini.GetVector3(section, "SpawnedVehicleCoordinates", Vector3.Zero)
-                        : null,
-                    SpawnedVehicleHeading = ini.HasKey(section, "SpawnedVehicleHeading")
-                        ? (float?)ini.GetFloat(section, "SpawnedVehicleHeading", 0f)
-                        : null,
-                    DisplayObjectsAtGroundLevel = ini.GetBool(section, "DisplayObjectsAtGroundLevel", ini.GetBool(section, "GroundLevel", false)),
-                    Inputs = inputs,
-                    OptionalInputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase),
-                    Outputs = outputs,
-                    FactoryProductionRatio = Math.Max(0.1f, ini.GetFloat(section, "FactoryProductionRatio", 1f)),
-                    InputCapacityTons = Math.Max(10f, inputCapTons),
-                    OutputCapacityTons = Math.Max(10f, outputCapTons),
-                    ProductionRate = productionRate,
-                    StartingTankRatio = startingTankRatio,
-                    Density = density,
-                    EmptyingRate = 0f,
-                    HasConfiguredEmptyingRate = false,
-                    RefuelIsFree = false,
-                    IndustryPrice = industryPrice,
-                    IndustryLicencePrice = industryLicencePrice,
-                    IndustryOwnerCut = industryOwnerCut,
-                    IsOwned = industryPrice <= 0f,
-                    HasContractorPermit = industryLicencePrice <= 0f,
-                    IsCsvBacked = false,
-                };
-            }
-        }
-
-        private static void MergeExternalLocations(IniFile ini, ExternalConfigCatalog externalCatalog, ModConfig config)
-        {
-            if (ini == null || externalCatalog == null || config == null)
+            if (externalCatalog == null || config == null)
             {
                 return;
             }
@@ -291,23 +113,23 @@ namespace LSOL.Config
                     continue;
                 }
 
-                config.IndustryConfigs[location.Id] = BuildIndustryConfigFromExternalLocation(ini, location);
+                config.IndustryConfigs[location.Id] = BuildIndustryConfigFromExternalLocation(coreConfig, location);
             }
         }
 
-        private static IndustryConfig BuildIndustryConfigFromExternalLocation(IniFile ini, ExternalLocationConfig location)
+        private static IndustryConfig BuildIndustryConfigFromExternalLocation(CoreXmlConfig coreConfig, ExternalLocationConfig location)
         {
             var standardValues = location.StandardEconomy ?? SiteEconomyPresetValues.Create(0f, 0f, location.IndustryPrice, 0f, 0f, location.FactoryProductionRatio, false);
             var productionRatio = Math.Max(0.1f, standardValues.ProductionRatio > 0f ? standardValues.ProductionRatio : (location.FactoryProductionRatio > 0f ? location.FactoryProductionRatio : 1f));
             var productionRate = standardValues.ProductionRate > 0f
                 ? standardValues.ProductionRate * productionRatio
-                : ResolveProductionRate(ini, location);
+                : ResolveProductionRate(coreConfig, location);
             var inputCapacityTons = standardValues.InputCapacityTons > 0f
                 ? standardValues.InputCapacityTons
-                : ResolveLocationInputCapacityTons(ini, location);
+                : ResolveLocationInputCapacityTons(coreConfig, location);
             var outputCapacityTons = standardValues.OutputCapacityTons > 0f
                 ? standardValues.OutputCapacityTons
-                : ResolveLocationOutputCapacityTons(ini, location);
+                : ResolveLocationOutputCapacityTons(coreConfig, location);
             var licencePrice = standardValues.PermitRequired ? Math.Max(0f, standardValues.LicencePrice) : 0f;
             var purchasePrice = Math.Max(0f, standardValues.PurchasePrice);
             var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(location.SiteRole);
@@ -344,6 +166,7 @@ namespace LSOL.Config
                 DisplayObjectsAtGroundLevel = location.DisplayObjectsAtGroundLevel,
                 MaxDisplayObjectLine = location.MaxSpawnedVehiclesLine,
                 MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
+                ObjectToDeleteModelHashes = ParseObjectModelHashes(location.ObjectToDelete),
                 Inputs = inputs,
                 OptionalInputs = new HashSet<string>(location.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 Outputs = outputs,
@@ -368,150 +191,126 @@ namespace LSOL.Config
             };
         }
 
-        private static float ResolveLocationInputCapacityTons(IniFile ini, ExternalLocationConfig location)
+        private static float ResolveLocationInputCapacityTons(CoreXmlConfig coreConfig, ExternalLocationConfig location)
         {
-            return Math.Max(10f, ResolveInputCapacityTons(ini, location));
+            return Math.Max(10f, ResolveInputCapacityTons(coreConfig, location));
         }
 
-        private static float ResolveLocationOutputCapacityTons(IniFile ini, ExternalLocationConfig location)
+        private static float ResolveLocationOutputCapacityTons(CoreXmlConfig coreConfig, ExternalLocationConfig location)
         {
-            return Math.Max(10f, ResolveOutputCapacityTons(ini, location));
+            return Math.Max(10f, ResolveOutputCapacityTons(coreConfig, location));
         }
 
-        private static float ResolveConfiguredProductionRate(IniFile ini, string section, float defaultRate)
+        private static float ResolveInputCapacityTons(CoreXmlConfig coreConfig, ExternalLocationConfig location)
         {
-            var productionRate = ini.GetFloat(section, "ProductionRate", float.NaN);
-            if (float.IsNaN(productionRate))
+            switch (location.Kind)
             {
-                var block = ini.GetSection(section);
-                foreach (var pair in block)
-                {
-                    if (!pair.Key.EndsWith("ProductionRate", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
+                case ExternalLocationKind.Industry:
+                    return 50f;
+                case ExternalLocationKind.Store:
+                    return ResolveDensityProfileCapacityTons(coreConfig != null ? coreConfig.StoreDensityProfile : null, location.Density, 60000f);
+                case ExternalLocationKind.GasStation:
+                    return ResolveDensityProfileCapacityTons(coreConfig != null ? coreConfig.GasStationDensityProfile : null, location.Density, 60000f);
+                default:
+                    return 50f;
+            }
+        }
 
-                    float parsed;
-                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) && parsed > 0f)
-                    {
-                        productionRate = parsed;
-                        break;
-                    }
-
-                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.CurrentCulture, out parsed) && parsed > 0f)
-                    {
-                        productionRate = parsed;
-                        break;
-                    }
-                }
+        private static float ResolveOutputCapacityTons(CoreXmlConfig coreConfig, ExternalLocationConfig location)
+        {
+            if (location.Kind != ExternalLocationKind.Industry || location.Outputs.Count == 0)
+            {
+                return 10f;
             }
 
-            if (float.IsNaN(productionRate) || productionRate <= 0f)
-            {
-                return defaultRate;
-            }
-
-            return productionRate;
+            return 50f;
         }
 
-        private static void ParseVehicles(IniFile ini, ModConfig config)
+        private static float ResolveProductionRate(CoreXmlConfig coreConfig, ExternalLocationConfig location)
         {
-            foreach (var section in ini.Sections)
+            if (location != null && location.SiteRole == SiteRole.Warehouse)
             {
-                if (!ini.HasKey(section, "ModelName") || !ini.HasKey(section, "VehicleCargoType"))
+                return 0f;
+            }
+
+            var ratio = location != null && location.Kind == ExternalLocationKind.Industry
+                ? Math.Max(0.1f, location.FactoryProductionRatio > 0f ? location.FactoryProductionRatio : 1f)
+                : 1f;
+            return Math.Max(1f, 30f * ratio);
+        }
+
+        private static float ResolveDensityProfileCapacityTons(XmlDensityProfileConfig profile, string density, float defaultCapacityRaw)
+        {
+            var rawCapacity = profile != null
+                ? profile.GetCapacity(density)
+                : defaultCapacityRaw;
+            return Math.Max(10f, rawCapacity / 1000f);
+        }
+
+        private static List<int> ParseObjectModelHashes(string raw)
+        {
+            var hashes = new List<int>();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return hashes;
+            }
+
+            var seen = new HashSet<int>();
+            var tokens = raw.Split(new[] { ',', ';', '|', '\t', '\r', '\n', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                var token = tokens[i].Trim();
+                if (string.IsNullOrWhiteSpace(token))
                 {
                     continue;
                 }
 
-                var enabled = ini.GetBool(section, "Enabled", true);
-                if (!enabled)
+                int hash;
+                if (!TryParseObjectModelHash(token, out hash) || !seen.Add(hash))
                 {
                     continue;
                 }
 
-                var rawModels = ini.GetStringList(section, "ModelName");
-                var configuredCargoType = ParseCargoType(ini.GetString(section, "VehicleCargoType", "Unknown"));
-                var capacityRaw = ini.GetFloat(section, "VehicleCapacity", 10000f);
-                var capacityTons = capacityRaw / 1000f;
-                var isTrailerSection = section.IndexOf("Trailer", StringComparison.OrdinalIgnoreCase) >= 0;
-
-                for (int i = 0; i < rawModels.Count; i++)
-                {
-                    var modelName = rawModels[i];
-                    var cargoType = NormalizeVehicleCargoType(section, modelName, configuredCargoType);
-                    var isTractor = IsTractorDefinition(section, modelName, cargoType);
-                    var isTrailer = isTrailerSection && !isTractor;
-                    config.VehicleDefinitions.Add(new VehicleDefinition
-                    {
-                        SectionName = section,
-                        ModelName = modelName,
-                        CargoType = cargoType,
-                        CapacityTons = Math.Max(0f, capacityTons),
-                        FuelCapacityLiters = ResolveLegacyFuelCapacityLiters(ini, section, modelName, cargoType, Math.Max(0f, capacityTons), isTractor, isTrailer),
-                        Price = Math.Max(0f, ini.GetFloat(section, "VehiclePrice", 0f)),
-                        IsEnabled = true,
-                        IsTrailer = isTrailer,
-                        IsTractor = isTractor,
-                    });
-                }
+                hashes.Add(hash);
             }
 
-            EnsureDefaultOpenHullTrailer(config);
+            return hashes;
         }
 
-        private static void EnsureDefaultOpenHullTrailer(ModConfig config)
+        private static bool TryParseObjectModelHash(string token, out int hash)
         {
-            if (config == null)
-            {
-                return;
-            }
-
-            var hasOpenHullTrailer = config.VehicleDefinitions.Any(x =>
-                x != null &&
-                x.IsEnabled &&
-                x.IsTrailer &&
-                x.CargoType == VehicleCargoType.OpenHull);
-
-            if (hasOpenHullTrailer)
-            {
-                return;
-            }
-
-            config.VehicleDefinitions.Add(new VehicleDefinition
-            {
-                SectionName = "OpenHullTrailers",
-                ModelName = "trflat",
-                CargoType = VehicleCargoType.OpenHull,
-                CapacityTons = 30f,
-                FuelCapacityLiters = 0f,
-                IsEnabled = true,
-                IsTrailer = true,
-                IsTractor = false,
-            });
-        }
-
-        private static VehicleCargoType NormalizeVehicleCargoType(string section, string modelName, VehicleCargoType cargoType)
-        {
-            if (string.Equals(modelName, "trailerlogs", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(section, "LogsTrailer", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Wood;
-            }
-
-            return cargoType;
-        }
-
-        private static bool IsTractorDefinition(string section, string modelName, VehicleCargoType cargoType)
-        {
-            if (string.Equals(modelName, "trailerlogs", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(section, "LogsTrailer", StringComparison.OrdinalIgnoreCase))
+            hash = 0;
+            if (string.IsNullOrWhiteSpace(token))
             {
                 return false;
             }
 
-            return cargoType == VehicleCargoType.Trailer ||
-                section.Equals("Trucks", StringComparison.OrdinalIgnoreCase) ||
-                section.IndexOf("Tractor", StringComparison.OrdinalIgnoreCase) >= 0;
+            var normalized = token.Trim();
+            if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                uint hexValue;
+                if (uint.TryParse(normalized.Substring(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out hexValue))
+                {
+                    hash = unchecked((int)hexValue);
+                    return true;
+                }
+            }
+
+            int signedValue;
+            if (int.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out signedValue))
+            {
+                hash = signedValue;
+                return true;
+            }
+
+            uint unsignedValue;
+            if (uint.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out unsignedValue))
+            {
+                hash = unchecked((int)unsignedValue);
+                return true;
+            }
+
+            return false;
         }
 
         private static List<VehicleCargoType> BuildFallbackCargoTypes(ModConfig config)
@@ -677,29 +476,6 @@ namespace LSOL.Config
             return 0f;
         }
 
-        private static void ParseObjects(IniFile ini, ModConfig config)
-        {
-            var block = ini.GetSection("Objects");
-            foreach (var pair in block)
-            {
-                var list = pair.Value
-                    .Split(',')
-                    .Select(x => x.Trim())
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .ToList();
-
-                if (list.Count > 0)
-                {
-                    config.ObjectModels[pair.Key] = list;
-                }
-            }
-
-            if (!config.ObjectModels.ContainsKey("Box"))
-            {
-                config.ObjectModels["Box"] = new List<string> { "prop_boxpile_05a" };
-            }
-        }
-
         private static void MergeExternalObjects(ExternalConfigCatalog externalCatalog, ModConfig config)
         {
             if (externalCatalog == null || config == null)
@@ -721,318 +497,6 @@ namespace LSOL.Config
             {
                 config.ObjectModels["Box"] = new List<string> { "prop_boxpile_05a" };
             }
-        }
-
-        private static void ParseWorkers(IniFile ini, ModConfig config)
-        {
-            var configured = ini.GetStringList("Workers", "Models");
-            if (configured.Count > 0)
-            {
-                config.WorkerModels.AddRange(configured);
-                return;
-            }
-
-            config.WorkerModels.Add("s_m_m_dockwork_01");
-            config.WorkerModels.Add("s_m_y_construct_01");
-            config.WorkerModels.Add("s_m_m_trucker_01");
-        }
-
-        private static ControlBindings ParseControls(IniFile ini)
-        {
-            var controls = new ControlBindings();
-            controls.ToggleDashboard = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "ToggleDashboard", controls.ToggleDashboard.ToString()),
-                controls.ToggleDashboard);
-            controls.ToggleContext = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "ToggleContext", controls.ToggleContext.ToString()),
-                controls.ToggleContext);
-            controls.OpenModMenu = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "OpenModMenu", controls.OpenModMenu.ToString()),
-                controls.OpenModMenu);
-            controls.OpenDebugMenu = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "OpenDebugMenu", controls.OpenDebugMenu.ToString()),
-                controls.OpenDebugMenu);
-            controls.Interact = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "Interact", controls.Interact.ToString()),
-                controls.Interact);
-            controls.GateInteract = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "GateInteract", controls.GateInteract.ToString()),
-                controls.GateInteract);
-            controls.OpenUpgrade = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "OpenUpgrade", controls.OpenUpgrade.ToString()),
-                controls.OpenUpgrade);
-
-            controls.MenuUp = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "MenuUp", controls.MenuUp.ToString()),
-                controls.MenuUp);
-            controls.MenuDown = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "MenuDown", controls.MenuDown.ToString()),
-                controls.MenuDown);
-            controls.MenuLeft = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "MenuLeft", controls.MenuLeft.ToString()),
-                controls.MenuLeft);
-            controls.MenuRight = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "MenuRight", controls.MenuRight.ToString()),
-                controls.MenuRight);
-            controls.MenuSelect = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "MenuSelect", controls.MenuSelect.ToString()),
-                controls.MenuSelect);
-            controls.MenuBack = ControlBindings.ParseOrDefault(
-                ini.GetString("Controls", "MenuBack", "Backspace"),
-                controls.MenuBack);
-
-            return controls;
-        }
-
-        private static VehicleCargoType ParseCargoType(string raw)
-        {
-            var normalized = (raw ?? string.Empty).Trim().Replace(" ", string.Empty);
-            if (normalized.Length == 0)
-            {
-                return VehicleCargoType.Unknown;
-            }
-
-            if (normalized.Equals("Aggregates", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Loose", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Aggregates;
-            }
-
-            if (normalized.Equals("OpenHull", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Solid", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.OpenHull;
-            }
-
-            if (normalized.Equals("Wood", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Wood;
-            }
-
-            if (normalized.Equals("CraftedGoods", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Crate", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.CraftedGoods;
-            }
-
-            if (normalized.Equals("Liquid", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Fluid", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Liquid;
-            }
-
-            if (normalized.Equals("DryBulk", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.DryBulk;
-            }
-
-            if (normalized.Equals("Refrigeration", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Refrigeration;
-            }
-
-            if (normalized.Equals("Recyclable", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Recyclables", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Recyclable;
-            }
-
-            if (normalized.Equals("Vehicles", StringComparison.OrdinalIgnoreCase) ||
-                normalized.Equals("Vehicle", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Vehicles;
-            }
-
-            if (normalized.Equals("Trailer", StringComparison.OrdinalIgnoreCase))
-            {
-                return VehicleCargoType.Trailer;
-            }
-
-                return VehicleCargoType.Unknown;
-        }
-
-        private static float ResolveInputCapacityTons(IniFile legacyIni, ExternalLocationConfig location)
-        {
-            float rawCapacity;
-            switch (location.Kind)
-            {
-                case ExternalLocationKind.Industry:
-                    rawCapacity = legacyIni.GetFloat(location.Id, "IndustryInputCapacity", 50000f);
-                    break;
-                case ExternalLocationKind.Store:
-                    rawCapacity = legacyIni.GetFloat(
-                        location.Id,
-                        "StoreInputCapacity",
-                        ResolveDensityProfileCapacityRaw(legacyIni, "StoreDensityProfiles", location.Density, 60000f));
-                    break;
-                case ExternalLocationKind.GasStation:
-                    rawCapacity = ResolveDensityProfileCapacityRaw(legacyIni, "GasStationDensityProfiles", location.Density, 60000f);
-                    break;
-                default:
-                    rawCapacity = 50000f;
-                    break;
-            }
-
-            return rawCapacity / 1000f;
-        }
-
-        private static float ResolveOutputCapacityTons(IniFile legacyIni, ExternalLocationConfig location)
-        {
-            if (location.Kind != ExternalLocationKind.Industry || location.Outputs.Count == 0)
-            {
-                return 10f;
-            }
-
-            return legacyIni.GetFloat(location.Id, "IndustryOutputCapacity", 50000f) / 1000f;
-        }
-
-        private static float ResolveProductionRate(IniFile legacyIni, ExternalLocationConfig location)
-        {
-            if (location != null && location.SiteRole == SiteRole.Warehouse)
-            {
-                return 0f;
-            }
-
-            var productionRate = legacyIni.GetFloat(location.Id, "ProductionRate", float.NaN);
-            if (float.IsNaN(productionRate))
-            {
-                productionRate = legacyIni.GetFloat(location.Id, "IndustryProductionRate", float.NaN);
-            }
-
-            if (float.IsNaN(productionRate))
-            {
-                var block = legacyIni.GetSection(location.Id);
-                foreach (var pair in block)
-                {
-                    if (!pair.Key.EndsWith("ProductionRate", StringComparison.OrdinalIgnoreCase))
-                    {
-                        continue;
-                    }
-
-                    float parsed;
-                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) && parsed > 0f)
-                    {
-                        productionRate = parsed;
-                        break;
-                    }
-
-                    if (float.TryParse(pair.Value, NumberStyles.Float, CultureInfo.CurrentCulture, out parsed) && parsed > 0f)
-                    {
-                        productionRate = parsed;
-                        break;
-                    }
-                }
-            }
-
-            if (float.IsNaN(productionRate) || productionRate <= 0f)
-            {
-                productionRate = 30f;
-            }
-
-            var ratio = location.Kind == ExternalLocationKind.Industry
-                ? Math.Max(0.1f, location.FactoryProductionRatio)
-                : 1f;
-
-            return Math.Max(1f, productionRate * ratio);
-        }
-
-        private static float ResolveDensityProfileCapacityRaw(IniFile legacyIni, string section, string density, float defaultCapacity)
-        {
-            var densityKey = NormalizeDensityKey(density);
-            return legacyIni.GetFloat(section, densityKey + "Capacity", defaultCapacity);
-        }
-
-        private static string NormalizeDensityKey(string density)
-        {
-            var normalized = (density ?? string.Empty).Trim().Replace(" ", string.Empty).ToLowerInvariant();
-            if (normalized == "verylow")
-            {
-                return "VeryLow";
-            }
-
-            if (normalized == "low")
-            {
-                return "Low";
-            }
-
-            if (normalized == "high")
-            {
-                return "High";
-            }
-
-            if (normalized == "veryhigh")
-            {
-                return "VeryHigh";
-            }
-
-            return "Medium";
-        }
-
-        private static ExternalLocationKind InferLocationKind(string section, HashSet<string> inputs, HashSet<string> outputs)
-        {
-            if (!string.IsNullOrWhiteSpace(section) && section.IndexOf("Petrol Station", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                return ExternalLocationKind.GasStation;
-            }
-
-            var hasFuelOnlyInput = inputs != null && inputs.Count == 1 && inputs.Contains("Fuel");
-            if ((outputs == null || outputs.Count == 0) && hasFuelOnlyInput)
-            {
-                return ExternalLocationKind.GasStation;
-            }
-
-            if (!string.IsNullOrWhiteSpace(section) && section.StartsWith("Store", StringComparison.OrdinalIgnoreCase))
-            {
-                return ExternalLocationKind.Store;
-            }
-
-            if ((outputs == null || outputs.Count == 0) && inputs != null && inputs.Count > 0)
-            {
-                return ExternalLocationKind.Store;
-            }
-
-            return ExternalLocationKind.Industry;
-        }
-
-        private static SiteRole InferLegacySiteRole(string section, HashSet<string> inputs, HashSet<string> outputs)
-        {
-            if (string.Equals(section, "MainOffice", StringComparison.OrdinalIgnoreCase))
-            {
-                return SiteRole.StarterHQ;
-            }
-
-            var locationKind = InferLocationKind(section, inputs, outputs);
-            if (locationKind == ExternalLocationKind.Store)
-            {
-                return SiteRole.StoreSink;
-            }
-
-            if (locationKind == ExternalLocationKind.GasStation)
-            {
-                return SiteRole.FuelSink;
-            }
-
-            if (string.Equals(section, "RecyclingCenter", StringComparison.OrdinalIgnoreCase))
-            {
-                return SiteRole.RecyclingHub;
-            }
-
-            if (string.Equals(section, "OmegaFactory", StringComparison.OrdinalIgnoreCase))
-            {
-                return SiteRole.SpecialPlant;
-            }
-
-            if (outputs == null || outputs.Count == 0)
-            {
-                return SiteRole.Warehouse;
-            }
-
-            if (inputs == null || inputs.Count == 0)
-            {
-                return SiteRole.RawProducer;
-            }
-
-            return SiteRole.ProcessingPlant;
         }
 
         private static List<VehicleCargoType> ResolveCargoTypeOrder(ExternalConfigCatalog externalCatalog)

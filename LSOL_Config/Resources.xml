@@ -1,0 +1,11 @@
+﻿<Resources>
+  <Group name="Aggregates" cargoType="Aggregates" commodities="Coal,Gravel,Ore,Crops" />
+  <Group name="OpenHull" cargoType="OpenHull" commodities="Bricks,Lumber,Steel,Alloy" />
+  <Group name="Wood" cargoType="Wood" commodities="Wood" />
+  <Group name="CraftedGoods" cargoType="CraftedGoods" commodities="Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer" />
+  <Group name="Liquid" cargoType="Liquid" commodities="Fuel,LiquidFertilizer,Oil" />
+  <Group name="DryBulk" cargoType="DryBulk" commodities="Asphalt,Cement,Concrete" />
+  <Group name="Refrigeration" cargoType="Refrigeration" commodities="Meat" />
+  <Group name="Recyclable" cargoType="Recyclable" commodities="Recyclable" />
+  <Group name="Vehicles" cargoType="Vehicles" commodities="Vehicles" />
+</Resources>

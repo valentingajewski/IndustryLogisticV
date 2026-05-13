@@ -457,6 +457,11 @@ namespace LSOL.Systems
                 return 0f;
             }
 
+            if (industry.IsWarehouse)
+            {
+                return 0f;
+            }
+
             commodity = CommodityCatalog.Normalize(commodity);
             var unitPrice = market.GetUnitPrice(commodity);
             float payout;
@@ -698,6 +703,7 @@ namespace LSOL.Systems
                 DisplayObjectsAtGroundLevel = source.DisplayObjectsAtGroundLevel,
                 MaxDisplayObjectLine = source.MaxDisplayObjectLine,
                 MaxDisplayObjectRow = source.MaxDisplayObjectRow,
+                ObjectToDeleteModelHashes = source.ObjectToDeleteModelHashes != null ? new List<int>(source.ObjectToDeleteModelHashes) : new List<int>(),
                 Inputs = new HashSet<string>(source.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 OptionalInputs = new HashSet<string>(source.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 Outputs = new HashSet<string>(source.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),

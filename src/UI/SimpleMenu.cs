@@ -1139,8 +1139,8 @@ namespace LSOL.UI
 
         private static void DrawTabletWallpaper(Size resolution, float x, float y, float width, float height)
         {
-            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(255, 10, 36, 96));
-            DrawRect(resolution.Width, resolution.Height, x, y + (height * 0.82f), width, height * 0.18f, Color.FromArgb(82, 4, 7, 18));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(255, 14, 16, 20));
+            DrawRect(resolution.Width, resolution.Height, x, y + (height * 0.76f), width, height * 0.24f, Color.FromArgb(88, 38, 44, 52));
         }
 
         private static void DrawDashboardWidget(Size resolution, MenuItem item, float x, float y, float width, float height, bool selected, bool compact)
@@ -1164,7 +1164,8 @@ namespace LSOL.UI
                     compact ? palette.Get(ModColorRole.AccentOrange, 236) : palette.Get(ModColorRole.TextSecondary, 216),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
-                    12f);
+                    12f,
+                    width - 28f);
             }
 
             var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
@@ -1177,7 +1178,8 @@ namespace LSOL.UI
                 palette.Get(ModColorRole.TextPrimary, 238),
                 compact ? GTA.UI.Font.ChaletComprimeCologne : GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
-                compact ? 18f : 16f);
+                compact ? 18f : 16f,
+                width - 28f);
 
             var detail = GetDetailText(item);
             if (!string.IsNullOrWhiteSpace(detail))
@@ -1191,7 +1193,8 @@ namespace LSOL.UI
                     palette.Get(ModColorRole.TextSecondary, 212),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left,
-                    14f);
+                    14f,
+                    width - 28f);
             }
         }
 
@@ -1214,7 +1217,8 @@ namespace LSOL.UI
                 palette.Get(ModColorRole.TextPrimary, 244),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Center,
-                14f);
+                14f,
+                size - 10f);
 
             var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
             DrawTextBlock(
@@ -1226,7 +1230,8 @@ namespace LSOL.UI
                 palette.Get(ModColorRole.TextPrimary, 224),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Center,
-                12f);
+                12f,
+                size - 8f);
         }
 
         private static void DrawDashboardDetailCard(Size resolution, MenuItem item, float x, float y, float width, float height)
@@ -1247,7 +1252,8 @@ namespace LSOL.UI
                 palette.Get(ModColorRole.TextPrimary, 236),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left,
-                16f);
+                16f,
+                width - 36f);
             DrawTextBlock(
                 resolution,
                 string.IsNullOrWhiteSpace(detail) ? "Select an app to inspect its current context." : detail,
@@ -1257,10 +1263,11 @@ namespace LSOL.UI
                 palette.Get(ModColorRole.TextSecondary, 210),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
-                14f);
+                14f,
+                width - 36f);
         }
 
-        private static void DrawTextBlock(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float lineSpacing)
+        private static void DrawTextBlock(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float lineSpacing, float maxWidth = float.NaN)
         {
             if (string.IsNullOrWhiteSpace(text))
             {
@@ -1283,23 +1290,41 @@ namespace LSOL.UI
                     scale,
                     color,
                     font,
-                    alignment);
+                    alignment,
+                    maxWidth);
             }
         }
 
-        private static void DrawHudTextLine(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment)
+        private static void DrawHudTextLine(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float maxWidth = float.NaN)
         {
             var coords = ToScriptTextCoords(resolution, x, y);
             var normalizedX = coords.X / 1280f;
             var normalizedY = coords.Y / 720f;
+            var wrapStart = 0f;
             var wrapEnd = alignment == Alignment.Right ? normalizedX : 1f;
+            if (!float.IsNaN(maxWidth) && maxWidth > 0f)
+            {
+                if (alignment == Alignment.Right)
+                {
+                    wrapStart = Math.Max(0f, ToScriptTextCoords(resolution, x - maxWidth, y).X / 1280f);
+                }
+                else if (alignment == Alignment.Center)
+                {
+                    wrapStart = Math.Max(0f, ToScriptTextCoords(resolution, x - (maxWidth * 0.5f), y).X / 1280f);
+                    wrapEnd = Math.Min(1f, ToScriptTextCoords(resolution, x + (maxWidth * 0.5f), y).X / 1280f);
+                }
+                else
+                {
+                    wrapEnd = Math.Min(1f, ToScriptTextCoords(resolution, x + maxWidth, y).X / 1280f);
+                }
+            }
 
             Function.Call(Hash.SET_TEXT_FONT, (int)font);
             Function.Call(Hash.SET_TEXT_SCALE, 0f, scale);
             Function.Call(Hash.SET_TEXT_COLOUR, color.R, color.G, color.B, color.A);
             Function.Call(Hash.SET_TEXT_CENTRE, alignment == Alignment.Center);
             Function.Call(Hash.SET_TEXT_RIGHT_JUSTIFY, alignment == Alignment.Right);
-            Function.Call(Hash.SET_TEXT_WRAP, 0f, wrapEnd);
+            Function.Call(Hash.SET_TEXT_WRAP, wrapStart, wrapEnd);
             Function.Call(Hash.SET_TEXT_DROPSHADOW, 0, 0, 0, 0, 0);
             Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
             Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text ?? string.Empty);

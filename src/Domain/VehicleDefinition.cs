@@ -14,6 +14,7 @@ namespace LSOL.Domain
         public float CapacityTons { get; set; }
         public float FuelCapacityLiters { get; set; }
         public float Price { get; set; }
+        public float DailyRent { get; set; }
         public bool IsEnabled { get; set; }
         public bool IsTrailer { get; set; }
         public bool IsTractor { get; set; }

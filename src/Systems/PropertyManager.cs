@@ -21,6 +21,9 @@ namespace LSOL.Systems
     public sealed class PropertyManager
     {
         private const int MinutesPerWeek = 7 * 24 * 60;
+        private const int MinutesPerDay = 24 * 60;
+        private const float CommercialVehicleSaleRefundRatio = 0.5f;
+        private const int CommercialRentalRefundDays = 2;
 
         private readonly List<OfficeDefinition> _officeDefinitions;
         private readonly Dictionary<string, OfficeDefinition> _officeDefinitionsById;
@@ -230,6 +233,7 @@ namespace LSOL.Systems
         {
             var messages = new List<string>();
             var currentWeekIndex = GetWeekIndex(currentInGameMinute);
+            var currentDayIndex = GetDayIndex(currentInGameMinute);
 
             for (int i = 0; i < _state.Offices.Count; i++)
             {
@@ -241,6 +245,11 @@ namespace LSOL.Systems
             {
                 var apartmentState = _state.Apartments[i];
                 ProcessApartmentWeeklyCharge(GetInteriorDefinition(apartmentState != null ? apartmentState.InteriorId : null), apartmentState, currentWeekIndex, ref balance, messages);
+            }
+
+            for (int i = 0; i < _state.CommercialVehicles.Count; i++)
+            {
+                ProcessCommercialVehicleDailyCharge(_state.CommercialVehicles[i], currentDayIndex, ref balance, messages);
             }
 
             return messages;
@@ -548,6 +557,9 @@ namespace LSOL.Systems
                 HasSeparateCargoVehicle = tractorDefinition != null,
                 PurchasePrice = purchasePrice,
                 AssignedOfficeId = _state.ActiveOfficeId,
+                IsRental = false,
+                DailyRent = 0f,
+                LastChargedDayIndex = -1,
                 InActiveGarage = GetActiveCommercialGarageVehicles().Count() < GetActiveOfficeCapacity(),
                 IsDeployed = false,
                 PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
@@ -556,7 +568,7 @@ namespace LSOL.Systems
                 CapacityTons = Math.Max(0f, cargoDefinition.CapacityTons),
                 Commodity = string.Empty,
                 WeightTons = 0f,
-                CargoCondition = 1f,
+                CargoCondition = 0f,
                 TotalLostTons = 0f,
                 SourceIndustryId = string.Empty,
                 SourceDistrictName = string.Empty,
@@ -568,6 +580,160 @@ namespace LSOL.Systems
             message = vehicle.InActiveGarage
                 ? string.Format("Purchased {0} for {1}. Assigned to active office garage.", vehicle.DisplayName, ModFormatting.FormatMoney(purchasePrice))
                 : string.Format("Purchased {0} for {1}. Office garage is full, so it was moved to reserve.", vehicle.DisplayName, ModFormatting.FormatMoney(purchasePrice));
+            return true;
+        }
+
+        public bool TryRentCommercialVehicle(VehicleDefinition cargoDefinition, VehicleDefinition tractorDefinition, ref float balance, int currentInGameMinute, out OwnedCommercialVehiclePersistenceEntry vehicle, out string message)
+        {
+            vehicle = null;
+            message = string.Empty;
+
+            string officeReason;
+            if (!CanUseCommercialSystems(out officeReason))
+            {
+                message = officeReason;
+                return false;
+            }
+
+            if (cargoDefinition == null)
+            {
+                message = "No commercial vehicle selected.";
+                return false;
+            }
+
+            if (cargoDefinition.IsTrailer)
+            {
+                if (tractorDefinition == null || !tractorDefinition.IsTractor)
+                {
+                    message = "Select a truck tractor for the trailer rental.";
+                    return false;
+                }
+            }
+            else
+            {
+                tractorDefinition = null;
+            }
+
+            var dailyRent = Math.Max(0f, cargoDefinition.DailyRent) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.DailyRent : 0f);
+            if (dailyRent <= 0.001f)
+            {
+                message = "Rental is not available for the selected vehicle.";
+                return false;
+            }
+
+            var upfrontCost = dailyRent * (1f + CommercialRentalRefundDays);
+            if (balance < upfrontCost)
+            {
+                message = string.Format(
+                    "Need {0} to cover the first rental day plus a refundable deposit.",
+                    ModFormatting.FormatMoney(upfrontCost));
+                return false;
+            }
+
+            balance -= upfrontCost;
+            vehicle = new OwnedCommercialVehiclePersistenceEntry
+            {
+                AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+                DisplayName = BuildCommercialDisplayName(
+                    tractorDefinition != null ? tractorDefinition.DisplayName : cargoDefinition.DisplayName,
+                    cargoDefinition.DisplayName,
+                    tractorDefinition != null),
+                PoweredModelName = tractorDefinition != null ? tractorDefinition.ModelName : cargoDefinition.ModelName,
+                CargoModelName = cargoDefinition.ModelName,
+                HasSeparateCargoVehicle = tractorDefinition != null,
+                PurchasePrice = 0f,
+                AssignedOfficeId = _state.ActiveOfficeId,
+                IsRental = true,
+                DailyRent = dailyRent,
+                LastChargedDayIndex = GetDayIndex(currentInGameMinute),
+                InActiveGarage = GetActiveCommercialGarageVehicles().Count() < GetActiveOfficeCapacity(),
+                IsDeployed = false,
+                PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
+                PoweredHeading = ActiveOffice != null ? ActiveOffice.SpawnHeading : 0f,
+                CargoType = cargoDefinition.CargoType,
+                CapacityTons = Math.Max(0f, cargoDefinition.CapacityTons),
+                Commodity = string.Empty,
+                WeightTons = 0f,
+                CargoCondition = 0f,
+                TotalLostTons = 0f,
+                SourceIndustryId = string.Empty,
+                SourceDistrictName = string.Empty,
+                CurrentFuelLiters = 0f,
+            };
+
+            _state.CommercialVehicles.Add(vehicle);
+            NormalizeCommercialGarageAssignments();
+            message = vehicle.InActiveGarage
+                ? string.Format(
+                    "Rented {0} for {1}/day. First day and deposit collected.",
+                    vehicle.DisplayName,
+                    ModFormatting.FormatMoney(dailyRent))
+                : string.Format(
+                    "Rented {0} for {1}/day. Office garage is full, so it was moved to reserve.",
+                    vehicle.DisplayName,
+                    ModFormatting.FormatMoney(dailyRent));
+            return true;
+        }
+
+        public bool TrySellCommercialVehicle(string assetId, FleetManager fleetManager, VehicleFuelSystem fuelSystem, ref float balance, out string message)
+        {
+            message = string.Empty;
+            var vehicle = GetCommercialVehicle(assetId);
+            if (vehicle == null)
+            {
+                message = "Commercial vehicle record not found.";
+                return false;
+            }
+
+            if (vehicle.IsRental)
+            {
+                message = "Use End Rent for rented vehicles.";
+                return false;
+            }
+
+            if (vehicle.IsDeployed)
+            {
+                TryStoreCommercialVehicle(assetId, fleetManager, fuelSystem, out _);
+            }
+
+            var refund = Math.Max(0f, vehicle.PurchasePrice * CommercialVehicleSaleRefundRatio);
+            balance += refund;
+            _state.CommercialVehicles.Remove(vehicle);
+            NormalizeCommercialGarageAssignments();
+            message = refund > 0.001f
+                ? string.Format("Sold {0} for {1}.", vehicle.DisplayName, ModFormatting.FormatMoney(refund))
+                : string.Format("Removed {0} from the garage roster.", vehicle.DisplayName);
+            return true;
+        }
+
+        public bool TryEndCommercialVehicleRental(string assetId, FleetManager fleetManager, VehicleFuelSystem fuelSystem, ref float balance, out string message)
+        {
+            message = string.Empty;
+            var vehicle = GetCommercialVehicle(assetId);
+            if (vehicle == null)
+            {
+                message = "Commercial vehicle record not found.";
+                return false;
+            }
+
+            if (!vehicle.IsRental)
+            {
+                message = "This vehicle is company-owned, not rented.";
+                return false;
+            }
+
+            if (vehicle.IsDeployed)
+            {
+                TryStoreCommercialVehicle(assetId, fleetManager, fuelSystem, out _);
+            }
+
+            var refund = Math.Max(0f, vehicle.DailyRent * CommercialRentalRefundDays);
+            balance += refund;
+            _state.CommercialVehicles.Remove(vehicle);
+            NormalizeCommercialGarageAssignments();
+            message = refund > 0.001f
+                ? string.Format("Ended rental for {0}. Refunded {1}.", vehicle.DisplayName, ModFormatting.FormatMoney(refund))
+                : string.Format("Ended rental for {0}.", vehicle.DisplayName);
             return true;
         }
 
@@ -967,7 +1133,9 @@ namespace LSOL.Systems
                 cargoState.CapacityTons = entry.CapacityTons > 0.001f ? entry.CapacityTons : Math.Max(0f, cargoDefinition.CapacityTons);
                 cargoState.Commodity = entry.Commodity;
                 cargoState.WeightTons = Math.Max(0f, Math.Min(cargoState.CapacityTons, entry.WeightTons));
-                cargoState.CargoCondition = entry.CargoCondition > 0.001f ? entry.CargoCondition : 1f;
+                cargoState.CargoCondition = cargoState.WeightTons <= 0.001f
+                    ? 0f
+                    : Math.Max(0f, Math.Min(1f, entry.CargoCondition));
                 cargoState.TotalLostTons = Math.Max(0f, entry.TotalLostTons);
                 cargoState.SourceIndustryId = entry.SourceIndustryId;
                 cargoState.SourceDistrictName = entry.SourceDistrictName;
@@ -1256,6 +1424,7 @@ namespace LSOL.Systems
         private void InitializeRentTracking(int currentInGameMinute)
         {
             var currentWeekIndex = GetWeekIndex(currentInGameMinute);
+            var currentDayIndex = GetDayIndex(currentInGameMinute);
             for (int i = 0; i < _state.Offices.Count; i++)
             {
                 if (_state.Offices[i] != null && _state.Offices[i].LastChargedWeekIndex < 0)
@@ -1270,6 +1439,43 @@ namespace LSOL.Systems
                 {
                     _state.Apartments[i].LastChargedWeekIndex = currentWeekIndex;
                 }
+            }
+
+            for (int i = 0; i < _state.CommercialVehicles.Count; i++)
+            {
+                var vehicle = _state.CommercialVehicles[i];
+                if (vehicle != null && vehicle.IsRental && vehicle.LastChargedDayIndex < 0)
+                {
+                    vehicle.LastChargedDayIndex = currentDayIndex;
+                }
+            }
+        }
+
+        private void ProcessCommercialVehicleDailyCharge(OwnedCommercialVehiclePersistenceEntry vehicle, int currentDayIndex, ref float balance, ICollection<string> messages)
+        {
+            if (vehicle == null || !vehicle.IsRental || vehicle.DailyRent <= 0.001f)
+            {
+                return;
+            }
+
+            var lastChargedDayIndex = vehicle.LastChargedDayIndex < 0 ? currentDayIndex : vehicle.LastChargedDayIndex;
+            var elapsedDays = currentDayIndex - lastChargedDayIndex;
+            if (elapsedDays <= 0)
+            {
+                return;
+            }
+
+            var charge = vehicle.DailyRent * elapsedDays;
+            balance -= charge;
+            vehicle.LastChargedDayIndex = currentDayIndex;
+            if (messages != null)
+            {
+                messages.Add(string.Format(
+                    "Commercial rental charge: {0} billed {1} for {2} day{3}.",
+                    vehicle.DisplayName,
+                    ModFormatting.FormatMoney(charge),
+                    elapsedDays,
+                    elapsedDays == 1 ? string.Empty : "s"));
             }
         }
 
@@ -1438,6 +1644,9 @@ namespace LSOL.Systems
                     HasSeparateCargoVehicle = entry.HasSeparateCargoVehicle,
                     PurchasePrice = entry.PurchasePrice,
                     AssignedOfficeId = entry.AssignedOfficeId,
+                    IsRental = entry.IsRental,
+                    DailyRent = entry.DailyRent,
+                    LastChargedDayIndex = entry.LastChargedDayIndex,
                     InActiveGarage = entry.InActiveGarage,
                     IsDeployed = entry.IsDeployed,
                     PoweredPosition = entry.PoweredPosition,
@@ -1482,6 +1691,11 @@ namespace LSOL.Systems
         private static int GetWeekIndex(int currentInGameMinute)
         {
             return Math.Max(0, currentInGameMinute) / MinutesPerWeek;
+        }
+
+        private static int GetDayIndex(int currentInGameMinute)
+        {
+            return Math.Max(0, currentInGameMinute) / MinutesPerDay;
         }
 
         private static string BuildCommercialDisplayName(string poweredDisplayName, string cargoDisplayName, bool hasSeparateCargoVehicle)

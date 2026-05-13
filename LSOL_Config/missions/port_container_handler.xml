@@ -1,0 +1,17 @@
+﻿<Mission id="port_container_handler" type="handler_container_transfer" category="Port Operations" name="Port Container Handling" summary="Stage a flatbed in the port, load a container with a handler, then run it inland to Grand Senora." description="The harbor needs a fast handoff from the docktug yard to the Grand Senora container warehouse. Use the docktug to stage the trailer, switch to the handler to secure the container, then hand the loaded flatbed to the road truck for the final delivery." reward="18000" repeatable="true" repeatCooldownInGameWeeks="1">
+  <Unlock districts="GrandSenora,Port" minInfluenceRatio="0.4" />
+  <Vehicles>
+    <Vehicle role="DockHandler" model="handler" x="958.51" y="-2940" z="5.41" heading="0" required="true" />
+    <Vehicle role="DockTug" model="docktug" x="808.25" y="-3036.74" z="5.74" heading="160" required="true" />
+    <Vehicle role="Trailer" model="trflat" x="937.16" y="-3155.35" z="5.90" heading="180" required="true" />
+    <Vehicle role="Truck" model="packer" x="858.12" y="-3130" z="5.41" heading="270" required="true" />
+  </Vehicles>
+  <Props>
+    <Prop role="Container" modelHash="874602658" x="957" y="-2917" z="5.41" heading="90" attachTargetRole="Trailer" attachOffset="0,-0.8,0.05" attachRotation="0,0,-90" required="true" />
+  </Props>
+  <Zones>
+    <Zone id="LoadingBay" x="937.16" y="-3155.35" z="5.90" radius="14" />
+    <Zone id="TransferBay" x="937.16" y="-3155.35" z="5.90" radius="14" />
+    <Zone id="Destination" x="166.82" y="2761.53" z="42.91" radius="18" />
+  </Zones>
+</Mission>

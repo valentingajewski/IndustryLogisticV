@@ -164,6 +164,7 @@ namespace LSOL.UI
         public TabletStateSnapshot()
         {
             IndustrySummaries = Array.Empty<TabletLocationSummary>();
+            ConstructionSiteSummaries = Array.Empty<TabletLocationSummary>();
             WarehouseSummaries = Array.Empty<TabletLocationSummary>();
             StoreSummaries = Array.Empty<TabletLocationSummary>();
             GasStationSummaries = Array.Empty<TabletLocationSummary>();
@@ -253,6 +254,8 @@ namespace LSOL.UI
 
         public IReadOnlyList<TabletLocationSummary> IndustrySummaries { get; set; }
 
+        public IReadOnlyList<TabletLocationSummary> ConstructionSiteSummaries { get; set; }
+
         public IReadOnlyList<TabletLocationSummary> WarehouseSummaries { get; set; }
 
         public IReadOnlyList<TabletLocationSummary> StoreSummaries { get; set; }
@@ -310,6 +313,7 @@ namespace LSOL.UI
         private bool _hasHistorySamples;
         private TabletGraphTimeframe _selectedGraphTimeframe;
         private string _selectedTrendCommodity;
+        private string _selectedUtilizationIndustryId;
 
         private int _lastRefreshMs;
         private bool _hasSnapshot;
@@ -318,6 +322,7 @@ namespace LSOL.UI
         private bool _nearestIndustryDirty;
         private bool _marketDirty;
         private bool _networkDirty;
+        private bool _statusDirty;
 
         public TabletStateStore(
             IndustryManager industryManager,
@@ -366,6 +371,7 @@ namespace LSOL.UI
             _lastHistorySampleMs = int.MinValue;
             _selectedGraphTimeframe = TabletGraphTimeframeCatalog.GetDefault();
             _selectedTrendCommodity = string.Empty;
+            _selectedUtilizationIndustryId = string.Empty;
             Snapshot = new TabletStateSnapshot();
             MarkAllDirty();
         }
@@ -390,6 +396,7 @@ namespace LSOL.UI
                 && !_nearestIndustryDirty
                 && !_marketDirty
                 && !_networkDirty
+                && !_statusDirty
                 && now - _lastRefreshMs < SnapshotRefreshIntervalMs)
             {
                 return;
@@ -403,6 +410,7 @@ namespace LSOL.UI
             _nearestIndustryDirty = false;
             _marketDirty = false;
             _networkDirty = false;
+            _statusDirty = false;
             Version += 1;
         }
 
@@ -467,8 +475,14 @@ namespace LSOL.UI
             _nearestIndustryDirty = true;
             _marketDirty = true;
             _networkDirty = true;
+            _statusDirty = true;
             _statisticsSnapshotCache.Invalidate();
             ClearLoadOptionsCache();
+        }
+
+        public void MarkStatusDirty()
+        {
+            _statusDirty = true;
         }
 
         public void MarkBalanceDirty()
@@ -510,6 +524,11 @@ namespace LSOL.UI
         public string SelectedTrendCommodity
         {
             get { return EnsureSelectedTrendCommodity(); }
+        }
+
+        public string SelectedUtilizationIndustryId
+        {
+            get { return EnsureSelectedUtilizationIndustryId(); }
         }
 
         public void CycleGraphTimeframe(int delta)
@@ -561,6 +580,39 @@ namespace LSOL.UI
             MarkAllDirty();
         }
 
+        public void CycleSelectedUtilizationIndustry(int delta)
+        {
+            var industries = GetOrderedUtilizationIndustries();
+            if (industries.Count == 0)
+            {
+                _selectedUtilizationIndustryId = string.Empty;
+                MarkAllDirty();
+                return;
+            }
+
+            var currentId = EnsureSelectedUtilizationIndustryId();
+            var currentIndex = industries.FindIndex(industry => string.Equals(industry.Id, currentId, StringComparison.OrdinalIgnoreCase));
+            if (currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = currentIndex + direction;
+            while (nextIndex < 0)
+            {
+                nextIndex += industries.Count;
+            }
+
+            while (nextIndex >= industries.Count)
+            {
+                nextIndex -= industries.Count;
+            }
+
+            _selectedUtilizationIndustryId = industries[nextIndex].Id;
+            MarkAllDirty();
+        }
+
         public TabletAnalyticsPersistenceSnapshot CreatePersistenceSnapshot()
         {
             EnsureSelectedTrendCommodity();
@@ -585,6 +637,7 @@ namespace LSOL.UI
             {
                 _selectedGraphTimeframe = TabletGraphTimeframeCatalog.GetDefault();
                 _selectedTrendCommodity = string.Empty;
+                _selectedUtilizationIndustryId = string.Empty;
                 _lastHistorySampleMs = int.MinValue;
                 _hasHistorySamples = false;
                 MarkAllDirty();
@@ -593,11 +646,13 @@ namespace LSOL.UI
 
             _selectedGraphTimeframe = snapshot.SelectedGraphTimeframe;
             _selectedTrendCommodity = CommodityCatalog.Normalize(snapshot.SelectedTrendCommodity);
+            _selectedUtilizationIndustryId = EnsureSelectedUtilizationIndustryId();
             _profitHistory.Restore(snapshot.ProfitHistory);
             RestoreNamedSeries(_commodityPriceHistoryByCommodity, snapshot.CommodityPriceHistories);
             RestoreNamedSeries(_siteUtilizationHistoryByIndustryId, snapshot.SiteUtilizationHistories);
             RestoreNamedSeries(_siteStorageHistoryByIndustryId, snapshot.SiteStorageHistories);
             EnsureSelectedTrendCommodity();
+            EnsureSelectedUtilizationIndustryId();
             _lastHistorySampleMs = Game.GameTime;
             _hasHistorySamples = snapshot.HasData;
             MarkAllDirty();
@@ -698,6 +753,64 @@ namespace LSOL.UI
                     CompletedDeliveries = Math.Max(0, contract.CompletedDeliveries),
                 })
                 .ToArray();
+        }
+
+        public NpcWorldDispatchOverview GetWorldDispatchOverview()
+        {
+            return _npcLogisticsManager != null
+                ? _npcLogisticsManager.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview()
+                : new NpcWorldDispatchOverview();
+        }
+
+        public IReadOnlyList<NpcWorldJobSummary> GetWorldDispatchJobs()
+        {
+            return _npcLogisticsManager != null && _npcLogisticsManager.WorldJobs != null
+                ? _npcLogisticsManager.WorldJobs
+                : Array.Empty<NpcWorldJobSummary>();
+        }
+
+        public void CycleWorldDispatchPolicy(int delta)
+        {
+            if (_npcLogisticsManager == null)
+            {
+                return;
+            }
+
+            _npcLogisticsManager.CycleWorldDispatchPolicy(delta);
+            MarkAllDirty();
+        }
+
+        public void CycleWorldPriorityCommodity(int delta)
+        {
+            if (_npcLogisticsManager == null)
+            {
+                return;
+            }
+
+            _npcLogisticsManager.CycleWorldPriorityCommodity(delta);
+            MarkAllDirty();
+        }
+
+        public void CycleWorldPriorityDistrict(int delta)
+        {
+            if (_npcLogisticsManager == null)
+            {
+                return;
+            }
+
+            _npcLogisticsManager.CycleWorldPriorityDistrict(delta);
+            MarkAllDirty();
+        }
+
+        public void TogglePremiumDispatch()
+        {
+            if (_npcLogisticsManager == null)
+            {
+                return;
+            }
+
+            _npcLogisticsManager.TogglePremiumDispatch();
+            MarkAllDirty();
         }
 
         public bool IsIndustryInRange(Industry industry, float interactionDistance, out float distance)
@@ -874,7 +987,10 @@ namespace LSOL.UI
 
             snapshot.IndustrySummaries = BuildLocationSummaries(
                 ExternalLocationKind.Industry,
-                industry => industry.SiteRole != SiteRole.Warehouse);
+                industry => industry.SiteRole != SiteRole.Warehouse && industry.SiteRole != SiteRole.ConstructionSiteSink);
+            snapshot.ConstructionSiteSummaries = BuildLocationSummaries(
+                ExternalLocationKind.Industry,
+                industry => industry.SiteRole == SiteRole.ConstructionSiteSink);
             snapshot.WarehouseSummaries = BuildLocationSummaries(
                 ExternalLocationKind.Industry,
                 industry => industry.SiteRole == SiteRole.Warehouse);
@@ -1079,6 +1195,18 @@ namespace LSOL.UI
                 .ToList();
         }
 
+        private List<Industry> GetOrderedUtilizationIndustries()
+        {
+            return _industryManager.Industries
+                .Where(industry => industry != null
+                    && industry.LocationKind == ExternalLocationKind.Industry
+                    && industry.SiteRole != SiteRole.Warehouse
+                    && industry.SiteRole != SiteRole.ConstructionSiteSink
+                    && !string.IsNullOrWhiteSpace(industry.Id))
+                .OrderBy(industry => industry.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private string EnsureSelectedTrendCommodity()
         {
             var normalized = CommodityCatalog.Normalize(_selectedTrendCommodity);
@@ -1097,6 +1225,24 @@ namespace LSOL.UI
 
             _selectedTrendCommodity = normalized;
             return _selectedTrendCommodity;
+        }
+
+        private string EnsureSelectedUtilizationIndustryId()
+        {
+            var industries = GetOrderedUtilizationIndustries();
+            if (industries.Count == 0)
+            {
+                _selectedUtilizationIndustryId = string.Empty;
+                return _selectedUtilizationIndustryId;
+            }
+
+            var selected = industries.FirstOrDefault(industry => string.Equals(industry.Id, _selectedUtilizationIndustryId, StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+            {
+                _selectedUtilizationIndustryId = industries[0].Id;
+            }
+
+            return _selectedUtilizationIndustryId;
         }
 
         private static IReadOnlyList<float> GetHistorySnapshot(

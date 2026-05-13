@@ -37,6 +37,7 @@ namespace LSOL.Domain
             DisplayObjectsAtGroundLevel = config.DisplayObjectsAtGroundLevel;
             MaxDisplayObjectLine = config.MaxDisplayObjectLine;
             MaxDisplayObjectRow = config.MaxDisplayObjectRow;
+            ObjectToDeleteModelHashes = (config.ObjectToDeleteModelHashes ?? new List<int>()).AsReadOnly();
             Inputs = new HashSet<string>(config.Inputs, StringComparer.OrdinalIgnoreCase);
             OptionalInputs = new HashSet<string>(config.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             Outputs = new HashSet<string>(config.Outputs, StringComparer.OrdinalIgnoreCase);
@@ -106,6 +107,7 @@ namespace LSOL.Domain
         public bool DisplayObjectsAtGroundLevel { get; }
         public int? MaxDisplayObjectLine { get; }
         public int? MaxDisplayObjectRow { get; }
+        public IReadOnlyList<int> ObjectToDeleteModelHashes { get; }
         public HashSet<string> Inputs { get; }
         public HashSet<string> OptionalInputs { get; }
         public HashSet<string> Outputs { get; }

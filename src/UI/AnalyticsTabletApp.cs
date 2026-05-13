@@ -184,17 +184,39 @@ namespace LSOL.UI
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateGraphTimeframeSelectorItem(context, "Left/right changes the utilization graph window."),
+                TabletUiHelpers.CreateSelectorItem(
+                    () =>
+                    {
+                        var selected = industries.FirstOrDefault(summary => string.Equals(summary.Industry.Id, context.StateStore.SelectedUtilizationIndustryId, StringComparison.OrdinalIgnoreCase));
+                        return string.Format("Site: < {0} >", selected != null ? selected.Name : "None");
+                    },
+                    () => "Left/right changes the graphed site. Enter advances.",
+                    () =>
+                    {
+                        context.StateStore.CycleSelectedUtilizationIndustry(-1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleSelectedUtilizationIndustry(1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleSelectedUtilizationIndustry(1);
+                        context.Refresh();
+                    },
+                    "SITE"),
             };
 
-            for (int i = 0; i < industries.Count; i++)
+            var selectedSummary = industries.FirstOrDefault(summary => string.Equals(summary.Industry.Id, context.StateStore.SelectedUtilizationIndustryId, StringComparison.OrdinalIgnoreCase));
+            if (selectedSummary != null)
             {
-                var summary = industries[i];
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    summary.Name,
-                    string.Format("{0:0.0} t/h | {1:0}% current use", summary.OutputPerHourTons, summary.UtilizationPercent)));
+                    string.Format("{0:0.0} t/h output", selectedSummary.OutputPerHourTons),
+                    string.Format("Current utilization {0:0}% | Omega {1:0.0}/{2:0.0}t", selectedSummary.UtilizationPercent, selectedSummary.OmegaStorageTons, selectedSummary.OmegaCapacityTons)));
             }
-
-            if (items.Count == 0)
+            else
             {
                 items.Add(TabletUiHelpers.CreateInfoItem("No industries tracked", "No production sites are currently available for utilization analytics."));
             }
@@ -204,9 +226,9 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Site Utilization",
-                Subtitle = "Select an industry to review utilization history",
+                Subtitle = "Use left/right to switch the industry shown in the graph",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                FooterText = "Arrow Up/Down Navigate | Left/Right Change Timeframe | Enter Select | Backspace/Esc Back",
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
                 BottomPanelHeight = 142f,
@@ -218,8 +240,8 @@ namespace LSOL.UI
                         return;
                     }
 
-                    var selectedIndex = GetGraphListSelectionIndex(panel.SelectedIndex, 1, industries.Count);
-                    var summary = industries[selectedIndex];
+                    var summary = industries.FirstOrDefault(entry => string.Equals(entry.Industry.Id, context.StateStore.SelectedUtilizationIndustryId, StringComparison.OrdinalIgnoreCase))
+                        ?? industries[0];
                     TabletChartRenderer.DrawHistoryPanel(
                         panel,
                         string.Format("{0} Utilization", summary.Name),

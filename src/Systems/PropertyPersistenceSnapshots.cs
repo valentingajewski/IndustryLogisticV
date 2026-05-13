@@ -84,6 +84,12 @@ namespace LSOL.Systems
 
         public string AssignedOfficeId { get; set; }
 
+        public bool IsRental { get; set; }
+
+        public float DailyRent { get; set; }
+
+        public int LastChargedDayIndex { get; set; } = -1;
+
         public bool InActiveGarage { get; set; }
 
         public bool IsDeployed { get; set; }

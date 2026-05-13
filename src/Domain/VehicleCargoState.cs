@@ -10,7 +10,7 @@ namespace LSOL.Domain
             VehicleHandle = vehicleHandle;
             CargoType = cargoType;
             CapacityTons = capacityTons;
-            CargoCondition = 1f;
+            CargoCondition = 0f;
             AttachedProps = new List<Prop>();
         }
 
@@ -67,7 +67,7 @@ namespace LSOL.Domain
         {
             Commodity = string.Empty;
             WeightTons = 0f;
-            CargoCondition = 1f;
+            CargoCondition = 0f;
             TotalLostTons = 0f;
             LastTrackedRigHealth = 0f;
             LastTrackedRigSpeed = 0f;

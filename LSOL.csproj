@@ -31,17 +31,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="missions\**\*">
+    <None Update="LSOL_Config\**\*">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <EmbeddedResource Include="configs\*.ini">
-      <LogicalName>LSOL.Configs.%(Filename)%(Extension)</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="configs\*.csv">
-      <LogicalName>LSOL.Configs.%(Filename)%(Extension)</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
+  <Target Name="RemoveLegacyRuntimeConfigFromOutput" AfterTargets="Build">
+    <RemoveDir Directories="$(OutDir)missions" Condition="Exists('$(OutDir)missions')" />
+    <RemoveDir Directories="$(OutDir)configs" Condition="Exists('$(OutDir)configs')" />
+  </Target>
 </Project>

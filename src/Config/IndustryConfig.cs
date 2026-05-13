@@ -27,6 +27,7 @@ namespace LSOL.Config
         public bool DisplayObjectsAtGroundLevel { get; set; }
         public int? MaxDisplayObjectLine { get; set; }
         public int? MaxDisplayObjectRow { get; set; }
+        public List<int> ObjectToDeleteModelHashes { get; set; }
         public HashSet<string> Inputs { get; set; }
         public HashSet<string> OptionalInputs { get; set; }
         public HashSet<string> Outputs { get; set; }
