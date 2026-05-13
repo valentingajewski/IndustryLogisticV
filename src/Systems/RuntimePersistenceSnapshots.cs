@@ -70,6 +70,8 @@ namespace LSOL.Systems
 
         public bool PremiumDispatchEnabled { get; set; }
 
+        public bool OfficeDeliveryNotificationsEnabled { get; set; } = true;
+
         public int LastWorldEvaluationClockMinute { get; set; } = -1;
 
         public int CompletedWorldDispatches { get; set; }
@@ -83,6 +85,7 @@ namespace LSOL.Systems
                     || !string.IsNullOrWhiteSpace(PriorityCommodity)
                     || !string.IsNullOrWhiteSpace(PriorityDistrict)
                     || PremiumDispatchEnabled
+                    || !OfficeDeliveryNotificationsEnabled
                     || CompletedWorldDispatches > 0;
             }
         }
@@ -90,6 +93,11 @@ namespace LSOL.Systems
 
     public sealed class NpcLogisticsContractSnapshot
     {
+        public NpcLogisticsContractSnapshot()
+        {
+            Routes = new List<NpcLogisticsRouteSnapshot>();
+        }
+
         public int Id { get; set; }
 
         public string OriginIndustryId { get; set; }
@@ -99,6 +107,18 @@ namespace LSOL.Systems
         public string Commodity { get; set; }
 
         public string TierId { get; set; }
+
+        public string AssignedVehicleAssetId { get; set; }
+
+        public string AssignedVehicleDisplayName { get; set; }
+
+        public int OriginTriggerThresholdPercent { get; set; }
+
+        public int DestinationTriggerThresholdPercent { get; set; } = 100;
+
+        public int CurrentRouteIndex { get; set; }
+
+        public List<NpcLogisticsRouteSnapshot> Routes { get; }
 
         public float ContractCost { get; set; }
 
@@ -115,6 +135,19 @@ namespace LSOL.Systems
         public float TotalProfitEarned { get; set; }
 
         public float LastJourneyLossRatio { get; set; }
+    }
+
+    public sealed class NpcLogisticsRouteSnapshot
+    {
+        public string OriginIndustryId { get; set; }
+
+        public string DestinationIndustryId { get; set; }
+
+        public string Commodity { get; set; }
+
+        public int OriginTriggerThresholdPercent { get; set; }
+
+        public int DestinationTriggerThresholdPercent { get; set; } = 100;
     }
 
     public sealed class NpcWorldLogisticsJobSnapshot

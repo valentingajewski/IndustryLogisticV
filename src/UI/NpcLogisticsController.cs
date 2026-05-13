@@ -12,6 +12,23 @@ namespace LSOL.UI
 {
     public sealed class NpcLogisticsController
     {
+        private static readonly int[] TriggerThresholdOptions = { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+
+        private sealed class DraftRouteConfig
+        {
+            public bool IsEnabled { get; set; }
+
+            public Industry OriginIndustry { get; set; }
+
+            public Industry DestinationIndustry { get; set; }
+
+            public string Commodity { get; set; }
+
+            public int OriginTriggerThresholdPercent { get; set; }
+
+            public int DestinationTriggerThresholdPercent { get; set; } = 100;
+        }
+
         private readonly ControlBindings _controls;
         private readonly NpcLogisticsManager _manager;
         private readonly Action _reopenOfficeMenu;
@@ -21,14 +38,20 @@ namespace LSOL.UI
         private readonly SimpleMenu _hireMenu;
         private readonly SimpleMenu _contractListMenu;
         private readonly SimpleMenu _contractActionMenu;
+        private readonly List<DraftRouteConfig> _draftRoutes;
 
         private List<Industry> _originOptions;
         private List<Industry> _destinationOptions;
         private List<string> _resourceOptions;
+        private List<OwnedCommercialVehiclePersistenceEntry> _garageVehicleOptions;
         private int _selectedOriginIndex;
         private int _selectedDestinationIndex;
         private int _selectedResourceIndex;
         private int _selectedTierIndex;
+        private int _selectedGarageVehicleIndex;
+        private int _selectedOriginTriggerIndex;
+        private int _selectedDestinationTriggerIndex;
+        private int _selectedRouteSlotIndex;
         private NpcLogisticsContract _selectedContract;
         private NpcLogisticsContract _editingContract;
 
@@ -51,6 +74,8 @@ namespace LSOL.UI
             _originOptions = new List<Industry>();
             _destinationOptions = new List<Industry>();
             _resourceOptions = new List<string>();
+            _garageVehicleOptions = new List<OwnedCommercialVehiclePersistenceEntry>();
+            _draftRoutes = CreateEmptyDraftRoutes();
         }
 
         public bool AnyMenuOpen
@@ -280,7 +305,7 @@ namespace LSOL.UI
                 new MenuItem
                 {
                     CaptionFactory = () => "Modify NPC",
-                    DetailFactory = () => "Change tier, route, or transported resource.",
+                    DetailFactory = () => "Change tier, route, assigned truck, trigger thresholds, or transported resource.",
                     OnActivate = ModifySelectedContract,
                 },
                 new MenuItem
@@ -344,6 +369,21 @@ namespace LSOL.UI
             {
                 new MenuItem
                 {
+                    CaptionFactory = CurrentRouteSlotCaption,
+                    DetailFactory = CurrentRouteSlotDetail,
+                    OnLeft = () => ChangeRouteSlot(-1),
+                    OnRight = () => ChangeRouteSlot(1),
+                },
+                new MenuItem
+                {
+                    CaptionFactory = CurrentRouteEnabledCaption,
+                    DetailFactory = CurrentRouteEnabledDetail,
+                    OnLeft = ToggleSelectedRouteEnabled,
+                    OnRight = ToggleSelectedRouteEnabled,
+                    OnActivate = ToggleSelectedRouteEnabled,
+                },
+                new MenuItem
+                {
                     CaptionFactory = CurrentOriginCaption,
                     DetailFactory = CurrentOriginDetail,
                     OnLeft = () => ChangeOrigin(-1),
@@ -362,6 +402,27 @@ namespace LSOL.UI
                     DetailFactory = CurrentResourceDetail,
                     OnLeft = () => ChangeResource(-1),
                     OnRight = () => ChangeResource(1),
+                },
+                new MenuItem
+                {
+                    CaptionFactory = CurrentAssignedTruckCaption,
+                    DetailFactory = CurrentAssignedTruckDetail,
+                    OnLeft = () => ChangeAssignedTruck(-1),
+                    OnRight = () => ChangeAssignedTruck(1),
+                },
+                new MenuItem
+                {
+                    CaptionFactory = CurrentOriginTriggerCaption,
+                    DetailFactory = CurrentOriginTriggerDetail,
+                    OnLeft = () => ChangeOriginTriggerThreshold(-1),
+                    OnRight = () => ChangeOriginTriggerThreshold(1),
+                },
+                new MenuItem
+                {
+                    CaptionFactory = CurrentDestinationTriggerCaption,
+                    DetailFactory = CurrentDestinationTriggerDetail,
+                    OnLeft = () => ChangeDestinationTriggerThreshold(-1),
+                    OnRight = () => ChangeDestinationTriggerThreshold(1),
                 },
                 new MenuItem
                 {
@@ -396,15 +457,24 @@ namespace LSOL.UI
 
         private void ConfirmDraft()
         {
-            var origin = GetSelectedOriginIndustry();
-            var destination = GetSelectedDestinationIndustry();
-            var resource = GetSelectedResource();
+            var assignedVehicle = GetSelectedAssignedVehicle();
             var tier = GetSelectedTier();
+            StoreCurrentSelectionsIntoDraftRoute();
+
+            string validationMessage;
+            var routes = BuildConfiguredRoutes(out validationMessage);
+            if (routes == null)
+            {
+                ShowStatus(validationMessage);
+                RebuildHireMenuItems();
+                _hireMenu.Open();
+                return;
+            }
 
             string message;
             var success = _editingContract == null
-                ? _manager.TryCreateContract(origin, destination, resource, tier, out message)
-                : _manager.TryModifyContract(_editingContract, origin, destination, resource, tier, out message);
+                ? _manager.TryCreateContract(routes, tier, assignedVehicle, out message)
+                : _manager.TryModifyContract(_editingContract, routes, tier, assignedVehicle, out message);
             ShowStatus(message);
             if (!success)
             {
@@ -420,38 +490,14 @@ namespace LSOL.UI
 
         private void SeedDraftFromContract(NpcLogisticsContract contract)
         {
+            ResetDraftRoutes(contract);
+            _selectedRouteSlotIndex = 0;
+
             _originOptions = _manager.GetOriginIndustryOptions();
             _selectedOriginIndex = 0;
-            if (contract != null && contract.OriginIndustry != null)
-            {
-                var originIndex = _originOptions.FindIndex(industry => string.Equals(industry.Id, contract.OriginIndustry.Id, StringComparison.OrdinalIgnoreCase));
-                if (originIndex >= 0)
-                {
-                    _selectedOriginIndex = originIndex;
-                }
-            }
+            LoadSelectedDraftRouteIntoSelections();
 
-            RefreshDraftSelections();
-
-            if (contract != null && contract.DestinationIndustry != null)
-            {
-                var destinationIndex = _destinationOptions.FindIndex(industry => string.Equals(industry.Id, contract.DestinationIndustry.Id, StringComparison.OrdinalIgnoreCase));
-                if (destinationIndex >= 0)
-                {
-                    _selectedDestinationIndex = destinationIndex;
-                }
-            }
-
-            RefreshResourceOptions();
-
-            if (contract != null && !string.IsNullOrWhiteSpace(contract.Commodity))
-            {
-                var resourceIndex = _resourceOptions.FindIndex(resource => string.Equals(resource, contract.Commodity, StringComparison.OrdinalIgnoreCase));
-                if (resourceIndex >= 0)
-                {
-                    _selectedResourceIndex = resourceIndex;
-                }
-            }
+            RefreshGarageVehicleOptions(contract != null ? contract.AssignedVehicleAssetId : string.Empty);
 
             _selectedTierIndex = 0;
             if (contract != null && contract.Tier != null)
@@ -462,6 +508,174 @@ namespace LSOL.UI
                     _selectedTierIndex = tierIndex;
                 }
             }
+        }
+
+        private List<DraftRouteConfig> CreateEmptyDraftRoutes()
+        {
+            var routes = new List<DraftRouteConfig>();
+            for (int i = 0; i < 5; i++)
+            {
+                routes.Add(new DraftRouteConfig
+                {
+                    IsEnabled = i == 0,
+                    OriginTriggerThresholdPercent = 0,
+                    DestinationTriggerThresholdPercent = 100,
+                });
+            }
+
+            return routes;
+        }
+
+        private void ResetDraftRoutes(NpcLogisticsContract contract)
+        {
+            _draftRoutes.Clear();
+            _draftRoutes.AddRange(CreateEmptyDraftRoutes());
+
+            if (contract == null)
+            {
+                return;
+            }
+
+            var sourceRoutes = contract.Routes != null && contract.Routes.Count > 0
+                ? contract.Routes
+                : new List<NpcLogisticsRouteDefinition>
+                {
+                    new NpcLogisticsRouteDefinition
+                    {
+                        OriginIndustry = contract.OriginIndustry,
+                        DestinationIndustry = contract.DestinationIndustry,
+                        Commodity = contract.Commodity,
+                        OriginTriggerThresholdPercent = contract.OriginTriggerThresholdPercent,
+                        DestinationTriggerThresholdPercent = contract.DestinationTriggerThresholdPercent,
+                    },
+                };
+
+            for (int i = 0; i < sourceRoutes.Count && i < _draftRoutes.Count; i++)
+            {
+                var route = sourceRoutes[i];
+                if (route == null)
+                {
+                    continue;
+                }
+
+                _draftRoutes[i].IsEnabled = true;
+                _draftRoutes[i].OriginIndustry = route.OriginIndustry;
+                _draftRoutes[i].DestinationIndustry = route.DestinationIndustry;
+                _draftRoutes[i].Commodity = route.Commodity;
+                _draftRoutes[i].OriginTriggerThresholdPercent = route.OriginTriggerThresholdPercent;
+                _draftRoutes[i].DestinationTriggerThresholdPercent = route.DestinationTriggerThresholdPercent;
+            }
+        }
+
+        private DraftRouteConfig GetSelectedDraftRouteConfig()
+        {
+            return _selectedRouteSlotIndex >= 0 && _selectedRouteSlotIndex < _draftRoutes.Count
+                ? _draftRoutes[_selectedRouteSlotIndex]
+                : null;
+        }
+
+        private void LoadSelectedDraftRouteIntoSelections()
+        {
+            var route = GetSelectedDraftRouteConfig();
+            _originOptions = _manager.GetOriginIndustryOptions();
+            _selectedOriginIndex = 0;
+            if (route != null && route.OriginIndustry != null)
+            {
+                var originIndex = _originOptions.FindIndex(industry => string.Equals(industry.Id, route.OriginIndustry.Id, StringComparison.OrdinalIgnoreCase));
+                if (originIndex >= 0)
+                {
+                    _selectedOriginIndex = originIndex;
+                }
+            }
+
+            RefreshDraftSelections();
+
+            if (route != null && route.DestinationIndustry != null)
+            {
+                var destinationIndex = _destinationOptions.FindIndex(industry => string.Equals(industry.Id, route.DestinationIndustry.Id, StringComparison.OrdinalIgnoreCase));
+                if (destinationIndex >= 0)
+                {
+                    _selectedDestinationIndex = destinationIndex;
+                }
+            }
+
+            RefreshResourceOptions();
+
+            if (route != null && !string.IsNullOrWhiteSpace(route.Commodity))
+            {
+                var resourceIndex = _resourceOptions.FindIndex(resource => string.Equals(resource, route.Commodity, StringComparison.OrdinalIgnoreCase));
+                if (resourceIndex >= 0)
+                {
+                    _selectedResourceIndex = resourceIndex;
+                }
+            }
+
+            _selectedOriginTriggerIndex = FindTriggerThresholdIndex(route != null ? route.OriginTriggerThresholdPercent : 0, 0);
+            _selectedDestinationTriggerIndex = FindTriggerThresholdIndex(route != null ? route.DestinationTriggerThresholdPercent : 100, TriggerThresholdOptions.Length - 1);
+        }
+
+        private void StoreCurrentSelectionsIntoDraftRoute()
+        {
+            var route = GetSelectedDraftRouteConfig();
+            if (route == null)
+            {
+                return;
+            }
+
+            route.OriginIndustry = GetSelectedOriginIndustry();
+            route.DestinationIndustry = GetSelectedDestinationIndustry();
+            route.Commodity = GetSelectedResource();
+            route.OriginTriggerThresholdPercent = GetSelectedOriginTriggerThresholdPercent();
+            route.DestinationTriggerThresholdPercent = GetSelectedDestinationTriggerThresholdPercent();
+        }
+
+        private List<NpcLogisticsRouteDefinition> BuildConfiguredRoutes(out string message)
+        {
+            message = string.Empty;
+            var routes = new List<NpcLogisticsRouteDefinition>();
+            for (int routeIndex = 0; routeIndex < _draftRoutes.Count; routeIndex++)
+            {
+                var draftRoute = _draftRoutes[routeIndex];
+                if (draftRoute == null || !draftRoute.IsEnabled)
+                {
+                    continue;
+                }
+
+                if (draftRoute.OriginIndustry == null)
+                {
+                    message = string.Format("Select a starting point for route {0}.", routeIndex + 1);
+                    return null;
+                }
+
+                if (draftRoute.DestinationIndustry == null)
+                {
+                    message = string.Format("Select a destination for route {0}.", routeIndex + 1);
+                    return null;
+                }
+
+                if (string.IsNullOrWhiteSpace(draftRoute.Commodity))
+                {
+                    message = string.Format("Select a resource for route {0}.", routeIndex + 1);
+                    return null;
+                }
+
+                routes.Add(new NpcLogisticsRouteDefinition
+                {
+                    OriginIndustry = draftRoute.OriginIndustry,
+                    DestinationIndustry = draftRoute.DestinationIndustry,
+                    Commodity = draftRoute.Commodity,
+                    OriginTriggerThresholdPercent = draftRoute.OriginTriggerThresholdPercent,
+                    DestinationTriggerThresholdPercent = draftRoute.DestinationTriggerThresholdPercent,
+                });
+            }
+
+            if (routes.Count == 0)
+            {
+                message = "Enable and configure at least one route first.";
+                return null;
+            }
+
+            return routes;
         }
 
         private void RefreshDraftSelections()
@@ -478,6 +692,7 @@ namespace LSOL.UI
 
             RefreshDestinationOptions();
             RefreshResourceOptions();
+            RefreshGarageVehicleOptions(_editingContract != null ? _editingContract.AssignedVehicleAssetId : string.Empty);
 
             if (_selectedTierIndex < 0 || _selectedTierIndex >= _manager.DriverTiers.Count)
             {
@@ -503,6 +718,28 @@ namespace LSOL.UI
             }
         }
 
+        private void RefreshGarageVehicleOptions(string includeAssignedAssetId = null)
+        {
+            var preferredAssetId = GetSelectedAssignedVehicle() != null
+                ? GetSelectedAssignedVehicle().AssetId
+                : includeAssignedAssetId;
+            _garageVehicleOptions = _manager
+                .GetAssignableGarageVehicles(GetSelectedResource(), includeAssignedAssetId)
+                .ToList();
+
+            if (!string.IsNullOrWhiteSpace(preferredAssetId))
+            {
+                var matchIndex = _garageVehicleOptions.FindIndex(vehicle => string.Equals(vehicle.AssetId, preferredAssetId, StringComparison.OrdinalIgnoreCase));
+                if (matchIndex >= 0)
+                {
+                    _selectedGarageVehicleIndex = matchIndex;
+                    return;
+                }
+            }
+
+            _selectedGarageVehicleIndex = _garageVehicleOptions.Count > 0 ? 0 : -1;
+        }
+
         private void ChangeOrigin(int delta)
         {
             if (_originOptions.Count == 0)
@@ -516,6 +753,8 @@ namespace LSOL.UI
             _selectedResourceIndex = 0;
             RefreshDestinationOptions();
             RefreshResourceOptions();
+            RefreshGarageVehicleOptions(_editingContract != null ? _editingContract.AssignedVehicleAssetId : string.Empty);
+            StoreCurrentSelectionsIntoDraftRoute();
         }
 
         private void ChangeDestination(int delta)
@@ -531,6 +770,8 @@ namespace LSOL.UI
             _selectedDestinationIndex = (_selectedDestinationIndex + delta + _destinationOptions.Count) % _destinationOptions.Count;
             _selectedResourceIndex = 0;
             RefreshResourceOptions();
+            RefreshGarageVehicleOptions(_editingContract != null ? _editingContract.AssignedVehicleAssetId : string.Empty);
+            StoreCurrentSelectionsIntoDraftRoute();
         }
 
         private void ChangeResource(int delta)
@@ -542,6 +783,68 @@ namespace LSOL.UI
             }
 
             _selectedResourceIndex = (_selectedResourceIndex + delta + _resourceOptions.Count) % _resourceOptions.Count;
+            RefreshGarageVehicleOptions(_editingContract != null ? _editingContract.AssignedVehicleAssetId : string.Empty);
+            StoreCurrentSelectionsIntoDraftRoute();
+        }
+
+        private void ChangeRouteSlot(int delta)
+        {
+            if (_draftRoutes.Count == 0)
+            {
+                _selectedRouteSlotIndex = -1;
+                return;
+            }
+
+            StoreCurrentSelectionsIntoDraftRoute();
+            _selectedRouteSlotIndex = (_selectedRouteSlotIndex + delta + _draftRoutes.Count) % _draftRoutes.Count;
+            LoadSelectedDraftRouteIntoSelections();
+            RefreshGarageVehicleOptions(_editingContract != null ? _editingContract.AssignedVehicleAssetId : string.Empty);
+        }
+
+        private void ToggleSelectedRouteEnabled()
+        {
+            var route = GetSelectedDraftRouteConfig();
+            if (route == null)
+            {
+                return;
+            }
+
+            route.IsEnabled = !route.IsEnabled;
+        }
+
+        private void ChangeAssignedTruck(int delta)
+        {
+            if (_garageVehicleOptions.Count == 0)
+            {
+                _selectedGarageVehicleIndex = -1;
+                return;
+            }
+
+            _selectedGarageVehicleIndex = (_selectedGarageVehicleIndex + delta + _garageVehicleOptions.Count) % _garageVehicleOptions.Count;
+        }
+
+        private void ChangeOriginTriggerThreshold(int delta)
+        {
+            if (TriggerThresholdOptions.Length == 0)
+            {
+                _selectedOriginTriggerIndex = -1;
+                return;
+            }
+
+            _selectedOriginTriggerIndex = (_selectedOriginTriggerIndex + delta + TriggerThresholdOptions.Length) % TriggerThresholdOptions.Length;
+            StoreCurrentSelectionsIntoDraftRoute();
+        }
+
+        private void ChangeDestinationTriggerThreshold(int delta)
+        {
+            if (TriggerThresholdOptions.Length == 0)
+            {
+                _selectedDestinationTriggerIndex = -1;
+                return;
+            }
+
+            _selectedDestinationTriggerIndex = (_selectedDestinationTriggerIndex + delta + TriggerThresholdOptions.Length) % TriggerThresholdOptions.Length;
+            StoreCurrentSelectionsIntoDraftRoute();
         }
 
         private void ChangeTier(int delta)
@@ -558,6 +861,27 @@ namespace LSOL.UI
         private string CurrentOriginCaption()
         {
             return string.Format("Starting Point: < {0} >", GetSelectedOriginIndustryName());
+        }
+
+        private string CurrentRouteSlotCaption()
+        {
+            return string.Format("Route Slot: < {0}/{1} >", _selectedRouteSlotIndex + 1, _draftRoutes.Count);
+        }
+
+        private string CurrentRouteSlotDetail()
+        {
+            return "Routes run in slot order. Up to 5 enabled routes can be chained on one hired NPC.";
+        }
+
+        private string CurrentRouteEnabledCaption()
+        {
+            var route = GetSelectedDraftRouteConfig();
+            return string.Format("Route Enabled: < {0} >", route != null && route.IsEnabled ? "On" : "Off");
+        }
+
+        private string CurrentRouteEnabledDetail()
+        {
+            return "Disabled slots are skipped. Enabled slots must have a full origin, destination, and resource configured.";
         }
 
         private string CurrentOriginDetail()
@@ -611,6 +935,47 @@ namespace LSOL.UI
             return string.Format("Tier: < {0} >", GetSelectedTierName());
         }
 
+        private string CurrentAssignedTruckCaption()
+        {
+            return string.Format("Assigned Truck: < {0} >", GetSelectedAssignedVehicleName());
+        }
+
+        private string CurrentAssignedTruckDetail()
+        {
+            if (_garageVehicleOptions.Count == 0)
+            {
+                return "Move a compatible company truck into the active office garage before hiring this NPC.";
+            }
+
+            var vehicle = GetSelectedAssignedVehicle();
+            if (vehicle == null)
+            {
+                return "Select which office garage truck this NPC should reserve.";
+            }
+
+            return "NPC routes reserve one office garage truck each. Only compatible active-garage vehicles are listed.";
+        }
+
+        private string CurrentOriginTriggerCaption()
+        {
+            return string.Format("Start Trigger: < {0}% >", GetSelectedOriginTriggerThresholdPercent());
+        }
+
+        private string CurrentOriginTriggerDetail()
+        {
+            return "NPC leaves the office only when source stock reaches at least this percent.";
+        }
+
+        private string CurrentDestinationTriggerCaption()
+        {
+            return string.Format("Destination Trigger: < {0}% >", GetSelectedDestinationTriggerThresholdPercent());
+        }
+
+        private string CurrentDestinationTriggerDetail()
+        {
+            return "NPC delivers until destination storage reaches this percent, then returns to the office.";
+        }
+
         private string CurrentTierDetail()
         {
             var tier = GetSelectedTier();
@@ -629,28 +994,41 @@ namespace LSOL.UI
 
         private string CurrentHireActionDetail()
         {
-            var origin = GetSelectedOriginIndustry();
-            var destination = GetSelectedDestinationIndustry();
-            var resource = GetSelectedResource();
+            var assignedVehicle = GetSelectedAssignedVehicle();
             var tier = GetSelectedTier();
-            if (origin == null || destination == null || string.IsNullOrWhiteSpace(resource) || tier == null)
+            StoreCurrentSelectionsIntoDraftRoute();
+
+            string validationMessage;
+            var configuredRoutes = BuildConfiguredRoutes(out validationMessage);
+            if (configuredRoutes == null || tier == null || assignedVehicle == null)
             {
                 return "Complete every selection before confirming the contract.";
             }
 
-            var fullCost = _manager.GetContractCost(resource, tier);
+            var currentRoute = GetSelectedDraftRouteConfig();
+            var fullCost = configuredRoutes.Sum(route => _manager.GetContractCost(route.Commodity, tier));
             var additionalCost = _editingContract == null
                 ? fullCost
                 : Math.Max(0f, fullCost - _editingContract.ContractCost);
             var weeklyWage = _manager.GetWeeklyWage(tier);
 
             var detail = string.Format(
-                "{0} -> {1} | {2} | Upfront {3} | Weekly {4}",
-                origin.Name,
-                destination.Name,
-                resource,
+                "Routes {0} | Slot {1} | Upfront {2} | Weekly {3}",
+                configuredRoutes.Count,
+                _selectedRouteSlotIndex + 1,
                 ModFormatting.FormatMoney(additionalCost),
                 ModFormatting.FormatMoney(weeklyWage));
+            detail += string.Format(" | Truck {0}", GetSelectedAssignedVehicleName());
+            if (currentRoute != null && currentRoute.IsEnabled && currentRoute.OriginIndustry != null && currentRoute.DestinationIndustry != null && !string.IsNullOrWhiteSpace(currentRoute.Commodity))
+            {
+                detail += string.Format(
+                    " | {0}->{1} {2} {3}%->{4}%",
+                    currentRoute.OriginIndustry.Name,
+                    currentRoute.DestinationIndustry.Name,
+                    currentRoute.Commodity,
+                    currentRoute.OriginTriggerThresholdPercent,
+                    currentRoute.DestinationTriggerThresholdPercent);
+            }
 
             if (_editingContract != null && additionalCost <= 0f)
             {
@@ -676,6 +1054,17 @@ namespace LSOL.UI
             }
 
             var tierName = contract.Tier != null ? contract.Tier.DisplayName : "Unknown";
+            if (contract.Routes != null && contract.Routes.Count > 1)
+            {
+                var firstRoute = contract.Routes[0];
+                return string.Format(
+                    "[{0}] {1} routes ({2} -> {3})",
+                    tierName,
+                    contract.Routes.Count,
+                    firstRoute != null && firstRoute.OriginIndustry != null ? firstRoute.OriginIndustry.Name : "Unknown",
+                    firstRoute != null && firstRoute.DestinationIndustry != null ? firstRoute.DestinationIndustry.Name : "Unknown");
+            }
+
             return string.Format(
                 "[{0}] {1} -> {2}",
                 tierName,
@@ -691,8 +1080,12 @@ namespace LSOL.UI
             }
 
             return string.Format(
-                "{0} | {1} | {2} | Deliveries {3}",
-                contract.Commodity,
+                "{0} route{1} | Truck {2} | Active {3}% -> {4}% | {5} | {6} | Deliveries {7}",
+                contract.Routes != null && contract.Routes.Count > 0 ? contract.Routes.Count : 1,
+                contract.Routes != null && contract.Routes.Count == 1 ? string.Empty : "s",
+                string.IsNullOrWhiteSpace(contract.AssignedVehicleDisplayName) ? "Legacy auto" : contract.AssignedVehicleDisplayName,
+                contract.OriginTriggerThresholdPercent,
+                contract.DestinationTriggerThresholdPercent,
                 _manager.BuildPayrollStatus(contract),
                 contract.StatusText,
                 contract.CompletedDeliveries);
@@ -726,6 +1119,27 @@ namespace LSOL.UI
                 : null;
         }
 
+        private OwnedCommercialVehiclePersistenceEntry GetSelectedAssignedVehicle()
+        {
+            return _selectedGarageVehicleIndex >= 0 && _selectedGarageVehicleIndex < _garageVehicleOptions.Count
+                ? _garageVehicleOptions[_selectedGarageVehicleIndex]
+                : null;
+        }
+
+        private int GetSelectedOriginTriggerThresholdPercent()
+        {
+            return _selectedOriginTriggerIndex >= 0 && _selectedOriginTriggerIndex < TriggerThresholdOptions.Length
+                ? TriggerThresholdOptions[_selectedOriginTriggerIndex]
+                : 0;
+        }
+
+        private int GetSelectedDestinationTriggerThresholdPercent()
+        {
+            return _selectedDestinationTriggerIndex >= 0 && _selectedDestinationTriggerIndex < TriggerThresholdOptions.Length
+                ? TriggerThresholdOptions[_selectedDestinationTriggerIndex]
+                : 100;
+        }
+
         private string GetSelectedOriginIndustryName()
         {
             var industry = GetSelectedOriginIndustry();
@@ -748,6 +1162,44 @@ namespace LSOL.UI
         {
             var tier = GetSelectedTier();
             return tier != null ? tier.DisplayName : "None";
+        }
+
+        private string GetSelectedAssignedVehicleName()
+        {
+            var vehicle = GetSelectedAssignedVehicle();
+            if (vehicle == null)
+            {
+                return "None";
+            }
+
+            return !string.IsNullOrWhiteSpace(vehicle.DisplayName)
+                ? vehicle.DisplayName
+                : (!string.IsNullOrWhiteSpace(vehicle.PoweredModelName)
+                    ? vehicle.PoweredModelName
+                    : (vehicle.CargoModelName ?? "Assigned truck"));
+        }
+
+        private int FindTriggerThresholdIndex(int thresholdPercent, int fallbackIndex)
+        {
+            if (TriggerThresholdOptions.Length == 0)
+            {
+                return -1;
+            }
+
+            var clamped = Math.Max(0, Math.Min(100, thresholdPercent));
+            var closestIndex = Math.Max(0, Math.Min(TriggerThresholdOptions.Length - 1, fallbackIndex));
+            var closestDistance = Math.Abs(TriggerThresholdOptions[closestIndex] - clamped);
+            for (int i = 0; i < TriggerThresholdOptions.Length; i++)
+            {
+                var distance = Math.Abs(TriggerThresholdOptions[i] - clamped);
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closestIndex = i;
+                }
+            }
+
+            return closestIndex;
         }
 
         private void CloseAndReturnToOffice()

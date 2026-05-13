@@ -185,6 +185,12 @@ namespace LSOL.Systems
                 : null;
         }
 
+        public bool HasActiveCorridorBetween(string districtA, string districtB)
+        {
+            var corridorState = GetCorridorState(districtA, districtB);
+            return corridorState != null && corridorState.RightLevel != CorridorRightLevel.None;
+        }
+
         public float GetDistrictReputationDebugOffset(string districtName)
         {
             if (string.IsNullOrWhiteSpace(districtName))

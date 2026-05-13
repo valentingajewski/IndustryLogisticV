@@ -101,7 +101,13 @@ namespace LSOL.Systems
                 return;
             }
 
-            var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            if (!CanTopUpCargoState(cargoState, selectedProduct, out var loadValidationMessage))
+            {
+                _showStatus(loadValidationMessage);
+                return;
+            }
+
+            var requestedCapacity = Math.Max(0f, cargoState.FreeCapacityTons);
             var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
             if (targetLoadTons <= 0.001f)
             {
@@ -151,11 +157,16 @@ namespace LSOL.Systems
                             return;
                         }
 
+                        var previousWeight = cargoState.WeightTons;
+                        var previousCondition = Math.Max(0f, Math.Min(1f, cargoState.CargoCondition));
+                        var previousLostTons = Math.Max(0f, cargoState.TotalLostTons);
                         cargoState.Commodity = selectedProduct;
                         cargoState.WeightTons += loaded;
                         cargoState.CargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
-                        cargoState.CargoCondition = 1f;
-                        cargoState.TotalLostTons = 0f;
+                        cargoState.CargoCondition = previousWeight <= 0.001f
+                            ? 1f
+                            : ((previousWeight * previousCondition) + loaded) / Math.Max(0.001f, cargoState.WeightTons);
+                        cargoState.TotalLostTons = previousWeight <= 0.001f ? 0f : previousLostTons;
                         cargoState.LastTrackedRigHealth = 0f;
                         cargoState.SourceIndustryId = industry != null ? industry.Id : string.Empty;
                         cargoState.SourceDistrictName = industry != null ? industry.DistrictName : string.Empty;
@@ -306,7 +317,13 @@ namespace LSOL.Systems
                 return;
             }
 
-            var requestedCapacity = Math.Max(0.5f, cargoState.FreeCapacityTons);
+            if (!CanTopUpCargoState(cargoState, selectedProduct, out var loadValidationMessage))
+            {
+                _showStatus(loadValidationMessage);
+                return;
+            }
+
+            var requestedCapacity = Math.Max(0f, cargoState.FreeCapacityTons);
             var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
             if (targetLoadTons <= 0.001f)
             {
@@ -356,11 +373,16 @@ namespace LSOL.Systems
                             return;
                         }
 
+                        var previousWeight = cargoState.WeightTons;
+                        var previousCondition = Math.Max(0f, Math.Min(1f, cargoState.CargoCondition));
+                        var previousLostTons = Math.Max(0f, cargoState.TotalLostTons);
                         cargoState.Commodity = selectedProduct;
                         cargoState.WeightTons += loaded;
                         cargoState.CargoType = CommodityCatalog.GetCargoTypeForCommodity(selectedProduct);
-                        cargoState.CargoCondition = 1f;
-                        cargoState.TotalLostTons = 0f;
+                        cargoState.CargoCondition = previousWeight <= 0.001f
+                            ? 1f
+                            : ((previousWeight * previousCondition) + loaded) / Math.Max(0.001f, cargoState.WeightTons);
+                        cargoState.TotalLostTons = previousWeight <= 0.001f ? 0f : previousLostTons;
                         cargoState.LastTrackedRigHealth = 0f;
                         cargoState.SourceIndustryId = industry != null ? industry.Id : string.Empty;
                         cargoState.SourceDistrictName = industry != null ? industry.DistrictName : string.Empty;
@@ -578,6 +600,41 @@ namespace LSOL.Systems
 
             var available = Math.Max(0f, industry.GetStock(commodity));
             return Math.Min(requestedTons, available);
+        }
+
+        private static bool CanTopUpCargoState(VehicleCargoState cargoState, string selectedProduct, out string message)
+        {
+            message = string.Empty;
+            if (cargoState == null)
+            {
+                message = "No cargo hold is available.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedProduct))
+            {
+                message = "No product selected for loading.";
+                return false;
+            }
+
+            if (cargoState.IsEmpty)
+            {
+                return true;
+            }
+
+            if (cargoState.FreeCapacityTons <= 0.001f)
+            {
+                message = "Vehicle cargo is already full.";
+                return false;
+            }
+
+            if (!string.Equals(CommodityCatalog.Normalize(cargoState.Commodity), CommodityCatalog.Normalize(selectedProduct), StringComparison.OrdinalIgnoreCase))
+            {
+                message = string.Format("Vehicle already carries {0}. Mixed cargo is not supported.", cargoState.Commodity);
+                return false;
+            }
+
+            return true;
         }
 
         private static string BuildLoadingTransferLabel(float currentTons, float targetTons, string commodity)

@@ -565,7 +565,7 @@ namespace LSOL.UI
             var permitSiteCount = permitSummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit);
             var unlockedPermitCount = permitSummaries.Count(summary => summary != null && summary.HasContractorPermitForGameplay);
             var operationsHeadline = snapshot.HasNearestIndustry
-                ? string.Format("{0} | {1:0.0}m", snapshot.NearestIndustryName, snapshot.NearestIndustryDistance)
+                ? string.Format("Nearest: {0} | {1:0.0}m", ShortenDashboardLabel(snapshot.NearestIndustryName, 20), snapshot.NearestIndustryDistance)
                 : "No nearby site";
             var operationsDetail = string.Format(
                 "{0}\n{1}",
@@ -580,8 +580,8 @@ namespace LSOL.UI
                 : "No market highlights cached yet.\nOpen Network to refresh industry pricing.";
             var siteDetail = snapshot.HasNearestIndustry
                 ? string.Format(
-                    "{0}\n{1:0.0} t/h | {2:0}% utilization",
-                    snapshot.NearestIndustryName,
+                    "{0}\nRate {1:0.0} t/h | Util {2:0}%",
+                    ShortenDashboardLabel(snapshot.NearestIndustryName, 20),
                     snapshot.NearestIndustryProductionRateTonsPerHour,
                     snapshot.NearestIndustryUtilizationPercent)
                 : "Browse tracked industries, stores, and stations across the region.";
@@ -771,6 +771,8 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "F6 Context | F8 Company Hub | Arrow Keys Navigate | Enter Select | Backspace/Esc Close",
                 WidthScale = 0.96f,
+                CaptionScale = 0.44f,
+                DetailScale = 0.275f,
                 MaxVisibleItems = 0,
                 Layout = SimpleMenuTabletLayout.Dashboard,
                 DashboardSidebarCount = 2,
@@ -823,6 +825,16 @@ namespace LSOL.UI
             }
 
             return string.Format("{0} | Fuel {1:0}/{2:0}L", cargoLabel, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+        }
+
+        private static string ShortenDashboardLabel(string value, int maxLength)
+        {
+            if (string.IsNullOrWhiteSpace(value) || maxLength <= 3 || value.Length <= maxLength)
+            {
+                return value ?? string.Empty;
+            }
+
+            return value.Substring(0, maxLength - 3).TrimEnd() + "...";
         }
     }
 
@@ -1252,12 +1264,25 @@ namespace LSOL.UI
 
     internal sealed class NetworkTabletApp : ITabletApp
     {
+        private enum LocationListFilterMode
+        {
+            All = 0,
+            Owned = 1,
+            NotOwned = 2,
+            Open = 3,
+            NotOpen = 4,
+        }
+
         private readonly float _interactionDistance;
         private readonly Func<Industry, string> _purchasePermit;
         private readonly Action<Industry> _addGpsRoute;
         private readonly Action _clearGpsRoute;
         private readonly Action _requestRefuelService;
         private readonly Action _requestRepairService;
+        private LocationListFilterMode _industryFilterMode;
+        private LocationListFilterMode _permitFilterMode;
+        private LocationListFilterMode _storeFilterMode;
+        private LocationListFilterMode _stationFilterMode;
 
         public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService)
         {
@@ -1267,6 +1292,10 @@ namespace LSOL.UI
             _clearGpsRoute = clearGpsRoute;
             _requestRefuelService = requestRefuelService;
             _requestRepairService = requestRepairService;
+            _industryFilterMode = LocationListFilterMode.All;
+            _permitFilterMode = LocationListFilterMode.All;
+            _storeFilterMode = LocationListFilterMode.All;
+            _stationFilterMode = LocationListFilterMode.All;
         }
 
         public string AppId
@@ -1285,9 +1314,9 @@ namespace LSOL.UI
                 case "dispatch":
                     return BuildDispatchPage(context);
                 case "stores":
-                    return BuildLocationListPage(context, "Stores", "Retail demand, storage, and detail pages", context.Snapshot.StoreSummaries, true, false);
+                    return BuildStoreListPage(context);
                 case "stations":
-                    return BuildLocationListPage(context, "Gas Stations", "Fuel storage coverage across service stations", context.Snapshot.GasStationSummaries, true, false);
+                    return BuildStationListPage(context);
                 case "services":
                     return BuildServicesPage(context);
                 case "market":
@@ -1409,6 +1438,111 @@ namespace LSOL.UI
                 MaxVisibleItems = 5,
                 Items = items,
             };
+        }
+
+        private static string BuildFilterCaption(LocationListFilterMode filterMode)
+        {
+            switch (filterMode)
+            {
+                case LocationListFilterMode.Owned:
+                    return "Filter: < Owned >";
+                case LocationListFilterMode.NotOwned:
+                    return "Filter: < Not owned >";
+                case LocationListFilterMode.Open:
+                    return "Filter: < Open >";
+                case LocationListFilterMode.NotOpen:
+                    return "Filter: < Not open >";
+                default:
+                    return "Filter: < All >";
+            }
+        }
+
+        private static string BuildFilterDetail(string title)
+        {
+            return string.Format("Left/right cycles the {0} filter between All, Owned, Not owned, Open, and Not open.", title.ToLowerInvariant());
+        }
+
+        private static LocationListFilterMode CycleFilter(LocationListFilterMode filterMode, int delta)
+        {
+            var values = Enum.GetValues(typeof(LocationListFilterMode)).Cast<LocationListFilterMode>().ToArray();
+            var currentIndex = Array.IndexOf(values, filterMode);
+            if (currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = currentIndex + direction;
+            while (nextIndex < 0)
+            {
+                nextIndex += values.Length;
+            }
+
+            while (nextIndex >= values.Length)
+            {
+                nextIndex -= values.Length;
+            }
+
+            return values[nextIndex];
+        }
+
+        private static bool IsSummaryOpenForFilter(TabletLocationSummary summary)
+        {
+            if (summary == null || summary.Industry == null)
+            {
+                return false;
+            }
+
+            return !summary.RequiresIndustryPurchase
+                && (!summary.RequiresContractorPermit || summary.HasContractorPermitForGameplay);
+        }
+
+        private static bool MatchesFilter(TabletLocationSummary summary, LocationListFilterMode filterMode)
+        {
+            switch (filterMode)
+            {
+                case LocationListFilterMode.Owned:
+                    return summary != null && summary.IsOwnedForGameplay;
+                case LocationListFilterMode.NotOwned:
+                    return summary != null && !summary.IsOwnedForGameplay;
+                case LocationListFilterMode.Open:
+                    return IsSummaryOpenForFilter(summary);
+                case LocationListFilterMode.NotOpen:
+                    return !IsSummaryOpenForFilter(summary);
+                default:
+                    return true;
+            }
+        }
+
+        private static List<TabletLocationSummary> ApplyFilter(IEnumerable<TabletLocationSummary> summaries, LocationListFilterMode filterMode)
+        {
+            return summaries == null
+                ? new List<TabletLocationSummary>()
+                : summaries.Where(summary => summary != null && MatchesFilter(summary, filterMode)).ToList();
+        }
+
+        private void CycleIndustryFilter(TabletShellContext context, int delta)
+        {
+            _industryFilterMode = CycleFilter(_industryFilterMode, delta);
+            context.Refresh();
+        }
+
+        private void CyclePermitFilter(TabletShellContext context, int delta)
+        {
+            _permitFilterMode = CycleFilter(_permitFilterMode, delta);
+            context.Refresh();
+        }
+
+        private void CycleStoreFilter(TabletShellContext context, int delta)
+        {
+            _storeFilterMode = CycleFilter(_storeFilterMode, delta);
+            context.Refresh();
+        }
+
+        private void CycleStationFilter(TabletShellContext context, int delta)
+        {
+            _stationFilterMode = CycleFilter(_stationFilterMode, delta);
+            context.Refresh();
         }
 
         private TabletShellPage BuildServicesPage(TabletShellContext context)
@@ -1734,7 +1868,15 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var items = new List<MenuItem>();
-            var industrySummaries = snapshot.IndustrySummaries;
+            var industrySummaries = ApplyFilter(snapshot.IndustrySummaries, _industryFilterMode);
+
+            items.Add(TabletUiHelpers.CreateSelectorItem(
+                () => BuildFilterCaption(_industryFilterMode),
+                () => BuildFilterDetail("Industries"),
+                () => CycleIndustryFilter(context, -1),
+                () => CycleIndustryFilter(context, 1),
+                () => CycleIndustryFilter(context, 1),
+                "FLT"));
 
             for (int i = 0; i < industrySummaries.Count; i++)
             {
@@ -1745,7 +1887,7 @@ namespace LSOL.UI
                     () => context.Push(TabletAppIds.Network, "detail", summary.Industry)));
             }
 
-            if (items.Count == 0)
+            if (items.Count == 1)
             {
                 items.Add(TabletUiHelpers.CreateInfoItem("No industries available", "No industry nodes are currently configured."));
             }
@@ -1763,6 +1905,34 @@ namespace LSOL.UI
             };
         }
 
+        private TabletShellPage BuildStoreListPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            return BuildFilteredLocationListPage(
+                context,
+                "Stores",
+                "Retail demand, storage, and detail pages",
+                snapshot.StoreSummaries,
+                true,
+                false,
+                _storeFilterMode,
+                delta => CycleStoreFilter(context, delta));
+        }
+
+        private TabletShellPage BuildStationListPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            return BuildFilteredLocationListPage(
+                context,
+                "Gas Stations",
+                "Fuel storage coverage across service stations",
+                snapshot.GasStationSummaries,
+                true,
+                false,
+                _stationFilterMode,
+                delta => CycleStationFilter(context, delta));
+        }
+
         private TabletShellPage BuildLocationListPage(
             TabletShellContext context,
             string title,
@@ -1770,6 +1940,19 @@ namespace LSOL.UI
             IReadOnlyList<TabletLocationSummary> summaries,
             bool openDetail,
             bool includePermitLink)
+        {
+            return BuildFilteredLocationListPage(context, title, subtitle, summaries, openDetail, includePermitLink, LocationListFilterMode.All, null);
+        }
+
+        private TabletShellPage BuildFilteredLocationListPage(
+            TabletShellContext context,
+            string title,
+            string subtitle,
+            IReadOnlyList<TabletLocationSummary> summaries,
+            bool openDetail,
+            bool includePermitLink,
+            LocationListFilterMode filterMode,
+            Action<int> cycleFilter)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var items = new List<MenuItem>();
@@ -1781,11 +1964,23 @@ namespace LSOL.UI
                     () => context.Push(TabletAppIds.Network, "permits")));
             }
 
-            if (summaries != null)
+            if (cycleFilter != null)
             {
-                for (int i = 0; i < summaries.Count; i++)
+                items.Add(TabletUiHelpers.CreateSelectorItem(
+                    () => BuildFilterCaption(filterMode),
+                    () => BuildFilterDetail(title),
+                    () => cycleFilter(-1),
+                    () => cycleFilter(1),
+                    () => cycleFilter(1),
+                    "FLT"));
+            }
+
+            var filteredSummaries = cycleFilter == null ? (summaries ?? Array.Empty<TabletLocationSummary>()).ToList() : ApplyFilter(summaries, filterMode);
+            if (filteredSummaries != null)
+            {
+                for (int i = 0; i < filteredSummaries.Count; i++)
                 {
-                    var summary = summaries[i];
+                    var summary = filteredSummaries[i];
                     items.Add(TabletUiHelpers.CreateActionItem(
                         TabletUiHelpers.BuildLocationCaption(summary),
                         TabletUiHelpers.BuildLocationOverviewDetail(summary),
@@ -1793,7 +1988,7 @@ namespace LSOL.UI
                 }
             }
 
-            if (items.Count == 0)
+            if (items.Count == 0 || (cycleFilter != null && items.Count == 1))
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(string.Format("No {0} available", title.ToLowerInvariant()), "No configured locations are available for this page."));
             }
@@ -1814,8 +2009,17 @@ namespace LSOL.UI
         private TabletShellPage BuildPermitPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
-            var permitSummaries = snapshot.IndustrySummaries.Concat(snapshot.ConstructionSiteSummaries).ToList();
-            var items = new List<MenuItem>();
+            var permitSummaries = ApplyFilter(snapshot.IndustrySummaries.Concat(snapshot.ConstructionSiteSummaries), _permitFilterMode);
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateSelectorItem(
+                    () => BuildFilterCaption(_permitFilterMode),
+                    () => BuildFilterDetail("Permits"),
+                    () => CyclePermitFilter(context, -1),
+                    () => CyclePermitFilter(context, 1),
+                    () => CyclePermitFilter(context, 1),
+                    "FLT"),
+            };
             for (int i = 0; i < permitSummaries.Count; i++)
             {
                 var summary = permitSummaries[i];
@@ -1832,7 +2036,7 @@ namespace LSOL.UI
                     summary.RequiresContractorPermit ? (Action)(() => context.Push(TabletAppIds.Network, "permit-confirm", summary.Industry)) : null));
             }
 
-            if (items.Count == 0)
+            if (items.Count == 1)
             {
                 items.Add(TabletUiHelpers.CreateInfoItem("No industries available", "No industry permit targets are currently configured."));
             }
@@ -1944,6 +2148,15 @@ namespace LSOL.UI
             }
 
             if (industry.IsStore)
+            {
+                return TabletUiHelpers.BuildLegacyIndustryStatisticsPage(
+                    context,
+                    snapshot,
+                    industry,
+                    "Arrow Up/Down to scroll | Enter, Backspace, or Esc to return");
+            }
+
+            if (industry.SiteRole == SiteRole.Warehouse)
             {
                 return TabletUiHelpers.BuildLegacyIndustryStatisticsPage(
                     context,
@@ -2372,29 +2585,11 @@ namespace LSOL.UI
                 return BuildUnavailablePage(snapshot, "No industry selected.", () => context.GoBack());
             }
 
-            var statistics = context.StateStore.GetIndustryStatistics(industry);
-            if (industry.SiteRole != SiteRole.Warehouse)
-            {
-                return TabletUiHelpers.BuildLegacyIndustryStatisticsPage(
-                    context,
-                    snapshot,
-                    industry,
-                    "Arrow Up/Down to scroll | Enter, Backspace, or Esc to return");
-            }
-
-            var items = new List<MenuItem>();
-            TabletUiHelpers.AppendIndustryStatisticsItems(items, summary, industry, statistics);
-            items.Add(TabletUiHelpers.CreateNavigationItem("Back to Operations", "Return to industry actions.", () => context.GoBack()));
-
-            return new TabletShellPage
-            {
-                Title = industry.SiteRole == SiteRole.Warehouse ? "Warehouse Detail" : "Industry Statistics",
-                Subtitle = industry.Name,
-                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                WidthScale = 0.98f,
-                MaxVisibleItems = 6,
-                Items = items,
-            };
+            return TabletUiHelpers.BuildLegacyIndustryStatisticsPage(
+                context,
+                snapshot,
+                industry,
+                "Arrow Up/Down to scroll | Enter, Backspace, or Esc to return");
         }
 
         private TabletShellPage BuildUpgradesPage(TabletShellContext context, Industry industry)

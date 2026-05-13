@@ -518,26 +518,15 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (cargoDefinition == null)
+            if (!TryNormalizeCommercialSelection(ref cargoDefinition, ref tractorDefinition, "purchase", out message))
             {
-                message = "No commercial vehicle selected.";
                 return false;
             }
 
-            if (cargoDefinition.IsTrailer)
-            {
-                if (tractorDefinition == null || !tractorDefinition.IsTractor)
-                {
-                    message = "Select a truck tractor for the trailer purchase.";
-                    return false;
-                }
-            }
-            else
-            {
-                tractorDefinition = null;
-            }
-
-            var purchasePrice = Math.Max(0f, cargoDefinition.Price) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.Price : 0f);
+            var poweredDefinition = tractorDefinition ?? cargoDefinition;
+            var cargoRecordDefinition = cargoDefinition ?? tractorDefinition;
+            var hasSeparateCargoVehicle = cargoDefinition != null && cargoDefinition.IsTrailer && tractorDefinition != null;
+            var purchasePrice = Math.Max(0f, cargoDefinition != null ? cargoDefinition.Price : 0f) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.Price : 0f);
             if (balance < purchasePrice)
             {
                 message = string.Format("Need {0} to purchase this commercial vehicle.", ModFormatting.FormatMoney(purchasePrice));
@@ -549,12 +538,12 @@ namespace LSOL.Systems
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
                 DisplayName = BuildCommercialDisplayName(
-                    tractorDefinition != null ? tractorDefinition.DisplayName : cargoDefinition.DisplayName,
-                    cargoDefinition.DisplayName,
-                    tractorDefinition != null),
-                PoweredModelName = tractorDefinition != null ? tractorDefinition.ModelName : cargoDefinition.ModelName,
-                CargoModelName = cargoDefinition.ModelName,
-                HasSeparateCargoVehicle = tractorDefinition != null,
+                    poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
+                    cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
+                    hasSeparateCargoVehicle),
+                PoweredModelName = poweredDefinition != null ? poweredDefinition.ModelName : string.Empty,
+                CargoModelName = cargoRecordDefinition != null ? cargoRecordDefinition.ModelName : string.Empty,
+                HasSeparateCargoVehicle = hasSeparateCargoVehicle,
                 PurchasePrice = purchasePrice,
                 AssignedOfficeId = _state.ActiveOfficeId,
                 IsRental = false,
@@ -564,8 +553,8 @@ namespace LSOL.Systems
                 IsDeployed = false,
                 PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
                 PoweredHeading = ActiveOffice != null ? ActiveOffice.SpawnHeading : 0f,
-                CargoType = cargoDefinition.CargoType,
-                CapacityTons = Math.Max(0f, cargoDefinition.CapacityTons),
+                CargoType = cargoDefinition != null ? cargoDefinition.CargoType : VehicleCargoType.Unknown,
+                CapacityTons = cargoDefinition != null ? Math.Max(0f, cargoDefinition.CapacityTons) : 0f,
                 Commodity = string.Empty,
                 WeightTons = 0f,
                 CargoCondition = 0f,
@@ -595,26 +584,15 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (cargoDefinition == null)
+            if (!TryNormalizeCommercialSelection(ref cargoDefinition, ref tractorDefinition, "rental", out message))
             {
-                message = "No commercial vehicle selected.";
                 return false;
             }
 
-            if (cargoDefinition.IsTrailer)
-            {
-                if (tractorDefinition == null || !tractorDefinition.IsTractor)
-                {
-                    message = "Select a truck tractor for the trailer rental.";
-                    return false;
-                }
-            }
-            else
-            {
-                tractorDefinition = null;
-            }
-
-            var dailyRent = Math.Max(0f, cargoDefinition.DailyRent) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.DailyRent : 0f);
+            var poweredDefinition = tractorDefinition ?? cargoDefinition;
+            var cargoRecordDefinition = cargoDefinition ?? tractorDefinition;
+            var hasSeparateCargoVehicle = cargoDefinition != null && cargoDefinition.IsTrailer && tractorDefinition != null;
+            var dailyRent = Math.Max(0f, cargoDefinition != null ? cargoDefinition.DailyRent : 0f) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.DailyRent : 0f);
             if (dailyRent <= 0.001f)
             {
                 message = "Rental is not available for the selected vehicle.";
@@ -635,12 +613,12 @@ namespace LSOL.Systems
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
                 DisplayName = BuildCommercialDisplayName(
-                    tractorDefinition != null ? tractorDefinition.DisplayName : cargoDefinition.DisplayName,
-                    cargoDefinition.DisplayName,
-                    tractorDefinition != null),
-                PoweredModelName = tractorDefinition != null ? tractorDefinition.ModelName : cargoDefinition.ModelName,
-                CargoModelName = cargoDefinition.ModelName,
-                HasSeparateCargoVehicle = tractorDefinition != null,
+                    poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
+                    cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
+                    hasSeparateCargoVehicle),
+                PoweredModelName = poweredDefinition != null ? poweredDefinition.ModelName : string.Empty,
+                CargoModelName = cargoRecordDefinition != null ? cargoRecordDefinition.ModelName : string.Empty,
+                HasSeparateCargoVehicle = hasSeparateCargoVehicle,
                 PurchasePrice = 0f,
                 AssignedOfficeId = _state.ActiveOfficeId,
                 IsRental = true,
@@ -650,8 +628,8 @@ namespace LSOL.Systems
                 IsDeployed = false,
                 PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
                 PoweredHeading = ActiveOffice != null ? ActiveOffice.SpawnHeading : 0f,
-                CargoType = cargoDefinition.CargoType,
-                CapacityTons = Math.Max(0f, cargoDefinition.CapacityTons),
+                CargoType = cargoDefinition != null ? cargoDefinition.CargoType : VehicleCargoType.Unknown,
+                CapacityTons = cargoDefinition != null ? Math.Max(0f, cargoDefinition.CapacityTons) : 0f,
                 Commodity = string.Empty,
                 WeightTons = 0f,
                 CargoCondition = 0f,
@@ -1124,7 +1102,11 @@ namespace LSOL.Systems
             }
 
             fleetManager.RegisterOwnedRig(truck, cargoVehicle);
-            fuelSystem.InitializeSpawnedVehicle(truck, entry.CurrentFuelLiters > 0.001f ? (float?)entry.CurrentFuelLiters : null);
+            var poweredDefinition = tractorDefinition ?? cargoDefinition;
+            if (fuelSystem != null && poweredDefinition != null && !poweredDefinition.IsTrailer)
+            {
+                fuelSystem.InitializeSpawnedVehicle(truck, entry.CurrentFuelLiters > 0.001f ? (float?)entry.CurrentFuelLiters : null);
+            }
 
             var cargoState = fleetManager.GetOrCreateCargoState(cargoVehicle);
             if (cargoState != null)
@@ -1706,6 +1688,47 @@ namespace LSOL.Systems
             }
 
             return string.Format("{0} + {1}", poweredDisplayName ?? string.Empty, cargoDisplayName ?? string.Empty).Trim();
+        }
+
+        private static bool TryNormalizeCommercialSelection(ref VehicleDefinition cargoDefinition, ref VehicleDefinition tractorDefinition, string modeLabel, out string message)
+        {
+            message = string.Empty;
+
+            if (cargoDefinition == null && tractorDefinition == null)
+            {
+                message = "Select a truck and/or trailer first.";
+                return false;
+            }
+
+            if (tractorDefinition != null && !tractorDefinition.IsTractor)
+            {
+                message = "Selected truck is not a valid tractor unit.";
+                return false;
+            }
+
+            if (cargoDefinition == null)
+            {
+                return true;
+            }
+
+            if (!cargoDefinition.IsTrailer)
+            {
+                tractorDefinition = null;
+                return true;
+            }
+
+            if (tractorDefinition == null)
+            {
+                return true;
+            }
+
+            if (!tractorDefinition.IsTractor)
+            {
+                message = string.Format("Select a truck tractor for the trailer {0}.", modeLabel);
+                return false;
+            }
+
+            return true;
         }
 
         private sealed class CommercialVehicleRuntimeState

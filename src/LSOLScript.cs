@@ -73,6 +73,7 @@ namespace LSOL
         private readonly FleetManager _fleetManager;
         private readonly PropertyManager _propertyManager;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
+        private readonly VehicleLoadPowerService _vehicleLoadPowerService;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
         private readonly SpecialMissionManager _specialMissionManager;
@@ -88,6 +89,7 @@ namespace LSOL
         private readonly LemonMenu _industryPurchaseMenu;
         private readonly LemonMenu _difficultyMenu;
         private readonly LemonMenu _optionsMenu;
+        private readonly LemonMenu _notificationsMenu;
         private readonly LemonMenu _debugMenu;
         private readonly LemonMenu _debugMissionMenu;
         private readonly DebugMenuProvider _debugMenuProvider;
@@ -157,6 +159,10 @@ namespace LSOL
         private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
+        private bool _cargoWeightPowerDifficultyEnabled;
+        private bool _pendingCargoWeightPowerDifficultyEnabled;
+        private bool _cruiseControlEnabled;
+        private float _cruiseControlTargetSpeedMps;
         private bool _isConstructing;
         private int _lastIndustryObjectDeletionSweepMs;
 
@@ -177,6 +183,7 @@ namespace LSOL
             _fleetManager = new FleetManager(_config);
             _propertyManager = new PropertyManager(_config);
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
+            _vehicleLoadPowerService = new VehicleLoadPowerService(_fleetManager);
             _globalMarket = new GlobalMarketManager(Game.GameTime);
             _territoryManager = new TerritoryManager(_config, _industryManager);
             _specialMissionManager = new SpecialMissionManager(
@@ -254,7 +261,10 @@ namespace LSOL
                 DeductProfit,
                 AddProfit,
                 message => ShowStatus(message),
-                _territoryManager);
+                _territoryManager,
+                () => _propertyManager != null ? _propertyManager.CommercialVehicles : Array.Empty<OwnedCommercialVehiclePersistenceEntry>(),
+                () => _propertyManager != null ? _propertyManager.ActiveOfficeId : string.Empty,
+                () => _propertyManager != null ? _propertyManager.ActiveOffice : null);
             _industryRefuelService = new IndustryRefuelService(
                 _fleetManager,
                 _vehicleFuelSystem,
@@ -263,6 +273,8 @@ namespace LSOL
                 () => _profit,
                 DeductProfit,
                 GetIndustryMarkerPosition,
+                GetGroundPosition,
+                message => ShowStatus(message, 4500),
                 IndustryInteractionDistance);
 
             _officeMenu = new LemonMenu("Office")
@@ -317,6 +329,12 @@ namespace LSOL
             _optionsMenu = new LemonMenu("Options")
             {
                 Subtitle = "Language and accessibility settings",
+                AlignRight = true,
+                Theme = LemonMenuTheme.Default,
+            };
+            _notificationsMenu = new LemonMenu("Notifications")
+            {
+                Subtitle = "Control gameplay alerts",
                 AlignRight = true,
                 Theme = LemonMenuTheme.Default,
             };
@@ -404,6 +422,7 @@ namespace LSOL
             _colorblindMode = ColorblindMode.Off;
             _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
             _vehicleFuelDifficultyEnabled = false;
+            _cargoWeightPowerDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
@@ -411,6 +430,7 @@ namespace LSOL
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingSaveName = string.Empty;
             _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
@@ -453,6 +473,7 @@ namespace LSOL
                     || _industryPurchaseMenu.IsOpen
                     || _difficultyMenu.IsOpen
                     || _optionsMenu.IsOpen
+                    || _notificationsMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _debugMissionMenu.IsOpen
                     || HasPropertyMenuOpen()
@@ -521,6 +542,11 @@ namespace LSOL
             }
 
             _npcLogisticsManager.Update(gameTime, GetCurrentInGameWeekMinute());
+            if (_industryRefuelService.Update(gameTime))
+            {
+                _tabletStateStore.MarkCargoDirty();
+                _tabletStateStore.MarkNetworkDirty();
+            }
             ProcessPropertyWeeklyCharges();
             _tabletStateStore.CaptureHistory(gameTime);
 
@@ -528,6 +554,9 @@ namespace LSOL
             {
                 _tabletStateStore.MarkCargoDirty();
             }
+
+            _vehicleLoadPowerService.Update(player);
+            UpdateCruiseControl(player);
 
             _specialMissionManager.Update(player, gameTime);
 
@@ -738,6 +767,18 @@ namespace LSOL
                 return true;
             }
 
+            if (_notificationsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToModControlMenu();
+                    return true;
+                }
+
+                _notificationsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_debugMissionMenu.IsOpen)
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
@@ -847,6 +888,7 @@ namespace LSOL
             _industryPurchaseMenu.Draw();
             _difficultyMenu.Draw();
             _optionsMenu.Draw();
+            _notificationsMenu.Draw();
             _officeMenu.Draw();
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
@@ -855,7 +897,7 @@ namespace LSOL
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1539,6 +1581,7 @@ namespace LSOL
             _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
             _optionsMenu.Close();
+            _notificationsMenu.Close();
             _debugMenu.Close();
             _debugMissionMenu.Close();
             _officeMenu.Close();
@@ -1552,7 +1595,7 @@ namespace LSOL
             _modControlMenu.Title = Text(ModTextKey.MenuGameModControlTitle);
             _modControlMenu.Subtitle = Text(ModTextKey.MenuGameModControlSubtitle);
 
-            _modControlMenu.SetItems(new[]
+            var items = new List<OfficeMenuItem>
             {
                 new OfficeMenuItem
                 {
@@ -1581,10 +1624,185 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => Text(ModTextKey.CommonClose),
-                    OnActivate = () => _modControlMenu.Close(),
+                    CaptionFactory = () => "Notifications",
+                    DetailFactory = CurrentNotificationsDetail,
+                    OnActivate = OpenNotificationsMenu,
                 },
+            };
+
+            if (ShouldShowCruiseControlMenuItem())
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentCruiseControlCaption,
+                    DetailFactory = CurrentCruiseControlDetail,
+                    OnActivate = ToggleCruiseControlFromMenu,
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonClose),
+                OnActivate = () => _modControlMenu.Close(),
             });
+
+            _modControlMenu.SetItems(items.ToArray());
+        }
+
+        private bool ShouldShowCruiseControlMenuItem()
+        {
+            Vehicle vehicle;
+            return TryGetCruiseControlVehicle(Game.Player.Character, out vehicle);
+        }
+
+        private void ToggleCruiseControlFromMenu()
+        {
+            if (_cruiseControlEnabled)
+            {
+                DisableCruiseControl(true);
+                return;
+            }
+
+            Vehicle vehicle;
+            if (!TryGetCruiseControlVehicle(Game.Player.Character, out vehicle))
+            {
+                ShowStatus("Drive a vehicle before enabling cruise control.", 3000);
+                return;
+            }
+
+            var targetSpeed = GetCruiseControlForwardSpeed(vehicle);
+            if (targetSpeed < 1.5f)
+            {
+                ShowStatus("Accelerate before enabling cruise control.", 3000);
+                return;
+            }
+
+            _cruiseControlEnabled = true;
+            _cruiseControlTargetSpeedMps = targetSpeed;
+            if (_modControlMenu.IsOpen)
+            {
+                RebuildModControlMenuItems();
+            }
+
+            ShowStatus(string.Format("Cruise control set to {0}.", FormatCruiseControlSpeed(_cruiseControlTargetSpeedMps)), 3000);
+        }
+
+        private void DisableCruiseControl(bool showStatus)
+        {
+            var wasEnabled = _cruiseControlEnabled;
+            _cruiseControlEnabled = false;
+            _cruiseControlTargetSpeedMps = 0f;
+
+            if (_modControlMenu.IsOpen)
+            {
+                RebuildModControlMenuItems();
+            }
+
+            if (showStatus && wasEnabled)
+            {
+                ShowStatus("Cruise control disabled.", 2500);
+            }
+        }
+
+        private void UpdateCruiseControl(Ped player)
+        {
+            if (!_cruiseControlEnabled)
+            {
+                return;
+            }
+
+            Vehicle vehicle;
+            if (!TryGetCruiseControlVehicle(player, out vehicle))
+            {
+                DisableCruiseControl(false);
+                return;
+            }
+
+            if (GetCruiseControlInput(72) > 0.04f)
+            {
+                DisableCruiseControl(true);
+                return;
+            }
+
+            if (_cruiseControlTargetSpeedMps <= 0.1f)
+            {
+                DisableCruiseControl(false);
+                return;
+            }
+
+            try
+            {
+                var currentForwardSpeed = GetCruiseControlForwardSpeed(vehicle);
+                if (Math.Abs(currentForwardSpeed - _cruiseControlTargetSpeedMps) > 0.75f)
+                {
+                    Function.Call(Hash.SET_VEHICLE_FORWARD_SPEED, vehicle.Handle, _cruiseControlTargetSpeedMps);
+                }
+            }
+            catch
+            {
+                DisableCruiseControl(false);
+            }
+        }
+
+        private static bool TryGetCruiseControlVehicle(Ped player, out Vehicle vehicle)
+        {
+            vehicle = null;
+            if (player == null || !player.Exists() || !player.IsInVehicle())
+            {
+                return false;
+            }
+
+            vehicle = player.CurrentVehicle;
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return false;
+            }
+
+            try
+            {
+                var driver = vehicle.GetPedOnSeat(VehicleSeat.Driver);
+                return driver != null && driver.Exists() && driver.Handle == player.Handle;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static float GetCruiseControlInput(int controlId)
+        {
+            try
+            {
+                return Function.Call<float>(Hash.GET_CONTROL_NORMAL, 0, controlId);
+            }
+            catch
+            {
+                return 0f;
+            }
+        }
+
+        private static float GetCruiseControlForwardSpeed(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return 0f;
+            }
+
+            try
+            {
+                var velocity = vehicle.Velocity;
+                var forward = vehicle.ForwardVector;
+                return (velocity.X * forward.X) + (velocity.Y * forward.Y) + (velocity.Z * forward.Z);
+            }
+            catch
+            {
+                return vehicle.Speed;
+            }
+        }
+
+        private static string FormatCruiseControlSpeed(float speedMetersPerSecond)
+        {
+            return string.Format("{0:0} km/h", Math.Max(0f, speedMetersPerSecond) * 3.6f);
         }
 
         private void RebuildSavingOptionsMenuItems()
@@ -1625,6 +1843,20 @@ namespace LSOL
             });
         }
 
+        private string CurrentCruiseControlCaption()
+        {
+            return Text(
+                ModTextKey.RowCruiseControl,
+                _cruiseControlEnabled
+                    ? FormatCruiseControlSpeed(_cruiseControlTargetSpeedMps)
+                    : Text(ModTextKey.CommonOff));
+        }
+
+        private string CurrentCruiseControlDetail()
+        {
+            return Text(ModTextKey.DetailCruiseControl);
+        }
+
         private void RebuildNewSaveSetupMenuItems()
         {
             _newSaveSetupMenu.Title = Text(ModTextKey.MenuDifficultyTitle);
@@ -1660,6 +1892,13 @@ namespace LSOL
                     DetailFactory = () => Text(ModTextKey.DetailVehicleFuel),
                     CheckboxStateFactory = () => _pendingVehicleFuelDifficultyEnabled,
                     OnActivate = TogglePendingVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.RowCargoWeightPower),
+                    DetailFactory = () => Text(ModTextKey.DetailCargoWeightPower),
+                    CheckboxStateFactory = () => _pendingCargoWeightPowerDifficultyEnabled,
+                    OnActivate = TogglePendingCargoWeightPowerSetting,
                 },
                 new OfficeMenuItem
                 {
@@ -1779,6 +2018,27 @@ namespace LSOL
             });
         }
 
+        private void RebuildNotificationsMenuItems()
+        {
+            _notificationsMenu.Title = "Notifications";
+            _notificationsMenu.Subtitle = "Control gameplay alerts";
+            _notificationsMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Office NPC deliveries",
+                    DetailFactory = () => "Show loading and unloading alerts for hired office logistics routes.",
+                    CheckboxStateFactory = () => _npcLogisticsManager.OfficeDeliveryNotificationsEnabled,
+                    OnActivate = ToggleOfficeNpcDeliveryNotifications,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
+                    OnActivate = ReturnToModControlMenu,
+                },
+            });
+        }
+
         private void OpenSavingOptionsMenu()
         {
             _modControlMenu.Close();
@@ -1791,6 +2051,13 @@ namespace LSOL
             _modControlMenu.Close();
             RebuildOptionsMenuItems();
             _optionsMenu.Open();
+        }
+
+        private void OpenNotificationsMenu()
+        {
+            _modControlMenu.Close();
+            RebuildNotificationsMenuItems();
+            _notificationsMenu.Open();
         }
 
         private void OpenSaveSlotsMenu(SaveSlotMenuAction action)
@@ -1809,6 +2076,7 @@ namespace LSOL
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
             _optionsMenu.Close();
+            _notificationsMenu.Close();
             RebuildModControlMenuItems();
             _modControlMenu.Open();
         }
@@ -1929,8 +2197,11 @@ namespace LSOL
                 return;
             }
 
+            result = AppendIndustryPurchasePermitGrantResult(industry, result);
             _territoryManager.OnIndustryAccessChanged(industry);
             _blipLifecycleManager.Refresh();
+            _tabletStateStore.MarkBalanceDirty();
+            _tabletStateStore.MarkNetworkDirty();
 
             ShowStatus(result, 4000);
             ReturnFromIndustryPurchaseMenu();
@@ -2019,6 +2290,13 @@ namespace LSOL
                     DetailFactory = () => Text(ModTextKey.DetailVehicleFuel),
                     CheckboxStateFactory = () => _vehicleFuelDifficultyEnabled,
                     OnActivate = ToggleVehicleFuelSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.RowCargoWeightPower),
+                    DetailFactory = () => Text(ModTextKey.DetailCargoWeightPower),
+                    CheckboxStateFactory = () => _cargoWeightPowerDifficultyEnabled,
+                    OnActivate = ToggleCargoWeightPowerSetting,
                 },
                 new OfficeMenuItem
                 {
@@ -2178,6 +2456,13 @@ namespace LSOL
             return Text(ModTextKey.DetailOptions);
         }
 
+        private string CurrentNotificationsDetail()
+        {
+            return string.Format(
+                "Office NPC deliveries: {0}",
+                _npcLogisticsManager.OfficeDeliveryNotificationsEnabled ? Text(ModTextKey.CommonOn) : Text(ModTextKey.CommonOff));
+        }
+
         private string CurrentSaveGameDetail()
         {
             NamedSaveEntry activeSave;
@@ -2316,9 +2601,20 @@ namespace LSOL
             ShowStatus(Text(ModTextKey.DetailColorblindChanged, GetColorblindModeDisplayName(_colorblindMode)));
         }
 
+        private void ToggleOfficeNpcDeliveryNotifications()
+        {
+            _npcLogisticsManager.SetOfficeDeliveryNotificationsEnabled(!_npcLogisticsManager.OfficeDeliveryNotificationsEnabled);
+            RebuildNotificationsMenuItems();
+        }
+
         private void TogglePendingVehicleFuelSetting()
         {
             _pendingVehicleFuelDifficultyEnabled = !_pendingVehicleFuelDifficultyEnabled;
+        }
+
+        private void TogglePendingCargoWeightPowerSetting()
+        {
+            _pendingCargoWeightPowerDifficultyEnabled = !_pendingCargoWeightPowerDifficultyEnabled;
         }
 
         private void TogglePendingCargoDamageSetting()
@@ -2360,6 +2656,19 @@ namespace LSOL
             }
 
             _vehicleFuelDifficultyEnabled = !_vehicleFuelDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
+        }
+
+        private void ToggleCargoWeightPowerSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _cargoWeightPowerDifficultyEnabled = !_cargoWeightPowerDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
         }
 
         private void ToggleCargoDamageSetting()
@@ -2463,6 +2772,7 @@ namespace LSOL
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
             _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
             _vehicleFuelSystem.SetDifficultyEnabled(_vehicleFuelDifficultyEnabled);
+            _vehicleLoadPowerService.SetDifficultyEnabled(_cargoWeightPowerDifficultyEnabled);
             _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
             _territoryManager.SetCorridorRestrictionEnabled(_corridorRestrictionDifficultyEnabled);
             _territoryManager.RefreshState();
@@ -2651,6 +2961,7 @@ namespace LSOL
                 return result;
             }
 
+            result = AppendIndustryPurchasePermitGrantResult(industry, result);
             _territoryManager.OnIndustryAccessChanged(industry);
             _blipLifecycleManager.Refresh();
             _tabletStateStore.MarkBalanceDirty();
@@ -3070,7 +3381,7 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Vehicle: < {0} >", _vehicleSpawnController.CurrentVehicleCaption),
+                    CaptionFactory = () => string.Format("Cargo / Trailer: < {0} >", _vehicleSpawnController.CurrentVehicleCaption),
                     DetailFactory = _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
                         ? (Func<string>)BuildCommercialDealershipVehicleSelectionDetail
                         : null,
@@ -3133,8 +3444,8 @@ namespace LSOL
             }
             else if (context == VehicleCargoMenuContext.CommercialDealership)
             {
-                _vehicleCargoMenu.Title = "Commercial Dealership";
-                _vehicleCargoMenu.Subtitle = "Purchase trucks and trailers for the active office";
+                _vehicleCargoMenu.Title = "Trucks Dealership";
+                _vehicleCargoMenu.Subtitle = "Purchase trucks and/or trailers";
             }
             else
             {
@@ -3193,10 +3504,15 @@ namespace LSOL
 
         private string CurrentVehicleSpawnerSelectionDetail()
         {
+            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            var selectedTruck = selectedVehicle != null && !selectedVehicle.IsTrailer
+                ? null
+                : _vehicleSpawnController.SelectedTractorDefinition;
             return string.Format(
-                "{0} | {1}",
+                "{0} | Cargo / Trailer {1} | Truck {2}",
                 _vehicleSpawnController.SelectedFilter.ToDisplayName(),
-                _vehicleSpawnController.CurrentVehicleCaption);
+                _vehicleSpawnController.CurrentVehicleCaption,
+                selectedTruck != null ? _vehicleSpawnController.CurrentTractorCaption : "None");
         }
 
         private string CurrentVehicleSpawnerActionDetail()
@@ -3208,10 +3524,14 @@ namespace LSOL
 
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
             {
-                return "Spawn the selected fleet vehicle at this industry pad.";
+                return _vehicleSpawnController.HasAnySelection
+                    ? "Spawn the selected truck, trailer, or combined rig at this industry pad."
+                    : "Select a truck and/or trailer first.";
             }
 
-            return "Spawn the selected fleet vehicle at the office lot.";
+            return _vehicleSpawnController.HasAnySelection
+                ? "Spawn the selected truck, trailer, or combined rig at the office lot."
+                : "Select a truck and/or trailer first.";
         }
 
         private string CurrentIndustryVehicleSpawnerDetail()
@@ -3683,7 +4003,13 @@ namespace LSOL
             }
 
             _fleetManager.RegisterOwnedRig(truck, cargoVehicle);
-            _vehicleFuelSystem.InitializeSpawnedVehicle(truck);
+            var poweredDefinition = _vehicleSpawnController.SelectedVehicleDefinition != null && _vehicleSpawnController.SelectedVehicleDefinition.IsTrailer
+                ? _vehicleSpawnController.SelectedTractorDefinition
+                : (_vehicleSpawnController.SelectedVehicleDefinition ?? _vehicleSpawnController.SelectedTractorDefinition);
+            if (poweredDefinition != null && !poweredDefinition.IsTrailer)
+            {
+                _vehicleFuelSystem.InitializeSpawnedVehicle(truck);
+            }
             _tabletStateStore.MarkCargoDirty();
 
             ShowStatus(message);
@@ -3775,12 +4101,6 @@ namespace LSOL
                 return;
             }
 
-            if (!cargoState.IsEmpty)
-            {
-                ShowStatus("Vehicle already carries cargo. Unload first.");
-                return;
-            }
-
             var cargoType = cargoState.CargoType;
             if (cargoType == VehicleCargoType.Unknown || cargoType == VehicleCargoType.Trailer)
             {
@@ -3794,7 +4114,21 @@ namespace LSOL
                 return;
             }
 
-            var selectedProduct = GetPreferredOreCommodity(products);
+            var selectedProduct = !cargoState.IsEmpty
+                ? products.FirstOrDefault(product => CommoditiesMatch(product, cargoState.Commodity))
+                : GetPreferredOreCommodity(products);
+            if (string.IsNullOrWhiteSpace(selectedProduct))
+            {
+                ShowStatus(string.Format("Vehicle already carries {0}. This site cannot top it up.", cargoState.Commodity));
+                return;
+            }
+
+            if (!CanLoadSelectedCommodity(cargoState, selectedProduct, out error))
+            {
+                ShowStatus(error);
+                return;
+            }
+
             StartTabletLoadTransfer(industry, cargoVehicle, cargoState, cargoType, selectedProduct);
         }
 
@@ -3821,9 +4155,9 @@ namespace LSOL
                 return;
             }
 
-            if (!cargoState.IsEmpty)
+            if (!CanLoadSelectedCommodity(cargoState, selectedProduct, out error))
             {
-                ShowStatus("Vehicle already carries cargo. Unload first.");
+                ShowStatus(error);
                 return;
             }
 
@@ -3834,6 +4168,49 @@ namespace LSOL
             }
 
             StartTabletLoadTransfer(industry, cargoVehicle, cargoState, cargoType, selectedProduct);
+        }
+
+        private static bool CommoditiesMatch(string left, string right)
+        {
+            return string.Equals(
+                CommodityCatalog.Normalize(left),
+                CommodityCatalog.Normalize(right),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool CanLoadSelectedCommodity(VehicleCargoState cargoState, string selectedProduct, out string message)
+        {
+            message = string.Empty;
+            if (cargoState == null)
+            {
+                message = "No cargo hold is available.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(selectedProduct))
+            {
+                message = "No product selected for loading.";
+                return false;
+            }
+
+            if (cargoState.IsEmpty)
+            {
+                return true;
+            }
+
+            if (cargoState.FreeCapacityTons <= 0.001f)
+            {
+                message = "Vehicle cargo is already full.";
+                return false;
+            }
+
+            if (!CommoditiesMatch(cargoState.Commodity, selectedProduct))
+            {
+                message = string.Format("Vehicle already carries {0}. Mixed cargo is not supported.", cargoState.Commodity);
+                return false;
+            }
+
+            return true;
         }
 
         private void HandleTabletUnloadRequested(Industry industry)
@@ -3941,29 +4318,15 @@ namespace LSOL
         private void HandleCompanyServiceRefuelRequested()
         {
             var player = Game.Player.Character;
-            if (player == null || !player.Exists() || !player.IsInVehicle())
+            string message;
+            if (!_industryRefuelService.TryRequestRemoteRefuel(player, Game.GameTime, out message))
             {
-                ShowStatus("Enter a company vehicle to request refueling.");
+                ShowStatus(message);
                 return;
             }
 
-            var telemetry = _vehicleFuelSystem.GetActiveTelemetry(player);
-            if (telemetry == null || telemetry.PoweredVehicle == null || !telemetry.PoweredVehicle.Exists() || telemetry.CapacityLiters <= 0.001f)
-            {
-                ShowStatus("No active company truck is available for remote refueling.");
-                return;
-            }
-
-            var litersNeeded = Math.Max(0f, telemetry.CapacityLiters - telemetry.CurrentLiters);
-            if (litersNeeded <= 0.01f)
-            {
-                ShowStatus("The active company truck is already full.");
-                return;
-            }
-
-            var addedLiters = _vehicleFuelSystem.AddFuel(telemetry.PoweredVehicle, litersNeeded);
-            _tabletStateStore.MarkCargoDirty();
-            ShowStatus(string.Format("Remote refuel completed: +{0:0}L.", addedLiters), 4500);
+            _tabletStateStore.MarkNetworkDirty();
+            ShowStatus(message, 4500);
         }
 
         private void HandleCompanyServiceRepairRequested()
@@ -4212,6 +4575,12 @@ namespace LSOL
                 {
                     CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
                 },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => BuildIndustryPermitCaption(_menuIndustry),
+                    DetailFactory = () => BuildIndustryPermitDetail(_menuIndustry),
+                    OnActivate = () => HandleIndustryPermitAction(_menuIndustry),
+                },
             };
 
             if (_industryManager.RequiresIndustryPurchase(_menuIndustry))
@@ -4310,6 +4679,104 @@ namespace LSOL
 
             _menuIndustry.ClampBuffersToCapacity();
             ShowStatus(result);
+            RebuildUpgradeMenuItems();
+        }
+
+        private string AppendIndustryPurchasePermitGrantResult(Industry industry, string purchaseResult)
+        {
+            if (industry == null || industry.HasContractorPermit || !industry.RequiresContractorPermit)
+            {
+                return purchaseResult;
+            }
+
+            industry.SetContractorPermitOwned(true);
+            if (string.IsNullOrWhiteSpace(purchaseResult))
+            {
+                return string.Format("Contractor permit granted for {0}.", industry.Name);
+            }
+
+            return string.Format("{0} Contractor permit granted.", purchaseResult.TrimEnd('.', ' '));
+        }
+
+        private string BuildIndustryPermitCaption(Industry industry)
+        {
+            if (industry == null)
+            {
+                return "Permit: n/a";
+            }
+
+            if (!industry.RequiresContractorPermit)
+            {
+                return "Permit: Open";
+            }
+
+            if (!_licensingDifficultyEnabled && !industry.HasContractorPermit)
+            {
+                return "Permit: Disabled";
+            }
+
+            return industry.HasContractorPermit
+                ? "Permit: Owned"
+                : string.Format("Permit: {0}", ModFormatting.FormatMoney(industry.IndustryLicencePrice));
+        }
+
+        private string BuildIndustryPermitDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return "No industry selected.";
+            }
+
+            if (!industry.RequiresContractorPermit)
+            {
+                return "No contractor permit is required for this site.";
+            }
+
+            if (!_licensingDifficultyEnabled && !industry.HasContractorPermit)
+            {
+                return "Licensing difficulty is disabled for this save, so permit access is already open.";
+            }
+
+            if (industry.HasContractorPermit)
+            {
+                return "Contractor permit already unlocked for this site.";
+            }
+
+            if (_industryManager.RequiresIndustryPurchase(industry))
+            {
+                return "Purchase this permit directly, or buy the industry to unlock it automatically.";
+            }
+
+            return string.Format("Purchase the contractor permit for {0}.", ModFormatting.FormatMoney(industry.IndustryLicencePrice));
+        }
+
+        private void HandleIndustryPermitAction(Industry industry)
+        {
+            if (industry == null)
+            {
+                ShowStatus("No industry selected.");
+                return;
+            }
+
+            if (!industry.RequiresContractorPermit)
+            {
+                ShowStatus(string.Format("{0} does not require a contractor permit.", industry.Name));
+                return;
+            }
+
+            if (!_licensingDifficultyEnabled && !industry.HasContractorPermit)
+            {
+                ShowStatus("Licensing system is disabled for this save.");
+                return;
+            }
+
+            if (industry.HasContractorPermit)
+            {
+                ShowStatus(string.Format("Contractor permit already purchased for {0}.", industry.Name));
+                return;
+            }
+
+            ShowStatus(PurchaseContractorPermitFromOverview(industry));
             RebuildUpgradeMenuItems();
         }
 

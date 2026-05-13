@@ -653,7 +653,7 @@ namespace LSOL
                 items.Add(new OfficeMenuItem
                 {
                     CaptionFactory = () => "No active commercial vehicles",
-                    DetailFactory = () => "Purchase trucks and trailers at the commercial dealership.",
+                    DetailFactory = () => "Purchase trucks and trailers at the trucks dealership.",
                 });
             }
             else
@@ -1405,13 +1405,9 @@ namespace LSOL
         private float GetSelectedCommercialVehicleDailyRent()
         {
             var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            if (selectedVehicle == null)
-            {
-                return 0f;
-            }
-
-            var selectedTractor = selectedVehicle.IsTrailer ? _vehicleSpawnController.SelectedTractorDefinition : null;
-            return Math.Max(0f, selectedVehicle.DailyRent) + Math.Max(0f, selectedTractor != null ? selectedTractor.DailyRent : 0f);
+            var selectedTractor = GetSelectedCommercialDealershipTruckDefinition(selectedVehicle);
+            return Math.Max(0f, selectedVehicle != null ? selectedVehicle.DailyRent : 0f)
+                + Math.Max(0f, selectedTractor != null ? selectedTractor.DailyRent : 0f);
         }
 
         private string CurrentVehicleSpawnerActionCaption()
@@ -1426,7 +1422,17 @@ namespace LSOL
             var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
             if (selectedVehicle == null)
             {
-                return "No vehicle available in this cargo filter.";
+                var selectedTruck = _vehicleSpawnController.SelectedTractorDefinition;
+                if (selectedTruck == null)
+                {
+                    return "No cargo vehicle or trailer selected. Set Cargo / Trailer to None for truck-only purchases, or change the cargo filter.";
+                }
+
+                var truckPrice = ModFormatting.FormatMoney(Math.Max(0f, selectedTruck.Price));
+                var truckOnlyDailyRent = GetSelectedCommercialVehicleDailyRent();
+                return truckOnlyDailyRent > 0.001f
+                    ? string.Format("Truck only. Price {0} | Rent {1}/day.", truckPrice, ModFormatting.FormatMoney(truckOnlyDailyRent))
+                    : string.Format("Truck only. Price {0}.", truckPrice);
             }
 
             var vehiclePrice = ModFormatting.FormatMoney(Math.Max(0f, selectedVehicle.Price));
@@ -1442,8 +1448,8 @@ namespace LSOL
             if (selectedTractor == null)
             {
                 return dailyRent > 0.001f
-                    ? string.Format("Trailer price {0} | Rent {1}/day. Select a truck to complete the setup.", vehiclePrice, ModFormatting.FormatMoney(dailyRent))
-                    : string.Format("Trailer price {0}. Select a truck to complete the purchase.", vehiclePrice);
+                    ? string.Format("Trailer only. Price {0} | Rent {1}/day. Set Truck to None to keep it standalone.", vehiclePrice, ModFormatting.FormatMoney(dailyRent))
+                    : string.Format("Trailer only. Price {0}. Set Truck to None to keep it standalone.", vehiclePrice);
             }
 
             var totalPrice = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor.Price);
@@ -1462,47 +1468,56 @@ namespace LSOL
         private string BuildCommercialDealershipTruckSelectionDetail()
         {
             var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
             if (selectedVehicle == null)
             {
-                return "No vehicle available in this cargo filter.";
+                if (selectedTractor == null)
+                {
+                    return "Select a truck for a truck-only purchase, or pair one with a trailer.";
+                }
+
+                var tractorPrice = Math.Max(0f, selectedTractor.Price);
+                var truckOnlyDailyRent = GetSelectedCommercialVehicleDailyRent();
+                return truckOnlyDailyRent > 0.001f
+                    ? string.Format("Truck only. Price {0} | Rent {1}/day.", ModFormatting.FormatMoney(tractorPrice), ModFormatting.FormatMoney(truckOnlyDailyRent))
+                    : string.Format("Truck only. Price {0}.", ModFormatting.FormatMoney(tractorPrice));
             }
 
             if (!selectedVehicle.IsTrailer)
             {
-                return "No truck tractor needed for the selected vehicle.";
+                return "No separate truck tractor is needed for the selected vehicle. Set Cargo / Trailer to None to buy a truck alone.";
             }
 
-            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
             if (selectedTractor == null)
             {
-                return "No truck tractor available for the selected trailer.";
+                return "Truck is set to None. The selected trailer will be purchased or rented on its own.";
             }
 
-            var tractorPrice = Math.Max(0f, selectedTractor.Price);
-            var totalPrice = Math.Max(0f, selectedVehicle.Price) + tractorPrice;
-            var dailyRent = GetSelectedCommercialVehicleDailyRent();
-            return dailyRent > 0.001f
+            var selectedTractorPrice = Math.Max(0f, selectedTractor.Price);
+            var totalPrice = Math.Max(0f, selectedVehicle.Price) + selectedTractorPrice;
+            var totalDailyRent = GetSelectedCommercialVehicleDailyRent();
+            return totalDailyRent > 0.001f
                 ? string.Format(
                     "Truck price {0} | Total purchase {1} | Total rent {2}/day.",
-                    ModFormatting.FormatMoney(tractorPrice),
+                    ModFormatting.FormatMoney(selectedTractorPrice),
                     ModFormatting.FormatMoney(totalPrice),
-                    ModFormatting.FormatMoney(dailyRent))
+                    ModFormatting.FormatMoney(totalDailyRent))
                 : string.Format(
                     "Truck price {0} | Total purchase {1}.",
-                    ModFormatting.FormatMoney(tractorPrice),
+                    ModFormatting.FormatMoney(selectedTractorPrice),
                     ModFormatting.FormatMoney(totalPrice));
         }
 
         private string BuildCommercialDealershipPurchaseDetail()
         {
             var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
-            if (selectedVehicle == null)
+            var selectedTractor = GetSelectedCommercialDealershipTruckDefinition(selectedVehicle);
+            if (selectedVehicle == null && selectedTractor == null)
             {
-                return "No vehicle available in this cargo filter.";
+                return "Select a truck and/or trailer first.";
             }
 
-            var price = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
+            var price = Math.Max(0f, selectedVehicle != null ? selectedVehicle.Price : 0f) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
             if (!IsCommercialDealershipRentMode)
             {
                 return string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price));
@@ -1519,6 +1534,17 @@ namespace LSOL
                 "Rent for {0}/day. First day plus a refundable deposit totals {1} upfront.",
                 ModFormatting.FormatMoney(dailyRent),
                 ModFormatting.FormatMoney(upfrontCost));
+        }
+
+        private VehicleDefinition GetSelectedCommercialDealershipTruckDefinition(VehicleDefinition selectedVehicle)
+        {
+            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
+            if (selectedVehicle == null)
+            {
+                return selectedTractor;
+            }
+
+            return selectedVehicle.IsTrailer ? selectedTractor : null;
         }
 
         private enum CommercialDealershipAcquisitionMode

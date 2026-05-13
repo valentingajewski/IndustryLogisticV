@@ -60,12 +60,13 @@ namespace LSOL.Systems
         {
             get
             {
-                if (_filteredVehicles.Count == 0)
+                var selectedVehicle = SelectedVehicleDefinition;
+                if (selectedVehicle == null)
                 {
-                    return "None for this cargo filter";
+                    return "None";
                 }
 
-                return string.Format("{0}", _filteredVehicles[_selectedVehicleIndex]);
+                return string.Format("{0}", selectedVehicle);
             }
         }
 
@@ -73,7 +74,7 @@ namespace LSOL.Systems
         {
             get
             {
-                return _filteredVehicles.Count == 0
+                return _selectedVehicleIndex < 0 || _selectedVehicleIndex >= _filteredVehicles.Count
                     ? null
                     : _filteredVehicles[_selectedVehicleIndex];
             }
@@ -83,22 +84,24 @@ namespace LSOL.Systems
         {
             get
             {
-                if (_filteredVehicles.Count == 0)
-                {
-                    return "n/a";
-                }
-
-                if (!_filteredVehicles[_selectedVehicleIndex].IsTrailer)
-                {
-                    return "auto (not needed)";
-                }
-
                 if (_tractorVehicles.Count == 0)
                 {
                     return "unavailable";
                 }
 
-                return string.Format("{0}", _tractorVehicles[_selectedTractorIndex].ModelName);
+                var selectedVehicle = SelectedVehicleDefinition;
+                if (selectedVehicle != null && !selectedVehicle.IsTrailer)
+                {
+                    return "auto (not needed)";
+                }
+
+                var selectedTractor = SelectedTractorDefinition;
+                if (selectedTractor == null)
+                {
+                    return "None";
+                }
+
+                return GetVehicleLabel(selectedTractor);
             }
         }
 
@@ -106,15 +109,13 @@ namespace LSOL.Systems
         {
             get
             {
-                var selectedVehicle = SelectedVehicleDefinition;
-                if (selectedVehicle == null || !selectedVehicle.IsTrailer || _tractorVehicles.Count == 0)
-                {
-                    return null;
-                }
-
-                return _tractorVehicles[_selectedTractorIndex];
+                return _selectedTractorIndex < 0 || _selectedTractorIndex >= _tractorVehicles.Count
+                    ? null
+                    : _tractorVehicles[_selectedTractorIndex];
             }
         }
+
+        public bool HasAnySelection => SelectedVehicleDefinition != null || SelectedTractorDefinition != null;
 
         public void ChangeFilter(int delta)
         {
@@ -136,28 +137,62 @@ namespace LSOL.Systems
 
         public void RefreshFilteredVehicles()
         {
+            var selectedVehicleModelName = SelectedVehicleDefinition != null
+                ? SelectedVehicleDefinition.ModelName
+                : string.Empty;
+            var keepNoVehicleSelection = _selectedVehicleIndex < 0;
             _filteredVehicles = _fleetManager.GetSpawnableForCargoType(SelectedFilter).ToList();
-            _selectedVehicleIndex = 0;
+
+            if (_filteredVehicles.Count == 0 || keepNoVehicleSelection)
+            {
+                _selectedVehicleIndex = -1;
+            }
+            else
+            {
+                var preservedIndex = _filteredVehicles.FindIndex(definition => string.Equals(definition.ModelName, selectedVehicleModelName, StringComparison.OrdinalIgnoreCase));
+                _selectedVehicleIndex = preservedIndex >= 0 ? preservedIndex : 0;
+            }
+
+            if (_tractorVehicles.Count == 0)
+            {
+                _selectedTractorIndex = -1;
+            }
+            else if (_selectedTractorIndex >= _tractorVehicles.Count)
+            {
+                _selectedTractorIndex = 0;
+            }
         }
 
         public void ChangeVehicleSelection(int delta)
         {
-            if (_filteredVehicles.Count == 0)
+            var optionCount = _filteredVehicles.Count + 1;
+            if (optionCount <= 1)
             {
+                _selectedVehicleIndex = _filteredVehicles.Count > 0 ? 0 : -1;
                 return;
             }
 
-            _selectedVehicleIndex = (_selectedVehicleIndex + delta + _filteredVehicles.Count) % _filteredVehicles.Count;
+            var optionIndex = _selectedVehicleIndex >= 0
+                ? _selectedVehicleIndex + 1
+                : 0;
+            optionIndex = (optionIndex + delta % optionCount + optionCount) % optionCount;
+            _selectedVehicleIndex = optionIndex == 0 ? -1 : optionIndex - 1;
         }
 
         public void ChangeTractorSelection(int delta)
         {
-            if (_tractorVehicles.Count == 0)
+            var optionCount = _tractorVehicles.Count + 1;
+            if (optionCount <= 1)
             {
+                _selectedTractorIndex = _tractorVehicles.Count > 0 ? 0 : -1;
                 return;
             }
 
-            _selectedTractorIndex = (_selectedTractorIndex + delta + _tractorVehicles.Count) % _tractorVehicles.Count;
+            var optionIndex = _selectedTractorIndex >= 0
+                ? _selectedTractorIndex + 1
+                : 0;
+            optionIndex = (optionIndex + delta % optionCount + optionCount) % optionCount;
+            _selectedTractorIndex = optionIndex == 0 ? -1 : optionIndex - 1;
         }
 
         public bool SpawnSelectedVehicle(Func<Vector3, Vector3> getGroundPosition, out Vehicle truck, out Vehicle cargoVehicle, out string message)
@@ -169,27 +204,42 @@ namespace LSOL.Systems
         {
             truck = null;
             cargoVehicle = null;
-            if (_filteredVehicles.Count == 0)
+
+            var selected = SelectedVehicleDefinition;
+            var tractor = SelectedTractorDefinition;
+            if (selected != null && !selected.IsTrailer)
             {
-                message = "No vehicle available in this cargo filter.";
-                return false;
+                tractor = null;
             }
 
-            var selected = _filteredVehicles[_selectedVehicleIndex];
-            VehicleDefinition tractor = null;
-            if (selected.IsTrailer && _tractorVehicles.Count > 0)
+            if (selected == null && tractor == null)
             {
-                tractor = _tractorVehicles[_selectedTractorIndex];
+                message = _filteredVehicles.Count == 0
+                    ? "No vehicle available in this cargo filter. Select a truck to spawn it on its own."
+                    : "Select a truck and/or cargo vehicle.";
+                return false;
             }
 
             return _fleetManager.SpawnSelectedVehicle(
                 selected,
                 tractor,
-                getGroundPosition(spawnPosition),
+                getGroundPosition != null ? getGroundPosition(spawnPosition) : spawnPosition,
                 spawnHeading,
                 out truck,
                 out cargoVehicle,
                 out message);
+        }
+
+        private static string GetVehicleLabel(VehicleDefinition definition)
+        {
+            if (definition == null)
+            {
+                return "None";
+            }
+
+            return string.IsNullOrWhiteSpace(definition.DisplayName)
+                ? definition.ModelName
+                : definition.DisplayName;
         }
     }
 }

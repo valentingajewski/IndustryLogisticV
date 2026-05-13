@@ -198,6 +198,7 @@ namespace LSOL.Systems
                     }
 
                     writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("CargoWeightPowerDifficultyEnabled={0}", metadata.CargoWeightPowerDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
@@ -288,6 +289,7 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "Language") ||
                 ini.HasKey("Meta", "ColorblindMode") ||
                 ini.HasKey("Meta", "VehicleFuelDifficultyEnabled") ||
+                ini.HasKey("Meta", "CargoWeightPowerDifficultyEnabled") ||
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
                 ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
                 ini.HasKey("Meta", "LicensingDifficultyEnabled") ||
@@ -305,6 +307,7 @@ namespace LSOL.Systems
                 ini.GetString("Meta", "ColorblindMode", string.Empty),
                 ColorblindMode.Off);
             metadata.VehicleFuelDifficultyEnabled = ini.GetBool("Meta", "VehicleFuelDifficultyEnabled", false);
+            metadata.CargoWeightPowerDifficultyEnabled = ini.GetBool("Meta", "CargoWeightPowerDifficultyEnabled", false);
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
             metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
             metadata.LicensingDifficultyEnabled = ini.GetBool("Meta", "LicensingDifficultyEnabled", false);
@@ -831,6 +834,7 @@ namespace LSOL.Systems
                 writer.WriteLine("PriorityCommodity={0}", snapshot.PriorityCommodity ?? string.Empty);
                 writer.WriteLine("PriorityDistrict={0}", snapshot.PriorityDistrict ?? string.Empty);
                 writer.WriteLine("PremiumDispatchEnabled={0}", snapshot.PremiumDispatchEnabled ? "true" : "false");
+                writer.WriteLine("OfficeDeliveryNotificationsEnabled={0}", snapshot.OfficeDeliveryNotificationsEnabled ? "true" : "false");
                 writer.WriteLine("LastWorldEvaluationClockMinute={0}", snapshot.LastWorldEvaluationClockMinute);
                 writer.WriteLine("CompletedWorldDispatches={0}", snapshot.CompletedWorldDispatches);
                 writer.WriteLine();
@@ -848,6 +852,29 @@ namespace LSOL.Systems
                 writer.WriteLine("DestinationIndustryId={0}", contract.DestinationIndustryId ?? string.Empty);
                 writer.WriteLine("Commodity={0}", contract.Commodity ?? string.Empty);
                 writer.WriteLine("TierId={0}", contract.TierId ?? string.Empty);
+                writer.WriteLine("AssignedVehicleAssetId={0}", contract.AssignedVehicleAssetId ?? string.Empty);
+                writer.WriteLine("AssignedVehicleDisplayName={0}", contract.AssignedVehicleDisplayName ?? string.Empty);
+                writer.WriteLine("OriginTriggerThresholdPercent={0}", contract.OriginTriggerThresholdPercent);
+                writer.WriteLine("DestinationTriggerThresholdPercent={0}", contract.DestinationTriggerThresholdPercent);
+                writer.WriteLine("CurrentRouteIndex={0}", contract.CurrentRouteIndex);
+                writer.WriteLine("RouteCount={0}", contract.Routes != null ? contract.Routes.Count : 0);
+                if (contract.Routes != null)
+                {
+                    for (int routeIndex = 0; routeIndex < contract.Routes.Count; routeIndex++)
+                    {
+                        var route = contract.Routes[routeIndex];
+                        if (route == null)
+                        {
+                            continue;
+                        }
+
+                        writer.WriteLine("Route{0}OriginIndustryId={1}", routeIndex, route.OriginIndustryId ?? string.Empty);
+                        writer.WriteLine("Route{0}DestinationIndustryId={1}", routeIndex, route.DestinationIndustryId ?? string.Empty);
+                        writer.WriteLine("Route{0}Commodity={1}", routeIndex, route.Commodity ?? string.Empty);
+                        writer.WriteLine("Route{0}OriginTriggerThresholdPercent={1}", routeIndex, route.OriginTriggerThresholdPercent);
+                        writer.WriteLine("Route{0}DestinationTriggerThresholdPercent={1}", routeIndex, route.DestinationTriggerThresholdPercent);
+                    }
+                }
                 writer.WriteLine("ContractCost={0}", FormatFloat(contract.ContractCost));
                 writer.WriteLine("PayrollElapsedInGameMinutes={0}", contract.PayrollElapsedInGameMinutes);
                 writer.WriteLine("CompletedPayrollCycles={0}", contract.CompletedPayrollCycles);
@@ -910,6 +937,7 @@ namespace LSOL.Systems
                 snapshot.PriorityCommodity = CommodityCatalog.Normalize(ini.GetString("NpcWorldDispatch", "PriorityCommodity", string.Empty));
                 snapshot.PriorityDistrict = ini.GetString("NpcWorldDispatch", "PriorityDistrict", string.Empty);
                 snapshot.PremiumDispatchEnabled = ini.GetBool("NpcWorldDispatch", "PremiumDispatchEnabled", false);
+                snapshot.OfficeDeliveryNotificationsEnabled = ini.GetBool("NpcWorldDispatch", "OfficeDeliveryNotificationsEnabled", true);
                 snapshot.LastWorldEvaluationClockMinute = ParseInt(ini.GetString("NpcWorldDispatch", "LastWorldEvaluationClockMinute", "-1"), -1);
                 snapshot.CompletedWorldDispatches = ParseInt(ini.GetString("NpcWorldDispatch", "CompletedWorldDispatches", "0"), 0);
             }
@@ -930,6 +958,11 @@ namespace LSOL.Systems
                         DestinationIndustryId = ini.GetString(section, "DestinationIndustryId", string.Empty),
                         Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
                         TierId = ini.GetString(section, "TierId", string.Empty),
+                        AssignedVehicleAssetId = ini.GetString(section, "AssignedVehicleAssetId", string.Empty),
+                        AssignedVehicleDisplayName = ini.GetString(section, "AssignedVehicleDisplayName", string.Empty),
+                        OriginTriggerThresholdPercent = ParseInt(ini.GetString(section, "OriginTriggerThresholdPercent", "0"), 0),
+                        DestinationTriggerThresholdPercent = ParseInt(ini.GetString(section, "DestinationTriggerThresholdPercent", "100"), 100),
+                        CurrentRouteIndex = ParseInt(ini.GetString(section, "CurrentRouteIndex", "0"), 0),
                         ContractCost = ini.GetFloat(section, "ContractCost", 0f),
                         PayrollElapsedInGameMinutes = ParseInt(ini.GetString(section, "PayrollElapsedInGameMinutes", "0"), 0),
                         CompletedPayrollCycles = ParseInt(ini.GetString(section, "CompletedPayrollCycles", "0"), 0),
@@ -939,6 +972,20 @@ namespace LSOL.Systems
                         TotalProfitEarned = ini.GetFloat(section, "TotalProfitEarned", 0f),
                         LastJourneyLossRatio = ini.GetFloat(section, "LastJourneyLossRatio", 0f),
                     });
+
+                    var contractSnapshot = snapshot.Contracts[snapshot.Contracts.Count - 1];
+                    var routeCount = ParseInt(ini.GetString(section, "RouteCount", "0"), 0);
+                    for (int routeIndex = 0; routeIndex < routeCount; routeIndex++)
+                    {
+                        contractSnapshot.Routes.Add(new NpcLogisticsRouteSnapshot
+                        {
+                            OriginIndustryId = ini.GetString(section, string.Format("Route{0}OriginIndustryId", routeIndex), string.Empty),
+                            DestinationIndustryId = ini.GetString(section, string.Format("Route{0}DestinationIndustryId", routeIndex), string.Empty),
+                            Commodity = CommodityCatalog.Normalize(ini.GetString(section, string.Format("Route{0}Commodity", routeIndex), string.Empty)),
+                            OriginTriggerThresholdPercent = ParseInt(ini.GetString(section, string.Format("Route{0}OriginTriggerThresholdPercent", routeIndex), "0"), 0),
+                            DestinationTriggerThresholdPercent = ParseInt(ini.GetString(section, string.Format("Route{0}DestinationTriggerThresholdPercent", routeIndex), "100"), 100),
+                        });
+                    }
 
                     continue;
                 }
@@ -1009,6 +1056,23 @@ namespace LSOL.Systems
                 writer.WriteLine("LastCompletedInGameMinute={0}", entry.LastCompletedInGameMinute);
                 writer.WriteLine();
             }
+
+            if (snapshot.AvailableMissionAnnouncements == null)
+            {
+                return;
+            }
+
+            foreach (var entry in snapshot.AvailableMissionAnnouncements.OrderBy(x => x != null ? x.MissionId : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (entry == null || string.IsNullOrWhiteSpace(entry.MissionId))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildSpecialMissionAvailabilitySectionName(entry.MissionId));
+                writer.WriteLine("AnnouncedAvailable=true");
+                writer.WriteLine();
+            }
         }
 
         private static SpecialMissionPersistenceSnapshot ReadSpecialMissionSnapshot(IniFile ini)
@@ -1058,6 +1122,30 @@ namespace LSOL.Systems
                     MissionId = missionId,
                     CompletionCount = completionCount,
                     LastCompletedInGameMinute = ParseInt(ini.GetString(section, "LastCompletedInGameMinute", "0"), 0),
+                });
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("SpecialMissionAvailability:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!ini.GetBool(section, "AnnouncedAvailable", false))
+                {
+                    continue;
+                }
+
+                var missionId = section.Substring("SpecialMissionAvailability:".Length).Trim();
+                if (string.IsNullOrWhiteSpace(missionId))
+                {
+                    continue;
+                }
+
+                snapshot.AvailableMissionAnnouncements.Add(new SpecialMissionAvailabilitySnapshot
+                {
+                    MissionId = missionId,
                 });
             }
 
@@ -1356,6 +1444,11 @@ namespace LSOL.Systems
             return "SpecialMissionProgress:" + (missionId ?? string.Empty).Trim();
         }
 
+        private static string BuildSpecialMissionAvailabilitySectionName(string missionId)
+        {
+            return "SpecialMissionAvailability:" + (missionId ?? string.Empty).Trim();
+        }
+
         private static string BuildTerritoryCorridorSectionName(string districtA, string districtB)
         {
             var left = districtA ?? string.Empty;
@@ -1493,6 +1586,7 @@ namespace LSOL.Systems
                     || !string.IsNullOrWhiteSpace(snapshot.PriorityCommodity)
                     || !string.IsNullOrWhiteSpace(snapshot.PriorityDistrict)
                     || snapshot.PremiumDispatchEnabled
+                    || !snapshot.OfficeDeliveryNotificationsEnabled
                     || snapshot.CompletedWorldDispatches > 0
                     || snapshot.LastWorldEvaluationClockMinute >= 0);
         }
@@ -1521,6 +1615,7 @@ namespace LSOL.Systems
         public ModLanguage? Language { get; set; }
         public ColorblindMode? ColorblindMode { get; set; }
         public bool VehicleFuelDifficultyEnabled { get; set; }
+        public bool CargoWeightPowerDifficultyEnabled { get; set; }
         public bool CargoDamageDifficultyEnabled { get; set; }
         public bool IndustryPricingDifficultyEnabled { get; set; }
         public bool LicensingDifficultyEnabled { get; set; }

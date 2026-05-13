@@ -16,23 +16,45 @@ namespace LSOL.UI
 
         public TabletShellPage BuildPage(TabletShellContext context, TabletRoute route)
         {
+            TabletShellPage page;
             switch ((route != null ? route.PageId : string.Empty) ?? string.Empty)
             {
                 case "profit":
-                    return BuildProfitPage(context);
+                    page = BuildProfitPage(context);
+                    break;
                 case "commodity":
-                    return BuildCommodityPage(context);
+                    page = BuildCommodityPage(context);
+                    break;
                 case "utilization":
-                    return BuildUtilizationPage(context);
+                    page = BuildUtilizationPage(context);
+                    break;
                 case "storage":
-                    return BuildStoragePage(context);
+                    page = BuildStoragePage(context);
+                    break;
                 case "districts":
-                    return BuildDistrictPage(context);
+                    page = BuildDistrictPage(context);
+                    break;
                 case "routes":
-                    return BuildRoutesPage(context);
+                    page = BuildRoutesPage(context);
+                    break;
                 default:
-                    return BuildRootPage(context);
+                    page = BuildRootPage(context);
+                    break;
             }
+
+            ApplyAnalyticsPageStyle(page);
+            return page;
+        }
+
+        private static void ApplyAnalyticsPageStyle(TabletShellPage page)
+        {
+            if (page == null)
+            {
+                return;
+            }
+
+            page.CaptionScale = 0.44f;
+            page.DetailScale = 0.275f;
         }
 
         private static TabletShellPage BuildRootPage(TabletShellContext context)
@@ -262,25 +284,43 @@ namespace LSOL.UI
                 .Where(summary => summary != null && summary.Industry != null)
                 .OrderBy(summary => summary.Name)
                 .ToList();
+            var selectedSummary = siteSummaries.FirstOrDefault(summary => string.Equals(summary.Industry.Id, context.StateStore.SelectedStorageIndustryId, StringComparison.OrdinalIgnoreCase));
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateGraphTimeframeSelectorItem(context, "Left/right changes the storage graph window."),
+                TabletUiHelpers.CreateSelectorItem(
+                    () => string.Format("Site: < {0} >", selectedSummary != null ? selectedSummary.Name : "None"),
+                    () => "Left/right changes the graphed storage site. Enter advances.",
+                    () =>
+                    {
+                        context.StateStore.CycleSelectedStorageIndustry(-1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleSelectedStorageIndustry(1);
+                        context.Refresh();
+                    },
+                    () =>
+                    {
+                        context.StateStore.CycleSelectedStorageIndustry(1);
+                        context.Refresh();
+                    },
+                    "SITE"),
             };
 
-            for (int i = 0; i < siteSummaries.Count; i++)
+            if (selectedSummary != null)
             {
-                var summary = siteSummaries[i];
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    summary.Name,
+                    selectedSummary.Name,
                     string.Format(
                         "{0:0.0}/{1:0.0}t | {2:0}% full | {3}",
-                        summary.StorageTons,
-                        summary.TotalCapacityTons,
-                        summary.FillRatio * 100f,
-                        summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry")));
+                        selectedSummary.StorageTons,
+                        selectedSummary.TotalCapacityTons,
+                        selectedSummary.FillRatio * 100f,
+                        selectedSummary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry")));
             }
-
-            if (items.Count == 0)
+            else
             {
                 items.Add(TabletUiHelpers.CreateInfoItem("No storage sites tracked", "No industry or warehouse sites are currently available for storage analytics."));
             }
@@ -304,8 +344,8 @@ namespace LSOL.UI
                         return;
                     }
 
-                    var selectedIndex = GetGraphListSelectionIndex(panel.SelectedIndex, 1, siteSummaries.Count);
-                    var summary = siteSummaries[selectedIndex];
+                    var summary = siteSummaries.FirstOrDefault(entry => string.Equals(entry.Industry.Id, context.StateStore.SelectedStorageIndustryId, StringComparison.OrdinalIgnoreCase))
+                        ?? siteSummaries[0];
                     TabletChartRenderer.DrawHistoryPanel(
                         panel,
                         string.Format("{0} Storage Fill", summary.Name),

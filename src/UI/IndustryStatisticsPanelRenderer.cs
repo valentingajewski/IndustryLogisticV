@@ -75,7 +75,7 @@ namespace LSOL.UI
                 0f);
 
             DrawText(
-                "Input and output stock by commodity",
+                BuildCommodityBreakdownSubtitle(industry),
                 frameX + 82f,
                 frameY + 143f,
                 0.30f,
@@ -123,6 +123,11 @@ namespace LSOL.UI
 
         public static string BuildOperationsSubtitle(Industry industry)
         {
+            if (industry != null && industry.SiteRole == SiteRole.Warehouse)
+            {
+                return "Warehouse Operations Interface";
+            }
+
             if (industry != null && industry.IsStore)
             {
                 return "Store Operations Interface";
@@ -133,12 +138,24 @@ namespace LSOL.UI
 
         public static string BuildStatisticsHeading(Industry industry)
         {
+            if (industry != null && industry.SiteRole == SiteRole.Warehouse)
+            {
+                return "WAREHOUSE STATISTICS";
+            }
+
             if (industry != null && industry.IsStore)
             {
                 return "STORE STATISTICS";
             }
 
             return "INDUSTRY STATISTICS";
+        }
+
+        public static string BuildCommodityBreakdownSubtitle(Industry industry)
+        {
+            return industry != null && industry.SiteRole == SiteRole.Warehouse
+                ? "Stored commodities and accepted capacity by commodity"
+                : "Input and output stock by commodity";
         }
 
         public static void DrawTabletBody(Industry industry, IndustryStatisticsSnapshot snapshot, int scrollIndex, SimpleMenuTabletPanelContext panel)
@@ -180,7 +197,7 @@ namespace LSOL.UI
 
             DrawPixelText(
                 resolution,
-                "Input and output stock by commodity",
+                BuildCommodityBreakdownSubtitle(industry),
                 contentX + 2f,
                 contentY + 24f,
                 0.30f,
@@ -212,7 +229,7 @@ namespace LSOL.UI
 
             DrawPixelText(
                 resolution,
-                string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, industry.CurrentOutputPerHourTons),
+                BuildSummaryLine(industry, snapshot),
                 contentX,
                 contentY + 74f,
                 0.25f,
@@ -225,7 +242,9 @@ namespace LSOL.UI
             {
                 DrawPixelText(
                     resolution,
-                    "No input/output commodities configured for this industry.",
+                    industry != null && industry.SiteRole == SiteRole.Warehouse
+                        ? "No accepted storage commodities are configured for this warehouse."
+                        : "No input/output commodities configured for this industry.",
                     contentX,
                     contentY + 138f,
                     0.29f,
@@ -238,7 +257,9 @@ namespace LSOL.UI
 
             DrawPixelText(
                 resolution,
-                "IN = input storage | OUT = output storage",
+                industry != null && industry.SiteRole == SiteRole.Warehouse
+                    ? "Stored warehouse commodities and their current fill ratios"
+                    : "IN = input storage | OUT = output storage",
                 contentX,
                 contentY + 112f,
                 0.24f,
@@ -307,6 +328,18 @@ namespace LSOL.UI
             }
         }
 
+        private static string BuildSummaryLine(Industry industry, IndustryStatisticsSnapshot snapshot)
+        {
+            var utilizationRatio = snapshot == null ? 0f : snapshot.UtilizationRatio;
+            if (industry != null && industry.SiteRole == SiteRole.Warehouse)
+            {
+                var commodityCount = snapshot != null && snapshot.Entries != null ? snapshot.Entries.Count : 0;
+                return string.Format("Fill Ratio: {0:0}% | Accepted Commodities: {1}", utilizationRatio * 100f, commodityCount);
+            }
+
+            return string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, industry != null ? industry.CurrentOutputPerHourTons : 0f);
+        }
+
         private static void DrawIndustryStatistics(Industry industry, IndustryStatisticsSnapshot snapshot, int scrollIndex, float frameX, float frameY)
         {
             var entries = snapshot == null ? null : snapshot.Entries;
@@ -335,7 +368,7 @@ namespace LSOL.UI
                 AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 230));
 
             DrawText(
-                string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, industry.CurrentOutputPerHourTons),
+                BuildSummaryLine(industry, snapshot),
                 frameX + 84f,
                 frameY + 192f,
                 0.25f,
@@ -347,7 +380,9 @@ namespace LSOL.UI
             if (entries == null || entries.Count == 0)
             {
                 DrawText(
-                    "No input/output commodities configured for this industry.",
+                    industry != null && industry.SiteRole == SiteRole.Warehouse
+                        ? "No accepted storage commodities are configured for this warehouse."
+                        : "No input/output commodities configured for this industry.",
                     frameX + 84f,
                     frameY + 266f,
                     0.29f,
@@ -362,7 +397,9 @@ namespace LSOL.UI
             var listTopY = frameY + 246f;
 
             DrawText(
-                "IN = input storage | OUT = output storage",
+                industry != null && industry.SiteRole == SiteRole.Warehouse
+                    ? "Stored warehouse commodities and their current fill ratios"
+                    : "IN = input storage | OUT = output storage",
                 frameX + 84f,
                 frameY + 232f,
                 0.24f,

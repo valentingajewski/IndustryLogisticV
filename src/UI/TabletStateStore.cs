@@ -314,6 +314,7 @@ namespace LSOL.UI
         private TabletGraphTimeframe _selectedGraphTimeframe;
         private string _selectedTrendCommodity;
         private string _selectedUtilizationIndustryId;
+        private string _selectedStorageIndustryId;
 
         private int _lastRefreshMs;
         private bool _hasSnapshot;
@@ -372,6 +373,7 @@ namespace LSOL.UI
             _selectedGraphTimeframe = TabletGraphTimeframeCatalog.GetDefault();
             _selectedTrendCommodity = string.Empty;
             _selectedUtilizationIndustryId = string.Empty;
+            _selectedStorageIndustryId = string.Empty;
             Snapshot = new TabletStateSnapshot();
             MarkAllDirty();
         }
@@ -531,6 +533,11 @@ namespace LSOL.UI
             get { return EnsureSelectedUtilizationIndustryId(); }
         }
 
+        public string SelectedStorageIndustryId
+        {
+            get { return EnsureSelectedStorageIndustryId(); }
+        }
+
         public void CycleGraphTimeframe(int delta)
         {
             _selectedGraphTimeframe = TabletGraphTimeframeCatalog.Cycle(_selectedGraphTimeframe, delta == 0 ? 1 : delta);
@@ -613,6 +620,39 @@ namespace LSOL.UI
             MarkAllDirty();
         }
 
+        public void CycleSelectedStorageIndustry(int delta)
+        {
+            var industries = GetOrderedStorageIndustries();
+            if (industries.Count == 0)
+            {
+                _selectedStorageIndustryId = string.Empty;
+                MarkAllDirty();
+                return;
+            }
+
+            var currentId = EnsureSelectedStorageIndustryId();
+            var currentIndex = industries.FindIndex(industry => string.Equals(industry.Id, currentId, StringComparison.OrdinalIgnoreCase));
+            if (currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = currentIndex + direction;
+            while (nextIndex < 0)
+            {
+                nextIndex += industries.Count;
+            }
+
+            while (nextIndex >= industries.Count)
+            {
+                nextIndex -= industries.Count;
+            }
+
+            _selectedStorageIndustryId = industries[nextIndex].Id;
+            MarkAllDirty();
+        }
+
         public TabletAnalyticsPersistenceSnapshot CreatePersistenceSnapshot()
         {
             EnsureSelectedTrendCommodity();
@@ -638,6 +678,7 @@ namespace LSOL.UI
                 _selectedGraphTimeframe = TabletGraphTimeframeCatalog.GetDefault();
                 _selectedTrendCommodity = string.Empty;
                 _selectedUtilizationIndustryId = string.Empty;
+                _selectedStorageIndustryId = string.Empty;
                 _lastHistorySampleMs = int.MinValue;
                 _hasHistorySamples = false;
                 MarkAllDirty();
@@ -647,12 +688,14 @@ namespace LSOL.UI
             _selectedGraphTimeframe = snapshot.SelectedGraphTimeframe;
             _selectedTrendCommodity = CommodityCatalog.Normalize(snapshot.SelectedTrendCommodity);
             _selectedUtilizationIndustryId = EnsureSelectedUtilizationIndustryId();
+            _selectedStorageIndustryId = EnsureSelectedStorageIndustryId();
             _profitHistory.Restore(snapshot.ProfitHistory);
             RestoreNamedSeries(_commodityPriceHistoryByCommodity, snapshot.CommodityPriceHistories);
             RestoreNamedSeries(_siteUtilizationHistoryByIndustryId, snapshot.SiteUtilizationHistories);
             RestoreNamedSeries(_siteStorageHistoryByIndustryId, snapshot.SiteStorageHistories);
             EnsureSelectedTrendCommodity();
             EnsureSelectedUtilizationIndustryId();
+            EnsureSelectedStorageIndustryId();
             _lastHistorySampleMs = Game.GameTime;
             _hasHistorySamples = snapshot.HasData;
             MarkAllDirty();
@@ -1207,6 +1250,17 @@ namespace LSOL.UI
                 .ToList();
         }
 
+        private List<Industry> GetOrderedStorageIndustries()
+        {
+            return _industryManager.Industries
+                .Where(industry => industry != null
+                    && !string.IsNullOrWhiteSpace(industry.Id)
+                    && industry.SiteRole != SiteRole.ConstructionSiteSink
+                    && (industry.SiteRole == SiteRole.Warehouse || industry.LocationKind == ExternalLocationKind.Industry))
+                .OrderBy(industry => industry.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
         private string EnsureSelectedTrendCommodity()
         {
             var normalized = CommodityCatalog.Normalize(_selectedTrendCommodity);
@@ -1243,6 +1297,24 @@ namespace LSOL.UI
             }
 
             return _selectedUtilizationIndustryId;
+        }
+
+        private string EnsureSelectedStorageIndustryId()
+        {
+            var industries = GetOrderedStorageIndustries();
+            if (industries.Count == 0)
+            {
+                _selectedStorageIndustryId = string.Empty;
+                return _selectedStorageIndustryId;
+            }
+
+            var selected = industries.FirstOrDefault(industry => string.Equals(industry.Id, _selectedStorageIndustryId, StringComparison.OrdinalIgnoreCase));
+            if (selected == null)
+            {
+                _selectedStorageIndustryId = industries[0].Id;
+            }
+
+            return _selectedStorageIndustryId;
         }
 
         private static IReadOnlyList<float> GetHistorySnapshot(

@@ -309,13 +309,13 @@ namespace LSOL.Systems
             _commercialDealershipBlip = CreateStaticBlip(
                 _getGroundPosition(_commercialDealershipMarker),
                 BlipSprite.Truck,
-                BlipColor.Blue,
+                BlipColor.White,
                 "Commercial Dealership",
                 0.95f);
             _personalDealershipBlip = CreateStaticBlip(
                 _getGroundPosition(_personalDealershipMarker),
                 BlipSprite.PersonalVehicleCar,
-                BlipColor.Yellow,
+                BlipColor.White,
                 "Personal Vehicle Dealership",
                 0.95f);
         }
@@ -432,6 +432,11 @@ namespace LSOL.Systems
                 return BlipColor.Green;
             }
 
+            if (_industryManager != null && _industryManager.IsIndustryOwnedForGameplay(industry))
+            {
+                return BlipColor.Green;
+            }
+
             if (_territoryManager == null)
             {
                 if (industry.IsOwned)
@@ -474,41 +479,7 @@ namespace LSOL.Systems
 
         private string ResolveIndustryBlipName(Industry industry)
         {
-            if (_territoryManager == null || industry == null)
-            {
-                return industry != null ? industry.Name : string.Empty;
-            }
-
-            var siteState = _territoryManager.GetSiteState(industry);
-            if (siteState == null)
-            {
-                return industry.Name;
-            }
-
-            if (industry.IsStarterHeadquarters)
-            {
-                return industry.Name + " [HQ]";
-            }
-
-            if (industry.IsDepotLike || industry.SiteRole == SiteRole.FleetYard)
-            {
-                var controlTag = siteState.ControlLevel == TerritoryControlLevel.Owned
-                    ? "YARD"
-                    : (siteState.ControlLevel == TerritoryControlLevel.Leased ? "LEASE" : "OPEN");
-                return string.Format("{0} [{1}]", industry.Name, controlTag);
-            }
-
-            if (siteState.FranchiseLevel != TerritoryFranchiseLevel.None)
-            {
-                return string.Format("{0} [F{1}]", industry.Name, (int)siteState.FranchiseLevel);
-            }
-
-            if (siteState.IsOperational)
-            {
-                return industry.Name + " [LIVE]";
-            }
-
-            return industry.Name + " [SETUP]";
+            return industry != null ? industry.Name : string.Empty;
         }
     }
 }

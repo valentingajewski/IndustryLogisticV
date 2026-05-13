@@ -689,13 +689,13 @@
       <Hardcore purchasePrice="800000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="722" legacyKey="Petrol Station 23" name="Office Gas Station" role="FuelSink" district="Port" company="RON" startingTankRatio="1" density="None" emptyingRate="0" ownershipTier="Starter" enabled="true" refuelIsFree="true">
+  <Site catalogId="722" legacyKey="Petrol Station 23" name="Port Office Gas Station" role="FuelSink" district="Port" company="RON" startingTankRatio="1" density="None" emptyingRate="0" ownershipTier="Starter" enabled="true" refuelIsFree="true">
     <Marker x="-61.84" y="-2532.41" z="6" />
     <Inputs primary="Fuel" />
     <Economy>
-      <Casual purchasePrice="0" inputCapacityTons="100000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
-      <Standard purchasePrice="0" inputCapacityTons="100000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
-      <Hardcore purchasePrice="0" inputCapacityTons="100000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Standard purchasePrice="450000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Hardcore purchasePrice="800000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
   <Site catalogId="723" legacyKey="Petrol Station 24" name="Davis Avenue 2" role="FuelSink" district="SouthLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Local" enabled="true">

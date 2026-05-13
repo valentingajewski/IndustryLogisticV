@@ -552,24 +552,60 @@ namespace LSOL.Systems
             cargoVehicle = null;
             message = string.Empty;
 
-            if (selected == null)
+            if (selected == null && selectedTractor == null)
             {
                 message = "No vehicle selected.";
                 return false;
             }
 
+            if (selected == null)
+            {
+                if (selectedTractor == null || !selectedTractor.IsEnabled || !selectedTractor.IsTractor)
+                {
+                    message = "No truck tractor selected.";
+                    return false;
+                }
+
+                if (!TrySpawnVehicle(selectedTractor, spawnPosition, heading, out truck))
+                {
+                    message = "Failed to spawn truck.";
+                    return false;
+                }
+
+                cargoVehicle = truck;
+                var truckState = GetOrCreateCargoState(cargoVehicle);
+                truckState.CargoType = VehicleCargoType.Unknown;
+                truckState.CapacityTons = Math.Max(0f, selectedTractor.CapacityTons);
+                truckState.ClearCargo();
+
+                message = string.Format("Spawned {0}.", truck.DisplayName);
+                return true;
+            }
+
             if (selected.IsTrailer)
             {
                 var tractor = selectedTractor;
-                if (tractor == null || !tractor.IsEnabled || !tractor.IsTractor)
+                if (tractor != null && (!tractor.IsEnabled || !tractor.IsTractor))
                 {
-                    tractor = _definitions.FirstOrDefault(x => x.IsEnabled && x.IsTractor);
+                    tractor = null;
                 }
 
                 if (tractor == null)
                 {
-                    message = "No truck tractor available in config.";
-                    return false;
+                    if (!TrySpawnVehicle(selected, spawnPosition, heading, out cargoVehicle))
+                    {
+                        message = "Failed to spawn trailer.";
+                        return false;
+                    }
+
+                    truck = cargoVehicle;
+                    var trailerOnlyState = GetOrCreateCargoState(cargoVehicle);
+                    trailerOnlyState.CargoType = selected.CargoType;
+                    trailerOnlyState.CapacityTons = Math.Max(1f, selected.CapacityTons);
+                    trailerOnlyState.ClearCargo();
+
+                    message = string.Format("Spawned {0}.", cargoVehicle.DisplayName);
+                    return true;
                 }
 
                 if (!TrySpawnTrailerCombination(tractor, selected, spawnPosition, heading, out truck, out cargoVehicle))
@@ -581,6 +617,7 @@ namespace LSOL.Systems
                 var trailerState = GetOrCreateCargoState(cargoVehicle);
                 trailerState.CargoType = selected.CargoType;
                 trailerState.CapacityTons = Math.Max(1f, selected.CapacityTons);
+                trailerState.ClearCargo();
 
                 message = string.Format("Spawned {0} with {1}.", truck.DisplayName, cargoVehicle.DisplayName);
                 return true;
@@ -596,6 +633,7 @@ namespace LSOL.Systems
             var stateForVehicle = GetOrCreateCargoState(cargoVehicle);
             stateForVehicle.CargoType = selected.CargoType;
             stateForVehicle.CapacityTons = Math.Max(1f, selected.CapacityTons);
+            stateForVehicle.ClearCargo();
 
             message = string.Format("Spawned {0}.", truck.DisplayName);
             return true;

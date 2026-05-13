@@ -29,7 +29,9 @@ namespace LSOL.Systems
         private readonly Dictionary<string, SpecialMissionDefinition> _definitionsById;
         private readonly Dictionary<string, int> _completionCounts;
         private readonly Dictionary<string, int> _lastCompletedInGameMinuteByMissionId;
+        private readonly HashSet<string> _announcedAvailableMissionIds;
         private ActiveSpecialMissionRuntime _activeMission;
+        private int _lastAvailabilityScanInGameMinute;
 
         public SpecialMissionManager(
             string configPath,
@@ -48,6 +50,8 @@ namespace LSOL.Systems
             _getCurrentInGameMinute = getCurrentInGameMinute;
             _completionCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _lastCompletedInGameMinuteByMissionId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            _announcedAvailableMissionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _lastAvailabilityScanInGameMinute = -1;
 
             Catalog = SpecialMissionCatalog.Load(configPath);
             _definitionsById = Catalog.Definitions
@@ -182,6 +186,11 @@ namespace LSOL.Systems
                 return false;
             }
 
+            if (!MeetsMissionSpecificAvailabilityRequirements(definition, out detail))
+            {
+                return false;
+            }
+
             var cooldownRemainingMinutes = GetRepeatCooldownRemainingMinutes(definition);
             if (cooldownRemainingMinutes > 0)
             {
@@ -204,6 +213,11 @@ namespace LSOL.Systems
                     unlocked = false;
                     availabilityDetail = BuildAvailabilityDelayDetail(definition, availabilityDelayRemainingMinutes);
                 }
+                else if (unlocked && !MeetsMissionSpecificAvailabilityRequirements(definition, out availabilityDetail))
+                {
+                    unlocked = false;
+                }
+
                 var completionCount = GetCompletionCount(definition.Id);
                 var cooldownRemainingMinutes = unlocked
                     ? GetRepeatCooldownRemainingMinutes(definition)
@@ -348,6 +362,7 @@ namespace LSOL.Systems
 
         public void Update(Ped player, int gameTime)
         {
+            RefreshMissionAvailabilityAnnouncements();
             if (_activeMission == null)
             {
                 return;
@@ -364,10 +379,12 @@ namespace LSOL.Systems
         public void ResetState(bool clearProgress = true)
         {
             CleanupActiveMission();
+            _lastAvailabilityScanInGameMinute = -1;
             if (clearProgress)
             {
                 _completionCounts.Clear();
                 _lastCompletedInGameMinuteByMissionId.Clear();
+                _announcedAvailableMissionIds.Clear();
             }
 
             MarkUiDirty();
@@ -443,6 +460,19 @@ namespace LSOL.Systems
                 });
             }
 
+            foreach (var missionId in _announcedAvailableMissionIds.OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(missionId))
+                {
+                    continue;
+                }
+
+                snapshot.AvailableMissionAnnouncements.Add(new SpecialMissionAvailabilitySnapshot
+                {
+                    MissionId = missionId,
+                });
+            }
+
             if (_activeMission != null)
             {
                 snapshot.ActiveMission = _activeMission.CreateSnapshot();
@@ -475,6 +505,20 @@ namespace LSOL.Systems
                     {
                         _lastCompletedInGameMinuteByMissionId[missionId] = entry.LastCompletedInGameMinute;
                     }
+                }
+            }
+
+            if (snapshot.AvailableMissionAnnouncements != null)
+            {
+                for (int i = 0; i < snapshot.AvailableMissionAnnouncements.Count; i++)
+                {
+                    var entry = snapshot.AvailableMissionAnnouncements[i];
+                    if (entry == null || string.IsNullOrWhiteSpace(entry.MissionId))
+                    {
+                        continue;
+                    }
+
+                    _announcedAvailableMissionIds.Add(entry.MissionId.Trim());
                 }
             }
 
@@ -567,6 +611,66 @@ namespace LSOL.Systems
             }
 
             return Math.Max(0, definition.AvailabilityDelayInGameMinutes - GetCurrentInGameMinute());
+        }
+
+        private bool MeetsMissionSpecificAvailabilityRequirements(SpecialMissionDefinition definition, out string detail)
+        {
+            detail = string.Empty;
+            if (definition == null)
+            {
+                detail = "Mission definition unavailable.";
+                return false;
+            }
+
+            if (string.Equals(definition.Id, "quarry_heavy_machinery", StringComparison.OrdinalIgnoreCase)
+                && (_territoryManager == null || !_territoryManager.HasActiveCorridorBetween("Port", "GrandSenora")))
+            {
+                detail = "Requires an active corridor between Port and GrandSenora.";
+                return false;
+            }
+
+            return true;
+        }
+
+        private void RefreshMissionAvailabilityAnnouncements()
+        {
+            var currentInGameMinute = GetCurrentInGameMinute();
+            if (currentInGameMinute == _lastAvailabilityScanInGameMinute)
+            {
+                return;
+            }
+
+            _lastAvailabilityScanInGameMinute = currentInGameMinute;
+            var newlyAvailable = new List<string>();
+            foreach (var definition in Definitions)
+            {
+                if (definition == null || string.IsNullOrWhiteSpace(definition.Id))
+                {
+                    continue;
+                }
+
+                var isAvailable = CanAcceptMission(definition.Id, out _);
+                if (isAvailable)
+                {
+                    if (_announcedAvailableMissionIds.Add(definition.Id.Trim()))
+                    {
+                        newlyAvailable.Add(definition.Name);
+                    }
+                }
+                else
+                {
+                    _announcedAvailableMissionIds.Remove(definition.Id.Trim());
+                }
+            }
+
+            if (newlyAvailable.Count == 1)
+            {
+                ShowStatus(string.Format("Special mission available: {0}.", newlyAvailable[0]), 4500);
+            }
+            else if (newlyAvailable.Count > 1)
+            {
+                ShowStatus(string.Format("Special missions available: {0}.", string.Join(", ", newlyAvailable.ToArray())), 5000);
+            }
         }
 
         private string BuildAvailabilityDelayDetail(SpecialMissionDefinition definition, int remainingMinutes)
@@ -2330,16 +2434,24 @@ namespace LSOL.Systems
         public SpecialMissionPersistenceSnapshot()
         {
             CompletedMissions = new List<SpecialMissionCompletionSnapshot>();
+            AvailableMissionAnnouncements = new List<SpecialMissionAvailabilitySnapshot>();
         }
 
         public List<SpecialMissionCompletionSnapshot> CompletedMissions { get; }
+
+        public List<SpecialMissionAvailabilitySnapshot> AvailableMissionAnnouncements { get; }
 
         public ActiveSpecialMissionPersistenceSnapshot ActiveMission { get; set; }
 
         public bool HasData
         {
-            get { return CompletedMissions.Count > 0 || ActiveMission != null; }
+            get { return CompletedMissions.Count > 0 || AvailableMissionAnnouncements.Count > 0 || ActiveMission != null; }
         }
+    }
+
+    public sealed class SpecialMissionAvailabilitySnapshot
+    {
+        public string MissionId { get; set; }
     }
 
     public sealed class SpecialMissionCompletionSnapshot

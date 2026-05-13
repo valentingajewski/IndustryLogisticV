@@ -43,7 +43,9 @@ namespace LSOL.UI
             Stockpile = industry.GetInputStockTotal() + industry.GetOutputStockTotal();
             TotalCapacity = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
             StockRatio = ModMath.Clamp01(Stockpile / TotalCapacity);
-            UtilizationRatio = ModMath.Clamp01(industry.LastUtilizationPercent / 100f);
+            UtilizationRatio = industry.SiteRole == SiteRole.Warehouse
+                ? StockRatio
+                : ModMath.Clamp01(industry.LastUtilizationPercent / 100f);
 
             AppendEntries(industry, industry.SortedInputs, true);
             AppendEntries(industry, industry.SortedOutputs, false);

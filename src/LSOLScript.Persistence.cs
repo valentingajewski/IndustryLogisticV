@@ -13,6 +13,7 @@ namespace LSOL
     {
         private void ResetSaveSessionState()
         {
+            DisableCruiseControl(false);
             _pendingOwnedFleetRestore = null;
             _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
@@ -22,6 +23,8 @@ namespace LSOL
             _fleetManager.DespawnOwnedFleet();
             _fleetManager.ClearAllStates();
             _vehicleFuelSystem.ClearAllStates();
+            _vehicleLoadPowerService.ClearAllStates();
+            _industryRefuelService.CancelActiveDispatch();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
             _tabletStateStore.MarkAllDirty();
@@ -86,6 +89,7 @@ namespace LSOL
             _pendingSaveName = saveName;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
@@ -114,6 +118,7 @@ namespace LSOL
             }
 
             _vehicleFuelDifficultyEnabled = _pendingVehicleFuelDifficultyEnabled;
+            _cargoWeightPowerDifficultyEnabled = _pendingCargoWeightPowerDifficultyEnabled;
             _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
             _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
             _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
@@ -139,6 +144,7 @@ namespace LSOL
             _pendingSaveName = string.Empty;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
@@ -248,6 +254,7 @@ namespace LSOL
                 else
                 {
                     _vehicleFuelDifficultyEnabled = false;
+                    _cargoWeightPowerDifficultyEnabled = false;
                     _cargoDamageDifficultyEnabled = true;
                     _industryPricingDifficultyEnabled = false;
                     _licensingDifficultyEnabled = false;
@@ -269,6 +276,7 @@ namespace LSOL
 
                 _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
                 _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+                _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
                 _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
                 _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
                 _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
@@ -421,6 +429,7 @@ namespace LSOL
                 Language = _language,
                 ColorblindMode = _colorblindMode,
                 VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
+                CargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled,
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
                 IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
                 LicensingDifficultyEnabled = _licensingDifficultyEnabled,
@@ -444,6 +453,7 @@ namespace LSOL
                 _currentStartingBalance = metadata.StartingBalance;
                 _language = metadata.Language ?? ModLanguage.English;
                 _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
+                _cargoWeightPowerDifficultyEnabled = metadata.CargoWeightPowerDifficultyEnabled;
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
                 _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
                 _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
@@ -456,6 +466,9 @@ namespace LSOL
             else
             {
                 _language = ModLanguage.English;
+                _vehicleFuelDifficultyEnabled = false;
+                _cargoWeightPowerDifficultyEnabled = false;
+                _cargoDamageDifficultyEnabled = true;
                 _industryPricingDifficultyEnabled = false;
                 _licensingDifficultyEnabled = false;
                 _corridorRestrictionDifficultyEnabled = true;
@@ -470,6 +483,7 @@ namespace LSOL
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
+            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
