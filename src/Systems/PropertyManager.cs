@@ -35,6 +35,7 @@ namespace LSOL.Systems
         private readonly Dictionary<string, PersonalVehicleRuntimeState> _personalRuntime;
 
         private PropertyOwnershipPersistenceSnapshot _state;
+        private bool _officeGarageLimitEnforced;
 
         public PropertyManager(ModConfig config)
         {
@@ -59,6 +60,7 @@ namespace LSOL.Systems
             _commercialRuntime = new Dictionary<string, CommercialVehicleRuntimeState>(StringComparer.OrdinalIgnoreCase);
             _personalRuntime = new Dictionary<string, PersonalVehicleRuntimeState>(StringComparer.OrdinalIgnoreCase);
             _state = new PropertyOwnershipPersistenceSnapshot();
+            _officeGarageLimitEnforced = true;
         }
 
         public IReadOnlyList<OfficeDefinition> Offices
@@ -104,6 +106,20 @@ namespace LSOL.Systems
         public InteriorDefinition ActiveApartment
         {
             get { return GetInteriorDefinition(_state.ActiveApartmentId); }
+        }
+
+        public void SetOfficeGarageLimitEnforced(bool enforced)
+        {
+            if (_officeGarageLimitEnforced == enforced)
+            {
+                return;
+            }
+
+            _officeGarageLimitEnforced = enforced;
+            if (!string.IsNullOrWhiteSpace(_state.ActiveOfficeId) && _state.CommercialVehicles.Count > 0)
+            {
+                NormalizeCommercialGarageAssignments();
+            }
         }
 
         public void ResetState()
@@ -393,7 +409,9 @@ namespace LSOL.Systems
 
             _state.ActiveOfficeId = definition.OfficeId;
             TransferCommercialVehiclesToActiveOffice();
-            message = string.Format("Activated {0}. Commercial garage capacity is now {1}.", definition.DisplayName, Math.Max(0, definition.MaxCommercialVehicles));
+            message = _officeGarageLimitEnforced
+                ? string.Format("Activated {0}. Commercial garage capacity is now {1}.", definition.DisplayName, Math.Max(0, definition.MaxCommercialVehicles))
+                : string.Format("Activated {0}. Commercial garage limit is disabled for this save.", definition.DisplayName);
             return true;
         }
 
@@ -1332,9 +1350,14 @@ namespace LSOL.Systems
 
         private int GetActiveOfficeCapacity()
         {
-            return ActiveOffice != null
+            if (ActiveOffice == null)
+            {
+                return 0;
+            }
+
+            return _officeGarageLimitEnforced
                 ? Math.Max(0, ActiveOffice.MaxCommercialVehicles)
-                : 0;
+                : int.MaxValue;
         }
 
         private void TransferCommercialVehiclesToActiveOffice()

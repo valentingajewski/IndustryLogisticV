@@ -66,7 +66,7 @@ namespace LSOL.Systems
                     return "None";
                 }
 
-                return string.Format("{0}", selectedVehicle);
+                return GetVehicleLabel(selectedVehicle);
             }
         }
 

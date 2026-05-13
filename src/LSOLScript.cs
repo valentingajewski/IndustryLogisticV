@@ -35,6 +35,9 @@ namespace LSOL
         private const string SavegamesDirectoryName = "LSOLSaves";
         private const int MaxSaveNameLength = 40;
         private const float DefaultStartingBalance = 20000f;
+        private const int DefaultNpcRouteLimit = 5;
+        private const int MinNpcRouteLimit = 0;
+        private const int MaxNpcRouteLimit = 10;
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
         private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
         private static readonly float[] DebugDistrictReputationAmountOptions = { 5f, 10f, 25f, 50f, 100f, 250f };
@@ -151,12 +154,19 @@ namespace LSOL
         private bool _pendingLicensingDifficultyEnabled;
         private bool _corridorRestrictionDifficultyEnabled;
         private bool _pendingCorridorRestrictionDifficultyEnabled;
+        private bool _reputationDifficultyEnabled;
+        private bool _pendingReputationDifficultyEnabled;
+        private bool _officeGarageLimitDifficultyEnabled;
+        private bool _pendingOfficeGarageLimitDifficultyEnabled;
         private ModLanguage _language;
         private EconomyDifficultyPreset _economyDifficultyPreset;
         private EconomyDifficultyPreset _pendingEconomyDifficultyPreset;
         private ColorblindMode _colorblindMode;
+        private bool _useMetricSpeedDisplay;
         private NpcWeeklyWageDifficulty _npcWeeklyWageDifficulty;
         private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
+        private int _npcRouteLimit;
+        private int _pendingNpcRouteLimit;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
         private bool _cargoWeightPowerDifficultyEnabled;
@@ -389,7 +399,6 @@ namespace LSOL
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
             _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager));
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
-            _tabletShellController.RegisterApp(new ContextTabletApp());
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
             _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
@@ -417,18 +426,25 @@ namespace LSOL
             _industryPricingDifficultyEnabled = false;
             _licensingDifficultyEnabled = false;
             _corridorRestrictionDifficultyEnabled = true;
+            _reputationDifficultyEnabled = true;
+            _officeGarageLimitDifficultyEnabled = true;
             _language = ModLanguage.English;
             _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
             _colorblindMode = ColorblindMode.Off;
+            _useMetricSpeedDisplay = false;
             _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
+            _npcRouteLimit = DefaultNpcRouteLimit;
             _vehicleFuelDifficultyEnabled = false;
             _cargoWeightPowerDifficultyEnabled = false;
             _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
+            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
+            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
+            _pendingNpcRouteLimit = _npcRouteLimit;
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
             _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
@@ -614,16 +630,6 @@ namespace LSOL
                 if (_modMechanicsEnabled)
                 {
                     OpenTabletNetworkApp();
-                }
-
-                return;
-            }
-
-            if (e.KeyCode == _controls.ToggleContext)
-            {
-                if (_modMechanicsEnabled)
-                {
-                    OpenTabletContextApp();
                 }
 
                 return;
@@ -966,66 +972,6 @@ namespace LSOL
                     "Press {0} to open nearby gate/door.",
                     KeyName(_controls.GateInteract))));
             }
-        }
-
-        private void DrawContextPanel(Ped player)
-        {
-            var lines = new List<string> { "F6 CONTEXT" };
-            var fuelTelemetry = _vehicleFuelSystem.GetActiveTelemetry(player);
-
-            Vehicle driverVehicle;
-            var cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
-            if (cargoVehicle != null && cargoVehicle.Exists())
-            {
-                var state = _fleetManager.GetOrCreateCargoState(cargoVehicle);
-                lines.Add(string.Format("Vehicle: {0}", cargoVehicle.DisplayName));
-                lines.Add(string.Format("Cargo type: {0}", state.CargoType.ToDisplayName()));
-                lines.Add(string.Format("Current cargo: {0}", state.IsEmpty ? "Empty" : state.Commodity));
-                lines.Add(string.Format("Weight: {0:0.0}/{1:0.0}t", state.WeightTons, state.CapacityTons));
-            }
-            else
-            {
-                lines.Add("Veh: none nearby");
-            }
-
-            if (fuelTelemetry != null)
-            {
-                if (fuelTelemetry.UsesSeparatePoweredVehicle && fuelTelemetry.PoweredVehicle != null && fuelTelemetry.PoweredVehicle.Exists())
-                {
-                    lines.Add(string.Format("Powered truck: {0}", fuelTelemetry.PoweredVehicle.DisplayName));
-                }
-
-                lines.Add(string.Format(
-                    "Fuel: {0:0}/{1:0}L{2}",
-                    fuelTelemetry.CurrentLiters,
-                    fuelTelemetry.CapacityLiters,
-                    fuelTelemetry.IsOutOfFuel
-                        ? " | EMPTY"
-                        : string.Format(" | {0:0}%", fuelTelemetry.FuelRatio * 100f)));
-            }
-            else
-            {
-                lines.Add("Fuel: n/a");
-            }
-
-            lines.Add(string.Empty);
-
-            if (_nearestIndustry != null && player.Position.DistanceTo(GetIndustryMarkerPosition(_nearestIndustry)) <= 40f)
-            {
-                lines.Add(string.Format("Industry: {0}", _nearestIndustry.Name));
-                lines.Add(string.Format("Inputs: {0}", JoinSet(_nearestIndustry.Inputs)));
-                lines.Add(string.Format("Outputs: {0}", JoinSet(_nearestIndustry.Outputs)));
-                lines.Add(string.Format("Rate: {0:0.0} t/h", _nearestIndustry.CurrentOutputPerHourTons));
-                lines.Add(string.Format("Utilization: {0:0}%", _nearestIndustry.LastUtilizationPercent));
-                lines.Add(string.Format("Omega: {0:0.0}/{1:0.0}t", _nearestIndustry.OmegaStorage, _nearestIndustry.OmegaCapacityTons));
-            }
-
-            else
-            {
-                lines.Add("Industry: none in range");
-            }
-
-            DrawPanel(lines, 0.73f, 0.08f, 0.245f, Color.FromArgb(196, 10, 15, 24), Color.FromArgb(235, 219, 165, 57));
         }
 
         private void UpdateCargoOverviewAndIntegrity(Ped player, int now)
@@ -1800,9 +1746,12 @@ namespace LSOL
             }
         }
 
-        private static string FormatCruiseControlSpeed(float speedMetersPerSecond)
+        private string FormatCruiseControlSpeed(float speedMetersPerSecond)
         {
-            return string.Format("{0:0} km/h", Math.Max(0f, speedMetersPerSecond) * 3.6f);
+            var speed = Math.Max(0f, speedMetersPerSecond);
+            return _useMetricSpeedDisplay
+                ? string.Format("{0:0} km/h", speed * 3.6f)
+                : string.Format("{0:0} mph", speed * 2.2369363f);
         }
 
         private void RebuildSavingOptionsMenuItems()
@@ -1930,6 +1879,28 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => Text(ModTextKey.RowReputationSystem),
+                    DetailFactory = () => Text(ModTextKey.DetailReputationSystem),
+                    CheckboxStateFactory = () => _pendingReputationDifficultyEnabled,
+                    OnActivate = TogglePendingReputationSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.RowOfficeGarageLimit),
+                    DetailFactory = () => Text(ModTextKey.DetailOfficeGarageLimit),
+                    CheckboxStateFactory = () => _pendingOfficeGarageLimitDifficultyEnabled,
+                    OnActivate = TogglePendingOfficeGarageLimitSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentPendingNpcRouteLimitCaption,
+                    DetailFactory = CurrentNpcRouteLimitDetail,
+                    OnLeft = () => ChangePendingNpcRouteLimit(-1),
+                    OnRight = () => ChangePendingNpcRouteLimit(1),
+                    OnActivate = () => ChangePendingNpcRouteLimit(1),
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => Text(ModTextKey.RowCreateSave),
                     DetailFactory = () => Text(ModTextKey.DetailCreateSave, _pendingSaveName),
                     OnActivate = FinalizeNewSave,
@@ -2001,6 +1972,14 @@ namespace LSOL
                     OnLeft = () => ChangeLanguage(-1),
                     OnRight = () => ChangeLanguage(1),
                     OnActivate = () => ChangeLanguage(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentSpeedUnitCaption,
+                    DetailFactory = CurrentSpeedUnitDetail,
+                    OnLeft = () => ChangeSpeedUnit(-1),
+                    OnRight = () => ChangeSpeedUnit(1),
+                    OnActivate = () => ChangeSpeedUnit(1),
                 },
                 new OfficeMenuItem
                 {
@@ -2328,6 +2307,28 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => Text(ModTextKey.RowReputationSystem),
+                    DetailFactory = () => Text(ModTextKey.DetailReputationSystem),
+                    CheckboxStateFactory = () => _reputationDifficultyEnabled,
+                    OnActivate = ToggleReputationSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.RowOfficeGarageLimit),
+                    DetailFactory = () => Text(ModTextKey.DetailOfficeGarageLimit),
+                    CheckboxStateFactory = () => _officeGarageLimitDifficultyEnabled,
+                    OnActivate = ToggleOfficeGarageLimitSetting,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentNpcRouteLimitCaption,
+                    DetailFactory = CurrentNpcRouteLimitDetail,
+                    OnLeft = () => ChangeNpcRouteLimit(-1),
+                    OnRight = () => ChangeNpcRouteLimit(1),
+                    OnActivate = () => ChangeNpcRouteLimit(1),
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => Text(ModTextKey.CommonBack),
                     OnActivate = ReturnToModControlMenu,
                 },
@@ -2372,13 +2373,6 @@ namespace LSOL
         private void CloseOverviewMenus()
         {
             _tabletShellController.Close();
-        }
-
-        private void OpenTabletContextApp()
-        {
-            CloseAllMenus();
-            _tabletStateStore.MarkAllDirty();
-            _tabletShellController.OpenContext();
         }
 
         private void OpenTabletNetworkApp()
@@ -2536,6 +2530,16 @@ namespace LSOL
                 : Text(ModTextKey.DetailLanguage);
         }
 
+        private string CurrentSpeedUnitCaption()
+        {
+            return Text(ModTextKey.RowSpeedUnit, GetSpeedUnitDisplayName(_useMetricSpeedDisplay));
+        }
+
+        private string CurrentSpeedUnitDetail()
+        {
+            return Text(ModTextKey.DetailSpeedUnit);
+        }
+
         private string CurrentColorblindModeCaption()
         {
             return Text(ModTextKey.RowColorblindMode, GetColorblindModeDisplayName(_colorblindMode));
@@ -2544,6 +2548,21 @@ namespace LSOL
         private string CurrentColorblindModeDetail()
         {
             return Text(ModTextKey.DetailColorblindMode);
+        }
+
+        private string CurrentNpcRouteLimitCaption()
+        {
+            return Text(ModTextKey.RowNpcRouteLimit, FormatNpcRouteLimitValue(_npcRouteLimit));
+        }
+
+        private string CurrentPendingNpcRouteLimitCaption()
+        {
+            return Text(ModTextKey.RowNpcRouteLimit, FormatNpcRouteLimitValue(_pendingNpcRouteLimit));
+        }
+
+        private string CurrentNpcRouteLimitDetail()
+        {
+            return Text(ModTextKey.DetailNpcRouteLimit);
         }
 
         private void ToggleMechanicsFromMenu()
@@ -2583,6 +2602,19 @@ namespace LSOL
             _language = SelectableLanguages[nextIndex];
             ApplyPresentationSettings(true);
             ShowStatus(Text(ModTextKey.DetailLanguageChanged, GetLanguageDisplayName(_language)));
+        }
+
+        private void ChangeSpeedUnit(int delta)
+        {
+            if (delta == 0)
+            {
+                return;
+            }
+
+            _useMetricSpeedDisplay = !_useMetricSpeedDisplay;
+            RebuildModControlMenuItems();
+            RebuildOptionsMenuItems();
+            ShowStatus(Text(ModTextKey.DetailSpeedUnitChanged, GetSpeedUnitDisplayName(_useMetricSpeedDisplay)));
         }
 
         private void ChangeColorblindMode(int delta)
@@ -2635,6 +2667,21 @@ namespace LSOL
         private void TogglePendingCorridorRestrictionSetting()
         {
             _pendingCorridorRestrictionDifficultyEnabled = !_pendingCorridorRestrictionDifficultyEnabled;
+        }
+
+        private void TogglePendingReputationSetting()
+        {
+            _pendingReputationDifficultyEnabled = !_pendingReputationDifficultyEnabled;
+        }
+
+        private void TogglePendingOfficeGarageLimitSetting()
+        {
+            _pendingOfficeGarageLimitDifficultyEnabled = !_pendingOfficeGarageLimitDifficultyEnabled;
+        }
+
+        private void ChangePendingNpcRouteLimit(int delta)
+        {
+            _pendingNpcRouteLimit = ClampNpcRouteLimit(_pendingNpcRouteLimit + delta);
         }
 
         private void ChangePendingEconomyDifficultyPreset(int delta)
@@ -2718,6 +2765,42 @@ namespace LSOL
             ApplyDifficultySettingsToSystems();
         }
 
+        private void ToggleReputationSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _reputationDifficultyEnabled = !_reputationDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
+        }
+
+        private void ToggleOfficeGarageLimitSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _officeGarageLimitDifficultyEnabled = !_officeGarageLimitDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
+        }
+
+        private void ChangeNpcRouteLimit(int delta)
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _npcRouteLimit = ClampNpcRouteLimit(_npcRouteLimit + delta);
+            ApplyDifficultySettingsToSystems();
+        }
+
         private void ChangeNpcWeeklyWageDifficulty(int delta)
         {
             if (_difficultySettingsLocked)
@@ -2771,9 +2854,12 @@ namespace LSOL
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
             _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
+            _propertyManager.SetOfficeGarageLimitEnforced(_officeGarageLimitDifficultyEnabled);
             _vehicleFuelSystem.SetDifficultyEnabled(_vehicleFuelDifficultyEnabled);
             _vehicleLoadPowerService.SetDifficultyEnabled(_cargoWeightPowerDifficultyEnabled);
+            _npcLogisticsManager.SetRouteLimit(_npcRouteLimit);
             _npcLogisticsManager.SetWeeklyWageDifficulty(_npcWeeklyWageDifficulty);
+            _territoryManager.SetReputationEnabled(_reputationDifficultyEnabled);
             _territoryManager.SetCorridorRestrictionEnabled(_corridorRestrictionDifficultyEnabled);
             _territoryManager.RefreshState();
             if (_modMechanicsEnabled)
@@ -2879,6 +2965,21 @@ namespace LSOL
                 default:
                     return Text(ModTextKey.ValueColorblindOff);
             }
+        }
+
+        private string GetSpeedUnitDisplayName(bool useMetric)
+        {
+            return Text(useMetric ? ModTextKey.ValueUnitMetric : ModTextKey.ValueUnitImperial);
+        }
+
+        private static int ClampNpcRouteLimit(int value)
+        {
+            return Math.Max(MinNpcRouteLimit, Math.Min(MaxNpcRouteLimit, value));
+        }
+
+        private static string FormatNpcRouteLimitValue(int routeLimit)
+        {
+            return ClampNpcRouteLimit(routeLimit).ToString();
         }
 
         private static NpcWeeklyWageDifficulty OffsetWeeklyWageDifficulty(NpcWeeklyWageDifficulty current, int delta)
@@ -3230,6 +3331,13 @@ namespace LSOL
         private string CurrentNpcHiringDetail()
         {
             var routeCount = _npcLogisticsManager.Contracts.Count;
+            if (_npcRouteLimit <= 0)
+            {
+                return routeCount > 0
+                    ? string.Format("Hiring new NPCs is disabled. {0} active logistics route{1} can still be managed.", routeCount, routeCount == 1 ? string.Empty : "s")
+                    : "Hiring new NPCs is disabled in Options.";
+            }
+
             return routeCount == 1
                 ? "1 active logistics route. Open the tablet-style NPC manager."
                 : string.Format("{0} active logistics routes. Open the tablet-style NPC manager.", routeCount);
@@ -3258,6 +3366,12 @@ namespace LSOL
             if (!_propertyManager.CanUseCommercialSystems(out reason))
             {
                 ShowStatus(reason);
+                return;
+            }
+
+            if (_npcRouteLimit <= 0 && _npcLogisticsManager.Contracts.Count == 0)
+            {
+                ShowStatus("Hiring NPC is disabled in Options.");
                 return;
             }
 

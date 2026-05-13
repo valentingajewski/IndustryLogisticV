@@ -103,7 +103,7 @@ namespace LSOL.UI
 
         public string PermitTag { get; set; }
 
-        public bool IsOwnedForGameplay { get; set; }
+        public bool IsOwnedByPlayer { get; set; }
 
         public bool RequiresIndustryPurchase { get; set; }
 
@@ -1007,8 +1007,8 @@ namespace LSOL.UI
                 snapshot.NearestIndustry = nearestIndustry;
                 snapshot.HasNearestIndustry = true;
                 snapshot.NearestIndustryName = nearestIndustry.Name;
-                snapshot.NearestIndustryInputs = nearestIndustry.SortedInputs != null
-                    ? nearestIndustry.SortedInputs.ToArray()
+                snapshot.NearestIndustryInputs = nearestIndustry.SortedAcceptedInputs != null
+                    ? nearestIndustry.SortedAcceptedInputs.ToArray()
                     : Array.Empty<string>();
                 snapshot.NearestIndustryOutputs = nearestIndustry.SortedOutputs != null
                     ? nearestIndustry.SortedOutputs.ToArray()
@@ -1061,19 +1061,20 @@ namespace LSOL.UI
                 var productionWarning = industry.GetProductionWarning() ?? string.Empty;
                 var requiresPermitForGameplay = _industryManager.RequiresContractorPermit(industry);
                 var hasPermitForGameplay = _industryManager.HasContractorPermitForGameplay(industry);
+                var isOwnedByPlayer = industry.IsOwned;
 
                 summaries.Add(new TabletLocationSummary
                 {
                     Industry = industry,
                     LocationKind = locationKind,
                     Name = industry.Name,
-                    OwnershipTag = _industryManager.IsIndustryOwnedForGameplay(industry)
+                    OwnershipTag = isOwnedByPlayer
                         ? "~g~[OWNED]~s~"
                         : "~r~[NOT OWNED]~s~",
                     PermitTag = !requiresPermitForGameplay
                         ? "~g~[OPEN]~s~"
                         : (hasPermitForGameplay ? "~g~[PERMIT]~s~" : "~r~[LOCKED]~s~"),
-                    IsOwnedForGameplay = _industryManager.IsIndustryOwnedForGameplay(industry),
+                    IsOwnedByPlayer = isOwnedByPlayer,
                     RequiresIndustryPurchase = _industryManager.RequiresIndustryPurchase(industry),
                     HasContractorPermitForGameplay = hasPermitForGameplay,
                     RequiresContractorPermit = requiresPermitForGameplay,

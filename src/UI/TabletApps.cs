@@ -481,7 +481,7 @@ namespace LSOL.UI
                 fillRatio));
             items.Add(CreateInfoItem(
                 "Accepted Resources",
-                SummarizeCommodities(industry.SortedInputs, 6)));
+                SummarizeCommodities(industry.SortedAcceptedInputs, 6)));
         }
 
         public static string GetUpgradeTitle(IndustryUpgradeModule module)
@@ -565,7 +565,7 @@ namespace LSOL.UI
             var permitSiteCount = permitSummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit);
             var unlockedPermitCount = permitSummaries.Count(summary => summary != null && summary.HasContractorPermitForGameplay);
             var operationsHeadline = snapshot.HasNearestIndustry
-                ? string.Format("Nearest: {0} | {1:0.0}m", ShortenDashboardLabel(snapshot.NearestIndustryName, 20), snapshot.NearestIndustryDistance)
+                ? string.Format("Nearest: {0}", ShortenDashboardLabel(snapshot.NearestIndustryName, 20))
                 : "No nearby site";
             var operationsDetail = string.Format(
                 "{0}\n{1}",
@@ -622,14 +622,6 @@ namespace LSOL.UI
                 Color.FromArgb(220, 96, 108, 118),
                 null,
                 "LIVE"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                "Context",
-                "Cargo vehicle telemetry\nNearby industry context.",
-                () => context.Push(TabletAppIds.Context, "root"),
-                Color.FromArgb(184, 34, 44, 54),
-                Color.FromArgb(226, 92, 114, 128),
-                null,
-                "CTX"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Industries",
                 string.Format("{0} tracked production sites", industryCount),
@@ -769,7 +761,7 @@ namespace LSOL.UI
                 Title = "LSOL OS",
                 Subtitle = "Company hub",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                FooterText = "F6 Context | F8 Company Hub | Arrow Keys Navigate | Enter Select | Backspace/Esc Close",
+                FooterText = "F8 Company Hub | Arrow Keys Navigate | Enter Select | Backspace/Esc Close",
                 WidthScale = 0.96f,
                 CaptionScale = 0.44f,
                 DetailScale = 0.275f,
@@ -1172,96 +1164,6 @@ namespace LSOL.UI
         }
     }
 
-    internal sealed class ContextTabletApp : ITabletApp
-    {
-        public string AppId
-        {
-            get { return TabletAppIds.Context; }
-        }
-
-        public TabletShellPage BuildPage(TabletShellContext context, TabletRoute route)
-        {
-            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
-            var items = new List<MenuItem>();
-            if (!string.IsNullOrWhiteSpace(snapshot.StatusBanner))
-            {
-                items.Add(TabletUiHelpers.CreateBannerItem("Status", snapshot.StatusBanner));
-            }
-
-            items.Add(TabletUiHelpers.CreateInfoItem(
-                string.Format("Vehicle: {0}", snapshot.HasCargoVehicle ? snapshot.CargoVehicleName : "None nearby"),
-                snapshot.HasCargoVehicle
-                    ? string.Format("Cargo type {0}", snapshot.CargoType.ToDisplayName())
-                    : "Move near a cargo truck or trailer to inspect active cargo state."));
-            items.Add(TabletUiHelpers.CreateInfoItem(
-                string.Format("Cargo: {0}", snapshot.HasCargoVehicle ? snapshot.CargoCommodity : "Unavailable"),
-                snapshot.HasCargoVehicle
-                    ? string.Format("Weight {0:0.0}/{1:0.0}t", snapshot.CargoWeightTons, snapshot.CargoCapacityTons)
-                    : "No cargo vehicle is currently resolved by FleetManager.",
-                snapshot.CargoCapacityRatio));
-            items.Add(TabletUiHelpers.CreateInfoItem(
-                snapshot.HasPoweredVehicle
-                    ? string.Format("Fuel: {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
-                    : "Fuel: unavailable",
-                snapshot.HasPoweredVehicle
-                    ? (snapshot.FuelVehicleMatchesCargoVehicle
-                        ? (snapshot.FuelIsEmpty
-                            ? "Powered vehicle tank is empty. Refuel at a petrol station."
-                            : "Fuel telemetry for the active powered cargo vehicle.")
-                        : string.Format("Powered vehicle {0} | Fuel belongs to the tractor, not the trailer.", snapshot.PoweredVehicleName))
-                    : "Move near a powered company cargo vehicle to inspect truck fuel telemetry.",
-                snapshot.FuelRatio));
-
-            if (snapshot.HasNearestIndustry)
-            {
-                items.Add(TabletUiHelpers.CreateInfoItem(
-                    string.Format("Nearest Site: {0}", snapshot.NearestIndustryName),
-                    string.Format("Inputs {0} | Outputs {1}", TabletUiHelpers.SummarizeCommodities(snapshot.NearestIndustryInputs), TabletUiHelpers.SummarizeCommodities(snapshot.NearestIndustryOutputs))));
-                items.Add(TabletUiHelpers.CreateInfoItem(
-                    string.Format("Production: {0:0.0} t/h", snapshot.NearestIndustryProductionRateTonsPerHour),
-                    string.Format("Utilization {0:0}%", snapshot.NearestIndustryUtilizationPercent),
-                    ModMath.Clamp01(snapshot.NearestIndustryUtilizationPercent / 100f)));
-                items.Add(TabletUiHelpers.CreateInfoItem(
-                    string.Format("Omega: {0:0.0}/{1:0.0}t", snapshot.NearestIndustryOmegaStorageTons, snapshot.NearestIndustryOmegaCapacityTons),
-                    string.IsNullOrWhiteSpace(snapshot.NearestIndustryProductionWarning)
-                        ? string.Format("{0:0.0}m away | Ownership {1} | Permit {2}", snapshot.NearestIndustryDistance, snapshot.NearestIndustryOwnedForGameplay ? "Open" : "Locked", snapshot.NearestIndustryHasPermitForGameplay ? "Open" : "Locked")
-                        : snapshot.NearestIndustryProductionWarning,
-                    snapshot.NearestIndustryOmegaCapacityTons <= 0.001f
-                        ? 0f
-                        : ModMath.Clamp01(snapshot.NearestIndustryOmegaStorageTons / snapshot.NearestIndustryOmegaCapacityTons)));
-            }
-            else
-            {
-                items.Add(TabletUiHelpers.CreateInfoItem("Nearest Site", "No industry telemetry is currently cached in range."));
-            }
-
-            if (snapshot.HasNearestIndustry)
-            {
-                items.Add(TabletUiHelpers.CreateActionItem(
-                    snapshot.CanInteractWithNearestIndustry ? "Open Site Operations" : "Review Site Detail",
-                    snapshot.CanInteractWithNearestIndustry
-                        ? "Jump straight into the nearest actionable site app."
-                        : "Open the network detail page for the nearest tracked site.",
-                    snapshot.CanInteractWithNearestIndustry
-                        ? (Action)(() => context.Push(TabletAppIds.Industry, "main", snapshot.NearestIndustry))
-                        : (Action)(() => context.Push(TabletAppIds.Network, "detail", snapshot.NearestIndustry))));
-            }
-
-            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the company hub or previous tablet page.", () => context.GoBack(), "BACK"));
-
-            return new TabletShellPage
-            {
-                Title = "Context",
-                Subtitle = "Vehicle cargo, fuel, and nearest industry telemetry",
-                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                FooterText = "Arrow Up/Down Navigate | Enter Select | Backspace/Esc Back",
-                WidthScale = 0.98f,
-                MaxVisibleItems = 7,
-                Items = items,
-            };
-        }
-    }
-
     internal sealed class NetworkTabletApp : ITabletApp
     {
         private enum LocationListFilterMode
@@ -1413,7 +1315,7 @@ namespace LSOL.UI
             for (int i = 0; i < warehouseSummaries.Count; i++)
             {
                 var summary = warehouseSummaries[i];
-                var acceptedResources = TabletUiHelpers.SummarizeCommodities(summary.Industry.SortedInputs, 4);
+                var acceptedResources = TabletUiHelpers.SummarizeCommodities(summary.Industry.SortedAcceptedInputs, 4);
                 Industry warehouse = summary.Industry;
                 items.Add(TabletUiHelpers.CreateActionItem(
                     TabletUiHelpers.BuildLocationCaption(summary),
@@ -1502,9 +1404,9 @@ namespace LSOL.UI
             switch (filterMode)
             {
                 case LocationListFilterMode.Owned:
-                    return summary != null && summary.IsOwnedForGameplay;
+                    return summary != null && summary.IsOwnedByPlayer;
                 case LocationListFilterMode.NotOwned:
-                    return summary != null && !summary.IsOwnedForGameplay;
+                    return summary != null && !summary.IsOwnedByPlayer;
                 case LocationListFilterMode.Open:
                     return IsSummaryOpenForFilter(summary);
                 case LocationListFilterMode.NotOpen:
@@ -1519,6 +1421,26 @@ namespace LSOL.UI
             return summaries == null
                 ? new List<TabletLocationSummary>()
                 : summaries.Where(summary => summary != null && MatchesFilter(summary, filterMode)).ToList();
+        }
+
+        private static bool MatchesIndustryFilter(TabletLocationSummary summary, LocationListFilterMode filterMode)
+        {
+            switch (filterMode)
+            {
+                case LocationListFilterMode.Open:
+                    return summary != null && summary.Industry != null && !summary.RequiresIndustryPurchase;
+                case LocationListFilterMode.NotOpen:
+                    return summary != null && summary.Industry != null && summary.RequiresIndustryPurchase;
+                default:
+                    return MatchesFilter(summary, filterMode);
+            }
+        }
+
+        private static List<TabletLocationSummary> ApplyIndustryFilter(IEnumerable<TabletLocationSummary> summaries, LocationListFilterMode filterMode)
+        {
+            return summaries == null
+                ? new List<TabletLocationSummary>()
+                : summaries.Where(summary => summary != null && MatchesIndustryFilter(summary, filterMode)).ToList();
         }
 
         private void CycleIndustryFilter(TabletShellContext context, int delta)
@@ -1868,7 +1790,7 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var items = new List<MenuItem>();
-            var industrySummaries = ApplyFilter(snapshot.IndustrySummaries, _industryFilterMode);
+            var industrySummaries = ApplyIndustryFilter(snapshot.IndustrySummaries, _industryFilterMode);
 
             items.Add(TabletUiHelpers.CreateSelectorItem(
                 () => BuildFilterCaption(_industryFilterMode),

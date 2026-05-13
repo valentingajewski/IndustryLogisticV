@@ -47,7 +47,7 @@ namespace LSOL.UI
                 ? StockRatio
                 : ModMath.Clamp01(industry.LastUtilizationPercent / 100f);
 
-            AppendEntries(industry, industry.SortedInputs, true);
+            AppendEntries(industry, industry.SortedAcceptedInputs, true);
             AppendEntries(industry, industry.SortedOutputs, false);
         }
 
@@ -92,7 +92,7 @@ namespace LSOL.UI
             if (capacity <= 0.001f)
             {
                 var bucketCount = isInput
-                    ? Math.Max(1, industry.Inputs.Count)
+                    ? Math.Max(1, industry.Inputs.Count + industry.OptionalInputs.Count)
                     : Math.Max(1, industry.Outputs.Count);
                 var totalCapacity = isInput
                     ? Math.Max(1f, industry.InputCapacityTons)

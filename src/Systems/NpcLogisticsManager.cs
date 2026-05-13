@@ -15,6 +15,8 @@ namespace LSOL.Systems
 {
     public sealed class NpcLogisticsManager
     {
+        private const int DefaultRouteLimit = 5;
+        private const int MaxRouteLimit = 10;
         private const float ArrivalDistance = 50f;
         private const int SpawnStaggerDelayMs = 10000;
         private const int DriveTaskRefreshIntervalMs = 4000;
@@ -58,6 +60,7 @@ namespace LSOL.Systems
         private string _worldPriorityDistrict;
         private bool _premiumDispatchEnabled;
         private bool _officeDeliveryNotificationsEnabled;
+        private int _routeLimit;
 
         public NpcLogisticsManager(
             string configDirectory,
@@ -104,6 +107,7 @@ namespace LSOL.Systems
             _worldPriorityDistrict = string.Empty;
             _premiumDispatchEnabled = false;
             _officeDeliveryNotificationsEnabled = true;
+            _routeLimit = DefaultRouteLimit;
         }
 
         public IReadOnlyList<NpcDriverTierDefinition> DriverTiers
@@ -126,6 +130,11 @@ namespace LSOL.Systems
             get { return _worldDispatchPolicy; }
         }
 
+        public int RouteLimit
+        {
+            get { return _routeLimit; }
+        }
+
         public string WorldPriorityCommodity
         {
             get { return _worldPriorityCommodity; }
@@ -146,12 +155,28 @@ namespace LSOL.Systems
             get { return _officeDeliveryNotificationsEnabled; }
         }
 
+        public void SetRouteLimit(int routeLimit)
+        {
+            _routeLimit = Math.Max(0, Math.Min(MaxRouteLimit, routeLimit));
+        }
+
         public void SetOfficeDeliveryNotificationsEnabled(bool enabled)
         {
             _officeDeliveryNotificationsEnabled = enabled;
         }
 
         public IReadOnlyList<OwnedCommercialVehiclePersistenceEntry> GetAssignableGarageVehicles(string commodity, string includeAssignedAssetId = null)
+        {
+            return GetAssignableGarageVehicles(
+                commodity,
+                string.IsNullOrWhiteSpace(includeAssignedAssetId) ? null : new[] { includeAssignedAssetId },
+                null);
+        }
+
+        public IReadOnlyList<OwnedCommercialVehiclePersistenceEntry> GetAssignableGarageVehicles(
+            string commodity,
+            IEnumerable<string> includeAssignedAssetIds,
+            NpcLogisticsContract includeContract)
         {
             var allVehicles = _getCommercialVehicles != null ? _getCommercialVehicles() : null;
             if (allVehicles == null || allVehicles.Count == 0)
@@ -160,11 +185,12 @@ namespace LSOL.Systems
             }
 
             var activeOfficeId = _getActiveOfficeId != null ? _getActiveOfficeId() ?? string.Empty : string.Empty;
+            var includedAssetIds = BuildAssignedVehicleAssetIdSet(includeAssignedAssetIds);
             var vehicles = new List<OwnedCommercialVehiclePersistenceEntry>();
             for (int i = 0; i < allVehicles.Count; i++)
             {
                 var entry = allVehicles[i];
-                if (!ShouldIncludeAssignableVehicle(entry, activeOfficeId, commodity, includeAssignedAssetId))
+                if (!ShouldIncludeAssignableVehicle(entry, activeOfficeId, commodity, includedAssetIds, includeContract))
                 {
                     continue;
                 }
@@ -422,13 +448,22 @@ namespace LSOL.Systems
                         OriginIndustry = originIndustry,
                         DestinationIndustry = destinationIndustry,
                         Commodity = commodity,
+                        AssignedVehicleAssetId = assignedVehicle != null ? assignedVehicle.AssetId : string.Empty,
+                        AssignedVehicleDisplayName = assignedVehicle != null ? BuildAssignedVehicleDisplayName(assignedVehicle) : string.Empty,
                         OriginTriggerThresholdPercent = originTriggerThresholdPercent,
                         DestinationTriggerThresholdPercent = destinationTriggerThresholdPercent,
                     },
                 },
                 tier,
-                assignedVehicle,
                 out message);
+        }
+
+        public bool TryCreateContract(
+            IReadOnlyList<NpcLogisticsRouteDefinition> routes,
+            NpcDriverTierDefinition tier,
+            out string message)
+        {
+            return TryUpsertContract(null, routes, tier, out message);
         }
 
         public bool TryCreateContract(
@@ -437,7 +472,7 @@ namespace LSOL.Systems
             OwnedCommercialVehiclePersistenceEntry assignedVehicle,
             out string message)
         {
-            return TryUpsertContract(null, routes, tier, assignedVehicle, out message);
+            return TryUpsertContract(null, ApplyFallbackAssignedVehicle(routes, assignedVehicle), tier, out message);
         }
 
         public bool TryModifyContract(
@@ -460,13 +495,23 @@ namespace LSOL.Systems
                         OriginIndustry = originIndustry,
                         DestinationIndustry = destinationIndustry,
                         Commodity = commodity,
+                        AssignedVehicleAssetId = assignedVehicle != null ? assignedVehicle.AssetId : string.Empty,
+                        AssignedVehicleDisplayName = assignedVehicle != null ? BuildAssignedVehicleDisplayName(assignedVehicle) : string.Empty,
                         OriginTriggerThresholdPercent = originTriggerThresholdPercent,
                         DestinationTriggerThresholdPercent = destinationTriggerThresholdPercent,
                     },
                 },
                 tier,
-                assignedVehicle,
                 out message);
+        }
+
+        public bool TryModifyContract(
+            NpcLogisticsContract contract,
+            IReadOnlyList<NpcLogisticsRouteDefinition> routes,
+            NpcDriverTierDefinition tier,
+            out string message)
+        {
+            return TryUpsertContract(contract, routes, tier, out message);
         }
 
         public bool TryModifyContract(
@@ -476,7 +521,7 @@ namespace LSOL.Systems
             OwnedCommercialVehiclePersistenceEntry assignedVehicle,
             out string message)
         {
-            return TryUpsertContract(contract, routes, tier, assignedVehicle, out message);
+            return TryUpsertContract(contract, ApplyFallbackAssignedVehicle(routes, assignedVehicle), tier, out message);
         }
 
         public bool TryFireContract(NpcLogisticsContract contract, out string message)
@@ -582,6 +627,8 @@ namespace LSOL.Systems
                         OriginIndustryId = route.OriginIndustry.Id,
                         DestinationIndustryId = route.DestinationIndustry.Id,
                         Commodity = route.Commodity,
+                        AssignedVehicleAssetId = route.AssignedVehicleAssetId,
+                        AssignedVehicleDisplayName = route.AssignedVehicleDisplayName,
                         OriginTriggerThresholdPercent = route.OriginTriggerThresholdPercent,
                         DestinationTriggerThresholdPercent = route.DestinationTriggerThresholdPercent,
                     });
@@ -698,6 +745,8 @@ namespace LSOL.Systems
                             OriginIndustry = routeOrigin,
                             DestinationIndustry = routeDestination,
                             Commodity = routeCommodity,
+                            AssignedVehicleAssetId = string.IsNullOrWhiteSpace(routeEntry.AssignedVehicleAssetId) ? entry.AssignedVehicleAssetId : routeEntry.AssignedVehicleAssetId,
+                            AssignedVehicleDisplayName = string.IsNullOrWhiteSpace(routeEntry.AssignedVehicleDisplayName) ? entry.AssignedVehicleDisplayName : routeEntry.AssignedVehicleDisplayName,
                             OriginTriggerThresholdPercent = ClampTriggerPercent(routeEntry.OriginTriggerThresholdPercent, 0),
                             DestinationTriggerThresholdPercent = ClampTriggerPercent(routeEntry.DestinationTriggerThresholdPercent, 100),
                         });
@@ -716,6 +765,8 @@ namespace LSOL.Systems
                         OriginIndustry = originIndustry,
                         DestinationIndustry = destinationIndustry,
                         Commodity = normalizedCommodity,
+                        AssignedVehicleAssetId = entry.AssignedVehicleAssetId,
+                        AssignedVehicleDisplayName = entry.AssignedVehicleDisplayName,
                         OriginTriggerThresholdPercent = ClampTriggerPercent(entry.OriginTriggerThresholdPercent, 0),
                         DestinationTriggerThresholdPercent = ClampTriggerPercent(entry.DestinationTriggerThresholdPercent, 100),
                     });
@@ -724,9 +775,13 @@ namespace LSOL.Systems
                 VehicleDefinition selectedVehicle;
                 VehicleDefinition selectedTractor;
                 OwnedCommercialVehiclePersistenceEntry assignedVehicle;
-                var assignedVehicleAssetId = entry.AssignedVehicleAssetId ?? string.Empty;
-                var assignedVehicleDisplayName = entry.AssignedVehicleDisplayName ?? string.Empty;
                 var currentRoute = routeDefinitions[Math.Max(0, Math.Min(routeDefinitions.Count - 1, entry.CurrentRouteIndex))];
+                var assignedVehicleAssetId = !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleAssetId)
+                    ? currentRoute.AssignedVehicleAssetId
+                    : (entry.AssignedVehicleAssetId ?? string.Empty);
+                var assignedVehicleDisplayName = !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleDisplayName)
+                    ? currentRoute.AssignedVehicleDisplayName
+                    : (entry.AssignedVehicleDisplayName ?? string.Empty);
                 if (string.IsNullOrWhiteSpace(assignedVehicleAssetId))
                 {
                     assignedVehicle = null;
@@ -769,6 +824,7 @@ namespace LSOL.Systems
                 };
 
                 SetContractRoutes(contract, routeDefinitions, contract.CurrentRouteIndex);
+                UpdateContractAssignedVehicleSummary(contract);
 
                 _contracts.Add(contract);
                 nextContractId = Math.Max(nextContractId, contract.Id + 1);
@@ -823,7 +879,6 @@ namespace LSOL.Systems
             NpcLogisticsContract contract,
             IReadOnlyList<NpcLogisticsRouteDefinition> routes,
             NpcDriverTierDefinition tier,
-            OwnedCommercialVehiclePersistenceEntry assignedVehicle,
             out string message)
         {
             message = string.Empty;
@@ -841,58 +896,29 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (assignedVehicle == null)
-            {
-                message = "Assign a truck from the active office garage first.";
-                return false;
-            }
-
-            var currentAssignedAssetId = contract != null ? contract.AssignedVehicleAssetId : string.Empty;
-            if (IsVehicleAssignedToAnotherContract(assignedVehicle.AssetId, currentAssignedAssetId))
-            {
-                message = "That truck is already assigned to another NPC route.";
-                return false;
-            }
-
-            var keepingCurrentAssignment = !string.IsNullOrWhiteSpace(currentAssignedAssetId)
-                && string.Equals(assignedVehicle.AssetId, currentAssignedAssetId, StringComparison.OrdinalIgnoreCase);
-            if (!keepingCurrentAssignment)
-            {
-                var activeOfficeId = _getActiveOfficeId != null ? _getActiveOfficeId() ?? string.Empty : string.Empty;
-                if (assignedVehicle.IsDeployed || !assignedVehicle.InActiveGarage)
-                {
-                    message = "Move the selected truck into the active office garage before assigning it to an NPC route.";
-                    return false;
-                }
-
-                if (!string.IsNullOrWhiteSpace(activeOfficeId)
-                    && !string.Equals(assignedVehicle.AssignedOfficeId, activeOfficeId, StringComparison.OrdinalIgnoreCase))
-                {
-                    message = "Only trucks assigned to the active office garage can be reserved by NPC routes.";
-                    return false;
-                }
-            }
-
-            VehicleDefinition selectedVehicle = null;
-            VehicleDefinition selectedTractor = null;
+            var currentContractAssignedAssetIds = GetContractAssignedVehicleAssetIds(contract);
             for (int routeIndex = 0; routeIndex < normalizedRoutes.Count; routeIndex++)
             {
+                OwnedCommercialVehiclePersistenceEntry routeAssignedVehicle;
+                string assignedVehicleMessage;
+                if (!TryResolveRouteAssignedVehicle(normalizedRoutes[routeIndex].AssignedVehicleAssetId, currentContractAssignedAssetIds, contract, out routeAssignedVehicle, out assignedVehicleMessage))
+                {
+                    message = string.Format("Route {0}: {1}", routeIndex + 1, assignedVehicleMessage);
+                    return false;
+                }
+
                 OwnedCommercialVehiclePersistenceEntry resolvedAssignedVehicle;
                 VehicleDefinition routeVehicle;
                 VehicleDefinition routeTractor;
                 string routeMessage;
-                if (!TryResolveAssignedVehicleForCommodity(assignedVehicle.AssetId, normalizedRoutes[routeIndex].Commodity, out resolvedAssignedVehicle, out routeVehicle, out routeTractor, out routeMessage))
+                if (!TryResolveAssignedVehicleForCommodity(routeAssignedVehicle.AssetId, normalizedRoutes[routeIndex].Commodity, out resolvedAssignedVehicle, out routeVehicle, out routeTractor, out routeMessage))
                 {
                     message = string.Format("Route {0}: {1}", routeIndex + 1, routeMessage);
                     return false;
                 }
 
-                if (routeIndex == 0)
-                {
-                    assignedVehicle = resolvedAssignedVehicle;
-                    selectedVehicle = routeVehicle;
-                    selectedTractor = routeTractor;
-                }
+                normalizedRoutes[routeIndex].AssignedVehicleAssetId = resolvedAssignedVehicle.AssetId;
+                normalizedRoutes[routeIndex].AssignedVehicleDisplayName = BuildAssignedVehicleDisplayName(resolvedAssignedVehicle);
             }
 
             var totalCost = normalizedRoutes.Sum(route => GetContractCost(route.Commodity, tier));
@@ -923,12 +949,9 @@ namespace LSOL.Systems
             }
 
             contract.Tier = tier;
-            contract.VehicleDefinition = selectedVehicle;
-            contract.TractorDefinition = selectedTractor;
-            contract.AssignedVehicleAssetId = assignedVehicle.AssetId;
-            contract.AssignedVehicleDisplayName = BuildAssignedVehicleDisplayName(assignedVehicle);
             contract.CurrentRouteIndex = 0;
             SetContractRoutes(contract, normalizedRoutes, contract.CurrentRouteIndex);
+            UpdateContractAssignedVehicleSummary(contract);
             contract.ContractCost = totalCost;
             contract.StatusText = "Preparing route";
             contract.Phase = NpcRoutePhase.PendingSpawn;
@@ -1102,7 +1125,6 @@ namespace LSOL.Systems
                         {
                             candidates.Add(candidate);
                         }
-
                         continue;
                     }
 
@@ -2880,10 +2902,11 @@ namespace LSOL.Systems
             if (_officeDeliveryNotificationsEnabled && _showStatus != null)
             {
                 _showStatus(string.Format(
-                    "NPC unloaded {0:0.0}t {1} at {2}.",
+                    "NPC unloaded {0:0.0}t {1} at {2}{3}",
                     acceptedTons,
                     contract.Commodity,
-                    contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "destination"));
+                    contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "destination",
+                    revenue > 0f ? string.Format(". Earned {0}.", ModFormatting.FormatMoney(revenue)) : "."));
             }
 
             contract.TotalDeliveredTons += acceptedTons;
@@ -2897,9 +2920,27 @@ namespace LSOL.Systems
                 contract.TotalProfitEarned += revenue;
                 if (contract.Routes.Count > 1)
                 {
+                    var previousCommodity = contract.Commodity;
                     AdvanceToNextRoute(contract);
-                    CleanupContractEntities(contract);
+                    if (!string.Equals(previousCommodity, contract.Commodity, StringComparison.OrdinalIgnoreCase))
+                    {
+                        BeginReturnToOffice(
+                            contract,
+                            string.Format("Switching to route {0}/{1}", contract.CurrentRouteIndex + 1, contract.Routes.Count),
+                            now);
+                        return;
+                    }
+
+                    string nextRouteWaitStatus;
+                    if (!CanStartOriginPickup(contract, out nextRouteWaitStatus))
+                    {
+                        BeginReturnToOffice(contract, nextRouteWaitStatus, now);
+                        return;
+                    }
+
+                    contract.Phase = NpcRoutePhase.DrivingToOrigin;
                     contract.StatusText = string.Format("Queued route {0}/{1}.", contract.CurrentRouteIndex + 1, contract.Routes.Count);
+                    contract.NextDriveTaskRefreshMs = 0;
                     contract.WaitUntilMs = now + 1000;
                     return;
                 }
@@ -3380,15 +3421,15 @@ namespace LSOL.Systems
             OwnedCommercialVehiclePersistenceEntry vehicle,
             string activeOfficeId,
             string commodity,
-            string includeAssignedAssetId)
+            ISet<string> includeAssignedAssetIds,
+            NpcLogisticsContract includeContract)
         {
             if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.AssetId))
             {
                 return false;
             }
 
-            var isCurrentAssignment = !string.IsNullOrWhiteSpace(includeAssignedAssetId)
-                && string.Equals(vehicle.AssetId, includeAssignedAssetId, StringComparison.OrdinalIgnoreCase);
+            var isCurrentAssignment = includeAssignedAssetIds != null && includeAssignedAssetIds.Contains(vehicle.AssetId);
             if (!isCurrentAssignment)
             {
                 if (vehicle.IsDeployed || !vehicle.InActiveGarage)
@@ -3402,7 +3443,7 @@ namespace LSOL.Systems
                     return false;
                 }
 
-                if (IsVehicleAssignedToAnotherContract(vehicle.AssetId, includeAssignedAssetId))
+                if (IsVehicleAssignedToAnotherContract(vehicle.AssetId, includeAssignedAssetIds, includeContract))
                 {
                     return false;
                 }
@@ -3411,7 +3452,7 @@ namespace LSOL.Systems
             return CanGarageVehicleCarryCommodity(vehicle, commodity);
         }
 
-        private bool IsVehicleAssignedToAnotherContract(string assetId, string includeAssignedAssetId)
+        private bool IsVehicleAssignedToAnotherContract(string assetId, ISet<string> includeAssignedAssetIds, NpcLogisticsContract includeContract)
         {
             if (string.IsNullOrWhiteSpace(assetId))
             {
@@ -3421,18 +3462,18 @@ namespace LSOL.Systems
             for (int i = 0; i < _contracts.Count; i++)
             {
                 var contract = _contracts[i];
-                if (contract == null || string.IsNullOrWhiteSpace(contract.AssignedVehicleAssetId))
+                if (contract == null)
                 {
                     continue;
                 }
 
-                if (!string.Equals(contract.AssignedVehicleAssetId, assetId, StringComparison.OrdinalIgnoreCase))
+                if (includeContract != null && contract.Id == includeContract.Id)
                 {
                     continue;
                 }
 
-                if (!string.IsNullOrWhiteSpace(includeAssignedAssetId)
-                    && string.Equals(contract.AssignedVehicleAssetId, includeAssignedAssetId, StringComparison.OrdinalIgnoreCase))
+                var contractAssignedAssetIds = GetContractAssignedVehicleAssetIds(contract);
+                if (!contractAssignedAssetIds.Contains(assetId))
                 {
                     continue;
                 }
@@ -3454,12 +3495,23 @@ namespace LSOL.Systems
             var cargoDefinition = _fleetManager.FindDefinitionByModelName(vehicle.CargoModelName);
             if (vehicle.HasSeparateCargoVehicle)
             {
-                if (poweredDefinition == null || cargoDefinition == null || !poweredDefinition.IsTractor || !cargoDefinition.IsTrailer)
+                if (poweredDefinition == null || !poweredDefinition.IsTractor)
                 {
                     return false;
                 }
 
-                return string.IsNullOrWhiteSpace(commodity) || _fleetManager.CanDefinitionCarryCommodity(cargoDefinition, commodity);
+                if (string.IsNullOrWhiteSpace(commodity))
+                {
+                    return true;
+                }
+
+                if (cargoDefinition != null && cargoDefinition.IsTrailer && _fleetManager.CanDefinitionCarryCommodity(cargoDefinition, commodity))
+                {
+                    return true;
+                }
+
+                VehicleDefinition trailerDefinition;
+                return TryResolveTrailerForCommodity(commodity, out trailerDefinition, out _);
             }
 
             if (poweredDefinition != null && poweredDefinition.IsTractor)
@@ -3546,13 +3598,33 @@ namespace LSOL.Systems
             var cargoDefinition = _fleetManager != null ? _fleetManager.FindDefinitionByModelName(assignedVehicle.CargoModelName) : null;
             if (assignedVehicle.HasSeparateCargoVehicle)
             {
-                if (poweredDefinition == null || cargoDefinition == null || !poweredDefinition.IsTractor || !cargoDefinition.IsTrailer)
+                if (poweredDefinition == null || !poweredDefinition.IsTractor)
                 {
                     failureReason = string.Format("{0} has an invalid truck or trailer setup.", BuildAssignedVehicleDisplayName(assignedVehicle));
                     return false;
                 }
 
-                selectedVehicle = cargoDefinition;
+                if (string.IsNullOrWhiteSpace(commodity))
+                {
+                    selectedVehicle = cargoDefinition;
+                    selectedTractor = poweredDefinition;
+                    return true;
+                }
+
+                if (cargoDefinition != null && cargoDefinition.IsTrailer && _fleetManager.CanDefinitionCarryCommodity(cargoDefinition, commodity))
+                {
+                    selectedVehicle = cargoDefinition;
+                    selectedTractor = poweredDefinition;
+                    return true;
+                }
+
+                VehicleDefinition trailerDefinition;
+                if (!TryResolveTrailerForCommodity(commodity, out trailerDefinition, out failureReason))
+                {
+                    return false;
+                }
+
+                selectedVehicle = trailerDefinition;
                 selectedTractor = poweredDefinition;
                 return true;
             }
@@ -3607,6 +3679,156 @@ namespace LSOL.Systems
             return true;
         }
 
+        private IReadOnlyList<NpcLogisticsRouteDefinition> ApplyFallbackAssignedVehicle(
+            IReadOnlyList<NpcLogisticsRouteDefinition> routes,
+            OwnedCommercialVehiclePersistenceEntry assignedVehicle)
+        {
+            if (routes == null || routes.Count == 0 || assignedVehicle == null || string.IsNullOrWhiteSpace(assignedVehicle.AssetId))
+            {
+                return routes;
+            }
+
+            var displayName = BuildAssignedVehicleDisplayName(assignedVehicle);
+            return routes
+                .Select(route => route == null
+                    ? null
+                    : new NpcLogisticsRouteDefinition
+                    {
+                        OriginIndustry = route.OriginIndustry,
+                        DestinationIndustry = route.DestinationIndustry,
+                        Commodity = route.Commodity,
+                        AssignedVehicleAssetId = string.IsNullOrWhiteSpace(route.AssignedVehicleAssetId) ? assignedVehicle.AssetId : route.AssignedVehicleAssetId,
+                        AssignedVehicleDisplayName = string.IsNullOrWhiteSpace(route.AssignedVehicleDisplayName) ? displayName : route.AssignedVehicleDisplayName,
+                        OriginTriggerThresholdPercent = route.OriginTriggerThresholdPercent,
+                        DestinationTriggerThresholdPercent = route.DestinationTriggerThresholdPercent,
+                    })
+                .ToList();
+        }
+
+        private bool TryResolveRouteAssignedVehicle(
+            string assetId,
+            ISet<string> currentContractAssignedAssetIds,
+            NpcLogisticsContract currentContract,
+            out OwnedCommercialVehiclePersistenceEntry assignedVehicle,
+            out string message)
+        {
+            assignedVehicle = FindGarageVehicleEntry(assetId);
+            message = string.Empty;
+
+            if (assignedVehicle == null)
+            {
+                message = string.IsNullOrWhiteSpace(assetId)
+                    ? "Assign a truck from the active office garage first."
+                    : "Assigned truck is no longer available in your fleet.";
+                return false;
+            }
+
+            if (IsVehicleAssignedToAnotherContract(assignedVehicle.AssetId, currentContractAssignedAssetIds, currentContract))
+            {
+                message = "That truck is already assigned to another NPC route.";
+                return false;
+            }
+
+            var keepingCurrentAssignment = currentContractAssignedAssetIds != null && currentContractAssignedAssetIds.Contains(assignedVehicle.AssetId);
+            if (!keepingCurrentAssignment)
+            {
+                var activeOfficeId = _getActiveOfficeId != null ? _getActiveOfficeId() ?? string.Empty : string.Empty;
+                if (assignedVehicle.IsDeployed || !assignedVehicle.InActiveGarage)
+                {
+                    message = "Move the selected truck into the active office garage before assigning it to an NPC route.";
+                    return false;
+                }
+
+                if (!string.IsNullOrWhiteSpace(activeOfficeId)
+                    && !string.Equals(assignedVehicle.AssignedOfficeId, activeOfficeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    message = "Only trucks assigned to the active office garage can be reserved by NPC routes.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static HashSet<string> BuildAssignedVehicleAssetIdSet(IEnumerable<string> assetIds)
+        {
+            var normalizedAssetIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (assetIds == null)
+            {
+                return normalizedAssetIds;
+            }
+
+            foreach (var assetId in assetIds)
+            {
+                if (!string.IsNullOrWhiteSpace(assetId))
+                {
+                    normalizedAssetIds.Add(assetId.Trim());
+                }
+            }
+
+            return normalizedAssetIds;
+        }
+
+        private HashSet<string> GetContractAssignedVehicleAssetIds(NpcLogisticsContract contract)
+        {
+            var assignedAssetIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (contract == null)
+            {
+                return assignedAssetIds;
+            }
+
+            if (contract.Routes != null)
+            {
+                for (int i = 0; i < contract.Routes.Count; i++)
+                {
+                    var route = contract.Routes[i];
+                    if (route != null && !string.IsNullOrWhiteSpace(route.AssignedVehicleAssetId))
+                    {
+                        assignedAssetIds.Add(route.AssignedVehicleAssetId.Trim());
+                    }
+                }
+            }
+
+            if (assignedAssetIds.Count == 0 && !string.IsNullOrWhiteSpace(contract.AssignedVehicleAssetId))
+            {
+                assignedAssetIds.Add(contract.AssignedVehicleAssetId.Trim());
+            }
+
+            return assignedAssetIds;
+        }
+
+        private void UpdateContractAssignedVehicleSummary(NpcLogisticsContract contract)
+        {
+            if (contract == null)
+            {
+                return;
+            }
+
+            var currentRoute = GetCurrentRoute(contract);
+            contract.AssignedVehicleAssetId = currentRoute != null && !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleAssetId)
+                ? currentRoute.AssignedVehicleAssetId
+                : GetContractAssignedVehicleAssetIds(contract).FirstOrDefault() ?? string.Empty;
+
+            var routeVehicleNames = contract.Routes
+                .Where(route => route != null && !string.IsNullOrWhiteSpace(route.AssignedVehicleDisplayName))
+                .Select(route => route.AssignedVehicleDisplayName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (routeVehicleNames.Count == 0)
+            {
+                contract.AssignedVehicleDisplayName = string.Empty;
+            }
+            else if (routeVehicleNames.Count == 1)
+            {
+                contract.AssignedVehicleDisplayName = routeVehicleNames[0];
+            }
+            else
+            {
+                contract.AssignedVehicleDisplayName = string.Format("{0} + {1} more", routeVehicleNames[0], routeVehicleNames.Count - 1);
+            }
+        }
+
         private string BuildAssignedVehicleDisplayName(OwnedCommercialVehiclePersistenceEntry vehicle)
         {
             if (vehicle == null)
@@ -3635,15 +3857,21 @@ namespace LSOL.Systems
             normalizedRoutes = new List<NpcLogisticsRouteDefinition>();
             message = string.Empty;
 
+            if (_routeLimit <= 0)
+            {
+                message = "Hiring NPC is disabled for this save.";
+                return false;
+            }
+
             if (routeSelections == null || routeSelections.Count == 0)
             {
                 message = "Configure at least one route first.";
                 return false;
             }
 
-            if (routeSelections.Count > 5)
+            if (routeSelections.Count > _routeLimit)
             {
-                message = "A hired NPC can have at most 5 routes.";
+                message = string.Format("A hired NPC can have at most {0} route{1}.", _routeLimit, _routeLimit == 1 ? string.Empty : "s");
                 return false;
             }
 
@@ -3707,6 +3935,8 @@ namespace LSOL.Systems
                     OriginIndustry = route.OriginIndustry,
                     DestinationIndustry = route.DestinationIndustry,
                     Commodity = normalizedCommodity,
+                    AssignedVehicleAssetId = route.AssignedVehicleAssetId != null ? route.AssignedVehicleAssetId.Trim() : string.Empty,
+                    AssignedVehicleDisplayName = route.AssignedVehicleDisplayName != null ? route.AssignedVehicleDisplayName.Trim() : string.Empty,
                     OriginTriggerThresholdPercent = ClampTriggerPercent(route.OriginTriggerThresholdPercent, 0),
                     DestinationTriggerThresholdPercent = ClampTriggerPercent(route.DestinationTriggerThresholdPercent, 100),
                 });
@@ -3748,6 +3978,8 @@ namespace LSOL.Systems
                         OriginIndustry = route.OriginIndustry,
                         DestinationIndustry = route.DestinationIndustry,
                         Commodity = CommodityCatalog.Normalize(route.Commodity),
+                        AssignedVehicleAssetId = route.AssignedVehicleAssetId != null ? route.AssignedVehicleAssetId.Trim() : string.Empty,
+                        AssignedVehicleDisplayName = route.AssignedVehicleDisplayName != null ? route.AssignedVehicleDisplayName.Trim() : string.Empty,
                         OriginTriggerThresholdPercent = ClampTriggerPercent(route.OriginTriggerThresholdPercent, 0),
                         DestinationTriggerThresholdPercent = ClampTriggerPercent(route.DestinationTriggerThresholdPercent, 100),
                     });
@@ -3782,7 +4014,10 @@ namespace LSOL.Systems
 
             VehicleDefinition selectedVehicle;
             VehicleDefinition selectedTractor;
-            if (string.IsNullOrWhiteSpace(contract.AssignedVehicleAssetId))
+            var assignedVehicleAssetId = !string.IsNullOrWhiteSpace(route.AssignedVehicleAssetId)
+                ? route.AssignedVehicleAssetId
+                : contract.AssignedVehicleAssetId;
+            if (string.IsNullOrWhiteSpace(assignedVehicleAssetId))
             {
                 if (!TryResolveVehicleForCommodity(route.Commodity, out selectedVehicle, out selectedTractor))
                 {
@@ -3796,7 +4031,7 @@ namespace LSOL.Systems
             {
                 OwnedCommercialVehiclePersistenceEntry assignedVehicle;
                 string failureReason;
-                if (!TryResolveAssignedVehicleForCommodity(contract.AssignedVehicleAssetId, route.Commodity, out assignedVehicle, out selectedVehicle, out selectedTractor, out failureReason))
+                if (!TryResolveAssignedVehicleForCommodity(assignedVehicleAssetId, route.Commodity, out assignedVehicle, out selectedVehicle, out selectedTractor, out failureReason))
                 {
                     contract.VehicleDefinition = null;
                     contract.TractorDefinition = null;
@@ -3806,12 +4041,14 @@ namespace LSOL.Systems
 
                 if (assignedVehicle != null)
                 {
-                    contract.AssignedVehicleDisplayName = BuildAssignedVehicleDisplayName(assignedVehicle);
+                    route.AssignedVehicleAssetId = assignedVehicle.AssetId;
+                    route.AssignedVehicleDisplayName = BuildAssignedVehicleDisplayName(assignedVehicle);
                 }
             }
 
             contract.VehicleDefinition = selectedVehicle;
             contract.TractorDefinition = selectedTractor;
+            UpdateContractAssignedVehicleSummary(contract);
             return true;
         }
 
@@ -4293,6 +4530,10 @@ namespace LSOL.Systems
         public Industry DestinationIndustry { get; set; }
 
         public string Commodity { get; set; }
+
+        public string AssignedVehicleAssetId { get; set; }
+
+        public string AssignedVehicleDisplayName { get; set; }
 
         public int OriginTriggerThresholdPercent { get; set; }
 

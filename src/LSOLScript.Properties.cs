@@ -445,7 +445,7 @@ namespace LSOL
             {
                 CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
                 DetailFactory = () => office != null
-                    ? string.Format("{0} vehicle slots | {1}", Math.Max(0, office.MaxCommercialVehicles), office.DistrictName)
+                    ? string.Format("{0} vehicle slots | {1}", BuildOfficeGarageCapacityLabel(office), office.DistrictName)
                     : "No office selected.",
             });
 
@@ -535,8 +535,20 @@ namespace LSOL
             var activeCount = _propertyManager.GetActiveCommercialGarageVehicles().Count();
             var reserveCount = _propertyManager.GetReserveCommercialVehicles().Count();
             var activeOffice = _propertyManager.ActiveOffice;
-            var capacity = activeOffice != null ? Math.Max(0, activeOffice.MaxCommercialVehicles) : 0;
+            var capacity = activeOffice != null ? BuildOfficeGarageCapacityLabel(activeOffice) : "0";
             return string.Format("Active {0}/{1} | Reserve {2}", activeCount, capacity, reserveCount);
+        }
+
+        private string BuildOfficeGarageCapacityLabel(OfficeDefinition office)
+        {
+            if (office == null)
+            {
+                return "0";
+            }
+
+            return _officeGarageLimitDifficultyEnabled
+                ? Math.Max(0, office.MaxCommercialVehicles).ToString()
+                : "Unlimited";
         }
 
         private void RentSelectedOffice()
@@ -712,7 +724,10 @@ namespace LSOL
             var cargo = string.IsNullOrWhiteSpace(vehicle.Commodity)
                 ? "Empty"
                 : string.Format("{0} {1:0.0}/{2:0.0}t", vehicle.Commodity, vehicle.WeightTons, Math.Max(0f, vehicle.CapacityTons));
-            return string.Format("{0} | {1} | {2} | {3}", location, deployed, acquisition, cargo);
+            var npcAssignment = BuildCommercialVehicleNpcAssignmentDetail(vehicle);
+            return string.IsNullOrWhiteSpace(npcAssignment)
+                ? string.Format("{0} | {1} | {2} | {3}", location, deployed, acquisition, cargo)
+                : string.Format("{0} | {1} | {2} | {3} | {4}", location, deployed, acquisition, npcAssignment, cargo);
         }
 
         private string BuildCommercialVehicleStatusCaption(OwnedCommercialVehiclePersistenceEntry vehicle)
@@ -723,10 +738,80 @@ namespace LSOL
             }
 
             return string.Format(
-                "[{0}{1}] {2}",
+                "[{0}{1}{2}] {3}",
                 _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId) ? "Out" : "Stored",
                 vehicle.IsRental ? "/Rent" : string.Empty,
+                IsCommercialVehicleAssignedToNpcContract(vehicle) ? "/NPC" : string.Empty,
                 vehicle.DisplayName);
+        }
+
+        private NpcLogisticsContract GetCommercialVehicleAssignedNpcContract(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null || _npcLogisticsManager == null || string.IsNullOrWhiteSpace(vehicle.AssetId))
+            {
+                return null;
+            }
+
+            var contracts = _npcLogisticsManager.Contracts;
+            if (contracts == null || contracts.Count == 0)
+            {
+                return null;
+            }
+
+            for (int i = 0; i < contracts.Count; i++)
+            {
+                var contract = contracts[i];
+                if (contract == null)
+                {
+                    continue;
+                }
+
+                var usesVehicle = contract.Routes != null && contract.Routes.Count > 0
+                    ? contract.Routes.Any(route => route != null
+                        && !string.IsNullOrWhiteSpace(route.AssignedVehicleAssetId)
+                        && string.Equals(route.AssignedVehicleAssetId, vehicle.AssetId, StringComparison.OrdinalIgnoreCase))
+                    : !string.IsNullOrWhiteSpace(contract.AssignedVehicleAssetId)
+                        && string.Equals(contract.AssignedVehicleAssetId, vehicle.AssetId, StringComparison.OrdinalIgnoreCase);
+                if (usesVehicle)
+                {
+                    return contract;
+                }
+            }
+
+            return null;
+        }
+
+        private bool IsCommercialVehicleAssignedToNpcContract(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            return GetCommercialVehicleAssignedNpcContract(vehicle) != null;
+        }
+
+        private string BuildCommercialVehicleNpcAssignmentDetail(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            var contract = GetCommercialVehicleAssignedNpcContract(vehicle);
+            if (contract == null)
+            {
+                return string.Empty;
+            }
+
+            var routeCount = contract.Routes != null ? contract.Routes.Count : 0;
+            var tierLabel = contract.Tier != null && !string.IsNullOrWhiteSpace(contract.Tier.DisplayName)
+                ? contract.Tier.DisplayName + " NPC"
+                : "hired NPC";
+            return routeCount > 0
+                ? string.Format("Assigned to {0} contract #{1} with {2} route{3}", tierLabel, contract.Id, routeCount, routeCount == 1 ? string.Empty : "s")
+                : string.Format("Assigned to {0} contract #{1}", tierLabel, contract.Id);
+        }
+
+        private bool ShowNpcAssignedCommercialVehicleBlocked(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (!IsCommercialVehicleAssignedToNpcContract(vehicle))
+            {
+                return false;
+            }
+
+            ShowStatus(string.Format("{0} is assigned to a hired NPC and cannot be managed manually.", vehicle.DisplayName));
+            return true;
         }
 
         private void HandleCommercialVehicleActivate(OwnedCommercialVehiclePersistenceEntry vehicle)
@@ -739,6 +824,11 @@ namespace LSOL
             string message;
             if (_commercialGarageMenuContext == CommercialGarageMenuContext.Industry)
             {
+                if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
+                {
+                    return;
+                }
+
                 if (_menuIndustry == null || !_menuIndustry.VehicleSpawnPosition.HasValue)
                 {
                     ShowStatus("No vehicle spawn configured for this industry.");
@@ -772,6 +862,11 @@ namespace LSOL
                 return;
             }
 
+            if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
+            {
+                return;
+            }
+
             string message;
             if (_propertyManager.TrySetCommercialVehicleActive(vehicle.AssetId, out message))
             {
@@ -790,6 +885,11 @@ namespace LSOL
         private void MoveCommercialVehicleToReserve(OwnedCommercialVehiclePersistenceEntry vehicle)
         {
             if (vehicle == null)
+            {
+                return;
+            }
+
+            if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
             {
                 return;
             }
@@ -857,13 +957,28 @@ namespace LSOL
             }
 
             var isDeployed = _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId);
+            var npcAssignmentDetail = BuildCommercialVehicleNpcAssignmentDetail(vehicle);
+            var isNpcAssigned = !string.IsNullOrWhiteSpace(npcAssignmentDetail);
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => vehicle.DisplayName,
                 DetailFactory = () => BuildCommercialVehicleDetail(vehicle),
             });
 
-            if (!isDeployed)
+            if (isNpcAssigned)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Assigned to Hired NPC",
+                    DetailFactory = () => npcAssignmentDetail,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Manual Control Locked",
+                    DetailFactory = () => "Reassign or dismiss the hired NPC contract before retrieving, storing, reserving, selling, or ending this rental.",
+                });
+            }
+            else if (!isDeployed)
             {
                 items.Add(new OfficeMenuItem
                 {
@@ -884,7 +999,7 @@ namespace LSOL
                 });
             }
 
-            if (vehicle.InActiveGarage)
+            if (vehicle.InActiveGarage && !isNpcAssigned)
             {
                 items.Add(new OfficeMenuItem
                 {
@@ -894,24 +1009,27 @@ namespace LSOL
                 });
             }
 
-            items.Add(new OfficeMenuItem
+            if (!isNpcAssigned)
             {
-                CaptionFactory = () => vehicle.IsRental ? "End Rent" : "Sell Vehicle",
-                DetailFactory = () => vehicle.IsRental
-                    ? string.Format("Close the rental and refund {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.DailyRent * 2f)))
-                    : string.Format("Sell this vehicle back for {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.PurchasePrice * 0.5f))),
-                OnActivate = () =>
+                items.Add(new OfficeMenuItem
                 {
-                    if (vehicle.IsRental)
+                    CaptionFactory = () => vehicle.IsRental ? "End Rent" : "Sell Vehicle",
+                    DetailFactory = () => vehicle.IsRental
+                        ? string.Format("Close the rental and refund {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.DailyRent * 2f)))
+                        : string.Format("Sell this vehicle back for {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.PurchasePrice * 0.5f))),
+                    OnActivate = () =>
                     {
-                        EndCommercialVehicleRentalFromGarage(vehicle);
-                    }
-                    else
-                    {
-                        SellCommercialVehicleFromGarage(vehicle);
-                    }
-                },
-            });
+                        if (vehicle.IsRental)
+                        {
+                            EndCommercialVehicleRentalFromGarage(vehicle);
+                        }
+                        else
+                        {
+                            SellCommercialVehicleFromGarage(vehicle);
+                        }
+                    },
+                });
+            }
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => "Back",
@@ -929,6 +1047,11 @@ namespace LSOL
         private void RetrieveCommercialVehicleFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
         {
             if (vehicle == null)
+            {
+                return;
+            }
+
+            if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
             {
                 return;
             }
@@ -971,6 +1094,11 @@ namespace LSOL
                 return;
             }
 
+            if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
+            {
+                return;
+            }
+
             string message;
             _propertyManager.TryStoreCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, out message);
             _tabletStateStore.MarkCargoDirty();
@@ -982,6 +1110,11 @@ namespace LSOL
         private void SellCommercialVehicleFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
         {
             if (vehicle == null)
+            {
+                return;
+            }
+
+            if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
             {
                 return;
             }
@@ -1001,6 +1134,11 @@ namespace LSOL
         private void EndCommercialVehicleRentalFromGarage(OwnedCommercialVehiclePersistenceEntry vehicle)
         {
             if (vehicle == null)
+            {
+                return;
+            }
+
+            if (ShowNpcAssignedCommercialVehicleBlocked(vehicle))
             {
                 return;
             }

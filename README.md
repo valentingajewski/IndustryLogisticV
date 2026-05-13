@@ -338,16 +338,6 @@ The company hub is the best place to:
 - check analytics,
 - browse mission content.
 
-### F6 Context Panel
-
-Use this while driving or working.
-
-It shows useful live information such as:
-
-- current cargo,
-- vehicle fuel,
-- nearby industry information.
-
 ## Property Systems
 
 ### Office Rules

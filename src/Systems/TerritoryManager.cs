@@ -51,6 +51,7 @@ namespace LSOL.Systems
 
         private int _lastRepossessionEvaluationMs;
         private bool _corridorRestrictionEnabled;
+        private bool _reputationEnabled;
 
         public TerritoryManager(ModConfig config, IndustryManager industryManager)
         {
@@ -63,6 +64,7 @@ namespace LSOL.Systems
             _districtReputationDebugOffsets = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             _lastRepossessionEvaluationMs = int.MinValue;
             _corridorRestrictionEnabled = true;
+            _reputationEnabled = true;
 
             if (config != null && config.DistrictConfigs != null)
             {
@@ -105,6 +107,11 @@ namespace LSOL.Systems
         public void SetCorridorRestrictionEnabled(bool enabled)
         {
             _corridorRestrictionEnabled = enabled;
+        }
+
+        public void SetReputationEnabled(bool enabled)
+        {
+            _reputationEnabled = enabled;
         }
 
         public void Reset()
@@ -281,6 +288,11 @@ namespace LSOL.Systems
 
         public bool IsDistrictEstablishedForNpc(string districtName)
         {
+            if (!_reputationEnabled)
+            {
+                return true;
+            }
+
             var districtState = GetDistrictState(districtName);
             return districtState != null && GetReputationTier(districtState.ReputationLabel) >= 2;
         }
@@ -291,6 +303,11 @@ namespace LSOL.Systems
             if (districtState == null)
             {
                 return "District influence data is unavailable.";
+            }
+
+            if (!_reputationEnabled)
+            {
+                return string.Empty;
             }
 
             if (IsDistrictEstablishedForNpc(districtName))
@@ -1061,6 +1078,13 @@ namespace LSOL.Systems
                 districtState.InfluenceRatio = target <= 0.001f
                     ? 0f
                     : Math.Max(0f, Math.Min(1.5f, districtState.InfluenceScore / target));
+
+                if (!_reputationEnabled)
+                {
+                    districtState.ReputationScore = 0f;
+                    districtState.ReputationLabel = "Disabled";
+                    continue;
+                }
 
                 float debugOffset;
                 if (_districtReputationDebugOffsets.TryGetValue(districtState.DistrictName ?? string.Empty, out debugOffset))

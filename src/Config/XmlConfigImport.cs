@@ -52,7 +52,6 @@ namespace LSOL.Config
             if (controls != null)
             {
                 coreConfig.Controls.ToggleDashboard = ControlBindings.ParseOrDefault(ReadAttribute(controls, "toggleDashboard"), coreConfig.Controls.ToggleDashboard);
-                coreConfig.Controls.ToggleContext = ControlBindings.ParseOrDefault(ReadAttribute(controls, "toggleContext"), coreConfig.Controls.ToggleContext);
                 coreConfig.Controls.OpenModMenu = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openModMenu"), coreConfig.Controls.OpenModMenu);
                 coreConfig.Controls.OpenDebugMenu = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openDebugMenu"), coreConfig.Controls.OpenDebugMenu);
                 coreConfig.Controls.Interact = ControlBindings.ParseOrDefault(ReadAttribute(controls, "interact"), coreConfig.Controls.Interact);

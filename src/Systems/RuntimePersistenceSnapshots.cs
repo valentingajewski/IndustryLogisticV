@@ -145,6 +145,10 @@ namespace LSOL.Systems
 
         public string Commodity { get; set; }
 
+        public string AssignedVehicleAssetId { get; set; }
+
+        public string AssignedVehicleDisplayName { get; set; }
+
         public int OriginTriggerThresholdPercent { get; set; }
 
         public int DestinationTriggerThresholdPercent { get; set; } = 100;

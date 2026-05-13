@@ -493,6 +493,7 @@
   </Site>
   <Site catalogId="700" legacyKey="Petrol Station 01" name="Davis Avenue" role="FuelSink" district="SouthLosSantos" company="LTD" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Regional" enabled="true">
     <Marker x="-66" y="-1759" z="29" />
+    <VehicleSpawn x="-66" y="-1759" z="29" heading="340" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -502,6 +503,7 @@
   </Site>
   <Site catalogId="701" legacyKey="Petrol Station 02" name="El Rancho Blvd" role="FuelSink" district="EastLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Regional" enabled="true">
     <Marker x="1209" y="-1402" z="35" />
+    <VehicleSpawn x="1209" y="-1402" z="35" heading="135" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -511,6 +513,7 @@
   </Site>
   <Site catalogId="702" legacyKey="Petrol Station 03" name="Popular St" role="FuelSink" district="EastLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Local" enabled="true">
     <Marker x="831" y="-1028" z="26" />
+    <VehicleSpawn x="831" y="-1028" z="26" heading="0" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -520,6 +523,7 @@
   </Site>
   <Site catalogId="703" legacyKey="Petrol Station 04" name="Capital Blvd" role="FuelSink" district="SouthLosSantos" company="XERO" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="254" y="-1263" z="29" />
+    <VehicleSpawn x="254" y="-1263" z="29" heading="180" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -529,6 +533,7 @@
   </Site>
   <Site catalogId="704" legacyKey="Petrol Station 05" name="Calais Ave" role="FuelSink" district="WestLosSantos" company="XERO" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Regional" enabled="true">
     <Marker x="-522" y="-1204" z="18" />
+    <VehicleSpawn x="-522" y="-1204" z="18" heading="250" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -538,6 +543,7 @@
   </Site>
   <Site catalogId="705" legacyKey="Petrol Station 06" name="Ginger St" role="FuelSink" district="WestLosSantos" company="LTD" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Local" enabled="true">
     <Marker x="-713" y="-935" z="19" />
+    <VehicleSpawn x="-713" y="-935" z="19" heading="180" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -547,6 +553,7 @@
   </Site>
   <Site catalogId="706" legacyKey="Petrol Station 07" name="US Route 15" role="FuelSink" district="EastLosSantos" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="2591" y="361" z="108" />
+    <VehicleSpawn x="2591" y="361" z="108" heading="0" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -556,6 +563,7 @@
   </Site>
   <Site catalogId="707" legacyKey="Petrol Station 08" name="Mirror Park Blvd" role="FuelSink" district="EastLosSantos" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Regional" enabled="true">
     <Marker x="1178" y="-319" z="69" />
+    <VehicleSpawn x="1178" y="-319" z="69" heading="100" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -565,6 +573,7 @@
   </Site>
   <Site catalogId="708" legacyKey="Petrol Station 09" name="Clinton Ave" role="FuelSink" district="Downtown" company="Globe Oil" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Regional" enabled="true">
     <Marker x="636" y="269" z="103" />
+    <VehicleSpawn x="636" y="269" z="103" heading="186" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -574,6 +583,7 @@
   </Site>
   <Site catalogId="709" legacyKey="Petrol Station 10" name="Morningwood" role="FuelSink" district="WestLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Regional" enabled="true">
     <Marker x="-1432" y="-272" z="46" />
+    <VehicleSpawn x="-1432" y="-272" z="46" heading="222" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -583,6 +593,7 @@
   </Site>
   <Site catalogId="710" legacyKey="Petrol Station 11" name="Interstate 2" role="FuelSink" district="WestLosSantos" company="XERO" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Local" enabled="true">
     <Marker x="-2082" y="-319" z="13" />
+    <VehicleSpawn x="-2082" y="-319" z="13" heading="0" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -592,6 +603,7 @@
   </Site>
   <Site catalogId="711" legacyKey="Petrol Station 12" name="Rockford Dr" role="FuelSink" district="NorthLosSantos" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="-1792" y="814" z="138" />
+    <VehicleSpawn x="-1792" y="814" z="138" heading="44" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -601,6 +613,7 @@
   </Site>
   <Site catalogId="712" legacyKey="Petrol Station 13" name="US Route 68 - Zancudo" role="FuelSink" district="NorthLosSantos" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="-2556" y="2346" z="33" />
+    <VehicleSpawn x="-2556" y="2346" z="33" heading="91" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -610,6 +623,7 @@
   </Site>
   <Site catalogId="713" legacyKey="Petrol Station 14" name="US Route 68 - Grand Senora Desert - East" role="FuelSink" district="GrandSenora" company="XERO" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.35" ownershipTier="Local" enabled="true">
     <Marker x="48" y="2776" z="57" />
+    <VehicleSpawn x="48" y="2776" z="57" heading="51" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="500" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -619,6 +633,7 @@
   </Site>
   <Site catalogId="714" legacyKey="Petrol Station 15" name="Senora Rd" role="FuelSink" district="GrandSenora" company="Globe Oil" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.35" ownershipTier="Local" enabled="true">
     <Marker x="264" y="2610" z="44" />
+    <VehicleSpawn x="264" y="2610" z="44" heading="280" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="500" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -628,6 +643,7 @@
   </Site>
   <Site catalogId="715" legacyKey="Petrol Station 16" name="US Route 68 - Grand Senora Desert - West" role="FuelSink" district="GrandSenora" company="Globe Oil" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="1207" y="2658" z="37" />
+    <VehicleSpawn x="1207" y="2658" z="37" heading="53" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -637,6 +653,7 @@
   </Site>
   <Site catalogId="716" legacyKey="Petrol Station 17" name="US Route 13" role="FuelSink" district="GrandSenora" company="XERO" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="2682" y="3261" z="55.24" />
+    <VehicleSpawn x="2682" y="3261" z="55.24" heading="152" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -646,6 +663,7 @@
   </Site>
   <Site catalogId="717" legacyKey="Petrol Station 18" name="Sandy Shores Marina Drive" role="FuelSink" district="GrandSenora" company="XERO" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="2006" y="3772" z="32" />
+    <VehicleSpawn x="2006" y="3772" z="32" heading="300" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -655,6 +673,7 @@
   </Site>
   <Site catalogId="718" legacyKey="Petrol Station 19" name="Grapeseed Main Street" role="FuelSink" district="Grapeseed" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="1689" y="4930" z="42" />
+    <VehicleSpawn x="1689" y="4930" z="42" heading="157" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -664,6 +683,7 @@
   </Site>
   <Site catalogId="719" legacyKey="Petrol Station 20" name="US Route 13 - Mount Chiliad" role="FuelSink" district="PaletoBay" company="Globe Oil" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="1700" y="6412" z="32" />
+    <VehicleSpawn x="1700" y="6412" z="32" heading="60" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -673,6 +693,7 @@
   </Site>
   <Site catalogId="720" legacyKey="Petrol Station 21" name="US Route 1" role="FuelSink" district="PaletoBay" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="195" y="6607" z="31" />
+    <VehicleSpawn x="195" y="6607" z="31" heading="195" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -682,6 +703,7 @@
   </Site>
   <Site catalogId="721" legacyKey="Petrol Station 22" name="Cascabel Ave" role="FuelSink" district="PaletoBay" company="XERO" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="-94" y="6424" z="31" />
+    <VehicleSpawn x="-94" y="6424" z="31" heading="320" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -691,6 +713,7 @@
   </Site>
   <Site catalogId="722" legacyKey="Petrol Station 23" name="Port Office Gas Station" role="FuelSink" district="Port" company="RON" startingTankRatio="1" density="None" emptyingRate="0" ownershipTier="Starter" enabled="true" refuelIsFree="true">
     <Marker x="-61.84" y="-2532.41" z="6" />
+    <VehicleSpawn x="-61.84" y="-2532.41" z="6" heading="240" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -700,6 +723,7 @@
   </Site>
   <Site catalogId="723" legacyKey="Petrol Station 24" name="Davis Avenue 2" role="FuelSink" district="SouthLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="4" ownershipTier="Local" enabled="true">
     <Marker x="170" y="-1556.77" z="29.26" />
+    <VehicleSpawn x="170" y="-1556.77" z="29.26" heading="130" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="10000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -709,6 +733,7 @@
   </Site>
   <Site catalogId="724" legacyKey="Petrol Station 25" name="Harmony Gas Station" role="FuelSink" district="GrandSenora" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="1036.97" y="2677.62" z="39.52" />
+    <VehicleSpawn x="1036.97" y="2677.62" z="39.52" heading="90" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />

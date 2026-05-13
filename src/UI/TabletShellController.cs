@@ -11,7 +11,6 @@ namespace LSOL.UI
     internal static class TabletAppIds
     {
         public const string Home = "home";
-        public const string Context = "context";
         public const string Network = "network";
         public const string Analytics = "analytics";
         public const string Industry = "industry";
@@ -144,11 +143,6 @@ namespace LSOL.UI
             _shell.OpenHome();
         }
 
-        public void OpenContext()
-        {
-            _shell.OpenContext();
-        }
-
         public void OpenNetwork()
         {
             _shell.OpenNetwork();
@@ -219,11 +213,6 @@ namespace LSOL.UI
         public void OpenHome()
         {
             Open(TabletAppIds.Home, "root");
-        }
-
-        public void OpenContext()
-        {
-            Open(TabletAppIds.Context, "root");
         }
 
         public void OpenNetwork()

@@ -12,6 +12,7 @@ namespace LSOL.Domain
         private readonly bool _supportsOmegaBoost;
         private readonly List<string> _sortedInputs;
         private readonly List<string> _sortedOptionalInputs;
+        private readonly List<string> _sortedAcceptedInputs;
         private readonly List<string> _sortedOutputs;
 
         public Industry(IndustryConfig config, List<ProductionRecipe> recipes, bool supportsOmegaBoost, float omegaCapacityMultiplier)
@@ -59,6 +60,11 @@ namespace LSOL.Domain
             _supportsOmegaBoost = supportsOmegaBoost;
             _sortedInputs = Inputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
             _sortedOptionalInputs = OptionalInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            _sortedAcceptedInputs = Inputs
+                .Concat(OptionalInputs)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
+                .ToList();
             _sortedOutputs = Outputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
 
             foreach (var input in Inputs)
@@ -120,6 +126,11 @@ namespace LSOL.Domain
         public IReadOnlyList<string> SortedOptionalInputs
         {
             get { return _sortedOptionalInputs; }
+        }
+
+        public IReadOnlyList<string> SortedAcceptedInputs
+        {
+            get { return _sortedAcceptedInputs; }
         }
 
         public IReadOnlyList<string> SortedOutputs

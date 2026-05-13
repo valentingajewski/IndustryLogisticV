@@ -16,13 +16,23 @@ namespace LSOL.Systems
         private const int ServiceDriveStyle = 786603;
         private const string DefaultDriverModel = "s_m_m_trucker_01";
 
+        private enum RemoteRefuelDispatchPhase
+        {
+            Delivering = 0,
+            Returning = 1,
+        }
+
         private sealed class RemoteRefuelDispatch
         {
             public Industry SourceIndustry { get; set; }
 
+            public Vector3 SourceSpawnPosition { get; set; }
+
             public int RequestedAtMs { get; set; }
 
             public int NextDriveTaskRefreshMs { get; set; }
+
+            public RemoteRefuelDispatchPhase Phase { get; set; }
 
             public int TargetVehicleHandle { get; set; }
 
@@ -121,13 +131,9 @@ namespace LSOL.Systems
                 return false;
             }
 
-            var spawnPosition = sourceIndustry.VehicleSpawnPosition.HasValue
-                ? sourceIndustry.VehicleSpawnPosition.Value
-                : sourceIndustry.Position;
-            if (_getGroundPosition != null)
-            {
-                spawnPosition = _getGroundPosition(spawnPosition);
-            }
+            Vector3 spawnPosition;
+            float spawnHeading;
+            ResolveDispatchSpawn(sourceIndustry, fuelTelemetry.PoweredVehicle.Position, out spawnPosition, out spawnHeading);
 
             Vehicle truck;
             Vehicle cargoVehicle;
@@ -135,7 +141,7 @@ namespace LSOL.Systems
                 tankerTrailer,
                 tractorDefinition,
                 spawnPosition,
-                sourceIndustry.VehicleSpawnHeading.HasValue ? sourceIndustry.VehicleSpawnHeading.Value : 0f,
+                spawnHeading,
                 out truck,
                 out cargoVehicle,
                 out message))
@@ -163,8 +169,10 @@ namespace LSOL.Systems
             _activeDispatch = new RemoteRefuelDispatch
             {
                 SourceIndustry = sourceIndustry,
+                SourceSpawnPosition = spawnPosition,
                 RequestedAtMs = now,
                 NextDriveTaskRefreshMs = 0,
+                Phase = RemoteRefuelDispatchPhase.Delivering,
                 TargetVehicleHandle = fuelTelemetry.PoweredVehicle.Handle,
                 Driver = driver,
                 Truck = truck,
@@ -186,14 +194,7 @@ namespace LSOL.Systems
 
             if (now - _activeDispatch.RequestedAtMs >= ServiceTimeoutMs)
             {
-                CancelActiveDispatch("Refuel tanker timed out before arrival.");
-                return false;
-            }
-
-            var targetVehicle = Entity.FromHandle(_activeDispatch.TargetVehicleHandle) as Vehicle;
-            if (targetVehicle == null || !targetVehicle.Exists())
-            {
-                CancelActiveDispatch("Refuel tanker cancelled because the target vehicle is no longer available.");
+                CancelActiveDispatch("Refuel tanker timed out before completing the dispatch.");
                 return false;
             }
 
@@ -204,6 +205,26 @@ namespace LSOL.Systems
             }
 
             RefreshDispatchBlip(_activeDispatch);
+
+            if (_activeDispatch.Phase == RemoteRefuelDispatchPhase.Returning)
+            {
+                if (_activeDispatch.Truck.Position.DistanceTo(_activeDispatch.SourceSpawnPosition) <= ServiceArrivalDistance)
+                {
+                    CleanupDispatch();
+                    return false;
+                }
+
+                EnsureDispatchDriveTask(_activeDispatch, _activeDispatch.SourceSpawnPosition, now);
+                return false;
+            }
+
+            var targetVehicle = Entity.FromHandle(_activeDispatch.TargetVehicleHandle) as Vehicle;
+            if (targetVehicle == null || !targetVehicle.Exists())
+            {
+                CancelActiveDispatch("Refuel tanker cancelled because the target vehicle is no longer available.");
+                return false;
+            }
+
             if (_activeDispatch.Truck.Position.DistanceTo(targetVehicle.Position) <= ServiceArrivalDistance)
             {
                 ClearDispatchDriverTasks(_activeDispatch.Driver);
@@ -219,7 +240,7 @@ namespace LSOL.Systems
                         : string.Format("Tanker service failed: {0}", message));
                 }
 
-                CleanupDispatch();
+                BeginDispatchReturn(_activeDispatch, now);
                 return changed;
             }
 
@@ -446,6 +467,28 @@ namespace LSOL.Systems
             return true;
         }
 
+        private void ResolveDispatchSpawn(Industry sourceIndustry, Vector3 targetPosition, out Vector3 spawnPosition, out float spawnHeading)
+        {
+            spawnPosition = sourceIndustry != null && sourceIndustry.VehicleSpawnPosition.HasValue
+                ? sourceIndustry.VehicleSpawnPosition.Value
+                : (sourceIndustry != null ? sourceIndustry.Position : targetPosition);
+            if (_getGroundPosition != null)
+            {
+                spawnPosition = _getGroundPosition(spawnPosition);
+            }
+
+            if (sourceIndustry != null && sourceIndustry.VehicleSpawnHeading.HasValue)
+            {
+                spawnHeading = sourceIndustry.VehicleSpawnHeading.Value;
+                return;
+            }
+
+            var delta = targetPosition - spawnPosition;
+            spawnHeading = delta.LengthSquared() <= 0.001f
+                ? 0f
+                : Function.Call<float>(Hash.GET_HEADING_FROM_VECTOR_2D, delta.X, delta.Y);
+        }
+
         private Ped CreateDispatchDriver(Vehicle truck)
         {
             if (truck == null || !truck.Exists())
@@ -511,6 +554,18 @@ namespace LSOL.Systems
             }
 
             Function.Call(Hash.CLEAR_PED_TASKS, driver.Handle);
+        }
+
+        private void BeginDispatchReturn(RemoteRefuelDispatch dispatch, int now)
+        {
+            if (dispatch == null)
+            {
+                return;
+            }
+
+            dispatch.Phase = RemoteRefuelDispatchPhase.Returning;
+            dispatch.NextDriveTaskRefreshMs = 0;
+            EnsureDispatchDriveTask(dispatch, dispatch.SourceSpawnPosition, now);
         }
 
         private Blip CreateDispatchBlip(Vehicle truck, Industry sourceIndustry)

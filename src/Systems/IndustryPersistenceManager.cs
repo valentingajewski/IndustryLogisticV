@@ -197,14 +197,18 @@ namespace LSOL.Systems
                         writer.WriteLine("ColorblindMode={0}", metadata.ColorblindMode.Value);
                     }
 
+                    writer.WriteLine("UseMetricSpeedDisplay={0}", metadata.UseMetricSpeedDisplay ? "true" : "false");
                     writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CargoWeightPowerDifficultyEnabled={0}", metadata.CargoWeightPowerDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("CorridorRestrictionDifficultyEnabled={0}", metadata.CorridorRestrictionDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("ReputationDifficultyEnabled={0}", metadata.ReputationDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("OfficeGarageLimitDifficultyEnabled={0}", metadata.OfficeGarageLimitDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("EconomyDifficultyPreset={0}", metadata.EconomyDifficultyPreset);
                     writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
+                    writer.WriteLine("NpcRouteLimit={0}", metadata.NpcRouteLimit);
                     writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
                 }
                 writer.WriteLine();
@@ -288,14 +292,18 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "StartingBalance") ||
                 ini.HasKey("Meta", "Language") ||
                 ini.HasKey("Meta", "ColorblindMode") ||
+                ini.HasKey("Meta", "UseMetricSpeedDisplay") ||
                 ini.HasKey("Meta", "VehicleFuelDifficultyEnabled") ||
                 ini.HasKey("Meta", "CargoWeightPowerDifficultyEnabled") ||
                 ini.HasKey("Meta", "CargoDamageDifficultyEnabled") ||
                 ini.HasKey("Meta", "IndustryPricingDifficultyEnabled") ||
                 ini.HasKey("Meta", "LicensingDifficultyEnabled") ||
                 ini.HasKey("Meta", "CorridorRestrictionDifficultyEnabled") ||
+                ini.HasKey("Meta", "ReputationDifficultyEnabled") ||
+                ini.HasKey("Meta", "OfficeGarageLimitDifficultyEnabled") ||
                 ini.HasKey("Meta", "EconomyDifficultyPreset") ||
                 ini.HasKey("Meta", "NpcWeeklyWageDifficulty") ||
+                ini.HasKey("Meta", "NpcRouteLimit") ||
                 ini.HasKey("Meta", "DifficultySettingsLocked");
 
             metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
@@ -306,18 +314,24 @@ namespace LSOL.Systems
             metadata.ColorblindMode = ParseColorblindMode(
                 ini.GetString("Meta", "ColorblindMode", string.Empty),
                 ColorblindMode.Off);
+            metadata.UseMetricSpeedDisplay = ini.GetBool("Meta", "UseMetricSpeedDisplay", false);
             metadata.VehicleFuelDifficultyEnabled = ini.GetBool("Meta", "VehicleFuelDifficultyEnabled", false);
             metadata.CargoWeightPowerDifficultyEnabled = ini.GetBool("Meta", "CargoWeightPowerDifficultyEnabled", false);
             metadata.CargoDamageDifficultyEnabled = ini.GetBool("Meta", "CargoDamageDifficultyEnabled", true);
             metadata.IndustryPricingDifficultyEnabled = ini.GetBool("Meta", "IndustryPricingDifficultyEnabled", false);
             metadata.LicensingDifficultyEnabled = ini.GetBool("Meta", "LicensingDifficultyEnabled", false);
             metadata.CorridorRestrictionDifficultyEnabled = ini.GetBool("Meta", "CorridorRestrictionDifficultyEnabled", true);
+            metadata.ReputationDifficultyEnabled = ini.GetBool("Meta", "ReputationDifficultyEnabled", true);
+            metadata.OfficeGarageLimitDifficultyEnabled = ini.GetBool("Meta", "OfficeGarageLimitDifficultyEnabled", true);
             metadata.EconomyDifficultyPreset = ParseEconomyDifficultyPreset(
                 ini.GetString("Meta", "EconomyDifficultyPreset", EconomyDifficultyPreset.Standard.ToString()),
                 EconomyDifficultyPreset.Standard);
             metadata.NpcWeeklyWageDifficulty = ParseNpcWeeklyWageDifficulty(
                 ini.GetString("Meta", "NpcWeeklyWageDifficulty", NpcWeeklyWageDifficulty.Standard.ToString()),
                 NpcWeeklyWageDifficulty.Standard);
+            metadata.NpcRouteLimit = ParseInt(
+                ini.GetString("Meta", "NpcRouteLimit", "5"),
+                5);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             metadata.Analytics = ReadAnalyticsSnapshot(ini);
             metadata.OwnedFleet = ReadOwnedFleetSnapshot(ini);
@@ -871,6 +885,8 @@ namespace LSOL.Systems
                         writer.WriteLine("Route{0}OriginIndustryId={1}", routeIndex, route.OriginIndustryId ?? string.Empty);
                         writer.WriteLine("Route{0}DestinationIndustryId={1}", routeIndex, route.DestinationIndustryId ?? string.Empty);
                         writer.WriteLine("Route{0}Commodity={1}", routeIndex, route.Commodity ?? string.Empty);
+                        writer.WriteLine("Route{0}AssignedVehicleAssetId={1}", routeIndex, route.AssignedVehicleAssetId ?? string.Empty);
+                        writer.WriteLine("Route{0}AssignedVehicleDisplayName={1}", routeIndex, route.AssignedVehicleDisplayName ?? string.Empty);
                         writer.WriteLine("Route{0}OriginTriggerThresholdPercent={1}", routeIndex, route.OriginTriggerThresholdPercent);
                         writer.WriteLine("Route{0}DestinationTriggerThresholdPercent={1}", routeIndex, route.DestinationTriggerThresholdPercent);
                     }
@@ -982,6 +998,8 @@ namespace LSOL.Systems
                             OriginIndustryId = ini.GetString(section, string.Format("Route{0}OriginIndustryId", routeIndex), string.Empty),
                             DestinationIndustryId = ini.GetString(section, string.Format("Route{0}DestinationIndustryId", routeIndex), string.Empty),
                             Commodity = CommodityCatalog.Normalize(ini.GetString(section, string.Format("Route{0}Commodity", routeIndex), string.Empty)),
+                            AssignedVehicleAssetId = ini.GetString(section, string.Format("Route{0}AssignedVehicleAssetId", routeIndex), string.Empty),
+                            AssignedVehicleDisplayName = ini.GetString(section, string.Format("Route{0}AssignedVehicleDisplayName", routeIndex), string.Empty),
                             OriginTriggerThresholdPercent = ParseInt(ini.GetString(section, string.Format("Route{0}OriginTriggerThresholdPercent", routeIndex), "0"), 0),
                             DestinationTriggerThresholdPercent = ParseInt(ini.GetString(section, string.Format("Route{0}DestinationTriggerThresholdPercent", routeIndex), "100"), 100),
                         });
@@ -1614,14 +1632,18 @@ namespace LSOL.Systems
         public float StartingBalance { get; set; }
         public ModLanguage? Language { get; set; }
         public ColorblindMode? ColorblindMode { get; set; }
+        public bool UseMetricSpeedDisplay { get; set; }
         public bool VehicleFuelDifficultyEnabled { get; set; }
         public bool CargoWeightPowerDifficultyEnabled { get; set; }
         public bool CargoDamageDifficultyEnabled { get; set; }
         public bool IndustryPricingDifficultyEnabled { get; set; }
         public bool LicensingDifficultyEnabled { get; set; }
         public bool CorridorRestrictionDifficultyEnabled { get; set; } = true;
+        public bool ReputationDifficultyEnabled { get; set; } = true;
+        public bool OfficeGarageLimitDifficultyEnabled { get; set; } = true;
         public EconomyDifficultyPreset EconomyDifficultyPreset { get; set; } = EconomyDifficultyPreset.Standard;
         public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
+        public int NpcRouteLimit { get; set; } = 5;
         public bool DifficultySettingsLocked { get; set; }
         public TabletAnalyticsPersistenceSnapshot Analytics { get; set; }
         public OwnedFleetPersistenceSnapshot OwnedFleet { get; set; }

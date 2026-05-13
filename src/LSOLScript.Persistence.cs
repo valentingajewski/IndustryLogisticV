@@ -94,8 +94,11 @@ namespace LSOL
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
+            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
+            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
+            _pendingNpcRouteLimit = _npcRouteLimit;
 
             _savingOptionsMenu.Close();
             RebuildNewSaveSetupMenuItems();
@@ -123,8 +126,11 @@ namespace LSOL
             _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
             _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
             _corridorRestrictionDifficultyEnabled = _pendingCorridorRestrictionDifficultyEnabled;
+            _reputationDifficultyEnabled = _pendingReputationDifficultyEnabled;
+            _officeGarageLimitDifficultyEnabled = _pendingOfficeGarageLimitDifficultyEnabled;
             _economyDifficultyPreset = _pendingEconomyDifficultyPreset;
             _npcWeeklyWageDifficulty = _pendingNpcWeeklyWageDifficulty;
+            _npcRouteLimit = ClampNpcRouteLimit(_pendingNpcRouteLimit);
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
             ApplyDifficultySettingsToSystems();
@@ -149,8 +155,11 @@ namespace LSOL
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
+            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
+            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
+            _pendingNpcRouteLimit = _npcRouteLimit;
             ReturnToSavingOptionsMenu();
             ShowStatus(Text(ModTextKey.DetailSaveCreated, createdSaveName), 4000);
         }
@@ -259,10 +268,14 @@ namespace LSOL
                     _industryPricingDifficultyEnabled = false;
                     _licensingDifficultyEnabled = false;
                     _corridorRestrictionDifficultyEnabled = true;
+                    _reputationDifficultyEnabled = true;
+                    _officeGarageLimitDifficultyEnabled = true;
                     _language = ModLanguage.English;
                     _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                     _colorblindMode = ColorblindMode.Off;
+                    _useMetricSpeedDisplay = false;
                     _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
+                    _npcRouteLimit = DefaultNpcRouteLimit;
                     _difficultySettingsLocked = false;
                     ApplyPresentationSettings(false);
                     ApplyDifficultySettingsToSystems();
@@ -281,8 +294,11 @@ namespace LSOL
                 _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
                 _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
                 _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
+                _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
+                _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
                 _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
                 _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
+                _pendingNpcRouteLimit = _npcRouteLimit;
             }
 
             RebuildSaveSlotsMenuItems();
@@ -428,14 +444,18 @@ namespace LSOL
                 StartingBalance = _currentStartingBalance,
                 Language = _language,
                 ColorblindMode = _colorblindMode,
+                UseMetricSpeedDisplay = _useMetricSpeedDisplay,
                 VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
                 CargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled,
                 CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
                 IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
                 LicensingDifficultyEnabled = _licensingDifficultyEnabled,
                 CorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled,
+                ReputationDifficultyEnabled = _reputationDifficultyEnabled,
+                OfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled,
                 EconomyDifficultyPreset = _economyDifficultyPreset,
                 NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
+                NpcRouteLimit = _npcRouteLimit,
                 DifficultySettingsLocked = _difficultySettingsLocked,
                 Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
                 OwnedFleet = _fleetManager.CreateOwnedFleetSnapshot(_vehicleFuelSystem),
@@ -452,29 +472,37 @@ namespace LSOL
                 _profit = metadata.Profit;
                 _currentStartingBalance = metadata.StartingBalance;
                 _language = metadata.Language ?? ModLanguage.English;
+                _useMetricSpeedDisplay = metadata.UseMetricSpeedDisplay;
                 _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
                 _cargoWeightPowerDifficultyEnabled = metadata.CargoWeightPowerDifficultyEnabled;
                 _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
                 _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
                 _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
                 _corridorRestrictionDifficultyEnabled = metadata.CorridorRestrictionDifficultyEnabled;
+                _reputationDifficultyEnabled = metadata.ReputationDifficultyEnabled;
+                _officeGarageLimitDifficultyEnabled = metadata.OfficeGarageLimitDifficultyEnabled;
                 _economyDifficultyPreset = metadata.EconomyDifficultyPreset;
                 _colorblindMode = metadata.ColorblindMode ?? ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = metadata.NpcWeeklyWageDifficulty;
+                _npcRouteLimit = ClampNpcRouteLimit(metadata.NpcRouteLimit);
                 _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
             }
             else
             {
                 _language = ModLanguage.English;
+                _useMetricSpeedDisplay = false;
                 _vehicleFuelDifficultyEnabled = false;
                 _cargoWeightPowerDifficultyEnabled = false;
                 _cargoDamageDifficultyEnabled = true;
                 _industryPricingDifficultyEnabled = false;
                 _licensingDifficultyEnabled = false;
                 _corridorRestrictionDifficultyEnabled = true;
+                _reputationDifficultyEnabled = true;
+                _officeGarageLimitDifficultyEnabled = true;
                 _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                 _colorblindMode = ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
+                _npcRouteLimit = DefaultNpcRouteLimit;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
@@ -488,8 +516,11 @@ namespace LSOL
             _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
             _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
+            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
+            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
+            _pendingNpcRouteLimit = _npcRouteLimit;
             ApplyDifficultySettingsToSystems();
             _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
             var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;

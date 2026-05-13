@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using GTA;
 using LSOL;
 using LSOL.Domain;
@@ -518,17 +519,17 @@ namespace LSOL.Systems
         {
             return industry != null
                 && industry.SupportsOmegaBoost
-                && industry.Inputs != null
-                && industry.Inputs.Count > 1;
+                && industry.SortedAcceptedInputs != null
+                && industry.SortedAcceptedInputs.Count > 1;
         }
 
         public static bool IsOmegaOnlyUnloadIndustry(Industry industry)
         {
             return industry != null
                 && industry.SupportsOmegaBoost
-                && industry.Inputs != null
-                && industry.Inputs.Count == 1
-                && industry.Inputs.Contains("Omega");
+                && industry.SortedAcceptedInputs != null
+                && industry.SortedAcceptedInputs.Count == 1
+                && industry.SortedAcceptedInputs.Contains("Omega");
         }
 
         private bool EnsureIndustryTransportPermit(Industry industry)
