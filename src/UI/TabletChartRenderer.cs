@@ -66,7 +66,7 @@ namespace LSOL.UI
             }
 
             var palette = AccessibilityTheme.Service.Palette;
-            formatter = formatter ?? (value => value.ToString("0.0"));
+            formatter = formatter ?? (value => ModFormatting.FormatNumber(value));
             var latestText = values != null && values.Count > 0
                 ? formatter(values[values.Count - 1])
                 : string.Empty;

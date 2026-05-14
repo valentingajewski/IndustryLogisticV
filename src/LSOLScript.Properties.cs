@@ -44,7 +44,7 @@ namespace LSOL
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
-            _commercialGarageActionMenu = new LemonMenu("Garage Vehicle")
+            _commercialGarageActionMenu = new LemonMenu("Vehicle")
             {
                 Subtitle = "Retrieve, store, reserve, or close the contract",
                 AlignRight = true,
@@ -677,7 +677,7 @@ namespace LSOL
                 return "Install a Diesel Tank first.";
             }
 
-            return string.Format("Stored diesel: {0:0}/{1:0}L.", Math.Max(0f, tank.StoredResourceAmount), definition.Capacity);
+            return string.Format("Stored diesel: {0}.", ModFormatting.FormatRatio(Math.Max(0f, tank.StoredResourceAmount), definition.Capacity, "L"));
         }
 
         private string BuildOfficeFuelUnloadDetail()
@@ -718,7 +718,7 @@ namespace LSOL
             var freeLiters = Math.Max(0f, definition.Capacity - tank.StoredResourceAmount);
             return freeLiters <= 0.05f
                 ? "The office diesel tank is already full."
-                : string.Format("Dispatch a refinery tanker to deliver up to {0:0}L at a discounted price.", freeLiters);
+                : string.Format("Dispatch a refinery tanker to deliver up to {0} at a discounted price.", ModFormatting.FormatLiters(freeLiters));
         }
 
         private string BuildOfficeRepairDetail()
@@ -857,7 +857,7 @@ namespace LSOL
             switch (definition.Function)
             {
                 case OfficeObjectFunction.Refuel:
-                    return string.Format("Diesel storage {0:0}L", Math.Max(0f, definition.Capacity));
+                    return string.Format("Diesel storage {0}", ModFormatting.FormatLiters(Math.Max(0f, definition.Capacity)));
                 case OfficeObjectFunction.Repair:
                     return "Repairs office trucks and trailers";
                 case OfficeObjectFunction.Npc:
@@ -1279,7 +1279,7 @@ namespace LSOL
                 : "Owned";
             var cargo = string.IsNullOrWhiteSpace(vehicle.Commodity)
                 ? "Empty"
-                : string.Format("{0} {1:0.0}/{2:0.0}t", vehicle.Commodity, vehicle.WeightTons, Math.Max(0f, vehicle.CapacityTons));
+                : string.Format("{0} {1}", vehicle.Commodity, ModFormatting.FormatRatio(vehicle.WeightTons, Math.Max(0f, vehicle.CapacityTons), "t"));
             var npcAssignment = BuildCommercialVehicleNpcAssignmentDetail(vehicle);
             return string.IsNullOrWhiteSpace(npcAssignment)
                 ? string.Format("{0} | {1} | {2} | {3}", location, deployed, acquisition, cargo)
@@ -1506,7 +1506,7 @@ namespace LSOL
                     CaptionFactory = () => "Back",
                     OnActivate = ReturnToCommercialGarageMenu,
                 });
-                _commercialGarageActionMenu.Title = "Garage Vehicle";
+                _commercialGarageActionMenu.Title = "Vehicle";
                 _commercialGarageActionMenu.Subtitle = "Vehicle actions";
                 _commercialGarageActionMenu.SetItems(items);
                 return;
@@ -1593,7 +1593,7 @@ namespace LSOL
                 OnActivate = ReturnToCommercialGarageMenu,
             });
 
-            _commercialGarageActionMenu.Title = vehicle.DisplayName;
+            _commercialGarageActionMenu.Title = "Vehicle";
             _commercialGarageActionMenu.Subtitle = vehicle.IsRental
                 ? string.Format("Rental {0}/day", ModFormatting.FormatMoney(vehicle.DailyRent))
                 : "Owned company vehicle";
@@ -2167,10 +2167,10 @@ namespace LSOL
             }
 
             return string.Format(
-                "Price {0} | Capacity {1:0.0}t | Fuel {2:0}L | Rent {3}/day",
+                "Price {0} | Capacity {1} | Fuel {2} | Rent {3}/day",
                 ModFormatting.FormatMoney(Math.Max(0f, definition.Price)),
-                Math.Max(0f, definition.CapacityTons),
-                Math.Max(0f, definition.FuelCapacityLiters),
+                ModFormatting.FormatTons(Math.Max(0f, definition.CapacityTons)),
+                ModFormatting.FormatLiters(Math.Max(0f, definition.FuelCapacityLiters)),
                 ModFormatting.FormatMoney(Math.Max(0f, definition.DailyRent)));
         }
 

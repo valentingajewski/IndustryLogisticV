@@ -208,7 +208,7 @@ namespace LSOL.UI
 
             DrawPixelText(
                 resolution,
-                string.Format("Total Stockpile: {0:0.0}/{1:0.0} t", stockpile, totalCapacity),
+                string.Format("Total Stockpile: {0}", ModFormatting.FormatRatio(stockpile, totalCapacity, " t")),
                 contentX,
                 contentY + 52f,
                 0.275f,
@@ -307,7 +307,7 @@ namespace LSOL.UI
 
                 DrawPixelText(
                     resolution,
-                    string.Format("{0:0.0}/{1:0.0} t", entry.Stock, entry.Capacity),
+                    ModFormatting.FormatRatio(entry.Stock, entry.Capacity, " t"),
                     contentX,
                     rowY + 14f,
                     0.235f,
@@ -334,10 +334,10 @@ namespace LSOL.UI
             if (industry != null && industry.SiteRole == SiteRole.Warehouse)
             {
                 var commodityCount = snapshot != null && snapshot.Entries != null ? snapshot.Entries.Count : 0;
-                return string.Format("Fill Ratio: {0:0}% | Accepted Commodities: {1}", utilizationRatio * 100f, commodityCount);
+                return string.Format("Fill Ratio: {0} | Accepted Commodities: {1}", ModFormatting.FormatPercent(utilizationRatio * 100f), commodityCount);
             }
 
-            return string.Format("Utilization: {0:0}% | Output: {1:0.0} t/h", utilizationRatio * 100f, industry != null ? industry.CurrentOutputPerHourTons : 0f);
+            return string.Format("Utilization: {0} | Output: {1}", ModFormatting.FormatPercent(utilizationRatio * 100f), ModFormatting.FormatRatePerHour(industry != null ? industry.CurrentOutputPerHourTons : 0f, "t"));
         }
 
         private static void DrawIndustryStatistics(Industry industry, IndustryStatisticsSnapshot snapshot, int scrollIndex, float frameX, float frameY)
@@ -349,7 +349,7 @@ namespace LSOL.UI
             var utilizationRatio = snapshot == null ? 0f : snapshot.UtilizationRatio;
 
             DrawText(
-                string.Format("Total Stockpile: {0:0.0}/{1:0.0} t", stockpile, totalCapacity),
+                string.Format("Total Stockpile: {0}", ModFormatting.FormatRatio(stockpile, totalCapacity, " t")),
                 frameX + 84f,
                 frameY + 170f,
                 0.275f,
@@ -430,7 +430,7 @@ namespace LSOL.UI
                     0f);
 
                 DrawText(
-                    string.Format("{0:0.0}/{1:0.0} t", entry.Stock, entry.Capacity),
+                    ModFormatting.FormatRatio(entry.Stock, entry.Capacity, " t"),
                     frameX + 84f,
                     rowY + 14f,
                     0.235f,

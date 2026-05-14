@@ -38,6 +38,8 @@ namespace LSOL.Systems
         private readonly Action<float> _deductProfit;
         private readonly Action<float> _addProfit;
         private readonly Action<string> _showStatus;
+        private readonly CompanyFinanceTracker _financeTracker;
+        private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<IReadOnlyList<OwnedCommercialVehiclePersistenceEntry>> _getCommercialVehicles;
         private readonly Func<string> _getActiveOfficeId;
         private readonly Func<OfficeDefinition> _getActiveOffice;
@@ -75,7 +77,9 @@ namespace LSOL.Systems
             TerritoryManager territoryManager = null,
             Func<IReadOnlyList<OwnedCommercialVehiclePersistenceEntry>> getCommercialVehicles = null,
             Func<string> getActiveOfficeId = null,
-            Func<OfficeDefinition> getActiveOffice = null)
+            Func<OfficeDefinition> getActiveOffice = null,
+            CompanyFinanceTracker financeTracker = null,
+            Func<int> getCurrentInGameMinute = null)
         {
             _industryManager = industryManager;
             _fleetManager = fleetManager;
@@ -86,6 +90,8 @@ namespace LSOL.Systems
             _deductProfit = deductProfit;
             _addProfit = addProfit;
             _showStatus = showStatus;
+            _financeTracker = financeTracker;
+            _getCurrentInGameMinute = getCurrentInGameMinute;
             _getCommercialVehicles = getCommercialVehicles;
             _getActiveOfficeId = getActiveOfficeId;
             _getActiveOffice = getActiveOffice;
@@ -933,6 +939,12 @@ namespace LSOL.Systems
             if (additionalCost > 0f && _deductProfit != null)
             {
                 _deductProfit(additionalCost);
+                RecordFinanceExpense(
+                    CompanyFinanceCategory.OtherExpense,
+                    additionalCost,
+                    string.Format("NPC route contract fee for {0} route{1}", normalizedRoutes.Count, normalizedRoutes.Count == 1 ? string.Empty : "s"),
+                    contract != null ? contract.Id : 0,
+                    contract != null ? BuildContractLabel(contract) : string.Empty);
             }
 
             if (isNewContract)
@@ -1488,7 +1500,7 @@ namespace LSOL.Systems
 
             _globalMarket?.RegisterDelivery(job.Commodity, now);
             _territoryManager?.RegisterDelivery(destination, job.Commodity, acceptedTons, true, string.Empty, string.Empty);
-            outcome = string.Format("{0} delivered {1:0.0}t {2} to {3}.", FormatWorldJobType(job.Type), acceptedTons, job.Commodity, destination.Name);
+            outcome = string.Format("{0} delivered {1} {2} to {3}.", FormatWorldJobType(job.Type), ModFormatting.FormatTons(acceptedTons), job.Commodity, destination.Name);
             return true;
         }
 
@@ -1508,7 +1520,7 @@ namespace LSOL.Systems
             }
 
             _territoryManager?.RegisterLoad(origin, job.Commodity, removedTons, true);
-            outcome = string.Format("Exported {0:0.0}t {1} from {2} to outside buyers.", removedTons, job.Commodity, origin.Name);
+            outcome = string.Format("Exported {0} {1} from {2} to outside buyers.", ModFormatting.FormatTons(removedTons), job.Commodity, origin.Name);
             return true;
         }
 
@@ -1551,9 +1563,9 @@ namespace LSOL.Systems
             _territoryManager?.RegisterDelivery(destination, job.Commodity, acceptedTons, true, origin.Id, origin.DistrictName);
             _industryManager.ComputeDeliveryProfit(destination, job.Commodity, acceptedTons, _globalMarket, now);
             outcome = string.Format(
-                "{0} moved {1:0.0}t {2} from {3} to {4}.",
+                "{0} moved {1} {2} from {3} to {4}.",
                 FormatWorldJobType(job.Type),
-                acceptedTons,
+                ModFormatting.FormatTons(acceptedTons),
                 job.Commodity,
                 origin.Name,
                 destination.Name);
@@ -1971,6 +1983,10 @@ namespace LSOL.Systems
             }
 
             _deductProfit(fee);
+            RecordFinanceExpense(
+                CompanyFinanceCategory.ServiceCall,
+                fee,
+                string.Format("Premium dispatch for {0}", job.Commodity ?? string.Empty));
         }
 
         private float ComputePremiumDispatchFee(NpcWorldLogisticsJob job)
@@ -2447,9 +2463,9 @@ namespace LSOL.Systems
             if (GetDestinationRemainingNeedTons(contract) <= 0.001f)
             {
                 waitStatus = string.Format(
-                    "Waiting at office for {0} storage under {1}%.",
+                    "Waiting at office for {0} storage under {1}.",
                     contract.DestinationIndustry.Name,
-                    destinationThreshold);
+                    ModFormatting.FormatPercent(destinationThreshold));
                 return false;
             }
 
@@ -2459,7 +2475,7 @@ namespace LSOL.Systems
                 var originThreshold = ClampTriggerPercent(contract.OriginTriggerThresholdPercent, 0);
                 waitStatus = originThreshold <= 0
                     ? string.Format("Waiting at office for stock at {0}.", contract.OriginIndustry.Name)
-                    : string.Format("Waiting at office for {0} stock above {1}%.", contract.OriginIndustry.Name, originThreshold);
+                    : string.Format("Waiting at office for {0} stock above {1}.", contract.OriginIndustry.Name, ModFormatting.FormatPercent(originThreshold));
                 return false;
             }
 
@@ -2479,9 +2495,9 @@ namespace LSOL.Systems
             if (GetDestinationRemainingNeedTons(contract) <= 0.001f)
             {
                 waitStatus = string.Format(
-                    "Waiting at office for {0} storage under {1}%.",
+                    "Waiting at office for {0} storage under {1}.",
                     contract.DestinationIndustry.Name,
-                    destinationThreshold);
+                    ModFormatting.FormatPercent(destinationThreshold));
                 return false;
             }
 
@@ -2633,9 +2649,9 @@ namespace LSOL.Systems
                 if (!CanAttemptContractSpawn(contract, now, out nextAllowedSpawnMs))
                 {
                     contract.StatusText = string.Format(
-                        "Spawn queue active at {0}; retrying in {1:0.0}s",
+                        "Spawn queue active at {0}; retrying in {1}s",
                         contract.OriginIndustry != null ? contract.OriginIndustry.Name : "origin",
-                        Math.Max(0, nextAllowedSpawnMs - now) / 1000f);
+                        ModFormatting.FormatNumber(Math.Max(0, nextAllowedSpawnMs - now) / 1000f));
                     contract.Phase = NpcRoutePhase.PendingSpawn;
                     contract.WaitUntilMs = nextAllowedSpawnMs;
                     return;
@@ -2714,6 +2730,12 @@ namespace LSOL.Systems
             if (totalCharge > 0f && _deductProfit != null)
             {
                 _deductProfit(totalCharge);
+                RecordFinanceExpense(
+                    CompanyFinanceCategory.NpcWages,
+                    totalCharge,
+                    string.Format("NPC payroll for {0}", BuildContractLabel(contract)),
+                    contract.Id,
+                    BuildContractLabel(contract));
             }
 
             contract.CompletedPayrollCycles += payrollCyclesDue;
@@ -2811,8 +2833,8 @@ namespace LSOL.Systems
             if (_officeDeliveryNotificationsEnabled && _showStatus != null)
             {
                 _showStatus(string.Format(
-                    "NPC loaded {0:0.0}t {1} at {2}.",
-                    deliveredTons,
+                    "NPC loaded {0} {1} at {2}.",
+                    ModFormatting.FormatTons(deliveredTons),
                     contract.Commodity,
                     contract.OriginIndustry != null ? contract.OriginIndustry.Name : "origin"));
             }
@@ -2894,19 +2916,26 @@ namespace LSOL.Systems
                     contract.OriginIndustry != null ? contract.OriginIndustry.DistrictName : cargoState.SourceDistrictName);
             }
 
-            if (_addProfit != null && revenue > 0f)
+            var creditedRevenue = Math.Max(0f, revenue);
+            if (_addProfit != null && creditedRevenue > 0f)
             {
-                _addProfit(revenue);
+                _addProfit(creditedRevenue);
+                RecordFinanceIncome(
+                    CompanyFinanceCategory.NpcDelivery,
+                    creditedRevenue,
+                    string.Format("NPC delivery to {0}", contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "destination"),
+                    contract.Id,
+                    BuildContractLabel(contract));
             }
 
             if (_officeDeliveryNotificationsEnabled && _showStatus != null)
             {
                 _showStatus(string.Format(
-                    "NPC unloaded {0:0.0}t {1} at {2}{3}",
-                    acceptedTons,
+                    "NPC unloaded {0} {1} at {2}. Earned {3}.",
+                    ModFormatting.FormatTons(acceptedTons),
                     contract.Commodity,
                     contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "destination",
-                    revenue > 0f ? string.Format(". Earned {0}.", ModFormatting.FormatMoney(revenue)) : "."));
+                    ModFormatting.FormatMoney(creditedRevenue)));
             }
 
             contract.TotalDeliveredTons += acceptedTons;
@@ -2917,7 +2946,7 @@ namespace LSOL.Systems
                 cargoState.ClearCargo();
                 _fleetManager.ClearCargoVisuals(cargoState);
                 contract.CompletedDeliveries += 1;
-                contract.TotalProfitEarned += revenue;
+                contract.TotalProfitEarned += creditedRevenue;
                 if (contract.Routes.Count > 1)
                 {
                     var previousCommodity = contract.Commodity;
@@ -2954,8 +2983,8 @@ namespace LSOL.Systems
                 {
                     contract.Phase = NpcRoutePhase.DrivingToOrigin;
                     contract.StatusText = string.Format(
-                        "Delivered {0:0.0}t {1}",
-                        acceptedTons,
+                        "Delivered {0} {1}",
+                        ModFormatting.FormatTons(acceptedTons),
                         contract.Commodity);
                     contract.NextDriveTaskRefreshMs = 0;
                     contract.WaitUntilMs = now + 1000;
@@ -4224,6 +4253,33 @@ namespace LSOL.Systems
                 contract.OriginIndustry.Name,
                 contract.DestinationIndustry.Name,
                 contract.Commodity);
+        }
+
+        private void RecordFinanceExpense(CompanyFinanceCategory category, float amount, string description, int routeContractId = 0, string routeLabel = null)
+        {
+            if (_financeTracker == null || amount <= 0f)
+            {
+                return;
+            }
+
+            _financeTracker.RecordExpense(category, amount, ResolveFinanceMinute(), description, routeContractId, routeLabel);
+        }
+
+        private void RecordFinanceIncome(CompanyFinanceCategory category, float amount, string description, int routeContractId = 0, string routeLabel = null)
+        {
+            if (_financeTracker == null || amount <= 0f)
+            {
+                return;
+            }
+
+            _financeTracker.RecordIncome(category, amount, ResolveFinanceMinute(), description, routeContractId, routeLabel);
+        }
+
+        private int ResolveFinanceMinute()
+        {
+            return _getCurrentInGameMinute != null
+                ? Math.Max(0, _getCurrentInGameMinute())
+                : 0;
         }
 
         private NpcWorldJobSummary BuildWorldJobSummary(NpcWorldLogisticsJob job)

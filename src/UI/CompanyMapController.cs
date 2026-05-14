@@ -399,8 +399,8 @@ namespace LSOL.UI
                 {
                     CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(reputationLabel)),
                     DetailFactory = () => string.Format(
-                        "Influence {0:0}% | Depots {1} | Operational {2} | Corridors {3}",
-                        district.InfluenceRatio * 100f,
+                        "Influence {0} | Depots {1} | Operational {2} | Corridors {3}",
+                        ModFormatting.FormatPercent(district.InfluenceRatio * 100f),
                         district.ControlledDepots,
                         district.OperationalSites,
                         district.RouteRights),
@@ -442,14 +442,14 @@ namespace LSOL.UI
             {
                 CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(GetReputationLabel(district))),
                 DetailFactory = () => string.Format(
-                    "Influence score {0:0.0} | {1}Reputation score {2:0.0}~s~",
-                    district.InfluenceScore,
+                    "Influence score {0} | {1}Reputation score {2}~s~",
+                    ModFormatting.FormatNumber(district.InfluenceScore),
                     GetReputationColorCode(GetReputationLabel(district)),
-                    district.ReputationScore),
+                    ModFormatting.FormatNumber(district.ReputationScore)),
             });
             items.Add(new MenuItem
             {
-                CaptionFactory = () => string.Format("Influence: {0:0}%", district.InfluenceRatio * 100f),
+                CaptionFactory = () => string.Format("Influence: {0}", ModFormatting.FormatPercent(district.InfluenceRatio * 100f)),
                 DetailFactory = () => district.InfluenceRatio >= 0.6f
                     ? "District is established enough to support local fleet privileges and better delivery terms."
                     : "Grow deliveries, depots, and corridors here to anchor the district.",
@@ -469,10 +469,10 @@ namespace LSOL.UI
             {
                 CaptionFactory = () => "Service & Support",
                 DetailFactory = () => string.Format(
-                    "Franchises {0} | Corridor rights {1} | Support bonus +{2:0}%",
+                    "Franchises {0} | Corridor rights {1} | Support bonus {2}",
                     district.FranchiseSites,
                     district.RouteRights,
-                    (_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f),
+                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f)),
             });
 
             var localIndustries = _industryManager != null && _industryManager.Industries != null
@@ -743,7 +743,7 @@ namespace LSOL.UI
                 Alignment.Left);
             DrawTextLine(
                 resolution,
-                string.Format("{0} | {1:0}%", GetReputationLabel(layout.District), layout.District.InfluenceRatio * 100f),
+                string.Format("{0} | {1}", GetReputationLabel(layout.District), ModFormatting.FormatPercent(layout.District.InfluenceRatio * 100f)),
                 x + 10f,
                 y + 30f,
                 0.20f,
@@ -781,7 +781,7 @@ namespace LSOL.UI
                 Alignment.Left);
             DrawTextLine(
                 resolution,
-                string.Format("{0} | Influence {1:0}%", GetReputationLabel(district), district.InfluenceRatio * 100f),
+                string.Format("{0} | Influence {1}", GetReputationLabel(district), ModFormatting.FormatPercent(district.InfluenceRatio * 100f)),
                 x + 18f,
                 y + 44f,
                 0.23f,
@@ -794,16 +794,16 @@ namespace LSOL.UI
                 ? "NPC Ready"
                 : "NPC Locked";
             var summary = string.Format(
-                "Influence score {0:0.0}\nReputation score {1:0.0}\nSites {2} | Controlled {3} | Operational {4}\nDepots {5} | Franchises {6}\nCorridor rights {7} | Support bonus +{8:0}%\n{9}",
-                district.InfluenceScore,
-                district.ReputationScore,
+                "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nDepots {5} | Franchises {6}\nCorridor rights {7} | Support bonus {8}\n{9}",
+                ModFormatting.FormatNumber(district.InfluenceScore),
+                ModFormatting.FormatNumber(district.ReputationScore),
                 district.SiteCount,
                 district.ControlledSites,
                 district.OperationalSites,
                 district.ControlledDepots,
                 district.FranchiseSites,
                 district.RouteRights,
-                supportBonus,
+                ModFormatting.FormatSignedPercent(supportBonus),
                 npcStatus);
             DrawTextBlock(
                 resolution,
@@ -872,7 +872,7 @@ namespace LSOL.UI
                     Alignment.Left);
                 DrawTextLine(
                     resolution,
-                    string.Format("{0} deliveries | {1:0.#} tons", corridor.DeliveryCount, corridor.TotalDeliveredTons),
+                    string.Format("{0} deliveries | {1}", corridor.DeliveryCount, ModFormatting.FormatTons(corridor.TotalDeliveredTons)),
                     x + width - 18f,
                     rowY,
                     0.20f,
@@ -1292,8 +1292,8 @@ namespace LSOL.UI
             {
                 CaptionFactory = () => "District Bonus",
                 DetailFactory = () => string.Format(
-                    "Current district support bonus +{0:0}% to route reliability and delivery posture.",
-                    (_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(industry.DistrictName) : 0f) * 100f),
+                    "Current district support bonus {0} to route reliability and delivery posture.",
+                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(industry.DistrictName) : 0f) * 100f)),
             });
             items.Add(new MenuItem
             {

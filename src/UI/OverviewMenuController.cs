@@ -800,9 +800,9 @@ namespace LSOL.UI
             }
 
             var detail = string.Format(
-                "Storage {0:0.0}t | Omega {1:0.0}t",
-                industry.GetInputStockTotal() + industry.GetOutputStockTotal(),
-                industry.OmegaStorage);
+                "Storage {0} | Omega {1}",
+                ModFormatting.FormatTons(industry.GetInputStockTotal() + industry.GetOutputStockTotal()),
+                ModFormatting.FormatTons(industry.OmegaStorage));
 
             var warning = industry.GetProductionWarning();
             if (!string.IsNullOrWhiteSpace(warning))
@@ -891,7 +891,7 @@ namespace LSOL.UI
 
             var storage = industry.GetInputStockTotal();
             var fillPercent = ModMath.Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
-            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillPercent);
+            return string.Format("Storage {0} | {1} full", ModFormatting.FormatTons(storage), ModFormatting.FormatPercent(fillPercent));
         }
 
         private static string GetGasStationOverviewDetail(Industry industry)
@@ -903,7 +903,7 @@ namespace LSOL.UI
 
             var storage = industry.GetInputStockTotal();
             var fillPercent = ModMath.Clamp01(storage / Math.Max(1f, industry.InputCapacityTons)) * 100f;
-            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillPercent);
+            return string.Format("Storage {0} | {1} full", ModFormatting.FormatTons(storage), ModFormatting.FormatPercent(fillPercent));
         }
 
         private bool IsBackMenuKey(WinForms.Keys key)

@@ -38,6 +38,8 @@ namespace LSOL.Systems
 
         private PropertyOwnershipPersistenceSnapshot _state;
         private bool _officeGarageLimitEnforced;
+        private CompanyFinanceTracker _financeTracker;
+        private Func<int> _getCurrentInGameMinute;
 
         public PropertyManager(ModConfig config)
         {
@@ -70,6 +72,12 @@ namespace LSOL.Systems
             _personalRuntime = new Dictionary<string, PersonalVehicleRuntimeState>(StringComparer.OrdinalIgnoreCase);
             _state = new PropertyOwnershipPersistenceSnapshot();
             _officeGarageLimitEnforced = true;
+        }
+
+        public void ConfigureFinanceTracking(CompanyFinanceTracker financeTracker, Func<int> getCurrentInGameMinute)
+        {
+            _financeTracker = financeTracker;
+            _getCurrentInGameMinute = getCurrentInGameMinute;
         }
 
         public IReadOnlyList<OfficeDefinition> Offices
@@ -351,6 +359,7 @@ namespace LSOL.Systems
             }
 
             balance -= upfrontRent;
+            RecordFinanceExpense(CompanyFinanceCategory.OfficeRent, upfrontRent, currentInGameMinute, string.Format("Office access for {0}", definition.DisplayName));
             state.IsRented = true;
             state.IsAccessSuspended = false;
             state.OutstandingRent = 0f;
@@ -390,6 +399,7 @@ namespace LSOL.Systems
             }
 
             balance -= definition.OfficePrice;
+            RecordFinanceExpense(CompanyFinanceCategory.OtherExpense, definition.OfficePrice, currentInGameMinute, string.Format("Purchased office {0}", definition.DisplayName));
             state.IsOwned = true;
             state.IsRented = false;
             state.IsAccessSuspended = false;
@@ -447,9 +457,11 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var rentDue = state.OutstandingRent;
             balance -= state.OutstandingRent;
             state.OutstandingRent = 0f;
             state.IsAccessSuspended = false;
+            RecordFinanceExpense(CompanyFinanceCategory.OfficeRent, rentDue, string.Format("Office arrears for {0}", definition.DisplayName));
             message = string.Format("Settled office rent for {0}.", definition.DisplayName);
             return true;
         }
@@ -478,6 +490,7 @@ namespace LSOL.Systems
             }
 
             balance -= definition.InteriorPrice;
+            RecordFinanceExpense(CompanyFinanceCategory.OtherExpense, definition.InteriorPrice, currentInGameMinute, string.Format("Purchased apartment {0}", definition.DisplayName));
             state.IsOwned = true;
             state.IsAccessSuspended = false;
             state.OutstandingRent = 0f;
@@ -532,9 +545,11 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var rentDue = state.OutstandingRent;
             balance -= state.OutstandingRent;
             state.OutstandingRent = 0f;
             state.IsAccessSuspended = false;
+            RecordFinanceExpense(CompanyFinanceCategory.ApartmentRent, rentDue, string.Format("Apartment arrears for {0}", definition.DisplayName));
             message = string.Format("Settled apartment rent for {0}.", definition.DisplayName);
             return true;
         }
@@ -567,6 +582,15 @@ namespace LSOL.Systems
             }
 
             balance -= purchasePrice;
+            RecordFinanceExpense(
+                CompanyFinanceCategory.OtherExpense,
+                purchasePrice,
+                string.Format(
+                    "Purchased commercial vehicle {0}",
+                    BuildCommercialDisplayName(
+                        poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
+                        cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
+                        hasSeparateCargoVehicle)));
             vehicle = new OwnedCommercialVehiclePersistenceEntry
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
@@ -642,6 +666,16 @@ namespace LSOL.Systems
             }
 
             balance -= upfrontCost;
+            RecordFinanceExpense(
+                CompanyFinanceCategory.VehicleRent,
+                upfrontCost,
+                currentInGameMinute,
+                string.Format(
+                    "Rental upfront for {0}",
+                    BuildCommercialDisplayName(
+                        poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
+                        cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
+                        hasSeparateCargoVehicle)));
             vehicle = new OwnedCommercialVehiclePersistenceEntry
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
@@ -709,6 +743,7 @@ namespace LSOL.Systems
 
             var refund = Math.Max(0f, vehicle.PurchasePrice * CommercialVehicleSaleRefundRatio);
             balance += refund;
+            RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Sold commercial vehicle {0}", vehicle.DisplayName));
             _state.CommercialVehicles.Remove(vehicle);
             NormalizeCommercialGarageAssignments();
             message = refund > 0.001f
@@ -740,6 +775,7 @@ namespace LSOL.Systems
 
             var refund = Math.Max(0f, vehicle.DailyRent * CommercialRentalRefundDays);
             balance += refund;
+            RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Rental refund for {0}", vehicle.DisplayName));
             _state.CommercialVehicles.Remove(vehicle);
             NormalizeCommercialGarageAssignments();
             message = refund > 0.001f
@@ -859,6 +895,7 @@ namespace LSOL.Systems
             }
 
             balance -= definition.Price;
+            RecordFinanceExpense(CompanyFinanceCategory.OtherExpense, definition.Price, string.Format("Purchased personal vehicle {0}", definition.DisplayName));
             vehicle = new OwnedPersonalVehiclePersistenceEntry
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
@@ -1101,6 +1138,7 @@ namespace LSOL.Systems
             }
 
             balance -= definition.Price;
+            RecordFinanceExpense(CompanyFinanceCategory.OtherExpense, definition.Price, string.Format("Purchased office object {0}", definition.DisplayName));
             purchasedEntry = new OfficeObjectPersistenceEntry
             {
                 InstanceId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
@@ -1510,6 +1548,7 @@ namespace LSOL.Systems
                 if (!state.IsAccessSuspended && state.OutstandingRent <= 0.01f && balance >= weeklyRent)
                 {
                     balance -= weeklyRent;
+                    RecordFinanceExpense(CompanyFinanceCategory.OfficeRent, weeklyRent, Math.Max(0, weekIndex * MinutesPerWeek), string.Format("Weekly office rent for {0}", definition.DisplayName));
                     messages.Add(string.Format("Paid weekly office rent for {0}: {1}.", definition.DisplayName, ModFormatting.FormatMoney(weeklyRent)));
                     continue;
                 }
@@ -1546,6 +1585,7 @@ namespace LSOL.Systems
                 if (!state.IsAccessSuspended && state.OutstandingRent <= 0.01f && balance >= weeklyRent)
                 {
                     balance -= weeklyRent;
+                    RecordFinanceExpense(CompanyFinanceCategory.ApartmentRent, weeklyRent, Math.Max(0, weekIndex * MinutesPerWeek), string.Format("Weekly apartment rent for {0}", definition.DisplayName));
                     messages.Add(string.Format("Paid weekly apartment rent for {0}: {1}.", definition.DisplayName, ModFormatting.FormatMoney(weeklyRent)));
                     continue;
                 }
@@ -1683,6 +1723,7 @@ namespace LSOL.Systems
             var charge = vehicle.DailyRent * elapsedDays;
             balance -= charge;
             vehicle.LastChargedDayIndex = currentDayIndex;
+            RecordFinanceExpense(CompanyFinanceCategory.VehicleRent, charge, Math.Max(0, currentDayIndex * MinutesPerDay), string.Format("Commercial rental charge for {0}", vehicle.DisplayName));
             if (messages != null)
             {
                 messages.Add(string.Format(
@@ -1956,6 +1997,38 @@ namespace LSOL.Systems
         private static int GetDayIndex(int currentInGameMinute)
         {
             return Math.Max(0, currentInGameMinute) / MinutesPerDay;
+        }
+
+        private void RecordFinanceExpense(CompanyFinanceCategory category, float amount, int inGameMinute, string description)
+        {
+            if (_financeTracker == null || amount <= 0f)
+            {
+                return;
+            }
+
+            _financeTracker.RecordExpense(category, amount, inGameMinute, description);
+        }
+
+        private void RecordFinanceExpense(CompanyFinanceCategory category, float amount, string description)
+        {
+            RecordFinanceExpense(category, amount, ResolveFinanceMinute(), description);
+        }
+
+        private void RecordFinanceIncome(CompanyFinanceCategory category, float amount, string description)
+        {
+            if (_financeTracker == null || amount <= 0f)
+            {
+                return;
+            }
+
+            _financeTracker.RecordIncome(category, amount, ResolveFinanceMinute(), description);
+        }
+
+        private int ResolveFinanceMinute()
+        {
+            return _getCurrentInGameMinute != null
+                ? Math.Max(0, _getCurrentInGameMinute())
+                : 0;
         }
 
         private static string BuildCommercialDisplayName(string poweredDisplayName, string cargoDisplayName, bool hasSeparateCargoVehicle)

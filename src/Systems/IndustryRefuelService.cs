@@ -51,6 +51,8 @@ namespace LSOL.Systems
         private readonly GlobalMarketManager _globalMarket;
         private readonly Func<float> _getProfit;
         private readonly Action<float> _deductProfit;
+        private readonly CompanyFinanceTracker _financeTracker;
+        private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<Industry, Vector3> _getIndustryMarkerPosition;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Action<string> _showStatus;
@@ -64,6 +66,8 @@ namespace LSOL.Systems
             GlobalMarketManager globalMarket,
             Func<float> getProfit,
             Action<float> deductProfit,
+            CompanyFinanceTracker financeTracker,
+            Func<int> getCurrentInGameMinute,
             Func<Industry, Vector3> getIndustryMarkerPosition,
             Func<Vector3, Vector3> getGroundPosition,
             Action<string> showStatus,
@@ -75,6 +79,8 @@ namespace LSOL.Systems
             _globalMarket = globalMarket ?? throw new ArgumentNullException(nameof(globalMarket));
             _getProfit = getProfit;
             _deductProfit = deductProfit;
+            _financeTracker = financeTracker;
+            _getCurrentInGameMinute = getCurrentInGameMinute;
             _getIndustryMarkerPosition = getIndustryMarkerPosition ?? throw new ArgumentNullException(nameof(getIndustryMarkerPosition));
             _getGroundPosition = getGroundPosition;
             _showStatus = showStatus;
@@ -99,7 +105,7 @@ namespace LSOL.Systems
                 return false;
             }
 
-            return TryRefuelVehicle(industry, poweredVehicle, cargoVehicle, fuelTelemetry, out message);
+            return TryRefuelVehicle(industry, poweredVehicle, cargoVehicle, fuelTelemetry, false, out message);
         }
 
         public bool TryRequestRemoteRefuel(Ped player, int now, out string message)
@@ -232,7 +238,7 @@ namespace LSOL.Systems
                 _vehicleFuelSystem.EnsureTrackedVehicle(targetVehicle);
                 var fuelTelemetry = _vehicleFuelSystem.GetTelemetry(targetVehicle);
                 var message = string.Empty;
-                var changed = fuelTelemetry != null && TryRefuelVehicle(_activeDispatch.SourceIndustry, targetVehicle, null, fuelTelemetry, out message);
+                var changed = fuelTelemetry != null && TryRefuelVehicle(_activeDispatch.SourceIndustry, targetVehicle, null, fuelTelemetry, true, out message);
                 if (!string.IsNullOrWhiteSpace(message))
                 {
                     _showStatus?.Invoke(changed
@@ -258,14 +264,14 @@ namespace LSOL.Systems
             CleanupDispatch();
         }
 
-        private bool TryRefuelVehicle(Industry industry, Vehicle poweredVehicle, Vehicle cargoVehicle, VehicleFuelTelemetry fuelTelemetry, out string message)
+        private bool TryRefuelVehicle(Industry industry, Vehicle poweredVehicle, Vehicle cargoVehicle, VehicleFuelTelemetry fuelTelemetry, bool isRemoteService, out string message)
         {
             message = string.Empty;
 
             var litersNeeded = Math.Max(0f, fuelTelemetry.CapacityLiters - fuelTelemetry.CurrentLiters);
             if (litersNeeded <= 0.05f)
             {
-                message = string.Format("Fuel tank already full ({0:0}/{1:0}L).", fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters);
+                message = string.Format("Fuel tank already full ({0}).", ModFormatting.FormatRatio(fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters, "L"));
                 return false;
             }
 
@@ -319,6 +325,13 @@ namespace LSOL.Systems
             if (pricePaid > 0f && _deductProfit != null)
             {
                 _deductProfit(pricePaid);
+                RecordFinanceExpense(
+                    CompanyFinanceCategory.FuelPurchase,
+                    pricePaid,
+                    string.Format(
+                        "{0} refuel at {1}",
+                        isRemoteService ? "Remote" : "Vehicle",
+                        industry != null ? industry.Name : "station"));
             }
 
             var resultingTank = Math.Min(fuelTelemetry.CapacityLiters, fuelTelemetry.CurrentLiters + addedLiters);
@@ -341,13 +354,25 @@ namespace LSOL.Systems
                 : string.Empty;
 
             message = string.Format(
-                "Refueled {0:0}L. Tank {1:0}/{2:0}L | {3}{4}",
-                addedLiters,
-                resultingTank,
-                fuelTelemetry.CapacityLiters,
+                "Refueled {0}. Tank {1} | {2}{3}",
+                ModFormatting.FormatLiters(addedLiters),
+                ModFormatting.FormatRatio(resultingTank, fuelTelemetry.CapacityLiters, "L"),
                 priceText,
                 noteText);
             return true;
+        }
+
+        private void RecordFinanceExpense(CompanyFinanceCategory category, float amount, string description)
+        {
+            if (_financeTracker == null || amount <= 0f)
+            {
+                return;
+            }
+
+            var inGameMinute = _getCurrentInGameMinute != null
+                ? Math.Max(0, _getCurrentInGameMinute())
+                : 0;
+            _financeTracker.RecordExpense(category, amount, inGameMinute, description);
         }
 
         private bool TryGetRefuelContext(Industry industry, Ped player, out Vehicle cargoVehicle, out Vehicle poweredVehicle, out VehicleFuelTelemetry fuelTelemetry, out string error)

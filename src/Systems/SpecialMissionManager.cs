@@ -559,7 +559,7 @@ namespace LSOL.Systems
                 var districtName = unlock.DistrictNames[i];
                 var state = _territoryManager != null ? _territoryManager.GetDistrictState(districtName) : null;
                 var percent = state != null ? state.InfluenceRatio * 100f : 0f;
-                progress.Add(string.Format("{0} {1:0}%/{2:0}%", districtName, percent, minimumPercent));
+                progress.Add(string.Format("{0} {1}/{2}", districtName, ModFormatting.FormatPercent(percent), ModFormatting.FormatPercent(minimumPercent)));
             }
 
             return string.Join(" | ", progress.ToArray());
@@ -881,7 +881,7 @@ namespace LSOL.Systems
             var missionName = runtime.Definition.Name;
             CleanupActiveMission();
             var rewardDetail = runtime.Definition.Reward > 0.001f
-                ? string.Format(" Earned ${0:0}.", runtime.Definition.Reward)
+                ? string.Format(" Earned {0}.", ModFormatting.FormatMoney(runtime.Definition.Reward))
                 : string.Empty;
             ShowStatus(string.Format("Completed {0}. {1}{2}", missionName, detail ?? string.Empty, rewardDetail).Trim(), 5000);
         }

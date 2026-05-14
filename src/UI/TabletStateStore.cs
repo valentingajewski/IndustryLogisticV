@@ -278,12 +278,39 @@ namespace LSOL.UI
         private const int SnapshotRefreshIntervalMs = 250;
         private const int LoadOptionsRefreshIntervalMs = 250;
         private const int HistorySampleIntervalMs = 15000;
+        private const int InGameMinutesPerDay = 24 * 60;
+        private const int InGameMinutesPerWeek = 7 * InGameMinutesPerDay;
+
+        private static readonly CompanyFinanceCategory[] IncomeBudgetCategories =
+        {
+            CompanyFinanceCategory.PlayerDelivery,
+            CompanyFinanceCategory.NpcDelivery,
+            CompanyFinanceCategory.IndustryIncome,
+            CompanyFinanceCategory.MissionReward,
+            CompanyFinanceCategory.OtherIncome,
+        };
+
+        private static readonly CompanyFinanceCategory[] ExpenseBudgetCategories =
+        {
+            CompanyFinanceCategory.OfficeRent,
+            CompanyFinanceCategory.ApartmentRent,
+            CompanyFinanceCategory.VehicleRent,
+            CompanyFinanceCategory.NpcWages,
+            CompanyFinanceCategory.FuelPurchase,
+            CompanyFinanceCategory.RepairCost,
+            CompanyFinanceCategory.ServiceCall,
+            CompanyFinanceCategory.PermitOrLicence,
+            CompanyFinanceCategory.OtherExpense,
+        };
 
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly NpcLogisticsManager _npcLogisticsManager;
+        private readonly PropertyManager _propertyManager;
+        private readonly CompanyFinanceTracker _financeTracker;
+        private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<Ped> _getPlayer;
         private readonly Func<Industry> _getNearestIndustry;
         private readonly Func<float> _getProfit;
@@ -331,6 +358,9 @@ namespace LSOL.UI
             VehicleFuelSystem vehicleFuelSystem,
             GlobalMarketManager globalMarket,
             NpcLogisticsManager npcLogisticsManager,
+            PropertyManager propertyManager,
+            CompanyFinanceTracker financeTracker,
+            Func<int> getCurrentInGameMinute,
             Func<Ped> getPlayer,
             Func<Industry> getNearestIndustry,
             Func<float> getProfit,
@@ -348,6 +378,9 @@ namespace LSOL.UI
             _vehicleFuelSystem = vehicleFuelSystem ?? throw new ArgumentNullException(nameof(vehicleFuelSystem));
             _globalMarket = globalMarket ?? throw new ArgumentNullException(nameof(globalMarket));
             _npcLogisticsManager = npcLogisticsManager;
+            _propertyManager = propertyManager;
+            _financeTracker = financeTracker;
+            _getCurrentInGameMinute = getCurrentInGameMinute;
             _getPlayer = getPlayer;
             _getNearestIndustry = getNearestIndustry;
             _getProfit = getProfit;
@@ -798,6 +831,203 @@ namespace LSOL.UI
                 .ToArray();
         }
 
+        public TabletBudgetOverview GetBudgetOverview()
+        {
+            var currentMinute = GetCurrentFinanceMinute();
+            var currentBalance = _getProfit != null ? _getProfit() : 0f;
+            var weeklyIncome = _financeTracker != null
+                ? _financeTracker.GetTotalAmount(currentMinute, InGameMinutesPerWeek, CompanyFinanceFlow.Income)
+                : 0f;
+            var weeklyExpenses = _financeTracker != null
+                ? _financeTracker.GetTotalAmount(currentMinute, InGameMinutesPerWeek, CompanyFinanceFlow.Expense)
+                : 0f;
+            var upcomingBills = GetUpcomingBillsInternal(currentMinute);
+            return new TabletBudgetOverview
+            {
+                CurrentBalance = currentBalance,
+                DailyNet = _financeTracker != null ? _financeTracker.GetNetAmount(currentMinute, InGameMinutesPerDay) : 0f,
+                WeeklyNet = weeklyIncome - weeklyExpenses,
+                WeeklyIncome = weeklyIncome,
+                WeeklyExpenses = weeklyExpenses,
+                UpcomingBills = upcomingBills.Sum(entry => entry.Amount),
+                Forecast = BuildWeeklyForecast(currentMinute, currentBalance, upcomingBills),
+            };
+        }
+
+        public IReadOnlyList<TabletBudgetBreakdownEntry> GetExpenseBreakdown()
+        {
+            return BuildBudgetBreakdown(GetCurrentFinanceMinute(), CompanyFinanceFlow.Expense, ExpenseBudgetCategories);
+        }
+
+        public IReadOnlyList<TabletBudgetBreakdownEntry> GetIncomeBreakdown()
+        {
+            return BuildBudgetBreakdown(GetCurrentFinanceMinute(), CompanyFinanceFlow.Income, IncomeBudgetCategories);
+        }
+
+        public IReadOnlyList<TabletUpcomingBillEntry> GetUpcomingBills()
+        {
+            return GetUpcomingBillsInternal(GetCurrentFinanceMinute());
+        }
+
+        public TabletBudgetForecast GetWeeklyForecast()
+        {
+            var currentMinute = GetCurrentFinanceMinute();
+            var currentBalance = _getProfit != null ? _getProfit() : 0f;
+            return BuildWeeklyForecast(currentMinute, currentBalance, GetUpcomingBillsInternal(currentMinute));
+        }
+
+        public IReadOnlyList<TabletBudgetRouteEntry> GetBudgetRouteProfitability()
+        {
+            if (_npcLogisticsManager == null || _npcLogisticsManager.Contracts == null)
+            {
+                return Array.Empty<TabletBudgetRouteEntry>();
+            }
+
+            return _npcLogisticsManager.Contracts
+                .Where(contract => contract != null)
+                .Select(contract =>
+                {
+                    var revenue = Math.Max(0f, contract.TotalProfitEarned);
+                    var operatingCost = Math.Max(0f, contract.ContractCost) + Math.Max(0f, contract.TotalWeeklyWagesPaid);
+                    return new TabletBudgetRouteEntry
+                    {
+                        Label = BuildRoutePerformanceLabel(contract),
+                        Detail = string.Format(
+                            "{0} | {1}",
+                            contract.Tier != null ? contract.Tier.DisplayName : "Route",
+                            contract.StatusText ?? string.Empty).Trim(),
+                        Revenue = revenue,
+                        OperatingCost = operatingCost,
+                        NetProfit = revenue - operatingCost,
+                        CompletedDeliveries = Math.Max(0, contract.CompletedDeliveries),
+                        DeliveredTons = Math.Max(0f, contract.TotalDeliveredTons),
+                    };
+                })
+                .OrderByDescending(entry => entry.NetProfit)
+                .ThenByDescending(entry => entry.Revenue)
+                .ToArray();
+        }
+
+        public TabletInventoryValuation GetInventoryValuation()
+        {
+            var locationValues = new List<TabletInventoryValueEntry>();
+            var commodityValues = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            float totalValue = 0f;
+
+            if (_industryManager != null && _industryManager.Industries != null)
+            {
+                foreach (var industry in _industryManager.Industries.Where(ShouldIncludeIndustryInventory))
+                {
+                    float locationValue = 0f;
+                    float totalTons = 0f;
+                    foreach (var commodity in industry.BufferStorage.Keys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase))
+                    {
+                        var tons = Math.Max(0f, industry.GetStock(commodity));
+                        if (tons <= 0.01f)
+                        {
+                            continue;
+                        }
+
+                        var value = tons * _globalMarket.GetUnitPrice(commodity);
+                        locationValue += value;
+                        totalTons += tons;
+                        AddCommodityValue(commodityValues, commodity, value);
+                    }
+
+                    if (industry.OmegaStorage > 0.01f)
+                    {
+                        var omegaValue = industry.OmegaStorage * _globalMarket.GetUnitPrice("Omega");
+                        locationValue += omegaValue;
+                        totalTons += industry.OmegaStorage;
+                        AddCommodityValue(commodityValues, "Omega", omegaValue);
+                    }
+
+                    if (locationValue <= 0.01f)
+                    {
+                        continue;
+                    }
+
+                    totalValue += locationValue;
+                    locationValues.Add(new TabletInventoryValueEntry
+                    {
+                        Label = industry.Name,
+                        Detail = BuildInventoryLocationDetail(industry, totalTons),
+                        Value = locationValue,
+                    });
+                }
+            }
+
+            if (_propertyManager != null)
+            {
+                var fuelUnitPrice = _globalMarket.GetUnitPrice("Fuel");
+                foreach (var office in _propertyManager.Offices.Where(office => office != null))
+                {
+                    var officeState = _propertyManager.GetOfficeState(office.OfficeId);
+                    if (officeState == null || (!officeState.IsOwned && !officeState.IsRented))
+                    {
+                        continue;
+                    }
+
+                    var storedLiters = Math.Max(0f, _propertyManager.GetOfficeObjectStoredResourceAmount(office.OfficeId, OfficeObjectFunction.Refuel));
+                    if (storedLiters <= 0.05f)
+                    {
+                        continue;
+                    }
+
+                    var value = (storedLiters / 1000f) * fuelUnitPrice;
+                    totalValue += value;
+                    AddCommodityValue(commodityValues, "Fuel", value);
+                    locationValues.Add(new TabletInventoryValueEntry
+                    {
+                        Label = string.Format("{0} tank", office.DisplayName),
+                        Detail = string.Format("{0} diesel stored", ModFormatting.FormatLiters(storedLiters)),
+                        Value = value,
+                    });
+                }
+
+                foreach (var vehicle in _propertyManager.CommercialVehicles.Where(entry => entry != null))
+                {
+                    var commodity = CommodityCatalog.Normalize(vehicle.Commodity);
+                    var weightTons = Math.Max(0f, vehicle.WeightTons);
+                    if (string.IsNullOrWhiteSpace(commodity) || weightTons <= 0.01f)
+                    {
+                        continue;
+                    }
+
+                    var value = weightTons * _globalMarket.GetUnitPrice(commodity);
+                    totalValue += value;
+                    AddCommodityValue(commodityValues, commodity, value);
+                    locationValues.Add(new TabletInventoryValueEntry
+                    {
+                        Label = vehicle.DisplayName,
+                        Detail = string.Format("{0} {1} | {2}", commodity, ModFormatting.FormatTons(weightTons), vehicle.IsDeployed ? "deployed cargo" : "garage cargo"),
+                        Value = value,
+                    });
+                }
+            }
+
+            return new TabletInventoryValuation
+            {
+                TotalValue = totalValue,
+                TopLocations = locationValues
+                    .OrderByDescending(entry => entry.Value)
+                    .ThenBy(entry => entry.Label, StringComparer.OrdinalIgnoreCase)
+                    .Take(6)
+                    .ToArray(),
+                TopCommodities = commodityValues
+                    .OrderByDescending(pair => pair.Value)
+                    .ThenBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                    .Take(6)
+                    .Select(pair => new TabletInventoryValueEntry
+                    {
+                        Label = pair.Key,
+                        Detail = "Combined value across all tracked locations",
+                        Value = pair.Value,
+                    })
+                    .ToArray(),
+            };
+        }
+
         public NpcWorldDispatchOverview GetWorldDispatchOverview()
         {
             return _npcLogisticsManager != null
@@ -1185,12 +1415,12 @@ namespace LSOL.UI
 
             if (industry.SiteRole == SiteRole.Warehouse)
             {
-                return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);
+                return string.Format("Storage {0} | {1} full", ModFormatting.FormatTons(storage), ModFormatting.FormatPercent(fillRatio * 100f));
             }
 
             if (locationKind == ExternalLocationKind.Industry)
             {
-                var detail = string.Format("Storage {0:0.0}t | Omega {1:0.0}t", storage, industry.OmegaStorage);
+                var detail = string.Format("Storage {0} | Omega {1}", ModFormatting.FormatTons(storage), ModFormatting.FormatTons(industry.OmegaStorage));
                 if (!string.IsNullOrWhiteSpace(productionWarning))
                 {
                     detail += string.Format(" | ~r~{0}~s~", productionWarning);
@@ -1202,13 +1432,13 @@ namespace LSOL.UI
             if (locationKind == ExternalLocationKind.GasStation)
             {
                 return string.Format(
-                    "Fuel {0:0.0}t | {1:0}% full{2}",
-                    storage,
-                    fillRatio * 100f,
+                    "Fuel {0} | {1} full{2}",
+                    ModFormatting.FormatTons(storage),
+                    ModFormatting.FormatPercent(fillRatio * 100f),
                     industry.RefuelIsFree ? " | Free office refuel" : string.Empty);
             }
 
-            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);
+            return string.Format("Storage {0} | {1} full", ModFormatting.FormatTons(storage), ModFormatting.FormatPercent(fillRatio * 100f));
         }
 
         private static string BuildRoutePerformanceLabel(NpcLogisticsContract contract)
@@ -1221,6 +1451,329 @@ namespace LSOL.UI
             var originName = contract.OriginIndustry != null ? contract.OriginIndustry.Name : "Origin";
             var destinationName = contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "Destination";
             return string.Format("{0} -> {1}", originName, destinationName);
+        }
+
+        private IReadOnlyList<TabletBudgetBreakdownEntry> BuildBudgetBreakdown(int currentMinute, CompanyFinanceFlow flow, IReadOnlyList<CompanyFinanceCategory> categories)
+        {
+            if (_financeTracker == null || categories == null || categories.Count == 0)
+            {
+                return Array.Empty<TabletBudgetBreakdownEntry>();
+            }
+
+            var dayTotals = _financeTracker
+                .GetTransactionsInWindow(currentMinute, InGameMinutesPerDay, flow, null)
+                .GroupBy(entry => entry.Category)
+                .ToDictionary(group => group.Key, group => group.Sum(entry => entry.Amount));
+            var weekTotals = _financeTracker
+                .GetTransactionsInWindow(currentMinute, InGameMinutesPerWeek, flow, null)
+                .GroupBy(entry => entry.Category)
+                .ToDictionary(group => group.Key, group => group.Sum(entry => entry.Amount));
+
+            return categories
+                .Select(category => new TabletBudgetBreakdownEntry
+                {
+                    Category = category,
+                    Label = GetBudgetCategoryLabel(category),
+                    DayTotal = GetCategoryTotal(dayTotals, category),
+                    WeekTotal = GetCategoryTotal(weekTotals, category),
+                })
+                .Where(entry => entry.DayTotal > 0.01f || entry.WeekTotal > 0.01f)
+                .OrderByDescending(entry => entry.WeekTotal)
+                .ThenBy(entry => entry.Label, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private List<TabletUpcomingBillEntry> GetUpcomingBillsInternal(int currentMinute)
+        {
+            var bills = new List<TabletUpcomingBillEntry>();
+            if (_propertyManager != null)
+            {
+                var currentWeekIndex = GetWeekIndex(currentMinute);
+                var currentDayIndex = GetDayIndex(currentMinute);
+                var nextWeekDueInMinutes = Math.Max(0, ((currentWeekIndex + 1) * InGameMinutesPerWeek) - currentMinute);
+                var nextDayDueInMinutes = Math.Max(0, ((currentDayIndex + 1) * InGameMinutesPerDay) - currentMinute);
+
+                foreach (var office in _propertyManager.Offices.Where(entry => entry != null))
+                {
+                    var state = _propertyManager.GetOfficeState(office.OfficeId);
+                    if (state == null || (!state.IsOwned && !state.IsRented))
+                    {
+                        continue;
+                    }
+
+                    if (state.OutstandingRent > 0.01f)
+                    {
+                        bills.Add(new TabletUpcomingBillEntry
+                        {
+                            Category = CompanyFinanceCategory.OfficeRent,
+                            Label = office.DisplayName,
+                            Detail = "Office arrears are blocking access until paid.",
+                            Amount = state.OutstandingRent,
+                            DueInMinutes = 0,
+                        });
+                        continue;
+                    }
+
+                    var weeklyRent = Math.Max(0f, office.WeeklyOfficeRent);
+                    if (weeklyRent <= 0.01f)
+                    {
+                        continue;
+                    }
+
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.OfficeRent,
+                        Label = office.DisplayName,
+                        Detail = "Weekly office rent",
+                        Amount = weeklyRent,
+                        DueInMinutes = nextWeekDueInMinutes,
+                    });
+                }
+
+                foreach (var apartment in _propertyManager.Interiors.Where(entry => entry != null))
+                {
+                    var state = _propertyManager.GetApartmentState(apartment.InteriorId);
+                    if (state == null || !state.IsOwned)
+                    {
+                        continue;
+                    }
+
+                    if (state.OutstandingRent > 0.01f)
+                    {
+                        bills.Add(new TabletUpcomingBillEntry
+                        {
+                            Category = CompanyFinanceCategory.ApartmentRent,
+                            Label = apartment.DisplayName,
+                            Detail = "Apartment arrears are outstanding.",
+                            Amount = state.OutstandingRent,
+                            DueInMinutes = 0,
+                        });
+                        continue;
+                    }
+
+                    var weeklyRent = Math.Max(0f, apartment.InteriorWeeklyRent);
+                    if (weeklyRent <= 0.01f)
+                    {
+                        continue;
+                    }
+
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.ApartmentRent,
+                        Label = apartment.DisplayName,
+                        Detail = "Weekly apartment rent",
+                        Amount = weeklyRent,
+                        DueInMinutes = nextWeekDueInMinutes,
+                    });
+                }
+
+                foreach (var vehicle in _propertyManager.CommercialVehicles.Where(entry => entry != null && entry.IsRental && entry.DailyRent > 0.01f))
+                {
+                    var overdueDays = vehicle.LastChargedDayIndex >= 0 ? Math.Max(0, currentDayIndex - vehicle.LastChargedDayIndex) : 0;
+                    if (overdueDays > 0)
+                    {
+                        bills.Add(new TabletUpcomingBillEntry
+                        {
+                            Category = CompanyFinanceCategory.VehicleRent,
+                            Label = vehicle.DisplayName,
+                            Detail = string.Format("Rental charge overdue by {0} day{1}", overdueDays, overdueDays == 1 ? string.Empty : "s"),
+                            Amount = vehicle.DailyRent * overdueDays,
+                            DueInMinutes = 0,
+                        });
+                        continue;
+                    }
+
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.VehicleRent,
+                        Label = vehicle.DisplayName,
+                        Detail = "Daily commercial rental charge",
+                        Amount = vehicle.DailyRent,
+                        DueInMinutes = nextDayDueInMinutes,
+                    });
+                }
+            }
+
+            if (_npcLogisticsManager != null && _npcLogisticsManager.Contracts != null)
+            {
+                foreach (var contract in _npcLogisticsManager.Contracts.Where(entry => entry != null && entry.Tier != null))
+                {
+                    var weeklyWage = Math.Max(0f, _npcLogisticsManager.GetWeeklyWage(contract.Tier));
+                    if (weeklyWage <= 0.01f)
+                    {
+                        continue;
+                    }
+
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.NpcWages,
+                        Label = BuildRoutePerformanceLabel(contract),
+                        Detail = string.Format("Weekly payroll for {0}", contract.Tier.DisplayName),
+                        Amount = weeklyWage,
+                        DueInMinutes = _npcLogisticsManager.GetRemainingPayrollMinutes(contract),
+                    });
+                }
+            }
+
+            return bills
+                .Where(entry => entry != null && entry.Amount > 0.01f)
+                .OrderBy(entry => entry.DueInMinutes)
+                .ThenByDescending(entry => entry.Amount)
+                .ThenBy(entry => entry.Label, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private TabletBudgetForecast BuildWeeklyForecast(int currentMinute, float currentBalance, IReadOnlyList<TabletUpcomingBillEntry> bills)
+        {
+            var estimatedIncome = _financeTracker != null
+                ? _financeTracker.GetTotalAmount(currentMinute, InGameMinutesPerWeek, CompanyFinanceFlow.Income)
+                : 0f;
+            var knownBills = bills != null
+                ? bills.Where(entry => entry != null && entry.DueInMinutes <= InGameMinutesPerWeek).Sum(entry => entry.Amount)
+                : 0f;
+            var projectedEndingBalance = currentBalance + estimatedIncome - knownBills;
+            var lowestProjectedBalance = currentBalance;
+            var cumulativeBills = 0f;
+
+            if (bills != null)
+            {
+                foreach (var bill in bills.Where(entry => entry != null && entry.DueInMinutes <= InGameMinutesPerWeek).OrderBy(entry => entry.DueInMinutes))
+                {
+                    cumulativeBills += bill.Amount;
+                    var incomeRatio = Math.Max(0f, Math.Min(1f, bill.DueInMinutes / (float)InGameMinutesPerWeek));
+                    var projectedAtDue = currentBalance + (estimatedIncome * incomeRatio) - cumulativeBills;
+                    lowestProjectedBalance = Math.Min(lowestProjectedBalance, projectedAtDue);
+                }
+            }
+
+            lowestProjectedBalance = Math.Min(lowestProjectedBalance, projectedEndingBalance);
+            return new TabletBudgetForecast
+            {
+                CurrentBalance = currentBalance,
+                EstimatedIncome = estimatedIncome,
+                KnownBills = knownBills,
+                ProjectedEndingBalance = projectedEndingBalance,
+                LowestProjectedBalance = lowestProjectedBalance,
+                TurnsNegative = lowestProjectedBalance < 0f,
+            };
+        }
+
+        private static float GetCategoryTotal(IDictionary<CompanyFinanceCategory, float> totals, CompanyFinanceCategory category)
+        {
+            if (totals == null)
+            {
+                return 0f;
+            }
+
+            float value;
+            return totals.TryGetValue(category, out value)
+                ? Math.Max(0f, value)
+                : 0f;
+        }
+
+        private static void AddCommodityValue(IDictionary<string, float> commodityValues, string commodity, float value)
+        {
+            if (commodityValues == null || string.IsNullOrWhiteSpace(commodity) || value <= 0.01f)
+            {
+                return;
+            }
+
+            var normalized = CommodityCatalog.Normalize(commodity);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            float existing;
+            commodityValues.TryGetValue(normalized, out existing);
+            commodityValues[normalized] = existing + value;
+        }
+
+        private bool ShouldIncludeIndustryInventory(Industry industry)
+        {
+            return industry != null && _industryManager.IsIndustryOwnedForGameplay(industry);
+        }
+
+        private static string BuildInventoryLocationDetail(Industry industry, float totalTons)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            string locationLabel;
+            if (industry.IsConstructionSink)
+            {
+                locationLabel = "Construction site";
+            }
+            else if (industry.LocationKind == ExternalLocationKind.Store)
+            {
+                locationLabel = "Store";
+            }
+            else if (industry.LocationKind == ExternalLocationKind.GasStation)
+            {
+                locationLabel = "Gas station";
+            }
+            else
+            {
+                locationLabel = industry.IsWarehouse ? "Warehouse" : "Industry";
+            }
+
+            return string.Format("{0} | {1} on hand", locationLabel, ModFormatting.FormatTons(totalTons));
+        }
+
+        private static string GetBudgetCategoryLabel(CompanyFinanceCategory category)
+        {
+            switch (category)
+            {
+                case CompanyFinanceCategory.PlayerDelivery:
+                    return "Player deliveries";
+                case CompanyFinanceCategory.NpcDelivery:
+                    return "NPC deliveries";
+                case CompanyFinanceCategory.IndustryIncome:
+                    return "Industry income";
+                case CompanyFinanceCategory.MissionReward:
+                    return "Mission rewards";
+                case CompanyFinanceCategory.OfficeRent:
+                    return "Office rent";
+                case CompanyFinanceCategory.ApartmentRent:
+                    return "Apartment rent";
+                case CompanyFinanceCategory.VehicleRent:
+                    return "Vehicle rent";
+                case CompanyFinanceCategory.NpcWages:
+                    return "NPC wages";
+                case CompanyFinanceCategory.FuelPurchase:
+                    return "Fuel purchases";
+                case CompanyFinanceCategory.RepairCost:
+                    return "Repairs";
+                case CompanyFinanceCategory.ServiceCall:
+                    return "Service calls";
+                case CompanyFinanceCategory.PermitOrLicence:
+                    return "Permits and licences";
+                case CompanyFinanceCategory.OtherExpense:
+                    return "Other expenses";
+                case CompanyFinanceCategory.OtherIncome:
+                    return "Other income";
+                default:
+                    return category.ToString();
+            }
+        }
+
+        private int GetCurrentFinanceMinute()
+        {
+            return _getCurrentInGameMinute != null
+                ? Math.Max(0, _getCurrentInGameMinute())
+                : 0;
+        }
+
+        private static int GetWeekIndex(int currentInGameMinute)
+        {
+            return currentInGameMinute <= 0 ? 0 : currentInGameMinute / InGameMinutesPerWeek;
+        }
+
+        private static int GetDayIndex(int currentInGameMinute)
+        {
+            return currentInGameMinute <= 0 ? 0 : currentInGameMinute / InGameMinutesPerDay;
         }
 
         private static string GetIndustryHistoryKey(Industry industry)
@@ -1452,10 +2005,10 @@ namespace LSOL.UI
                 var cargoValue = loadableTons * unitPrice;
 
                 subtitles[commodity.Trim()] = string.Format(
-                    "Cargo value: ${0:0} ({1:0.0}t | ${2:0}/t)",
-                    cargoValue,
-                    loadableTons,
-                    unitPrice);
+                    "Cargo value: {0} ({1} | {2})",
+                    ModFormatting.FormatMoney(cargoValue),
+                    ModFormatting.FormatTons(loadableTons),
+                    ModFormatting.FormatPricePerTon(unitPrice));
             }
         }
 

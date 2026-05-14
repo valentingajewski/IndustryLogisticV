@@ -151,13 +151,13 @@ namespace LSOL.UI
                 new MenuItem
                 {
                     CaptionFactory = () => "Increase district reputation",
-                    DetailFactory = () => string.Format("Adds +{0:0.#} reputation score to the selected district.", callbacks.SelectedDistrictReputationAmount()),
+                    DetailFactory = () => string.Format("Adds {0} reputation score to the selected district.", ModFormatting.FormatSignedNumber(callbacks.SelectedDistrictReputationAmount())),
                     OnActivate = callbacks.IncreaseDistrictReputation,
                 },
                 new MenuItem
                 {
                     CaptionFactory = () => "Decrease district reputation",
-                    DetailFactory = () => string.Format("Applies -{0:0.#} reputation score to the selected district.", callbacks.SelectedDistrictReputationAmount()),
+                    DetailFactory = () => string.Format("Applies {0} reputation score to the selected district.", ModFormatting.FormatSignedNumber(-callbacks.SelectedDistrictReputationAmount())),
                     OnActivate = callbacks.DecreaseDistrictReputation,
                 },
                 new MenuItem

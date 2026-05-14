@@ -179,7 +179,7 @@ namespace LSOL.Systems
 
                         NotifyIndustryOutputChanged(industry);
 
-                        _showStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
+                        _showStatus(string.Format("Loaded {0} {1}.", ModFormatting.FormatTons(loaded), selectedProduct));
                     }
                     finally
                     {
@@ -244,7 +244,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                string.Format("Unloading {0:0.0}t {1}...", tonsToUnload, commodity),
+                string.Format("Unloading {0} {1}...", ModFormatting.FormatTons(tonsToUnload), commodity),
                 2800,
                 () =>
                 {
@@ -281,19 +281,19 @@ namespace LSOL.Systems
                         if (industry != null && industry.IsWarehouse)
                         {
                             _showStatus(string.Format(
-                                "Stored {0:0.0}t {1} | Condition {2:0}%",
-                                accepted,
+                                "Stored {0} {1} | Condition {2}",
+                                ModFormatting.FormatTons(accepted),
                                 commodity,
-                                conditionRatio * 100f));
+                                ModFormatting.FormatPercent(conditionRatio * 100f)));
                         }
                         else
                         {
                             _showStatus(string.Format(
-                                "Unloaded {0:0.0}t {1}. Profit +${2:0} | Condition {3:0}%",
-                                accepted,
+                                "Unloaded {0} {1}. Profit {2} | Condition {3}",
+                                ModFormatting.FormatTons(accepted),
                                 commodity,
-                                revenue,
-                                conditionRatio * 100f));
+                                ModFormatting.FormatSignedMoney(revenue),
+                                ModFormatting.FormatPercent(conditionRatio * 100f)));
                         }
                     }
                     finally
@@ -395,7 +395,7 @@ namespace LSOL.Systems
 
                         NotifyIndustryOutputChanged(industry);
 
-                        _showStatus(string.Format("Loaded {0:0.0}t {1}.", loaded, selectedProduct));
+                        _showStatus(string.Format("Loaded {0} {1}.", ModFormatting.FormatTons(loaded), selectedProduct));
                     }
                     finally
                     {
@@ -441,7 +441,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                string.Format("Unloading {0:0.0}t {1}...", tonsToUnload, commodity),
+                string.Format("Unloading {0} {1}...", ModFormatting.FormatTons(tonsToUnload), commodity),
                 2800,
                 () =>
                 {
@@ -475,11 +475,11 @@ namespace LSOL.Systems
 
                         if (industry != null && industry.IsWarehouse)
                         {
-                            _showStatus(string.Format("Stored {0:0.0}t {1}", accepted, commodity));
+                            _showStatus(string.Format("Stored {0} {1}", ModFormatting.FormatTons(accepted), commodity));
                         }
                         else
                         {
-                            _showStatus(string.Format("Unloaded {0:0.0}t {1}. Profit +${2:0}", accepted, commodity, revenue));
+                            _showStatus(string.Format("Unloaded {0} {1}. Profit {2}", ModFormatting.FormatTons(accepted), commodity, ModFormatting.FormatSignedMoney(revenue)));
                         }
                     }
                     finally
@@ -641,9 +641,8 @@ namespace LSOL.Systems
         private static string BuildLoadingTransferLabel(float currentTons, float targetTons, string commodity)
         {
             return string.Format(
-                "Loading {0:0.0}/{1:0.0}t {2}...",
-                Math.Max(0f, currentTons),
-                Math.Max(0f, targetTons),
+                "Loading {0} {1}...",
+                ModFormatting.FormatRatio(Math.Max(0f, currentTons), Math.Max(0f, targetTons), "t"),
                 commodity ?? string.Empty);
         }
 

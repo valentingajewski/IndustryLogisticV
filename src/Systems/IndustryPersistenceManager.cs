@@ -179,6 +179,11 @@ namespace LSOL.Systems
                     persistenceVersion = 13;
                 }
 
+                if (metadata != null && HasFinanceData(metadata.Finance))
+                {
+                    persistenceVersion = 14;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -277,6 +282,11 @@ namespace LSOL.Systems
                 {
                     WritePropertyOwnershipSnapshot(writer, metadata.PropertyOwnership);
                 }
+
+                if (metadata != null && HasFinanceData(metadata.Finance))
+                {
+                    WriteFinanceSnapshot(writer, metadata.Finance);
+                }
             }
         }
 
@@ -341,7 +351,47 @@ namespace LSOL.Systems
             metadata.NpcLogistics = ReadNpcLogisticsSnapshot(ini);
             metadata.SpecialMissions = ReadSpecialMissionSnapshot(ini);
             metadata.PropertyOwnership = ReadPropertyOwnershipSnapshot(ini);
+            metadata.Finance = ReadFinanceSnapshot(ini);
             return metadata;
+        }
+
+        private static CompanyFinancePersistenceSnapshot ReadFinanceSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new CompanyFinancePersistenceSnapshot();
+            var hasFinance = false;
+            if (ini.HasSection("FinanceMeta"))
+            {
+                snapshot.NextSequence = ParseInt(ini.GetString("FinanceMeta", "NextSequence", "1"), 1);
+                hasFinance = true;
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("Finance:Transaction:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                snapshot.Transactions.Add(new CompanyFinanceTransactionSnapshot
+                {
+                    Sequence = ParseInt(ini.GetString(section, "Sequence", "0"), 0),
+                    InGameMinute = ParseInt(ini.GetString(section, "InGameMinute", "0"), 0),
+                    Flow = ParseCompanyFinanceFlow(ini.GetString(section, "Flow", CompanyFinanceFlow.Expense.ToString()), CompanyFinanceFlow.Expense),
+                    Category = ParseCompanyFinanceCategory(ini.GetString(section, "Category", CompanyFinanceCategory.OtherExpense.ToString()), CompanyFinanceCategory.OtherExpense),
+                    Amount = ini.GetFloat(section, "Amount", 0f),
+                    Description = ini.GetString(section, "Description", string.Empty),
+                    RouteContractId = ParseInt(ini.GetString(section, "RouteContractId", "0"), 0),
+                    RouteLabel = ini.GetString(section, "RouteLabel", string.Empty),
+                });
+                hasFinance = true;
+            }
+
+            return hasFinance ? snapshot : null;
         }
 
         private static TabletAnalyticsPersistenceSnapshot ReadAnalyticsSnapshot(IniFile ini)
@@ -446,6 +496,34 @@ namespace LSOL.Systems
             WriteNamedSeriesPersistence(writer, "Analytics:Commodity:", analytics.CommodityPriceHistories, CommodityCatalog.Normalize);
             WriteNamedSeriesPersistence(writer, "Analytics:SiteUtilization:", analytics.SiteUtilizationHistories, key => key);
             WriteNamedSeriesPersistence(writer, "Analytics:SiteStorage:", analytics.SiteStorageHistories, key => key);
+        }
+
+        private static void WriteFinanceSnapshot(StreamWriter writer, CompanyFinancePersistenceSnapshot finance)
+        {
+            if (writer == null || finance == null || finance.Transactions == null || finance.Transactions.Count == 0)
+            {
+                return;
+            }
+
+            writer.WriteLine("[FinanceMeta]");
+            writer.WriteLine("NextSequence={0}", Math.Max(1, finance.NextSequence));
+            writer.WriteLine();
+
+            foreach (var transaction in finance.Transactions
+                .Where(entry => entry != null && entry.Amount > 0f)
+                .OrderBy(entry => entry.Sequence))
+            {
+                writer.WriteLine("[Finance:Transaction:{0:D4}]", Math.Max(0, transaction.Sequence));
+                writer.WriteLine("Sequence={0}", transaction.Sequence);
+                writer.WriteLine("InGameMinute={0}", transaction.InGameMinute);
+                writer.WriteLine("Flow={0}", transaction.Flow);
+                writer.WriteLine("Category={0}", transaction.Category);
+                writer.WriteLine("Amount={0}", FormatFloat(transaction.Amount));
+                writer.WriteLine("Description={0}", transaction.Description ?? string.Empty);
+                writer.WriteLine("RouteContractId={0}", Math.Max(0, transaction.RouteContractId));
+                writer.WriteLine("RouteLabel={0}", transaction.RouteLabel ?? string.Empty);
+                writer.WriteLine();
+            }
         }
 
         private static void WriteNamedSeriesPersistence(
@@ -1662,6 +1740,33 @@ namespace LSOL.Systems
         {
             return snapshot != null && snapshot.HasData;
         }
+
+        private static bool HasFinanceData(CompanyFinancePersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static CompanyFinanceFlow ParseCompanyFinanceFlow(string raw, CompanyFinanceFlow fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            CompanyFinanceFlow parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static CompanyFinanceCategory ParseCompanyFinanceCategory(string raw, CompanyFinanceCategory fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            CompanyFinanceCategory parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
     }
 
     public sealed class IndustryPersistenceLoadResult
@@ -1696,5 +1801,6 @@ namespace LSOL.Systems
         public NpcLogisticsPersistenceSnapshot NpcLogistics { get; set; }
         public SpecialMissionPersistenceSnapshot SpecialMissions { get; set; }
         public PropertyOwnershipPersistenceSnapshot PropertyOwnership { get; set; }
+        public CompanyFinancePersistenceSnapshot Finance { get; set; }
     }
 }

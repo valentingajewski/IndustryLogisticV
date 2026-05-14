@@ -113,6 +113,8 @@ namespace LSOL.Systems
         private readonly GlobalMarketManager _globalMarket;
         private readonly Func<float> _getProfit;
         private readonly Action<float> _deductProfit;
+        private readonly CompanyFinanceTracker _financeTracker;
+        private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Action<string> _showStatus;
         private readonly Dictionary<string, Prop> _spawnedProps;
@@ -132,6 +134,8 @@ namespace LSOL.Systems
             GlobalMarketManager globalMarket,
             Func<float> getProfit,
             Action<float> deductProfit,
+            CompanyFinanceTracker financeTracker,
+            Func<int> getCurrentInGameMinute,
             Func<Vector3, Vector3> getGroundPosition,
             Action<string> showStatus)
         {
@@ -142,6 +146,8 @@ namespace LSOL.Systems
             _globalMarket = globalMarket ?? throw new ArgumentNullException(nameof(globalMarket));
             _getProfit = getProfit;
             _deductProfit = deductProfit;
+            _financeTracker = financeTracker;
+            _getCurrentInGameMinute = getCurrentInGameMinute;
             _getGroundPosition = getGroundPosition;
             _showStatus = showStatus;
             _spawnedProps = new Dictionary<string, Prop>(StringComparer.OrdinalIgnoreCase);
@@ -329,7 +335,7 @@ namespace LSOL.Systems
             }
 
             _propertyManager.TryUpdateOfficeObjectStoredResourceAmount(tankEntry.InstanceId, Math.Max(0f, storedLiters - addedLiters), out tankEntry);
-            message = string.Format("Refueled {0:0}L from the office diesel tank. Tank now holds {1:0}/{2:0}L.", addedLiters, Math.Max(0f, storedLiters - addedLiters), tankDefinition.Capacity);
+            message = string.Format("Refueled {0} from the office diesel tank. Tank now holds {1}.", ModFormatting.FormatLiters(addedLiters), ModFormatting.FormatRatio(Math.Max(0f, storedLiters - addedLiters), tankDefinition.Capacity, "L"));
             return true;
         }
 
@@ -476,7 +482,7 @@ namespace LSOL.Systems
 
             _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
             _propertyManager.TryUpdateOfficeObjectStoredResourceAmount(tankEntry.InstanceId, storedLiters + transferableLiters, out tankEntry);
-            message = string.Format("Unloaded {0:0}L of diesel into the office tank. Tank now holds {1:0}/{2:0}L.", transferableLiters, storedLiters + transferableLiters, tankDefinition.Capacity);
+            message = string.Format("Unloaded {0} of diesel into the office tank. Tank now holds {1}.", ModFormatting.FormatLiters(transferableLiters), ModFormatting.FormatRatio(storedLiters + transferableLiters, tankDefinition.Capacity, "L"));
             return true;
         }
 
@@ -801,10 +807,10 @@ namespace LSOL.Systems
             {
                 case HaulDeliveryPhase.ReachTruck:
                     Screen.ShowHelpTextThisFrame(string.Format(
-                        "Go to the port truck at {0:0.00}, {1:0.00}, {2:0.00} and take it to haul {3}.",
-                        OfficeObjectHaulTruckSpawnPosition.X,
-                        OfficeObjectHaulTruckSpawnPosition.Y,
-                        OfficeObjectHaulTruckSpawnPosition.Z,
+                        "Go to the port truck at {0}, {1}, {2} and take it to haul {3}.",
+                        ModFormatting.FormatSignedNumber(OfficeObjectHaulTruckSpawnPosition.X),
+                        ModFormatting.FormatSignedNumber(OfficeObjectHaulTruckSpawnPosition.Y),
+                        ModFormatting.FormatSignedNumber(OfficeObjectHaulTruckSpawnPosition.Z),
                         definition.DisplayName));
                     if (IsPlayerUsingVehicle(player, delivery.Truck))
                     {
@@ -823,10 +829,10 @@ namespace LSOL.Systems
                     else
                     {
                         Screen.ShowHelpTextThisFrame(string.Format(
-                            "Attach the trailer at {0:0.00}, {1:0.00}, {2:0.00} to transport {3}.",
-                            OfficeObjectHaulTrailerSpawnPosition.X,
-                            OfficeObjectHaulTrailerSpawnPosition.Y,
-                            OfficeObjectHaulTrailerSpawnPosition.Z,
+                            "Attach the trailer at {0}, {1}, {2} to transport {3}.",
+                            ModFormatting.FormatSignedNumber(OfficeObjectHaulTrailerSpawnPosition.X),
+                            ModFormatting.FormatSignedNumber(OfficeObjectHaulTrailerSpawnPosition.Y),
+                            ModFormatting.FormatSignedNumber(OfficeObjectHaulTrailerSpawnPosition.Z),
                             definition.DisplayName));
                     }
 
@@ -1206,10 +1212,27 @@ namespace LSOL.Systems
             if (deliveredPrice > 0f && _deductProfit != null)
             {
                 _deductProfit(deliveredPrice);
+                RecordFinanceExpense(
+                    CompanyFinanceCategory.FuelPurchase,
+                    deliveredPrice,
+                    string.Format("Office fuel delivery for {0}", _activeFuelDelivery.OfficeId ?? "office"));
             }
 
-            _showStatus?.Invoke(string.Format("Refinery delivery unloaded {0:0}L at the office tank for {1}.", deliveredLiters, ModFormatting.FormatMoney(deliveredPrice)));
+            _showStatus?.Invoke(string.Format("Refinery delivery unloaded {0} at the office tank for {1}.", ModFormatting.FormatLiters(deliveredLiters), ModFormatting.FormatMoney(deliveredPrice)));
             BeginDispatchReturn(_activeFuelDelivery, now);
+        }
+
+        private void RecordFinanceExpense(CompanyFinanceCategory category, float amount, string description)
+        {
+            if (_financeTracker == null || amount <= 0f)
+            {
+                return;
+            }
+
+            var inGameMinute = _getCurrentInGameMinute != null
+                ? Math.Max(0, _getCurrentInGameMinute())
+                : 0;
+            _financeTracker.RecordExpense(category, amount, inGameMinute, description);
         }
 
         private bool TryGetActiveOfficeTank(out OfficeDefinition office, out OfficeObjectPersistenceEntry tankEntry, out OfficeObjectDefinition tankDefinition, out float storedLiters, out string message)

@@ -1,4 +1,5 @@
 using System;
+using System.Globalization;
 
 namespace LSOL
 {
@@ -22,10 +23,93 @@ namespace LSOL
 
     internal static class ModFormatting
     {
-        public static string FormatMoney(float amount)
+        private const string PlayerFacingNumberFormat = "#,##0.00";
+        private static readonly CultureInfo PlayerFacingCulture = CultureInfo.InvariantCulture;
+
+        public static string FormatNumber(double value)
         {
-            var absolute = Math.Abs(amount).ToString("0,0");
-            return amount < 0f ? string.Format("-${0}", absolute) : string.Format("${0}", absolute);
+            return value.ToString(PlayerFacingNumberFormat, PlayerFacingCulture);
+        }
+
+        public static string FormatSignedNumber(double value)
+        {
+            return FormatSignedCore(value, FormatNumber(Math.Abs(value)));
+        }
+
+        public static string FormatMoney(double amount)
+        {
+            return FormatMoneyCore(amount, includePositiveSign: false);
+        }
+
+        public static string FormatSignedMoney(double amount)
+        {
+            return FormatMoneyCore(amount, includePositiveSign: true);
+        }
+
+        public static string FormatPercent(double value)
+        {
+            return string.Concat(FormatNumber(value), "%");
+        }
+
+        public static string FormatSignedPercent(double value)
+        {
+            return FormatSignedCore(value, FormatPercent(Math.Abs(value)));
+        }
+
+        public static string FormatTons(double value)
+        {
+            return string.Concat(FormatNumber(value), "t");
+        }
+
+        public static string FormatLiters(double value)
+        {
+            return string.Concat(FormatNumber(value), "L");
+        }
+
+        public static string FormatRatePerHour(double value, string unit)
+        {
+            return string.Format(PlayerFacingCulture, "{0} {1}/h", FormatNumber(value), unit ?? string.Empty);
+        }
+
+        public static string FormatPricePerTon(double value)
+        {
+            return string.Concat(FormatMoney(value), "/t");
+        }
+
+        public static string FormatSpeed(double value, string unit)
+        {
+            return string.Format(PlayerFacingCulture, "{0} {1}", FormatNumber(value), unit ?? string.Empty);
+        }
+
+        public static string FormatRatio(double current, double capacity, string unitSuffix)
+        {
+            return string.Format(PlayerFacingCulture, "{0}/{1}{2}", FormatNumber(current), FormatNumber(capacity), unitSuffix ?? string.Empty);
+        }
+
+        private static string FormatMoneyCore(double amount, bool includePositiveSign)
+        {
+            var absolute = string.Concat("$", FormatNumber(Math.Abs(amount)));
+            return FormatSignedCore(amount, absolute, includePositiveSign);
+        }
+
+        private static string FormatSignedCore(double value, string absolute)
+        {
+            return FormatSignedCore(value, absolute, includePositiveSign: true);
+        }
+
+        private static string FormatSignedCore(double value, string absolute, bool includePositiveSign)
+        {
+            if (value < 0d)
+            {
+                return string.Concat("-", absolute);
+            }
+
+            if (includePositiveSign && value > 0d)
+            {
+                return string.Concat("+", absolute);
+            }
+
+            return absolute;
         }
     }
 

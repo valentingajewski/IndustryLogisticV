@@ -469,6 +469,7 @@ namespace LSOL
                 PropertyOwnership = _propertyManager.CreateSnapshot(_fleetManager, _vehicleFuelSystem),
                 NpcLogistics = _npcLogisticsManager.CreatePersistenceSnapshot(),
                 SpecialMissions = _specialMissionManager.CreatePersistenceSnapshot(),
+                Finance = _financeTracker.CreatePersistenceSnapshot(),
             };
         }
 
@@ -516,6 +517,7 @@ namespace LSOL
             }
 
             ApplyPresentationSettings(false);
+            _financeTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.Finance : null);
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);

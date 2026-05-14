@@ -270,11 +270,10 @@ namespace LSOL.UI
             }
 
             var cargoSummary = string.Format(
-                "{0} | {1} | {2:0.0}/{3:0.0}t",
+                "{0} | {1} | {2}",
                 snapshot.CargoVehicleName,
                 snapshot.CargoIsEmpty ? "Empty" : snapshot.CargoCommodity,
-                snapshot.CargoWeightTons,
-                snapshot.CargoCapacityTons);
+                ModFormatting.FormatRatio(snapshot.CargoWeightTons, snapshot.CargoCapacityTons, "t"));
 
             if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
             {
@@ -282,8 +281,8 @@ namespace LSOL.UI
             }
 
             var fuelSummary = snapshot.FuelVehicleMatchesCargoVehicle
-                ? string.Format("Fuel {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
-                : string.Format("Fuel {0} {1:0}/{2:0}L", snapshot.PoweredVehicleName, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+                ? string.Format("Fuel {0}", ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"))
+                : string.Format("Fuel {0} {1}", snapshot.PoweredVehicleName, ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"));
             return string.Format("{0} | {1}", cargoSummary, fuelSummary);
         }
 
@@ -296,7 +295,7 @@ namespace LSOL.UI
 
             return string.Join(
                 " | ",
-                snapshot.MarketHighlights.Select(highlight => string.Format("{0} ${1:0}/t", highlight.Commodity, highlight.UnitPrice)).ToArray());
+                snapshot.MarketHighlights.Select(highlight => string.Format("{0} {1}", highlight.Commodity, ModFormatting.FormatPricePerTon(highlight.UnitPrice))).ToArray());
         }
 
         public static string BuildLocationCaption(TabletLocationSummary summary)
@@ -390,12 +389,12 @@ namespace LSOL.UI
             var utilizationRatio = statistics != null ? statistics.UtilizationRatio : 0f;
 
             items.Add(CreateInfoItem(
-                string.Format("Stockpile {0:0.0}/{1:0.0}t", stockpile, totalCapacity),
+                string.Format("Stockpile {0}", ModFormatting.FormatRatio(stockpile, totalCapacity, "t")),
                 "Combined input and output storage across the site.",
                 stockRatio));
             items.Add(CreateInfoItem(
-                string.Format("Production {0:0.0} t/h", industry.CurrentOutputPerHourTons),
-                string.Format("Utilization {0:0}% | Omega {1:0.0}/{2:0.0}t", industry.LastUtilizationPercent, industry.OmegaStorage, industry.OmegaCapacityTons),
+                string.Format("Production {0}", ModFormatting.FormatRatePerHour(industry.CurrentOutputPerHourTons, "t")),
+                string.Format("Utilization {0} | Omega {1}", ModFormatting.FormatPercent(industry.LastUtilizationPercent), ModFormatting.FormatRatio(industry.OmegaStorage, industry.OmegaCapacityTons, "t")),
                 utilizationRatio));
             items.Add(CreateInfoItem(
                 "Module Levels",
@@ -432,11 +431,11 @@ namespace LSOL.UI
             }
 
             items.Add(CreateInfoItem(
-                string.Format("Total Stockpile {0:0.0}/{1:0.0}t", stockpile, totalCapacity),
+                string.Format("Total Stockpile {0}", ModFormatting.FormatRatio(stockpile, totalCapacity, "t")),
                 "Combined input and output storage across the site.",
                 stockRatio));
             items.Add(CreateInfoItem(
-                string.Format("Utilization {0:0}% | Output {1:0.0} t/h", industry.LastUtilizationPercent, industry.CurrentOutputPerHourTons),
+                string.Format("Utilization {0} | Output {1}", ModFormatting.FormatPercent(industry.LastUtilizationPercent), ModFormatting.FormatRatePerHour(industry.CurrentOutputPerHourTons, "t")),
                 legendDetail));
 
             AppendIndustryCommodityItems(items, statistics);
@@ -459,7 +458,7 @@ namespace LSOL.UI
             {
                 var entry = statistics.Entries[i];
                 var caption = string.Format("{0} {1}", entry.IsInput ? "IN" : "OUT", entry.Commodity);
-                var detail = string.Format("{0:0.0}/{1:0.0}t", entry.Stock, entry.Capacity);
+                var detail = ModFormatting.FormatRatio(entry.Stock, entry.Capacity, "t");
                 items.Add(CreateInfoItem(caption, detail, entry.Ratio));
             }
         }
@@ -476,7 +475,7 @@ namespace LSOL.UI
             var fillRatio = statistics != null ? statistics.StockRatio : ModMath.Clamp01(totalStorage / Math.Max(1f, totalCapacity));
             items.Add(CreateInfoItem("Access", BuildIndustryAccessDetail(summary ?? new TabletLocationSummary { RequiresIndustryPurchase = industry.RequiresPurchase }, industry)));
             items.Add(CreateInfoItem(
-                string.Format("Storage {0:0.0}/{1:0.0}t", totalStorage, totalCapacity),
+                string.Format("Storage {0}", ModFormatting.FormatRatio(totalStorage, totalCapacity, "t")),
                 "Warehouse inventory capacity.",
                 fillRatio));
             items.Add(CreateInfoItem(
@@ -556,6 +555,7 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var dispatchOverview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
+            var budgetOverview = context.StateStore.GetBudgetOverview() ?? new TabletBudgetOverview();
             var items = new List<MenuItem>();
             var totalTrackedSites = snapshot.IndustrySummaries.Count + snapshot.ConstructionSiteSummaries.Count + snapshot.WarehouseSummaries.Count + snapshot.StoreSummaries.Count + snapshot.GasStationSummaries.Count;
             var warehouseCount = snapshot.WarehouseSummaries.Count;
@@ -573,17 +573,17 @@ namespace LSOL.UI
                 BuildHomeOperationsStatus(snapshot));
             var marketDetail = snapshot.MarketHighlights != null && snapshot.MarketHighlights.Count > 0
                 ? string.Format(
-                    "{0} ${1:0}/t\n{2} market highlights cached",
+                    "{0} {1}\n{2} market highlights cached",
                     snapshot.MarketHighlights[0].Commodity,
-                    snapshot.MarketHighlights[0].UnitPrice,
+                    ModFormatting.FormatPricePerTon(snapshot.MarketHighlights[0].UnitPrice),
                     snapshot.MarketHighlights.Count)
                 : "No market highlights cached yet.\nOpen Network to refresh industry pricing.";
             var siteDetail = snapshot.HasNearestIndustry
                 ? string.Format(
-                    "{0}\nRate {1:0.0} t/h | Util {2:0}%",
+                    "{0}\nRate {1} | Util {2}",
                     ShortenDashboardLabel(snapshot.NearestIndustryName, 20),
-                    snapshot.NearestIndustryProductionRateTonsPerHour,
-                    snapshot.NearestIndustryUtilizationPercent)
+                    ModFormatting.FormatRatePerHour(snapshot.NearestIndustryProductionRateTonsPerHour, "t"),
+                    ModFormatting.FormatPercent(snapshot.NearestIndustryUtilizationPercent))
                 : "Browse tracked industries, stores, and stations across the region.";
             var permitDetail = permitSiteCount > 0
                 ? string.Format("{0}/{1} transport permits unlocked", unlockedPermitCount, permitSiteCount)
@@ -622,6 +622,19 @@ namespace LSOL.UI
                 Color.FromArgb(220, 96, 108, 118),
                 null,
                 "LIVE"));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Budget",
+                string.Format(
+                    "7d net {0}\nKnown bills {1}",
+                    budgetOverview.WeeklyNet >= 0f
+                        ? "+" + ModFormatting.FormatMoney(budgetOverview.WeeklyNet)
+                        : "-" + ModFormatting.FormatMoney(Math.Abs(budgetOverview.WeeklyNet)),
+                    ModFormatting.FormatMoney(budgetOverview.UpcomingBills)),
+                () => context.Push(TabletAppIds.Budget, "root"),
+                Color.FromArgb(184, 42, 56, 44),
+                Color.FromArgb(226, 96, 138, 110),
+                null,
+                "BDG"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Industries",
                 string.Format("{0} tracked production sites", industryCount),
@@ -810,13 +823,13 @@ namespace LSOL.UI
 
             var cargoLabel = snapshot.CargoIsEmpty
                 ? "Empty"
-                : string.Format("{0} {1:0.0}/{2:0.0}t", snapshot.CargoCommodity, snapshot.CargoWeightTons, snapshot.CargoCapacityTons);
+                : string.Format("{0} {1}", snapshot.CargoCommodity, ModFormatting.FormatRatio(snapshot.CargoWeightTons, snapshot.CargoCapacityTons, "t"));
             if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
             {
                 return cargoLabel;
             }
 
-            return string.Format("{0} | Fuel {1:0}/{2:0}L", cargoLabel, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+            return string.Format("{0} | Fuel {1}", cargoLabel, ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"));
         }
 
         private static string ShortenDashboardLabel(string value, int maxLength)
@@ -1599,7 +1612,7 @@ namespace LSOL.UI
 
                     items.Add(TabletUiHelpers.CreateInfoItem(
                         label,
-                        string.Format("{0} | {1:0.0}t | {2}m remaining", job.Detail, job.Tons, Math.Max(0, job.RemainingInGameMinutes))));
+                        string.Format("{0} | {1} | {2}m remaining", job.Detail, ModFormatting.FormatTons(job.Tons), Math.Max(0, job.RemainingInGameMinutes))));
                 }
             }
 
@@ -1630,7 +1643,7 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateCommoditySelectorItem(context, "Left/right changes the market graph resource. Enter advances."),
                 TabletUiHelpers.CreateInfoItem(
                     "Market Highlights",
-                    string.Format("Scarcity x{0:0.00} | {1}", snapshot.MarketMultiplier, TabletUiHelpers.BuildMarketSummary(snapshot)))
+                    string.Format("Scarcity x{0} | {1}", ModFormatting.FormatNumber(snapshot.MarketMultiplier), TabletUiHelpers.BuildMarketSummary(snapshot)))
             };
 
             if (snapshot.MarketHighlights != null)
@@ -1642,7 +1655,7 @@ namespace LSOL.UI
                     var isSelectedCommodity = string.Equals(commodity, selectedCommodity, StringComparison.OrdinalIgnoreCase);
                     items.Add(TabletUiHelpers.CreateActionItem(
                         isSelectedCommodity ? string.Format("{0} ~g~[TREND]~s~", commodity) : commodity,
-                        string.Format("${0:0}/t | {1} | Press Enter to chart this resource.", highlight.UnitPrice, highlight.Reason),
+                        string.Format("{0} | {1} | Press Enter to chart this resource.", ModFormatting.FormatPricePerTon(highlight.UnitPrice), highlight.Reason),
                         () =>
                         {
                             context.StateStore.SetSelectedTrendCommodity(commodity);
@@ -1683,13 +1696,13 @@ namespace LSOL.UI
                         panel,
                         string.Format("{0} Price Trend", selectedPrice.Commodity),
                         string.Format(
-                            "{0} cargo | Window {1} | Current ${2:0}/t",
+                            "{0} cargo | Window {1} | Current {2}",
                             selectedPrice.CargoType.ToDisplayName(),
                             context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                            selectedPrice.UnitPrice),
+                            ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice)),
                         context.StateStore.GetCommodityPriceHistory(selectedPrice.Commodity, context.StateStore.SelectedGraphTimeframe),
                         Color.FromArgb(214, 214, 168, 94),
-                        value => string.Format("${0:0}/t", value));
+                        value => ModFormatting.FormatPricePerTon(value));
                 },
                 Items = items,
             };
@@ -1733,7 +1746,7 @@ namespace LSOL.UI
                     var isSelectedCommodity = string.Equals(commodity, selectedCommodity, StringComparison.OrdinalIgnoreCase);
                     items.Add(TabletUiHelpers.CreateActionItem(
                         isSelectedCommodity ? string.Format("{0} ~g~[TREND]~s~", commodity) : commodity,
-                        string.Format("${0:0}/t | {1} | Press Enter to set graph target.", price.UnitPrice, price.CargoType.ToDisplayName()),
+                        string.Format("{0} | {1} | Press Enter to set graph target.", ModFormatting.FormatPricePerTon(price.UnitPrice), price.CargoType.ToDisplayName()),
                         () =>
                         {
                             context.StateStore.SetSelectedTrendCommodity(commodity);
@@ -1774,13 +1787,13 @@ namespace LSOL.UI
                         panel,
                         string.Format("{0} Price Trend", selectedPrice.Commodity),
                         string.Format(
-                            "{0} cargo | Window {1} | Current ${2:0}/t",
+                            "{0} cargo | Window {1} | Current {2}",
                             selectedPrice.CargoType.ToDisplayName(),
                             context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                            selectedPrice.UnitPrice),
+                            ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice)),
                         context.StateStore.GetCommodityPriceHistory(selectedPrice.Commodity, context.StateStore.SelectedGraphTimeframe),
                         Color.FromArgb(214, 214, 168, 94),
-                        value => string.Format("${0:0}/t", value));
+                        value => ModFormatting.FormatPricePerTon(value));
                 },
                 Items = items,
             };
@@ -2704,8 +2717,8 @@ namespace LSOL.UI
             }
 
             var tankDetail = snapshot.FuelVehicleMatchesCargoVehicle
-                ? string.Format("Tank {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
-                : string.Format("{0} tank {1:0}/{2:0}L", snapshot.PoweredVehicleName, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+                ? string.Format("Tank {0}", ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"))
+                : string.Format("{0} tank {1}", snapshot.PoweredVehicleName, ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"));
             var pricingDetail = industry != null && industry.RefuelIsFree
                 ? "Free at office station."
                 : "Uses station stock and current fuel market price.";
@@ -2726,7 +2739,7 @@ namespace LSOL.UI
             var detail = string.Format("Deduct {0} and unlock upgrades.", ModFormatting.FormatMoney(industry.IndustryPrice));
             if (industry.IndustryOwnerCut > 0f)
             {
-                detail += string.Format(" Removes the {0:0}% owner cut.", industry.IndustryOwnerCut * 100f);
+                detail += string.Format(" Removes the {0} owner cut.", ModFormatting.FormatPercent(industry.IndustryOwnerCut * 100f));
             }
 
             if (snapshot.Balance < industry.IndustryPrice)

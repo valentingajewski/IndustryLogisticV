@@ -168,7 +168,7 @@ namespace LSOL.UI
                 var isSelectedCommodity = string.Equals(commodity, selectedCommodity, StringComparison.OrdinalIgnoreCase);
                 items.Add(TabletUiHelpers.CreateActionItem(
                     isSelectedCommodity ? string.Format("{0} ~g~[TREND]~s~", commodity) : commodity,
-                    string.Format("{0} | Current ${1:0}/t | Press Enter to set graph target.", price.CargoType.ToDisplayName(), price.UnitPrice),
+                    string.Format("{0} | Current {1} | Press Enter to set graph target.", price.CargoType.ToDisplayName(), ModFormatting.FormatPricePerTon(price.UnitPrice)),
                     () =>
                     {
                         context.StateStore.SetSelectedTrendCommodity(commodity);
@@ -235,8 +235,8 @@ namespace LSOL.UI
             if (selectedSummary != null)
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    string.Format("{0:0.0} t/h output", selectedSummary.OutputPerHourTons),
-                    string.Format("Current utilization {0:0}% | Omega {1:0.0}/{2:0.0}t", selectedSummary.UtilizationPercent, selectedSummary.OmegaStorageTons, selectedSummary.OmegaCapacityTons)));
+                    string.Format("{0} output", ModFormatting.FormatRatePerHour(selectedSummary.OutputPerHourTons, "t")),
+                    string.Format("Current utilization {0} | Omega {1}", ModFormatting.FormatPercent(selectedSummary.UtilizationPercent), ModFormatting.FormatRatio(selectedSummary.OmegaStorageTons, selectedSummary.OmegaCapacityTons, "t"))));
             }
             else
             {
@@ -267,10 +267,10 @@ namespace LSOL.UI
                     TabletChartRenderer.DrawHistoryPanel(
                         panel,
                         string.Format("{0} Utilization", summary.Name),
-                        string.Format("Current {0:0}% | Output {1:0.0} t/h | Window {2}", summary.UtilizationPercent, summary.OutputPerHourTons, context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
+                        string.Format("Current {0} | Output {1} | Window {2}", ModFormatting.FormatPercent(summary.UtilizationPercent), ModFormatting.FormatRatePerHour(summary.OutputPerHourTons, "t"), context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
                         context.StateStore.GetSiteUtilizationHistory(summary.Industry, context.StateStore.SelectedGraphTimeframe),
                         GetUtilizationAccent(214),
-                        value => string.Format("{0:0}%", value));
+                        value => ModFormatting.FormatPercent(value));
                 },
                 Items = items,
             };
@@ -314,10 +314,9 @@ namespace LSOL.UI
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     selectedSummary.Name,
                     string.Format(
-                        "{0:0.0}/{1:0.0}t | {2:0}% full | {3}",
-                        selectedSummary.StorageTons,
-                        selectedSummary.TotalCapacityTons,
-                        selectedSummary.FillRatio * 100f,
+                        "{0} | {1} full | {2}",
+                        ModFormatting.FormatRatio(selectedSummary.StorageTons, selectedSummary.TotalCapacityTons, "t"),
+                        ModFormatting.FormatPercent(selectedSummary.FillRatio * 100f),
                         selectedSummary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry")));
             }
             else
@@ -349,10 +348,10 @@ namespace LSOL.UI
                     TabletChartRenderer.DrawHistoryPanel(
                         panel,
                         string.Format("{0} Storage Fill", summary.Name),
-                        string.Format("Current {0:0}% | {1} | Window {2}", summary.FillRatio * 100f, summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
+                        string.Format("Current {0} | {1} | Window {2}", ModFormatting.FormatPercent(summary.FillRatio * 100f), summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
                         context.StateStore.GetSiteStorageHistory(summary.Industry, context.StateStore.SelectedGraphTimeframe),
                         GetStorageAccent(214),
-                        value => string.Format("{0:0}%", value));
+                        value => ModFormatting.FormatPercent(value));
                 },
                 Items = items,
             };
@@ -369,7 +368,7 @@ namespace LSOL.UI
                 var district = districts[i];
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     district.DistrictName,
-                    string.Format("{0:0}% influence | {1} | {2} depots", district.InfluencePercent, district.ReputationLabel, district.ControlledDepots)));
+                    string.Format("{0} influence | {1} | {2} depots", ModFormatting.FormatPercent(district.InfluencePercent), district.ReputationLabel, district.ControlledDepots)));
             }
 
             if (items.Count == 0)
@@ -403,7 +402,7 @@ namespace LSOL.UI
                         {
                             Label = district.DistrictName,
                             Value = district.InfluencePercent,
-                            ValueText = string.Format("{0:0}%", district.InfluencePercent),
+                            ValueText = ModFormatting.FormatPercent(district.InfluencePercent),
                             FillColor = GetDistrictAccent(210),
                         })
                         .ToArray();
@@ -431,9 +430,9 @@ namespace LSOL.UI
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     route.Label,
                     string.Format(
-                        "{0:0.0}t delivered | {1:0}% loss | Avg {2}",
-                        route.DeliveredTons,
-                        route.LossRatioPercent,
+                        "{0} delivered | {1} loss | Avg {2}",
+                        ModFormatting.FormatTons(route.DeliveredTons),
+                        ModFormatting.FormatPercent(route.LossRatioPercent),
                         ModFormatting.FormatMoney(route.AveragePayout))));
             }
 
@@ -471,14 +470,14 @@ namespace LSOL.UI
                         {
                             Label = "Delivered Tons",
                             Ratio = route.DeliveredTons / maxDelivered,
-                            ValueText = string.Format("{0:0.0}t", route.DeliveredTons),
+                            ValueText = ModFormatting.FormatTons(route.DeliveredTons),
                             FillColor = GetRouteDeliveredAccent(214),
                         },
                         new TabletMetricBarEntry
                         {
                             Label = "Loss Ratio",
                             Ratio = route.LossRatioPercent / 100f,
-                            ValueText = string.Format("{0:0}%", route.LossRatioPercent),
+                            ValueText = ModFormatting.FormatPercent(route.LossRatioPercent),
                             FillColor = GetRouteLossAccent(214),
                         },
                         new TabletMetricBarEntry
@@ -555,13 +554,13 @@ namespace LSOL.UI
                 panel,
                 string.Format("{0} Price Trend", selectedPrice.Commodity),
                 string.Format(
-                    "{0} cargo | Window {1} | Current ${2:0}/t",
+                    "{0} cargo | Window {1} | Current {2}",
                     selectedPrice.CargoType.ToDisplayName(),
                     context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                    selectedPrice.UnitPrice),
+                    ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice)),
                 context.StateStore.GetCommodityPriceHistory(selectedPrice.Commodity, context.StateStore.SelectedGraphTimeframe),
                 GetCommodityAccent(214),
-                value => string.Format("${0:0}/t", value));
+                value => ModFormatting.FormatPricePerTon(value));
         }
 
         private static int GetGraphListSelectionIndex(int selectedIndex, int selectorCount, int entryCount)
@@ -603,10 +602,10 @@ namespace LSOL.UI
                 string.Format(
                     "Window {0} | Current {1} | Press Enter to browse resources",
                     context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                    currentPrice != null ? string.Format("${0:0}/t", currentPrice.UnitPrice) : "price board"),
+                    currentPrice != null ? ModFormatting.FormatPricePerTon(currentPrice.UnitPrice) : "price board"),
                 context.StateStore.GetCommodityPriceHistory(commodity, context.StateStore.SelectedGraphTimeframe),
                 GetCommodityAccent(214),
-                value => string.Format("${0:0}/t", value));
+                value => ModFormatting.FormatPricePerTon(value));
         }
 
         private static void DrawUtilizationPreview(SimpleMenuTabletPanelContext panel, TabletShellContext context, TabletStateSnapshot snapshot)
@@ -626,7 +625,7 @@ namespace LSOL.UI
                 string.Format("Window {0} | Press Enter to browse all industries.", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
                 context.StateStore.GetSiteUtilizationHistory(industry, context.StateStore.SelectedGraphTimeframe),
                 GetUtilizationAccent(214),
-                value => string.Format("{0:0}%", value));
+                value => ModFormatting.FormatPercent(value));
         }
 
         private static void DrawStoragePreview(SimpleMenuTabletPanelContext panel, TabletShellContext context, TabletStateSnapshot snapshot)
@@ -647,7 +646,7 @@ namespace LSOL.UI
                 string.Format("Window {0} | Press Enter to browse all storage sites.", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
                 context.StateStore.GetSiteStorageHistory(site, context.StateStore.SelectedGraphTimeframe),
                 GetStorageAccent(214),
-                value => string.Format("{0:0}%", value));
+                value => ModFormatting.FormatPercent(value));
         }
 
         private static void DrawDistrictPreview(SimpleMenuTabletPanelContext panel, TabletShellContext context)
@@ -668,7 +667,7 @@ namespace LSOL.UI
                     {
                         Label = district.DistrictName,
                         Value = district.InfluencePercent,
-                        ValueText = string.Format("{0:0}%", district.InfluencePercent),
+                        ValueText = ModFormatting.FormatPercent(district.InfluencePercent),
                         FillColor = GetDistrictAccent(210),
                     })
                     .ToArray());
@@ -692,7 +691,7 @@ namespace LSOL.UI
                     {
                         Label = route.Label,
                         Value = route.DeliveredTons,
-                        ValueText = string.Format("{0:0.0}t", route.DeliveredTons),
+                        ValueText = ModFormatting.FormatTons(route.DeliveredTons),
                         FillColor = GetRouteDeliveredAccent(210),
                     })
                     .ToArray());

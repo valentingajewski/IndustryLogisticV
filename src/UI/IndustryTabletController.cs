@@ -257,10 +257,10 @@ namespace LSOL.UI
                 var cargoValue = loadableTons * unitPrice;
 
                 subtitles[commodity.Trim()] = string.Format(
-                    "Cargo value: ${0:0} ({1:0.0}t | ${2:0}/t)",
-                    cargoValue,
-                    loadableTons,
-                    unitPrice);
+                    "Cargo value: {0} ({1} | {2})",
+                    ModFormatting.FormatMoney(cargoValue),
+                    ModFormatting.FormatTons(loadableTons),
+                    ModFormatting.FormatPricePerTon(unitPrice));
             }
         }
 

@@ -606,7 +606,7 @@ namespace LSOL.Domain
 
             if (profit < cost)
             {
-                result = string.Format("Not enough profit. Cost: ${0:0}", cost);
+                result = string.Format("Not enough profit. Cost: {0}", ModFormatting.FormatMoney(cost));
                 return false;
             }
 
@@ -675,13 +675,13 @@ namespace LSOL.Domain
 
             if (profit < cost)
             {
-                result = string.Format("Not enough profit. Cost: ${0:0}", cost);
+                result = string.Format("Not enough profit. Cost: {0}", ModFormatting.FormatMoney(cost));
                 return false;
             }
 
             profit -= cost;
             SetOwned(true);
-            result = string.Format("Purchased {0} for ${1:0}.", Name, cost);
+            result = string.Format("Purchased {0} for {1}.", Name, ModFormatting.FormatMoney(cost));
             return true;
         }
 
@@ -705,13 +705,13 @@ namespace LSOL.Domain
 
             if (profit < cost)
             {
-                result = string.Format("Not enough profit. Permit cost: ${0:0}", cost);
+                result = string.Format("Not enough profit. Permit cost: {0}", ModFormatting.FormatMoney(cost));
                 return false;
             }
 
             profit -= cost;
             SetContractorPermitOwned(true);
-            result = string.Format("Purchased contractor permit for {0} for ${1:0}.", Name, cost);
+            result = string.Format("Purchased contractor permit for {0} for {1}.", Name, ModFormatting.FormatMoney(cost));
             return true;
         }
 
@@ -786,10 +786,10 @@ namespace LSOL.Domain
 
             var recipe = _recipes[0];
             return string.Format(
-                "{0} -> {1} | {2:0.0} cyc/h",
+                "{0} -> {1} | {2}",
                 FormatCommodityFlow(recipe.InputsTons, "Passive source"),
                 FormatCommodityFlow(recipe.OutputsTons, "No output"),
-                ProductionRate);
+                ModFormatting.FormatRatePerHour(ProductionRate, "cyc"));
         }
 
         public string GetProductionWarning()
@@ -997,7 +997,7 @@ namespace LSOL.Domain
                 " + ",
                 tonsByCommodity
                     .OrderBy(x => CommodityCatalog.Normalize(x.Key))
-                    .Select(x => string.Format("{0:0.#} {1}", x.Value, CommodityCatalog.Normalize(x.Key))));
+                    .Select(x => string.Format("{0} {1}", ModFormatting.FormatNumber(x.Value), CommodityCatalog.Normalize(x.Key))));
         }
 
         private static string FormatCommodityNames(IEnumerable<string> commodities)

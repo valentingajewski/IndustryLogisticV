@@ -1067,10 +1067,10 @@ namespace LSOL.UI
             }
 
             return string.Format(
-                "Model {0} | Loss up to {1:0}% | Speed {2:0}% | Weekly {3}",
+                "Model {0} | Loss up to {1} | Speed {2} | Weekly {3}",
                 tier.NpcModel,
-                tier.CargoLossRate * 100f,
-                tier.SpeedMultiplier * 100f,
+                ModFormatting.FormatPercent(tier.CargoLossRate * 100f),
+                ModFormatting.FormatPercent(tier.SpeedMultiplier * 100f),
                 ModFormatting.FormatMoney(_manager.GetWeeklyWage(tier)));
         }
 

@@ -722,7 +722,7 @@ namespace LSOL.UI
                     0f);
 
                 DrawText(
-                    string.Format("Profit Balance: ${0:0}", _profitBalance),
+                    string.Format("Profit Balance: {0}", ModFormatting.FormatMoney(_profitBalance)),
                     _frameX + 82f,
                     _frameY + 143f,
                     0.30f,
@@ -785,10 +785,10 @@ namespace LSOL.UI
 
             if (_profitBalance < cost)
             {
-                return string.Format("Lv.{0} -> ${1:0} | Need ${2:0} more", level, cost, cost - _profitBalance);
+                return string.Format("Lv.{0} -> {1} | Need {2} more", level, ModFormatting.FormatMoney(cost), ModFormatting.FormatMoney(cost - _profitBalance));
             }
 
-            return string.Format("Lv.{0} -> ${1:0} | Press Enter to purchase", level, cost);
+            return string.Format("Lv.{0} -> {1} | Press Enter to purchase", level, ModFormatting.FormatMoney(cost));
         }
 
         private int GetUpgradeSelectionCount()
@@ -877,9 +877,9 @@ namespace LSOL.UI
             if (_requiresIndustryPurchase)
             {
                 return string.Format(
-                    "Purchase for {0} to unlock upgrades and remove the {1:0}% owner cut",
+                    "Purchase for {0} to unlock upgrades and remove the {1} owner cut",
                     ModFormatting.FormatMoney(_industryPrice),
-                    _industryOwnerCut * 100f);
+                    ModFormatting.FormatPercent(_industryOwnerCut * 100f));
             }
 
             return "Industry Operations Interface";

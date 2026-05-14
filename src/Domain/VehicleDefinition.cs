@@ -26,10 +26,10 @@ namespace LSOL.Domain
             var label = string.IsNullOrWhiteSpace(DisplayName) ? ModelName : DisplayName;
             if (FuelCapacityLiters > 0f)
             {
-                return string.Format("{0} ({1}, {2:0.0}t, {3:0}L)", label, CargoType.ToDisplayName(), CapacityTons, FuelCapacityLiters);
+                return string.Format("{0} ({1}, {2}, {3})", label, CargoType.ToDisplayName(), ModFormatting.FormatTons(CapacityTons), ModFormatting.FormatLiters(FuelCapacityLiters));
             }
 
-            return string.Format("{0} ({1}, {2:0.0}t)", label, CargoType.ToDisplayName(), CapacityTons);
+            return string.Format("{0} ({1}, {2})", label, CargoType.ToDisplayName(), ModFormatting.FormatTons(CapacityTons));
         }
     }
 }

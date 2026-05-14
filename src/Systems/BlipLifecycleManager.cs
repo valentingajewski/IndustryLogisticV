@@ -403,7 +403,7 @@ namespace LSOL.Systems
             blip.Color = color;
             blip.Name = name;
             blip.Scale = scale;
-            blip.IsShortRange = false;
+            blip.IsShortRange = true;
             blip.IsHiddenOnLegend = false;
             return blip;
         }
