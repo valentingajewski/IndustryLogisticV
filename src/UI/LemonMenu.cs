@@ -102,6 +102,11 @@ namespace LSOL.UI
             get { return _menu.Visible; }
         }
 
+        public int SelectedIndex
+        {
+            get { return _menu.SelectedIndex; }
+        }
+
         public void SetItems(IEnumerable<MenuItem> items)
         {
             var selectedIndex = _menu.SelectedIndex;

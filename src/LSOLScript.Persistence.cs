@@ -25,6 +25,7 @@ namespace LSOL
             _vehicleFuelSystem.ClearAllStates();
             _vehicleLoadPowerService.ClearAllStates();
             _industryRefuelService.CancelActiveDispatch();
+            _officeObjectManager.Cleanup();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
             _tabletStateStore.MarkAllDirty();
@@ -96,6 +97,7 @@ namespace LSOL
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
             _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
+            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingNpcRouteLimit = _npcRouteLimit;
@@ -128,6 +130,7 @@ namespace LSOL
             _corridorRestrictionDifficultyEnabled = _pendingCorridorRestrictionDifficultyEnabled;
             _reputationDifficultyEnabled = _pendingReputationDifficultyEnabled;
             _officeGarageLimitDifficultyEnabled = _pendingOfficeGarageLimitDifficultyEnabled;
+            _officeNpcLimitDifficultyEnabled = _pendingOfficeNpcLimitDifficultyEnabled;
             _economyDifficultyPreset = _pendingEconomyDifficultyPreset;
             _npcWeeklyWageDifficulty = _pendingNpcWeeklyWageDifficulty;
             _npcRouteLimit = ClampNpcRouteLimit(_pendingNpcRouteLimit);
@@ -157,6 +160,7 @@ namespace LSOL
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
             _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
+            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingNpcRouteLimit = _npcRouteLimit;
@@ -270,6 +274,7 @@ namespace LSOL
                     _corridorRestrictionDifficultyEnabled = true;
                     _reputationDifficultyEnabled = true;
                     _officeGarageLimitDifficultyEnabled = true;
+                    _officeNpcLimitDifficultyEnabled = false;
                     _language = ModLanguage.English;
                     _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                     _colorblindMode = ColorblindMode.Off;
@@ -296,6 +301,7 @@ namespace LSOL
                 _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
                 _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
                 _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
+                _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
                 _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
                 _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
                 _pendingNpcRouteLimit = _npcRouteLimit;
@@ -453,6 +459,7 @@ namespace LSOL
                 CorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled,
                 ReputationDifficultyEnabled = _reputationDifficultyEnabled,
                 OfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled,
+                OfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled,
                 EconomyDifficultyPreset = _economyDifficultyPreset,
                 NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
                 NpcRouteLimit = _npcRouteLimit,
@@ -481,6 +488,7 @@ namespace LSOL
                 _corridorRestrictionDifficultyEnabled = metadata.CorridorRestrictionDifficultyEnabled;
                 _reputationDifficultyEnabled = metadata.ReputationDifficultyEnabled;
                 _officeGarageLimitDifficultyEnabled = metadata.OfficeGarageLimitDifficultyEnabled;
+                _officeNpcLimitDifficultyEnabled = metadata.OfficeNpcLimitDifficultyEnabled;
                 _economyDifficultyPreset = metadata.EconomyDifficultyPreset;
                 _colorblindMode = metadata.ColorblindMode ?? ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = metadata.NpcWeeklyWageDifficulty;
@@ -499,6 +507,7 @@ namespace LSOL
                 _corridorRestrictionDifficultyEnabled = true;
                 _reputationDifficultyEnabled = true;
                 _officeGarageLimitDifficultyEnabled = true;
+                _officeNpcLimitDifficultyEnabled = false;
                 _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                 _colorblindMode = ColorblindMode.Off;
                 _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
@@ -518,6 +527,7 @@ namespace LSOL
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
             _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
+            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingNpcRouteLimit = _npcRouteLimit;

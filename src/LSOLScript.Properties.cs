@@ -23,6 +23,8 @@ namespace LSOL
 
         private LemonMenu _commercialGarageMenu;
         private LemonMenu _commercialGarageActionMenu;
+        private LemonMenu _officeObjectsMenu;
+        private LemonMenu _officeObjectPurchaseMenu;
         private LemonMenu _apartmentMenu;
         private LemonMenu _personalGarageMenu;
         private LemonMenu _personalDealershipMenu;
@@ -31,6 +33,8 @@ namespace LSOL
         private CommercialGarageMenuContext _commercialGarageMenuContext;
         private OwnedCommercialVehiclePersistenceEntry _selectedCommercialGarageVehicle;
         private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
+        private List<OfficeObjectDefinition> _officeObjectPreviewSlots;
+        private OfficeObjectDefinition _pendingOfficeObjectPurchaseDefinition;
 
         private void InitializePropertyMenus()
         {
@@ -43,6 +47,18 @@ namespace LSOL
             _commercialGarageActionMenu = new LemonMenu("Garage Vehicle")
             {
                 Subtitle = "Retrieve, store, reserve, or close the contract",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _officeObjectsMenu = new LemonMenu("Office Objects")
+            {
+                Subtitle = "Buy modules, haul them from the port, and place decorative props at the active office",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
+            _officeObjectPurchaseMenu = new LemonMenu("Confirm Purchase")
+            {
+                Subtitle = "Review price, office limits, and placement requirements",
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
@@ -66,12 +82,15 @@ namespace LSOL
             };
             _commercialGarageMenuContext = CommercialGarageMenuContext.Office;
             _commercialDealershipAcquisitionMode = CommercialDealershipAcquisitionMode.Purchase;
+            _officeObjectPreviewSlots = new List<OfficeObjectDefinition>();
         }
 
         private bool HasPropertyMenuOpen()
         {
             return (_commercialGarageMenu != null && _commercialGarageMenu.IsOpen)
                 || (_commercialGarageActionMenu != null && _commercialGarageActionMenu.IsOpen)
+                || (_officeObjectsMenu != null && _officeObjectsMenu.IsOpen)
+                || (_officeObjectPurchaseMenu != null && _officeObjectPurchaseMenu.IsOpen)
                 || (_apartmentMenu != null && _apartmentMenu.IsOpen)
                 || (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
                 || (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen);
@@ -87,6 +106,16 @@ namespace LSOL
             if (_commercialGarageActionMenu != null)
             {
                 _commercialGarageActionMenu.Draw();
+            }
+
+            if (_officeObjectsMenu != null)
+            {
+                _officeObjectsMenu.Draw();
+            }
+
+            if (_officeObjectPurchaseMenu != null)
+            {
+                _officeObjectPurchaseMenu.Draw();
             }
 
             if (_apartmentMenu != null)
@@ -115,6 +144,16 @@ namespace LSOL
             if (_commercialGarageActionMenu != null)
             {
                 _commercialGarageActionMenu.Close();
+            }
+
+            if (_officeObjectsMenu != null)
+            {
+                _officeObjectsMenu.Close();
+            }
+
+            if (_officeObjectPurchaseMenu != null)
+            {
+                _officeObjectPurchaseMenu.Close();
             }
 
             if (_apartmentMenu != null)
@@ -174,6 +213,30 @@ namespace LSOL
                 }
 
                 _commercialGarageActionMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_officeObjectPurchaseMenu != null && _officeObjectPurchaseMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToOfficeObjectsMenu();
+                    return true;
+                }
+
+                _officeObjectPurchaseMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_officeObjectsMenu != null && _officeObjectsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToOfficeMenuFromObjects();
+                    return true;
+                }
+
+                _officeObjectsMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -521,6 +584,36 @@ namespace LSOL
                 });
                 items.Add(new OfficeMenuItem
                 {
+                    CaptionFactory = () => "Objects",
+                    DetailFactory = BuildOfficeObjectsSummary,
+                    OnActivate = OpenOfficeObjectsMenu,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Refuel Vehicle",
+                    DetailFactory = BuildOfficeVehicleRefuelDetail,
+                    OnActivate = RefuelVehicleFromOfficeTank,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Unload Fuel Cargo",
+                    DetailFactory = BuildOfficeFuelUnloadDetail,
+                    OnActivate = UnloadFuelCargoIntoOfficeTank,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Request Diesel Delivery",
+                    DetailFactory = BuildOfficeFuelDeliveryDetail,
+                    OnActivate = RequestOfficeFuelDelivery,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Repair Vehicle",
+                    DetailFactory = BuildOfficeRepairDetail,
+                    OnActivate = RepairVehicleAtOffice,
+                });
+                items.Add(new OfficeMenuItem
+                {
                     CaptionFactory = () => "Hire NPC",
                     DetailFactory = CurrentNpcHiringDetail,
                     OnActivate = OpenNpcHiringMenu,
@@ -549,6 +642,469 @@ namespace LSOL
             return _officeGarageLimitDifficultyEnabled
                 ? Math.Max(0, office.MaxCommercialVehicles).ToString()
                 : "Unlimited";
+        }
+
+        private string BuildOfficeObjectsSummary()
+        {
+            if (_menuOffice == null)
+            {
+                return "No office selected.";
+            }
+
+            if (!string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Activate this office to buy and place objects here.";
+            }
+
+            var objects = _propertyManager.GetOfficeObjects(_menuOffice.OfficeId, true);
+            var placed = objects.Count(entry => entry != null && entry.IsPlaced);
+            var pending = objects.Count - placed;
+            var catalogCount = _propertyManager.OfficeObjectCatalog.Count;
+            return string.Format("Catalog {0} | Placed {1} | Pending placement {2}", catalogCount, placed, pending);
+        }
+
+        private string BuildOfficeVehicleRefuelDetail()
+        {
+            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Activate this office to refuel company vehicles from its diesel tank.";
+            }
+
+            var tank = _propertyManager.GetFirstPlacedOfficeObjectByFunction(_menuOffice.OfficeId, OfficeObjectFunction.Refuel);
+            var definition = tank != null ? _propertyManager.GetOfficeObjectDefinition(tank.DefinitionId) : null;
+            if (tank == null || definition == null)
+            {
+                return "Install a Diesel Tank first.";
+            }
+
+            return string.Format("Stored diesel: {0:0}/{1:0}L.", Math.Max(0f, tank.StoredResourceAmount), definition.Capacity);
+        }
+
+        private string BuildOfficeFuelUnloadDetail()
+        {
+            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Activate this office to unload fuel cargo into its diesel tank.";
+            }
+
+            var tank = _propertyManager.GetFirstPlacedOfficeObjectByFunction(_menuOffice.OfficeId, OfficeObjectFunction.Refuel);
+            if (tank == null)
+            {
+                return "Install a Diesel Tank first.";
+            }
+
+            return "Unload Fuel cargo from an office truck into the active office tank.";
+        }
+
+        private string BuildOfficeFuelDeliveryDetail()
+        {
+            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Activate this office to request refinery diesel delivery.";
+            }
+
+            if (_officeObjectManager.HasActiveFuelDelivery && string.Equals(_officeObjectManager.ActiveFuelDeliveryOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "A refinery tanker is already en route to this office.";
+            }
+
+            var tank = _propertyManager.GetFirstPlacedOfficeObjectByFunction(_menuOffice.OfficeId, OfficeObjectFunction.Refuel);
+            var definition = tank != null ? _propertyManager.GetOfficeObjectDefinition(tank.DefinitionId) : null;
+            if (tank == null || definition == null)
+            {
+                return "Install a Diesel Tank first.";
+            }
+
+            var freeLiters = Math.Max(0f, definition.Capacity - tank.StoredResourceAmount);
+            return freeLiters <= 0.05f
+                ? "The office diesel tank is already full."
+                : string.Format("Dispatch a refinery tanker to deliver up to {0:0}L at a discounted price.", freeLiters);
+        }
+
+        private string BuildOfficeRepairDetail()
+        {
+            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return "Activate this office to use its Maintenance Bay.";
+            }
+
+            return _propertyManager.HasOfficeObjectFunction(_menuOffice.OfficeId, OfficeObjectFunction.Repair)
+                ? "Repair the active office truck and trailer for free."
+                : "Install a Maintenance Bay first.";
+        }
+
+        private void OpenOfficeObjectsMenu()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            if (!string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                ShowStatus("Activate this office before buying or placing office objects.");
+                return;
+            }
+
+            string reason;
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
+            _officeMenu.Close();
+            RebuildOfficeObjectMenuItems();
+            _officeObjectsMenu.Open();
+        }
+
+        private void RebuildOfficeObjectMenuItems()
+        {
+            _officeObjectPreviewSlots.Clear();
+
+            var items = new List<OfficeMenuItem>
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = BuildOfficeObjectsSummary,
+                    DetailFactory = () => _menuOffice != null
+                        ? string.Format("{0} catalog entries available for {1}.", _propertyManager.OfficeObjectCatalog.Count, _menuOffice.DisplayName)
+                        : "No office selected.",
+                }
+            };
+            _officeObjectPreviewSlots.Add(null);
+
+            var catalog = _propertyManager.OfficeObjectCatalog;
+            if (catalog.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No office objects configured",
+                    DetailFactory = () => "OfficeObjects.xml is empty or failed to load.",
+                });
+                _officeObjectPreviewSlots.Add(null);
+            }
+            else
+            {
+                for (int i = 0; i < catalog.Count; i++)
+                {
+                    var definition = catalog[i];
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => BuildOfficeObjectCaption(definition),
+                        DetailFactory = () => BuildOfficeObjectDetail(definition),
+                        OnActivate = () => HandleOfficeObjectSelection(definition),
+                    });
+                    _officeObjectPreviewSlots.Add(definition);
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = ReturnToOfficeMenuFromObjects,
+            });
+            _officeObjectPreviewSlots.Add(null);
+
+            _officeObjectsMenu.Title = _menuOffice != null ? string.Format("{0} Objects", _menuOffice.DisplayName) : "Office Objects";
+            _officeObjectsMenu.Subtitle = "Buy modules, haul them from the port, and place decorative props at the active office";
+            _officeObjectsMenu.SetItems(items);
+        }
+
+        private string BuildOfficeObjectCaption(OfficeObjectDefinition definition)
+        {
+            if (definition == null)
+            {
+                return string.Empty;
+            }
+
+            var category = definition.IsFunctional ? "Module" : "Decor";
+            return string.Format("[{0}] {1}", category, definition.DisplayName);
+        }
+
+        private string BuildOfficeObjectDetail(OfficeObjectDefinition definition)
+        {
+            if (definition == null || _menuOffice == null)
+            {
+                return string.Empty;
+            }
+
+            var objects = _propertyManager.GetOfficeObjects(_menuOffice.OfficeId, true)
+                .Where(entry => entry != null && entry.DefinitionId == definition.ObjectId)
+                .ToList();
+            var placed = objects.Count(entry => entry.IsPlaced);
+            var pending = objects.Count - placed;
+            var limitLabel = definition.PerOfficeLimit > 0 ? string.Format("Limit {0}", definition.PerOfficeLimit) : "No office limit";
+            var functionLabel = definition.IsFunctional
+                ? string.Format("{0} | Port haul required", BuildOfficeObjectFunctionLabel(definition))
+                : "Decorative placement";
+            return string.Format(
+                "{0} | {1} | Price {2} | Placed {3} | Pending {4}",
+                limitLabel,
+                functionLabel,
+                ModFormatting.FormatMoney(definition.Price),
+                placed,
+                pending);
+        }
+
+        private string BuildOfficeObjectFunctionLabel(OfficeObjectDefinition definition)
+        {
+            if (definition == null)
+            {
+                return string.Empty;
+            }
+
+            switch (definition.Function)
+            {
+                case OfficeObjectFunction.Refuel:
+                    return string.Format("Diesel storage {0:0}L", Math.Max(0f, definition.Capacity));
+                case OfficeObjectFunction.Repair:
+                    return "Repairs office trucks and trailers";
+                case OfficeObjectFunction.Npc:
+                    return string.Format("Supports {0:0} hired NPCs", Math.Max(0f, definition.Capacity));
+                default:
+                    return definition.Function.ToString();
+            }
+        }
+
+        private void HandleOfficeObjectSelection(OfficeObjectDefinition definition)
+        {
+            if (definition == null || _menuOffice == null)
+            {
+                return;
+            }
+
+            var pendingEntry = _propertyManager.GetOfficeObjects(_menuOffice.OfficeId, true)
+                .FirstOrDefault(entry => entry != null && !entry.IsPlaced && entry.DefinitionId == definition.ObjectId);
+            if (pendingEntry != null)
+            {
+                StartOfficeObjectPlacement(pendingEntry);
+                return;
+            }
+
+            _pendingOfficeObjectPurchaseDefinition = definition;
+            RebuildOfficeObjectPurchaseMenuItems();
+            _officeObjectsMenu.Close();
+            _officeObjectPurchaseMenu.Open();
+        }
+
+        private void RebuildOfficeObjectPurchaseMenuItems()
+        {
+            var definition = _pendingOfficeObjectPurchaseDefinition;
+            var items = new List<OfficeMenuItem>();
+            if (definition == null)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No office object selected",
+                    DetailFactory = () => "Return to the catalog and choose a valid office object.",
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    OnActivate = ReturnToOfficeObjectsMenu,
+                });
+                _officeObjectPurchaseMenu.Title = "Confirm Purchase";
+                _officeObjectPurchaseMenu.Subtitle = "Office object unavailable";
+                _officeObjectPurchaseMenu.SetItems(items);
+                return;
+            }
+
+            string blockedReason;
+            var canPurchase = CanPurchaseOfficeObject(definition, out blockedReason);
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => definition.DisplayName,
+                DetailFactory = () => BuildOfficeObjectDetail(definition),
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => canPurchase ? string.Format("Purchase for {0}", ModFormatting.FormatMoney(definition.Price)) : "Purchase blocked",
+                DetailFactory = () => canPurchase
+                    ? (definition.IsFunctional
+                        ? "Buy now, then haul it from the port to the active office before placement."
+                        : "Buy now and immediately enter placement mode at the active office.")
+                    : blockedReason,
+                OnActivate = canPurchase
+                    ? (Action)ConfirmOfficeObjectPurchase
+                    : (Action)(() => ShowStatus(blockedReason)),
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Back",
+                OnActivate = ReturnToOfficeObjectsMenu,
+            });
+
+            _officeObjectPurchaseMenu.Title = "Confirm Purchase";
+            _officeObjectPurchaseMenu.Subtitle = _menuOffice != null ? _menuOffice.DisplayName : "Office object";
+            _officeObjectPurchaseMenu.SetItems(items);
+        }
+
+        private bool CanPurchaseOfficeObject(OfficeObjectDefinition definition, out string blockedReason)
+        {
+            blockedReason = string.Empty;
+            if (definition == null || _menuOffice == null)
+            {
+                blockedReason = "No office object selected.";
+                return false;
+            }
+
+            if (!string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                blockedReason = "Activate this office before buying objects for it.";
+                return false;
+            }
+
+            string reason;
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                blockedReason = reason;
+                return false;
+            }
+
+            if (definition.PerOfficeLimit > 0 && _propertyManager.GetOfficeObjectCount(_menuOffice.OfficeId, definition.ObjectId) >= definition.PerOfficeLimit)
+            {
+                blockedReason = string.Format("{0} limit reached at this office.", definition.DisplayName);
+                return false;
+            }
+
+            if (_profit + 0.001f < definition.Price)
+            {
+                blockedReason = string.Format("Need {0} to purchase {1}.", ModFormatting.FormatMoney(definition.Price), definition.DisplayName);
+                return false;
+            }
+
+            return true;
+        }
+
+        private void ConfirmOfficeObjectPurchase()
+        {
+            if (_pendingOfficeObjectPurchaseDefinition == null || _menuOffice == null)
+            {
+                ReturnToOfficeObjectsMenu();
+                return;
+            }
+
+            OfficeObjectPersistenceEntry purchasedEntry;
+            string message;
+            if (!_propertyManager.TryPurchaseOfficeObject(_menuOffice.OfficeId, _pendingOfficeObjectPurchaseDefinition.ObjectId, ref _profit, out purchasedEntry, out message))
+            {
+                ShowStatus(message);
+                RebuildOfficeObjectPurchaseMenuItems();
+                return;
+            }
+
+            _tabletStateStore.MarkBalanceDirty();
+            _pendingOfficeObjectPurchaseDefinition = null;
+            StartOfficeObjectPlacement(purchasedEntry, message);
+        }
+
+        private void StartOfficeObjectPlacement(OfficeObjectPersistenceEntry entry, string prefixMessage = null)
+        {
+            if (_menuOffice == null || entry == null)
+            {
+                return;
+            }
+
+            string placementMessage;
+            if (!_officeObjectManager.TryStartPlacement(_menuOffice, entry, out placementMessage))
+            {
+                ShowStatus(!string.IsNullOrWhiteSpace(prefixMessage)
+                    ? string.Format("{0} {1}", prefixMessage, placementMessage)
+                    : placementMessage);
+                ReturnToOfficeObjectsMenu();
+                return;
+            }
+
+            _officeObjectPurchaseMenu.Close();
+            _officeObjectsMenu.Close();
+            ShowStatus(!string.IsNullOrWhiteSpace(prefixMessage)
+                ? string.Format("{0} {1}", prefixMessage, placementMessage)
+                : placementMessage);
+        }
+
+        private void ReturnToOfficeObjectsMenu()
+        {
+            _officeObjectPurchaseMenu.Close();
+            _pendingOfficeObjectPurchaseDefinition = null;
+            RebuildOfficeObjectMenuItems();
+            _officeObjectsMenu.Open();
+        }
+
+        private void ReturnToOfficeMenuFromObjects()
+        {
+            _officeObjectPurchaseMenu.Close();
+            _officeObjectsMenu.Close();
+            _pendingOfficeObjectPurchaseDefinition = null;
+            RebuildOfficeMenuItems();
+            _officeMenu.Open();
+        }
+
+        private OfficeObjectDefinition GetSelectedOfficeObjectPreviewDefinition()
+        {
+            if (_officeObjectsMenu == null || !_officeObjectsMenu.IsOpen || _officeObjectPreviewSlots == null || _officeObjectPreviewSlots.Count == 0)
+            {
+                return null;
+            }
+
+            var selectedIndex = _officeObjectsMenu.SelectedIndex;
+            return selectedIndex >= 0 && selectedIndex < _officeObjectPreviewSlots.Count
+                ? _officeObjectPreviewSlots[selectedIndex]
+                : null;
+        }
+
+        private void RefreshOfficeObjectMenus(bool markCargoDirty)
+        {
+            if (markCargoDirty)
+            {
+                _tabletStateStore.MarkCargoDirty();
+            }
+
+            RebuildOfficeMenuItems();
+            if (_officeObjectsMenu != null && _officeObjectsMenu.IsOpen)
+            {
+                RebuildOfficeObjectMenuItems();
+            }
+        }
+
+        private void RefuelVehicleFromOfficeTank()
+        {
+            string message;
+            if (_officeObjectManager.TryRefuelPlayerVehicleAtOffice(Game.Player.Character, out message))
+            {
+                RefreshOfficeObjectMenus(true);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void UnloadFuelCargoIntoOfficeTank()
+        {
+            string message;
+            if (_officeObjectManager.TryUnloadFuelCargoIntoOfficeTank(Game.Player.Character, out message))
+            {
+                RefreshOfficeObjectMenus(true);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void RequestOfficeFuelDelivery()
+        {
+            string message;
+            if (_officeObjectManager.TryRequestOfficeFuelDelivery(Game.GameTime, out message))
+            {
+                RefreshOfficeObjectMenus(false);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void RepairVehicleAtOffice()
+        {
+            string message;
+            _officeObjectManager.TryRepairPlayerVehicleAtOffice(Game.Player.Character, out message);
+            ShowStatus(message);
         }
 
         private void RentSelectedOffice()

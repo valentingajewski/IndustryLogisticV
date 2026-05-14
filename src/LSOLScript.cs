@@ -101,6 +101,7 @@ namespace LSOL
         private readonly CargoTransferController _cargoTransferController;
         private readonly NpcLogisticsManager _npcLogisticsManager;
         private readonly IndustryRefuelService _industryRefuelService;
+        private readonly OfficeObjectManager _officeObjectManager;
         private readonly NpcLogisticsController _npcLogisticsController;
         private readonly TabletStateStore _tabletStateStore;
         private readonly TabletShellController _tabletShellController;
@@ -158,6 +159,8 @@ namespace LSOL
         private bool _pendingReputationDifficultyEnabled;
         private bool _officeGarageLimitDifficultyEnabled;
         private bool _pendingOfficeGarageLimitDifficultyEnabled;
+        private bool _officeNpcLimitDifficultyEnabled;
+        private bool _pendingOfficeNpcLimitDifficultyEnabled;
         private ModLanguage _language;
         private EconomyDifficultyPreset _economyDifficultyPreset;
         private EconomyDifficultyPreset _pendingEconomyDifficultyPreset;
@@ -286,6 +289,16 @@ namespace LSOL
                 GetGroundPosition,
                 message => ShowStatus(message, 4500),
                 IndustryInteractionDistance);
+            _officeObjectManager = new OfficeObjectManager(
+                _propertyManager,
+                _fleetManager,
+                _vehicleFuelSystem,
+                _industryManager,
+                _globalMarket,
+                () => _profit,
+                DeductProfit,
+                GetGroundPosition,
+                message => ShowStatus(message, 4500));
 
             _officeMenu = new LemonMenu("Office")
             {
@@ -368,6 +381,7 @@ namespace LSOL
                 _controls,
                 _npcLogisticsManager,
                 OpenOfficeMenu,
+                GetNpcHiringBlockedReason,
                 message => ShowStatus(message));
             _companyMapController = new CompanyMapController(
                 _controls,
@@ -428,6 +442,7 @@ namespace LSOL
             _corridorRestrictionDifficultyEnabled = true;
             _reputationDifficultyEnabled = true;
             _officeGarageLimitDifficultyEnabled = true;
+            _officeNpcLimitDifficultyEnabled = false;
             _language = ModLanguage.English;
             _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
             _colorblindMode = ColorblindMode.Off;
@@ -442,6 +457,7 @@ namespace LSOL
             _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
             _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
             _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
+            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
             _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingNpcRouteLimit = _npcRouteLimit;
@@ -495,6 +511,7 @@ namespace LSOL
                     || HasPropertyMenuOpen()
                     || _npcLogisticsController.AnyMenuOpen
                     || _companyMapController.AnyMenuOpen
+                    || (_officeObjectManager != null && _officeObjectManager.IsPlacementActive)
                     || _tabletShellController.IsOpen;
             }
         }
@@ -575,6 +592,11 @@ namespace LSOL
             UpdateCruiseControl(player);
 
             _specialMissionManager.Update(player, gameTime);
+            _officeObjectManager.Update(
+                player,
+                GetSelectedOfficeObjectPreviewDefinition(),
+                _officeObjectsMenu != null && _officeObjectsMenu.IsOpen,
+                gameTime);
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -641,6 +663,11 @@ namespace LSOL
             }
 
             if (HandleMenuKey(e.KeyCode))
+            {
+                return;
+            }
+
+            if (_officeObjectManager.HandleKey(e.KeyCode, _controls))
             {
                 return;
             }
@@ -1893,6 +1920,13 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "NPC limit at office",
+                    DetailFactory = CurrentPendingOfficeNpcLimitDetail,
+                    CheckboxStateFactory = () => _pendingOfficeNpcLimitDifficultyEnabled,
+                    OnActivate = TogglePendingOfficeNpcLimitSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = CurrentPendingNpcRouteLimitCaption,
                     DetailFactory = CurrentNpcRouteLimitDetail,
                     OnLeft = () => ChangePendingNpcRouteLimit(-1),
@@ -2321,6 +2355,13 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "NPC limit at office",
+                    DetailFactory = CurrentOfficeNpcLimitDetail,
+                    CheckboxStateFactory = () => _officeNpcLimitDifficultyEnabled,
+                    OnActivate = ToggleOfficeNpcLimitSetting,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = CurrentNpcRouteLimitCaption,
                     DetailFactory = CurrentNpcRouteLimitDetail,
                     OnLeft = () => ChangeNpcRouteLimit(-1),
@@ -2565,6 +2606,23 @@ namespace LSOL
             return Text(ModTextKey.DetailNpcRouteLimit);
         }
 
+        private string CurrentOfficeNpcLimitDetail()
+        {
+            return BuildOfficeNpcLimitDetail(_officeNpcLimitDifficultyEnabled);
+        }
+
+        private string CurrentPendingOfficeNpcLimitDetail()
+        {
+            return BuildOfficeNpcLimitDetail(_pendingOfficeNpcLimitDifficultyEnabled);
+        }
+
+        private static string BuildOfficeNpcLimitDetail(bool enabled)
+        {
+            return enabled
+                ? "Require Construction Site Cabin capacity before hiring additional NPCs."
+                : "Ignore Construction Site Cabin capacity when hiring NPCs.";
+        }
+
         private void ToggleMechanicsFromMenu()
         {
             SetModMechanicsEnabled(!_modMechanicsEnabled, true);
@@ -2679,6 +2737,11 @@ namespace LSOL
             _pendingOfficeGarageLimitDifficultyEnabled = !_pendingOfficeGarageLimitDifficultyEnabled;
         }
 
+        private void TogglePendingOfficeNpcLimitSetting()
+        {
+            _pendingOfficeNpcLimitDifficultyEnabled = !_pendingOfficeNpcLimitDifficultyEnabled;
+        }
+
         private void ChangePendingNpcRouteLimit(int delta)
         {
             _pendingNpcRouteLimit = ClampNpcRouteLimit(_pendingNpcRouteLimit + delta);
@@ -2786,6 +2849,18 @@ namespace LSOL
             }
 
             _officeGarageLimitDifficultyEnabled = !_officeGarageLimitDifficultyEnabled;
+            ApplyDifficultySettingsToSystems();
+        }
+
+        private void ToggleOfficeNpcLimitSetting()
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _officeNpcLimitDifficultyEnabled = !_officeNpcLimitDifficultyEnabled;
             ApplyDifficultySettingsToSystems();
         }
 
@@ -3338,9 +3413,70 @@ namespace LSOL
                     : "Hiring new NPCs is disabled in Options.";
             }
 
+            var hireBlockedReason = GetNpcHiringBlockedReason();
+            if (!string.IsNullOrWhiteSpace(hireBlockedReason))
+            {
+                return hireBlockedReason;
+            }
+
+            if (_officeNpcLimitDifficultyEnabled)
+            {
+                var capacity = GetActiveOfficeNpcCapacity();
+                return string.Format(
+                    "{0} hired NPC{1} active | Capacity {2}. Open the tablet-style NPC manager.",
+                    routeCount,
+                    routeCount == 1 ? string.Empty : "s",
+                    Math.Max(0, capacity));
+            }
+
             return routeCount == 1
                 ? "1 active logistics route. Open the tablet-style NPC manager."
                 : string.Format("{0} active logistics routes. Open the tablet-style NPC manager.", routeCount);
+        }
+
+        private string GetNpcHiringBlockedReason()
+        {
+            string reason;
+            if (!_propertyManager.CanUseCommercialSystems(out reason))
+            {
+                return reason;
+            }
+
+            if (!_officeNpcLimitDifficultyEnabled)
+            {
+                return string.Empty;
+            }
+
+            var office = _propertyManager.ActiveOffice;
+            if (office == null)
+            {
+                return "Activate an office before hiring NPCs.";
+            }
+
+            var capacity = GetActiveOfficeNpcCapacity();
+            if (capacity <= 0)
+            {
+                return "Install a Construction Site Cabin at the active office to hire NPCs.";
+            }
+
+            var hiredNpcCount = _npcLogisticsManager.Contracts.Count;
+            if (hiredNpcCount >= capacity)
+            {
+                return string.Format("Construction Site Cabin capacity reached: {0}/{1} hired NPCs.", hiredNpcCount, capacity);
+            }
+
+            return string.Empty;
+        }
+
+        private int GetActiveOfficeNpcCapacity()
+        {
+            var office = _propertyManager.ActiveOffice;
+            if (office == null)
+            {
+                return 0;
+            }
+
+            return (int)Math.Floor(_propertyManager.GetOfficeObjectFunctionCapacity(office.OfficeId, OfficeObjectFunction.Npc) + 0.001f);
         }
 
         private string CurrentCompanyMapDetail()
@@ -5503,6 +5639,7 @@ namespace LSOL
             _cargoTransferController.ClearState();
             _industryOutputPropManager.DestroyAll();
             _barrierInteractionHandler.ClearState();
+            _officeObjectManager.Cleanup();
             CloseAllMenus();
             _heldKeys.Clear();
         }

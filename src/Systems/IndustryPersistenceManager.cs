@@ -206,6 +206,7 @@ namespace LSOL.Systems
                     writer.WriteLine("CorridorRestrictionDifficultyEnabled={0}", metadata.CorridorRestrictionDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("ReputationDifficultyEnabled={0}", metadata.ReputationDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("OfficeGarageLimitDifficultyEnabled={0}", metadata.OfficeGarageLimitDifficultyEnabled ? "true" : "false");
+                    writer.WriteLine("OfficeNpcLimitDifficultyEnabled={0}", metadata.OfficeNpcLimitDifficultyEnabled ? "true" : "false");
                     writer.WriteLine("EconomyDifficultyPreset={0}", metadata.EconomyDifficultyPreset);
                     writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
                     writer.WriteLine("NpcRouteLimit={0}", metadata.NpcRouteLimit);
@@ -301,6 +302,7 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "CorridorRestrictionDifficultyEnabled") ||
                 ini.HasKey("Meta", "ReputationDifficultyEnabled") ||
                 ini.HasKey("Meta", "OfficeGarageLimitDifficultyEnabled") ||
+                ini.HasKey("Meta", "OfficeNpcLimitDifficultyEnabled") ||
                 ini.HasKey("Meta", "EconomyDifficultyPreset") ||
                 ini.HasKey("Meta", "NpcWeeklyWageDifficulty") ||
                 ini.HasKey("Meta", "NpcRouteLimit") ||
@@ -323,6 +325,7 @@ namespace LSOL.Systems
             metadata.CorridorRestrictionDifficultyEnabled = ini.GetBool("Meta", "CorridorRestrictionDifficultyEnabled", true);
             metadata.ReputationDifficultyEnabled = ini.GetBool("Meta", "ReputationDifficultyEnabled", true);
             metadata.OfficeGarageLimitDifficultyEnabled = ini.GetBool("Meta", "OfficeGarageLimitDifficultyEnabled", true);
+            metadata.OfficeNpcLimitDifficultyEnabled = ini.GetBool("Meta", "OfficeNpcLimitDifficultyEnabled", false);
             metadata.EconomyDifficultyPreset = ParseEconomyDifficultyPreset(
                 ini.GetString("Meta", "EconomyDifficultyPreset", EconomyDifficultyPreset.Standard.ToString()),
                 EconomyDifficultyPreset.Standard);
@@ -648,6 +651,23 @@ namespace LSOL.Systems
                 writer.WriteLine();
             }
 
+            foreach (var officeObject in snapshot.OfficeObjects.OrderBy(entry => entry != null ? entry.InstanceId : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (officeObject == null || string.IsNullOrWhiteSpace(officeObject.InstanceId) || string.IsNullOrWhiteSpace(officeObject.OfficeId) || officeObject.DefinitionId <= 0)
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPropertyOfficeObjectSectionName(officeObject.InstanceId));
+                writer.WriteLine("OfficeId={0}", officeObject.OfficeId ?? string.Empty);
+                writer.WriteLine("DefinitionId={0}", officeObject.DefinitionId);
+                writer.WriteLine("IsPlaced={0}", officeObject.IsPlaced ? "true" : "false");
+                writer.WriteLine("Position={0}", FormatVector3(officeObject.Position));
+                writer.WriteLine("Rotation={0}", FormatVector3(officeObject.Rotation));
+                writer.WriteLine("StoredResourceAmount={0}", FormatFloat(officeObject.StoredResourceAmount));
+                writer.WriteLine();
+            }
+
             foreach (var apartment in snapshot.Apartments.OrderBy(entry => entry != null ? entry.InteriorId : string.Empty, StringComparer.OrdinalIgnoreCase))
             {
                 if (apartment == null || string.IsNullOrWhiteSpace(apartment.InteriorId))
@@ -768,6 +788,26 @@ namespace LSOL.Systems
                             IsAccessSuspended = ini.GetBool(section, "IsAccessSuspended", false),
                             OutstandingRent = ini.GetFloat(section, "OutstandingRent", 0f),
                             LastChargedWeekIndex = ParseInt(ini.GetString(section, "LastChargedWeekIndex", "-1"), -1),
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("PropertyOfficeObject:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var instanceId = section.Substring("PropertyOfficeObject:".Length).Trim();
+                    if (!string.IsNullOrWhiteSpace(instanceId))
+                    {
+                        snapshot.OfficeObjects.Add(new OfficeObjectPersistenceEntry
+                        {
+                            InstanceId = instanceId,
+                            OfficeId = ini.GetString(section, "OfficeId", string.Empty),
+                            DefinitionId = ParseInt(ini.GetString(section, "DefinitionId", "0"), 0),
+                            IsPlaced = ini.GetBool(section, "IsPlaced", false),
+                            Position = ParseVector3(ini.GetString(section, "Position", string.Empty), Vector3.Zero),
+                            Rotation = ParseVector3(ini.GetString(section, "Rotation", string.Empty), Vector3.Zero),
+                            StoredResourceAmount = ini.GetFloat(section, "StoredResourceAmount", 0f),
                         });
                     }
 
@@ -1442,6 +1482,11 @@ namespace LSOL.Systems
             return "PropertyOffice:" + (officeId ?? string.Empty).Trim();
         }
 
+        private static string BuildPropertyOfficeObjectSectionName(string instanceId)
+        {
+            return "PropertyOfficeObject:" + (instanceId ?? string.Empty).Trim();
+        }
+
         private static string BuildPropertyApartmentSectionName(string apartmentId)
         {
             return "PropertyApartment:" + (apartmentId ?? string.Empty).Trim();
@@ -1641,6 +1686,7 @@ namespace LSOL.Systems
         public bool CorridorRestrictionDifficultyEnabled { get; set; } = true;
         public bool ReputationDifficultyEnabled { get; set; } = true;
         public bool OfficeGarageLimitDifficultyEnabled { get; set; } = true;
+        public bool OfficeNpcLimitDifficultyEnabled { get; set; }
         public EconomyDifficultyPreset EconomyDifficultyPreset { get; set; } = EconomyDifficultyPreset.Standard;
         public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
         public int NpcRouteLimit { get; set; } = 5;

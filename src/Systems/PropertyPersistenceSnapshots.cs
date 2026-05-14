@@ -9,6 +9,7 @@ namespace LSOL.Systems
         public PropertyOwnershipPersistenceSnapshot()
         {
             Offices = new List<OfficeOwnershipPersistenceEntry>();
+            OfficeObjects = new List<OfficeObjectPersistenceEntry>();
             Apartments = new List<ApartmentOwnershipPersistenceEntry>();
             CommercialVehicles = new List<OwnedCommercialVehiclePersistenceEntry>();
             PersonalVehicles = new List<OwnedPersonalVehiclePersistenceEntry>();
@@ -19,6 +20,8 @@ namespace LSOL.Systems
         public string ActiveApartmentId { get; set; }
 
         public List<OfficeOwnershipPersistenceEntry> Offices { get; }
+
+        public List<OfficeObjectPersistenceEntry> OfficeObjects { get; }
 
         public List<ApartmentOwnershipPersistenceEntry> Apartments { get; }
 
@@ -33,6 +36,7 @@ namespace LSOL.Systems
                 return !string.IsNullOrWhiteSpace(ActiveOfficeId)
                     || !string.IsNullOrWhiteSpace(ActiveApartmentId)
                     || Offices.Count > 0
+                    || OfficeObjects.Count > 0
                     || Apartments.Count > 0
                     || CommercialVehicles.Count > 0
                     || PersonalVehicles.Count > 0;
@@ -53,6 +57,23 @@ namespace LSOL.Systems
         public float OutstandingRent { get; set; }
 
         public int LastChargedWeekIndex { get; set; } = -1;
+    }
+
+    public sealed class OfficeObjectPersistenceEntry
+    {
+        public string InstanceId { get; set; }
+
+        public string OfficeId { get; set; }
+
+        public int DefinitionId { get; set; }
+
+        public bool IsPlaced { get; set; }
+
+        public Vector3 Position { get; set; }
+
+        public Vector3 Rotation { get; set; }
+
+        public float StoredResourceAmount { get; set; }
     }
 
     public sealed class ApartmentOwnershipPersistenceEntry

@@ -20,6 +20,7 @@ namespace LSOL.Config
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
         public List<OfficeDefinition> OfficeDefinitions { get; private set; }
+        public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; private set; }
         public List<InteriorDefinition> InteriorDefinitions { get; private set; }
         public List<DealershipVehicleDefinition> PersonalVehicleDefinitions { get; private set; }
         public ExternalConfigCatalog ExternalCatalog { get; private set; }
@@ -51,6 +52,7 @@ namespace LSOL.Config
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
                 OfficeDefinitions = new List<OfficeDefinition>(),
+                OfficeObjectDefinitions = new List<OfficeObjectDefinition>(),
                 InteriorDefinitions = new List<InteriorDefinition>(),
                 PersonalVehicleDefinitions = new List<DealershipVehicleDefinition>(),
                 CargoTypes = new List<VehicleCargoType>(),
@@ -75,6 +77,11 @@ namespace LSOL.Config
             if (externalCatalog.OfficeDefinitions.Count > 0)
             {
                 config.OfficeDefinitions.AddRange(CloneOfficeDefinitions(externalCatalog.OfficeDefinitions));
+            }
+
+            if (externalCatalog.OfficeObjectDefinitions.Count > 0)
+            {
+                config.OfficeObjectDefinitions.AddRange(CloneOfficeObjectDefinitions(externalCatalog.OfficeObjectDefinitions));
             }
 
             if (externalCatalog.InteriorDefinitions.Count > 0)
@@ -373,6 +380,28 @@ namespace LSOL.Config
                             WeeklyOfficeRent = x.WeeklyOfficeRent,
                             MaxCommercialVehicles = x.MaxCommercialVehicles,
                             Description = x.Description,
+                        })
+                        .ToList();
+            }
+
+            private static IEnumerable<OfficeObjectDefinition> CloneOfficeObjectDefinitions(IEnumerable<OfficeObjectDefinition> source)
+            {
+                return source == null
+                    ? new OfficeObjectDefinition[0]
+                    : source
+                        .Where(x => x != null)
+                        .Select(x => new OfficeObjectDefinition
+                        {
+                            ObjectId = x.ObjectId,
+                            ModelName = x.ModelName,
+                            ModelHash = x.ModelHash,
+                            DisplayName = x.DisplayName,
+                            Size = x.Size,
+                            Function = x.Function,
+                            ResourceType = x.ResourceType,
+                            Capacity = x.Capacity,
+                            PerOfficeLimit = x.PerOfficeLimit,
+                            Price = x.Price,
                         })
                         .ToList();
             }

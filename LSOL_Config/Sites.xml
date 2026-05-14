@@ -6,9 +6,9 @@
     <Worker x="2677.02" y="2763.29" z="37.88" />
     <Inputs outputs="Gravel,Coal,Ore" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="101" legacyKey="OilField" name="Grand Senora Desert Oil Field" role="RawProducer" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true">
@@ -16,20 +16,20 @@
     <VehicleSpawn x="612" y="2915" z="40" heading="320" />
     <Inputs outputs="Oil" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="102" legacyKey="Refinery" name="El Burro Heights Refinery" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true">
     <Marker x="1725" y="-1659" z="112.5" />
-    <VehicleSpawn x="1740" y="-1705.65" z="112.5" heading="138" />
+    <VehicleSpawn x="1379.44" y="-1612.73" z="55.64" heading="78" />
     <Worker x="2770.84" y="1482.36" z="24.52" />
     <Inputs outputs="Fuel" primary="Oil" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="103" legacyKey="PlasticFactory" name="Los Santos Plastic Factory" role="ProcessingPlant" district="Port" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.5" enabled="true">
@@ -38,12 +38,12 @@
     <Worker x="252" y="-3042.5" z="5.88" />
     <Inputs outputs="Plastic" primary="Oil" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
-  <Site catalogId="104" legacyKey="SmeltingFactory" name="Cypress Flats Smelting Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.5" enabled="true" groundLevel="true">
+  <Site catalogId="104" legacyKey="SmeltingFactory" name="Cypress Flats Smelting Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.5" enabled="true" groundLevel="true" objectToDelete="3008087081,3066743879">
     <Marker x="1073.11" y="-1952.96" z="31" />
     <VehicleSpawn x="1090" y="-1974.67" z="31" heading="55" />
     <DisplaySpawn x="1066" y="-1972.45" z="31" heading="145" />
@@ -51,9 +51,9 @@
     <Display maxLine="2" objectModelHash="2640273460" maxRow="2" />
     <Inputs outputs="Steel,Alloy,Recyclable" primary="Ore,Coal" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="105" legacyKey="MechanicalPartsFactory" name="La Mesa Mechanical Parts Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -63,9 +63,9 @@
     <Display maxLine="4" objectModelHash="300547451" maxRow="2" />
     <Inputs outputs="MechanicalParts" primary="Steel,Alloy" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="106" legacyKey="ProcessorFactory" name="Cypress Flats Processor Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -75,9 +75,9 @@
     <Display maxLine="5" objectModelHash="1935071027" maxRow="3" />
     <Inputs outputs="Processors,Recyclable" primary="Plastic,Alloy,Chemicals" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="107" legacyKey="ConsumerElectronicsFactory" name="Consumer Electronics Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -87,9 +87,9 @@
     <Display maxLine="3" objectModelHash="1935071027" maxRow="1" />
     <Inputs outputs="TV,Computer,Recyclable" primary="Processors,MechanicalParts" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="108" legacyKey="RecyclingCenter" name="La Puerta Recycling Center" role="RecyclingHub" district="WestLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -99,9 +99,9 @@
     <Display maxLine="3" objectModelHash="2953021284" maxRow="1" />
     <Inputs outputs="Metal,Alloy,Plastic" primary="Recyclable" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="8" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="10" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="12" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="8" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="10" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="12" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="109" legacyKey="OmegaFactory" name="Rancho Omega Factory" role="SpecialPlant" district="SouthLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true">
@@ -111,9 +111,9 @@
     <Worker x="498" y="-1966.4" z="24.86" />
     <Inputs outputs="Omega" primary="Ore,Oil" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="2.5" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="3" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="3.5" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="2.5" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="3" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="3.5" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="110" legacyKey="Forest" name="Paleto Forest" role="RawProducer" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true">
@@ -121,9 +121,9 @@
     <VehicleSpawn x="-812" y="5434.78" z="33.76" heading="68" />
     <Inputs outputs="Wood" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="111" legacyKey="Sawmill" name="Paleto Bay Sawmill" role="ProcessingPlant" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true">
@@ -132,9 +132,9 @@
     <Worker x="-553.88" y="5378.62" z="70.18" />
     <Inputs outputs="Lumber,Paper" primary="Wood" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="112" legacyKey="WoodFurnitureFactory" name="Cypress Flats Wood Furniture Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -144,21 +144,21 @@
     <Display maxLine="3" objectModelHash="1935071027" maxRow="1" />
     <Inputs outputs="Furniture" primary="Lumber" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
-  <Site catalogId="113" legacyKey="Farm" name="Grapeseed Farm" role="RawProducer" district="Grapeseed" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
+  <Site catalogId="113" legacyKey="Farm" name="Grapeseed Farm" role="RawProducer" district="Grapeseed" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true" objectToDelete="1911284463">
     <Marker x="2307" y="4888" z="41.81" />
     <VehicleSpawn x="2290" y="4892" z="41.1" heading="313" />
     <DisplaySpawn x="2301.44" y="4888.32" z="41.81" heading="226" />
     <Display maxLine="4" objectModelHash="1700312454" maxRow="2" />
     <Inputs outputs="Crops,Livestock" optional="LiquidFertilizer,Water" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="114" legacyKey="AlcoholFactory" name="La Mesa Alcohol Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -168,9 +168,9 @@
     <Display maxLine="3" objectModelHash="2221734764" maxRow="1" />
     <Inputs outputs="Alcohol" primary="Crops" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="115" legacyKey="Slaughterhouse" name="Elysian Island Slaughterhouse" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -180,9 +180,9 @@
     <Display maxLine="5" objectModelHash="379464063" maxRow="2" />
     <Inputs outputs="Meat" primary="Livestock" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="116" legacyKey="[FoodProcessingFactory]" name="CluckingBell Food Processing Factory" role="ProcessingPlant" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -192,9 +192,9 @@
     <Display maxLine="10" objectModelHash="153748523" maxRow="2" />
     <Inputs outputs="ProcessedFood" primary="Crops,Livestock" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="117" legacyKey="FabricFactory" name="La Mesa Fabric Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -204,9 +204,9 @@
     <Display maxLine="3" objectModelHash="153748523" maxRow="5" />
     <Inputs outputs="Fabric" primary="Crops,Chemicals" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="118" legacyKey="ClothingFactory" name="La Mesa Clothing Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -216,9 +216,9 @@
     <Display maxLine="4" objectModelHash="153748523" maxRow="1" />
     <Inputs outputs="Clothes" primary="Fabric" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="119" legacyKey="ChemicalPlant" name="Palmer-Taylor Chemical Plant" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.5" enabled="true">
@@ -227,9 +227,9 @@
     <Worker x="578.11" y="2935.85" z="40.92" />
     <Inputs outputs="Chemicals" primary="Wood,Oil,Gravel,Crops" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="120" legacyKey="PharmaceuticalFactory" name="Humane Labs Pharmaceutical Factory" role="ManufacturingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -241,9 +241,9 @@
     <Display maxLine="5" objectModelHash="4217628831" maxRow="1" />
     <Inputs outputs="Medicine" primary="Chemicals,Plastic" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="121" legacyKey="CementFactory" name="Grand Senora Cement Factory" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Starter" industryOwnerCut="0.5" enabled="true" groundLevel="true" objectToDelete="437009729,3324172348">
@@ -254,9 +254,9 @@
     <Display maxLine="10" objectModelHash="646559885" maxRow="2" />
     <Inputs outputs="Cement" primary="Gravel,Coal" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="122" legacyKey="ConcreteFactory" name="Elysian Island Concrete Factory" role="ProcessingPlant" district="Port" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -267,9 +267,9 @@
     <Display maxLine="4" objectModelHash="2343741282" maxRow="2" />
     <Inputs outputs="Concrete" primary="Cement,Gravel" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="123" legacyKey="BricksFactory" name="Grand Senora Bricks Factory" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -279,9 +279,9 @@
     <Display maxLine="5" objectModelHash="1711856655" maxRow="4" />
     <Inputs outputs="Bricks" primary="Cement,Gravel" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="124" legacyKey="BeamFactory" name="Cypress Flats Beam Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.5" enabled="true">
@@ -290,9 +290,9 @@
     <Display objectModelHash="1606004099" />
     <Inputs outputs="Beam,Recyclable" primary="Steel" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="125" legacyKey="VehicleFactory" name="Los Santos Vehicle Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -302,9 +302,9 @@
     <Display maxLine="10" objectModelHash="2817386317" maxRow="2" />
     <Inputs outputs="Vehicles,Recyclable" primary="Steel,Plastic,Processors,Fabric,MechanicalParts" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="126" legacyKey="LiquidFertilizerFactory" name="Liquid Fertilizer" role="ProcessingPlant" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true" groundLevel="true">
@@ -314,9 +314,9 @@
     <Display maxLine="3" objectModelHash="1370563384" maxRow="1" />
     <Inputs outputs="LiquidFertilizer" primary="Water,Chemicals" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="127" legacyKey="WaterSupply" name="Tataviam Mountains Water Supply" role="RawProducer" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true">
@@ -324,9 +324,9 @@
     <VehicleSpawn x="1940.41" y="601.38" z="176.12" heading="330" />
     <Inputs outputs="Water" optional="Omega" />
     <Economy>
-      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="180" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="120" outputCapacityTons="100" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="80" outputCapacityTons="70" productionRatio="1" permitRequired="true" />
+      <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="32" licencePrice="13000" purchasePrice="450000" inputCapacityTons="1200" outputCapacityTons="1000" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="24" licencePrice="18000" purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="700" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="300" legacyKey="HarborTerminal" name="Port Terminal" role="Warehouse" district="Port" startingTankRatio="0" ownershipTier="Local" enabled="true">

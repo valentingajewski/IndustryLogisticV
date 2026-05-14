@@ -474,6 +474,62 @@ namespace LSOL.Config
             return catalog.OfficeDefinitions.Count > 0;
         }
 
+        public static bool TryPopulateOfficeObjects(string configDirectory, ExternalConfigCatalog catalog)
+        {
+            if (catalog == null)
+            {
+                return false;
+            }
+
+            var document = LoadDocument(
+                configDirectory,
+                "OfficeObjects.xml",
+                catalog.ValidationMessages,
+                "OfficeObjects.xml missing. Office object catalog will be unavailable.");
+            if (document == null || document.Root == null)
+            {
+                return false;
+            }
+
+            foreach (var element in document.Root.Elements("Object"))
+            {
+                var objectId = ReadIntAttribute(element, "id", 0);
+                var displayName = ReadAttribute(element, "name");
+                var modelName = ReadAttribute(element, "model");
+                int modelHash;
+                var hasModelHash = TryReadHashAttribute(element, "hash", out modelHash);
+                var size = ParseOfficeObjectSize(ReadAttribute(element, "size"));
+                var function = ParseOfficeObjectFunction(ReadAttribute(element, "function"));
+                var resourceType = CommodityCatalog.Normalize(ReadAttribute(element, "resource"));
+                if (resourceType.Equals("None", StringComparison.OrdinalIgnoreCase))
+                {
+                    resourceType = string.Empty;
+                }
+
+                if (objectId <= 0 || string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(modelName) || !hasModelHash)
+                {
+                    catalog.ValidationMessages.Add("OfficeObjects.xml contains an object with missing id, name, model, or hash.");
+                    continue;
+                }
+
+                catalog.OfficeObjectDefinitions.Add(new OfficeObjectDefinition
+                {
+                    ObjectId = objectId,
+                    DisplayName = displayName,
+                    ModelName = modelName,
+                    ModelHash = modelHash,
+                    Size = size,
+                    Function = function,
+                    ResourceType = resourceType,
+                    Capacity = Math.Max(0f, ReadFloatAttribute(element, "capacity", 0f)),
+                    PerOfficeLimit = Math.Max(0, ReadIntAttribute(element, "limit", 0)),
+                    Price = Math.Max(0f, ReadFloatAttribute(element, "price", 0f)),
+                });
+            }
+
+            return catalog.OfficeObjectDefinitions.Count > 0;
+        }
+
         public static bool TryPopulateInteriors(string configDirectory, ExternalConfigCatalog catalog)
         {
             if (catalog == null)
@@ -745,6 +801,48 @@ namespace LSOL.Config
                 || int.TryParse(raw, NumberStyles.Integer, CultureInfo.CurrentCulture, out value);
         }
 
+        private static bool TryReadHashAttribute(XElement element, string name, out int value)
+        {
+            value = 0;
+            if (element == null || element.Attribute(name) == null)
+            {
+                return false;
+            }
+
+            var raw = element.Attribute(name).Value;
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return false;
+            }
+
+            var normalized = raw.Trim();
+            if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                uint hexValue;
+                if (uint.TryParse(normalized.Substring(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out hexValue))
+                {
+                    value = unchecked((int)hexValue);
+                    return true;
+                }
+            }
+
+            if (int.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out value)
+                || int.TryParse(normalized, NumberStyles.Integer, CultureInfo.CurrentCulture, out value))
+            {
+                return true;
+            }
+
+            uint unsignedValue;
+            if (uint.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out unsignedValue)
+                || uint.TryParse(normalized, NumberStyles.Integer, CultureInfo.CurrentCulture, out unsignedValue))
+            {
+                value = unchecked((int)unsignedValue);
+                return true;
+            }
+
+            return false;
+        }
+
         private static float? ReadOptionalFloatAttribute(XElement element, string name)
         {
             float parsed;
@@ -837,6 +935,44 @@ namespace LSOL.Config
             }
 
             return VehicleCargoType.Unknown;
+        }
+
+        private static OfficeObjectSize ParseOfficeObjectSize(string raw)
+        {
+            var normalized = (raw ?? string.Empty).Trim();
+            if (normalized.Equals("Medium", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectSize.Medium;
+            }
+
+            if (normalized.Equals("Big", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Equals("Large", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectSize.Big;
+            }
+
+            return OfficeObjectSize.Small;
+        }
+
+        private static OfficeObjectFunction ParseOfficeObjectFunction(string raw)
+        {
+            var normalized = (raw ?? string.Empty).Trim().Replace(" ", string.Empty);
+            if (normalized.Equals("Refuel", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectFunction.Refuel;
+            }
+
+            if (normalized.Equals("Repair", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectFunction.Repair;
+            }
+
+            if (normalized.Equals("Npc", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectFunction.Npc;
+            }
+
+            return OfficeObjectFunction.Decorative;
         }
 
         private static ExternalLocationKind ResolveLocationKind(SiteRole role, HashSet<string> inputs, HashSet<string> outputs)

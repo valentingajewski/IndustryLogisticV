@@ -36,6 +36,7 @@ namespace LSOL.UI
         private readonly ControlBindings _controls;
         private readonly NpcLogisticsManager _manager;
         private readonly Action _reopenOfficeMenu;
+        private readonly Func<string> _getHireBlockedReason;
         private readonly Action<string> _showStatus;
 
         private readonly SimpleMenu _rootMenu;
@@ -63,11 +64,13 @@ namespace LSOL.UI
             ControlBindings controls,
             NpcLogisticsManager manager,
             Action reopenOfficeMenu,
+            Func<string> getHireBlockedReason,
             Action<string> showStatus)
         {
             _controls = controls;
             _manager = manager;
             _reopenOfficeMenu = reopenOfficeMenu;
+            _getHireBlockedReason = getHireBlockedReason;
             _showStatus = showStatus;
 
             _rootMenu = CreateMenu("Hire NPC", "Automate logistics between industries", 0.70f);
@@ -215,6 +218,7 @@ namespace LSOL.UI
         private void RebuildRootMenuItems()
         {
             var routeLimit = _manager.RouteLimit;
+            var hireBlockedReason = GetHireBlockedReason();
             _rootMenu.Title = "Hire NPC";
             _rootMenu.Subtitle = "Automate resource transportation routes";
             _rootMenu.SetItems(new[]
@@ -224,12 +228,16 @@ namespace LSOL.UI
                     CaptionFactory = () => "Hire New NPC",
                     DetailFactory = () => routeLimit <= 0
                         ? "Hiring NPC is disabled in Options. Increase the NPC route limit to create new contracts."
-                        : "Create a new automated logistics route.",
+                        : !string.IsNullOrWhiteSpace(hireBlockedReason)
+                            ? hireBlockedReason
+                            : "Create a new automated logistics route.",
                     IdleBackgroundColor = Color.FromArgb(170, 46, 66, 50),
                     SelectedBackgroundColor = Color.FromArgb(205, 85, 124, 94),
                     OnActivate = routeLimit <= 0
                         ? (Action)(() => ShowStatus("Hiring NPC is disabled in Options."))
-                        : OpenHireNewMenu,
+                        : !string.IsNullOrWhiteSpace(hireBlockedReason)
+                            ? (Action)(() => ShowStatus(hireBlockedReason))
+                            : OpenHireNewMenu,
                 },
                 new MenuItem
                 {
@@ -255,6 +263,14 @@ namespace LSOL.UI
             if (_manager.RouteLimit <= 0)
             {
                 ShowStatus("Hiring NPC is disabled in Options.");
+                OpenRootMenu();
+                return;
+            }
+
+            var hireBlockedReason = GetHireBlockedReason();
+            if (!string.IsNullOrWhiteSpace(hireBlockedReason))
+            {
+                ShowStatus(hireBlockedReason);
                 OpenRootMenu();
                 return;
             }
@@ -485,6 +501,18 @@ namespace LSOL.UI
 
         private void ConfirmDraft()
         {
+            if (_editingContract == null)
+            {
+                var hireBlockedReason = GetHireBlockedReason();
+                if (!string.IsNullOrWhiteSpace(hireBlockedReason))
+                {
+                    ShowStatus(hireBlockedReason);
+                    RebuildHireMenuItems();
+                    _hireMenu.Open();
+                    return;
+                }
+            }
+
             var tier = GetSelectedTier();
             StoreCurrentSelectionsIntoDraftRoute();
 
@@ -1294,6 +1322,11 @@ namespace LSOL.UI
             }
 
             _showStatus(message);
+        }
+
+        private string GetHireBlockedReason()
+        {
+            return _getHireBlockedReason != null ? _getHireBlockedReason() : string.Empty;
         }
 
         private bool IsBackMenuKey(WinForms.Keys key)

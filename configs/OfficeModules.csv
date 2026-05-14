@@ -1,0 +1,11 @@
+ObjectID,ObjectIGName,ObjectHash,Name,Size,ObjectFunction,Resource,Capacity,ObjectLimit,ObjectPrice
+1,prop_ind_deiseltank,1519880608,Dieseltank,Small,Refuel,Fuel,10000,1,10000
+2,prop_portacabin01,3196461136,Construction Site Cabin,Big,NPC,,5,5,20000
+3,sm_hanger_mod_tools_5,3677229496,Maintenance Bay,Medium,Repair,,,1,3000
+4,prop_mp_cone_02,1245865676,Cone,Small,Decorative,,,20,250
+5,prop_pallettruck_01,2400924923,Pallet  truck,Small,Decorative,,,5,250
+6,prop_wheelbarrow02a,1133730678,Wheel Barrow,Small,Decorative,,,5,250
+7,prop_shelves_02,2641123218,Empty shelves,Medium,Decorative,,,5,250
+8,v_ret_fh_shelf_01,2994868227,Shelf,Medium,Decorative,,,5,250
+9,prop_barrier_work01a,1072616162,Barrier 01,Small,Decorative,,,10,250
+10,prop_barrier_work02a,2310399891,Barrier 02,Small,Decorative,,,10,250

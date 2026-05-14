@@ -27,6 +27,8 @@ namespace LSOL.Systems
 
         private readonly List<OfficeDefinition> _officeDefinitions;
         private readonly Dictionary<string, OfficeDefinition> _officeDefinitionsById;
+        private readonly List<OfficeObjectDefinition> _officeObjectDefinitions;
+        private readonly Dictionary<int, OfficeObjectDefinition> _officeObjectDefinitionsById;
         private readonly List<InteriorDefinition> _interiorDefinitions;
         private readonly Dictionary<string, InteriorDefinition> _interiorDefinitionsById;
         private readonly List<DealershipVehicleDefinition> _personalVehicleDefinitions;
@@ -45,6 +47,13 @@ namespace LSOL.Systems
             _officeDefinitionsById = _officeDefinitions
                 .Where(x => x != null && !string.IsNullOrWhiteSpace(x.OfficeId))
                 .ToDictionary(x => x.OfficeId, x => x, StringComparer.OrdinalIgnoreCase);
+            _officeObjectDefinitions = config != null && config.OfficeObjectDefinitions != null
+                ? config.OfficeObjectDefinitions.OrderBy(x => x != null ? x.Price : 0f).ThenBy(x => x != null ? x.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase).ToList()
+                : new List<OfficeObjectDefinition>();
+            _officeObjectDefinitionsById = _officeObjectDefinitions
+                .Where(x => x != null && x.ObjectId > 0)
+                .GroupBy(x => x.ObjectId)
+                .ToDictionary(group => group.Key, group => group.First());
             _interiorDefinitions = config != null && config.InteriorDefinitions != null
                 ? config.InteriorDefinitions.OrderBy(x => x != null ? x.InteriorPrice : 0f).ThenBy(x => x != null ? x.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase).ToList()
                 : new List<InteriorDefinition>();
@@ -71,6 +80,11 @@ namespace LSOL.Systems
         public IReadOnlyList<InteriorDefinition> Interiors
         {
             get { return _interiorDefinitions; }
+        }
+
+        public IReadOnlyList<OfficeObjectDefinition> OfficeObjectCatalog
+        {
+            get { return _officeObjectDefinitions; }
         }
 
         public IReadOnlyList<DealershipVehicleDefinition> PersonalVehicleCatalog
@@ -139,6 +153,7 @@ namespace LSOL.Systems
             ClearRuntimeState();
             _state = snapshot != null ? CloneSnapshot(snapshot) : new PropertyOwnershipPersistenceSnapshot();
             EnsureValidSelections();
+            PruneInvalidOfficeObjects();
             InitializeRentTracking(currentInGameMinute);
             NormalizeCommercialGarageAssignments();
             ReassignPersonalVehiclesToActiveApartment();
@@ -975,6 +990,169 @@ namespace LSOL.Systems
             return _state.Offices.FirstOrDefault(entry => entry != null && string.Equals(entry.OfficeId, officeId, StringComparison.OrdinalIgnoreCase));
         }
 
+        public OfficeObjectDefinition GetOfficeObjectDefinition(int definitionId)
+        {
+            OfficeObjectDefinition definition;
+            return _officeObjectDefinitionsById.TryGetValue(definitionId, out definition)
+                ? definition
+                : null;
+        }
+
+        public IReadOnlyList<OfficeObjectPersistenceEntry> GetOfficeObjects(string officeId, bool includeUnplaced = true)
+        {
+            if (string.IsNullOrWhiteSpace(officeId))
+            {
+                return Array.Empty<OfficeObjectPersistenceEntry>();
+            }
+
+            return _state.OfficeObjects
+                .Where(entry => entry != null
+                    && string.Equals(entry.OfficeId, officeId, StringComparison.OrdinalIgnoreCase)
+                    && (includeUnplaced || entry.IsPlaced))
+                .OrderBy(entry => entry.InstanceId, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        public int GetOfficeObjectCount(string officeId, int definitionId, bool includeUnplaced = true)
+        {
+            if (string.IsNullOrWhiteSpace(officeId) || definitionId <= 0)
+            {
+                return 0;
+            }
+
+            return _state.OfficeObjects.Count(entry => entry != null
+                && string.Equals(entry.OfficeId, officeId, StringComparison.OrdinalIgnoreCase)
+                && entry.DefinitionId == definitionId
+                && (includeUnplaced || entry.IsPlaced));
+        }
+
+        public bool HasOfficeObjectFunction(string officeId, OfficeObjectFunction function)
+        {
+            return GetOfficeObjects(officeId, false)
+                .Select(entry => GetOfficeObjectDefinition(entry.DefinitionId))
+                .Any(definition => definition != null && definition.Function == function);
+        }
+
+        public float GetOfficeObjectFunctionCapacity(string officeId, OfficeObjectFunction function)
+        {
+            return GetOfficeObjects(officeId, false)
+                .Select(entry => GetOfficeObjectDefinition(entry.DefinitionId))
+                .Where(definition => definition != null && definition.Function == function)
+                .Sum(definition => Math.Max(0f, definition.Capacity));
+        }
+
+        public float GetOfficeObjectStoredResourceAmount(string officeId, OfficeObjectFunction function)
+        {
+            return GetOfficeObjects(officeId, false)
+                .Where(entry =>
+                {
+                    var definition = GetOfficeObjectDefinition(entry.DefinitionId);
+                    return definition != null && definition.Function == function;
+                })
+                .Sum(entry => Math.Max(0f, entry.StoredResourceAmount));
+        }
+
+        public OfficeObjectPersistenceEntry GetFirstPlacedOfficeObjectByFunction(string officeId, OfficeObjectFunction function)
+        {
+            return GetOfficeObjects(officeId, false)
+                .FirstOrDefault(entry =>
+                {
+                    var definition = GetOfficeObjectDefinition(entry.DefinitionId);
+                    return definition != null && definition.Function == function;
+                });
+        }
+
+        public bool TryPurchaseOfficeObject(string officeId, int definitionId, ref float balance, out OfficeObjectPersistenceEntry purchasedEntry, out string message)
+        {
+            purchasedEntry = null;
+            message = string.Empty;
+
+            var officeDefinition = GetOfficeDefinition(officeId);
+            var officeState = GetOfficeState(officeId);
+            if (officeDefinition == null || officeState == null || (!officeState.IsOwned && !officeState.IsRented))
+            {
+                message = "Acquire the office before purchasing objects.";
+                return false;
+            }
+
+            if (officeState.IsAccessSuspended || officeState.OutstandingRent > 0.01f)
+            {
+                message = string.Format("{0} is unavailable until office arrears are settled.", officeDefinition.DisplayName);
+                return false;
+            }
+
+            var definition = GetOfficeObjectDefinition(definitionId);
+            if (definition == null)
+            {
+                message = "Office object definition unavailable.";
+                return false;
+            }
+
+            if (definition.PerOfficeLimit > 0 && GetOfficeObjectCount(officeId, definitionId) >= definition.PerOfficeLimit)
+            {
+                message = string.Format("{0} limit reached for this office.", definition.DisplayName);
+                return false;
+            }
+
+            if (balance < definition.Price)
+            {
+                message = string.Format("Need {0} to purchase {1}.", ModFormatting.FormatMoney(definition.Price), definition.DisplayName);
+                return false;
+            }
+
+            balance -= definition.Price;
+            purchasedEntry = new OfficeObjectPersistenceEntry
+            {
+                InstanceId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+                OfficeId = officeId,
+                DefinitionId = definitionId,
+                IsPlaced = false,
+                Position = Vector3.Zero,
+                Rotation = Vector3.Zero,
+                StoredResourceAmount = 0f,
+            };
+
+            _state.OfficeObjects.Add(purchasedEntry);
+            message = string.Format("Purchased {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(definition.Price));
+            return true;
+        }
+
+        public bool TryPlaceOfficeObject(string instanceId, Vector3 position, Vector3 rotation, out OfficeObjectPersistenceEntry placedEntry, out string message)
+        {
+            placedEntry = null;
+            message = string.Empty;
+
+            var entry = GetOfficeObject(instanceId);
+            if (entry == null)
+            {
+                message = "Office object record not found.";
+                return false;
+            }
+
+            entry.Position = position;
+            entry.Rotation = rotation;
+            entry.IsPlaced = true;
+            placedEntry = entry;
+
+            var definition = GetOfficeObjectDefinition(entry.DefinitionId);
+            message = string.Format("Placed {0}.", definition != null ? definition.DisplayName : "office object");
+            return true;
+        }
+
+        public bool TryUpdateOfficeObjectStoredResourceAmount(string instanceId, float amount, out OfficeObjectPersistenceEntry updatedEntry)
+        {
+            updatedEntry = null;
+            var entry = GetOfficeObject(instanceId);
+            if (entry == null)
+            {
+                return false;
+            }
+
+            entry.StoredResourceAmount = Math.Max(0f, amount);
+            updatedEntry = entry;
+            return true;
+        }
+
         public ApartmentOwnershipPersistenceEntry GetApartmentState(string interiorId)
         {
             if (string.IsNullOrWhiteSpace(interiorId))
@@ -1029,6 +1207,38 @@ namespace LSOL.Systems
             }
 
             return results;
+        }
+
+        public bool TryResolveCommercialVehicleRecord(Vehicle vehicle, out OwnedCommercialVehiclePersistenceEntry entry)
+        {
+            entry = null;
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return false;
+            }
+
+            for (int i = 0; i < _state.CommercialVehicles.Count; i++)
+            {
+                var candidate = _state.CommercialVehicles[i];
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                CommercialVehicleRuntimeState runtime;
+                if (!_commercialRuntime.TryGetValue(candidate.AssetId, out runtime))
+                {
+                    continue;
+                }
+
+                if (runtime.TruckHandle == vehicle.Handle || runtime.CargoHandle == vehicle.Handle)
+                {
+                    entry = candidate;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void CaptureAllRuntimeState(FleetManager fleetManager, VehicleFuelSystem fuelSystem)
@@ -1518,6 +1728,16 @@ namespace LSOL.Systems
             return state;
         }
 
+        private OfficeObjectPersistenceEntry GetOfficeObject(string instanceId)
+        {
+            if (string.IsNullOrWhiteSpace(instanceId))
+            {
+                return null;
+            }
+
+            return _state.OfficeObjects.FirstOrDefault(entry => entry != null && string.Equals(entry.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
+        }
+
         private OwnedCommercialVehiclePersistenceEntry GetCommercialVehicle(string assetId)
         {
             if (string.IsNullOrWhiteSpace(assetId))
@@ -1582,6 +1802,21 @@ namespace LSOL.Systems
             _personalRuntime.Clear();
         }
 
+        private void PruneInvalidOfficeObjects()
+        {
+            for (int i = _state.OfficeObjects.Count - 1; i >= 0; i--)
+            {
+                var entry = _state.OfficeObjects[i];
+                if (entry == null
+                    || string.IsNullOrWhiteSpace(entry.OfficeId)
+                    || GetOfficeDefinition(entry.OfficeId) == null
+                    || GetOfficeObjectDefinition(entry.DefinitionId) == null)
+                {
+                    _state.OfficeObjects.RemoveAt(i);
+                }
+            }
+        }
+
         private static PropertyOwnershipPersistenceSnapshot CloneSnapshot(PropertyOwnershipPersistenceSnapshot source)
         {
             var clone = new PropertyOwnershipPersistenceSnapshot
@@ -1611,6 +1846,26 @@ namespace LSOL.Systems
                     IsAccessSuspended = entry.IsAccessSuspended,
                     OutstandingRent = entry.OutstandingRent,
                     LastChargedWeekIndex = entry.LastChargedWeekIndex,
+                });
+            }
+
+            for (int i = 0; i < source.OfficeObjects.Count; i++)
+            {
+                var entry = source.OfficeObjects[i];
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                clone.OfficeObjects.Add(new OfficeObjectPersistenceEntry
+                {
+                    InstanceId = entry.InstanceId,
+                    OfficeId = entry.OfficeId,
+                    DefinitionId = entry.DefinitionId,
+                    IsPlaced = entry.IsPlaced,
+                    Position = entry.Position,
+                    Rotation = entry.Rotation,
+                    StoredResourceAmount = entry.StoredResourceAmount,
                 });
             }
 

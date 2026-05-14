@@ -1,0 +1,13 @@
+﻿ObjectID,ObjectIGName,ObjectHash,ObjectName,Size,Site,IndustModule
+,prop_storagetank_03b,1747145311,Storage Tank,,,
+,xs_prop_arena_industrial_c,3079983249,Industrial Annex1,,,
+,xs_prop_arena_industrial_a,3698956890,Industrial Annex2,,,
+,prop_gas_tank_01a,2165440626,Gas Tank,,,
+,prop_gas_tank_02a,4248663967,Large Gas Tank,,,
+,cs5_3_tankblue_01,1916376129,Industrial Fuel Tank,,,
+,prop_storagetank_04,638679163,Storage Tank 2,Big,,
+,prop_storagetank_02b,1890640474,Storage Tank 3,Small,,
+,p_oil_pjack_01_s,568309711,Oil Well 1,Big,OilField,Production
+,p_oil_pjack_02_s,,Oil Well 2,Big,OilField,Production
+,p_oil_pjack_03_s,323971301,Oil Well 3,Big,OilField,Production
+,cs4_13_build_conv006,3726306093,Conveyor,Big,MineralMine,Production

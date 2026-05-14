@@ -18,6 +18,7 @@ namespace LSOL.Config
             ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             VehicleDefinitions = new List<VehicleDefinition>();
             OfficeDefinitions = new List<OfficeDefinition>();
+            OfficeObjectDefinitions = new List<OfficeObjectDefinition>();
             InteriorDefinitions = new List<InteriorDefinition>();
             PersonalVehicleDefinitions = new List<DealershipVehicleDefinition>();
             ValidationMessages = new List<string>();
@@ -30,6 +31,7 @@ namespace LSOL.Config
         public Dictionary<string, List<string>> ObjectModels { get; }
         public List<VehicleDefinition> VehicleDefinitions { get; }
         public List<OfficeDefinition> OfficeDefinitions { get; }
+        public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; }
         public List<InteriorDefinition> InteriorDefinitions { get; }
         public List<DealershipVehicleDefinition> PersonalVehicleDefinitions { get; }
         public List<string> ValidationMessages { get; }
@@ -64,6 +66,7 @@ namespace LSOL.Config
             XmlConfigImport.TryPopulateSites(configDirectory, catalog);
             XmlConfigImport.TryPopulateVehicles(configDirectory, catalog);
             XmlConfigImport.TryPopulateOffices(configDirectory, catalog);
+            XmlConfigImport.TryPopulateOfficeObjects(configDirectory, catalog);
             XmlConfigImport.TryPopulateInteriors(configDirectory, catalog);
             XmlConfigImport.TryPopulateDealershipVehicles(configDirectory, catalog);
 
