@@ -2129,34 +2129,48 @@ namespace LSOL
                     : string.Format("Truck only. Price {0}.", truckPrice);
             }
 
-            var vehiclePrice = ModFormatting.FormatMoney(Math.Max(0f, selectedVehicle.Price));
+            var vehicleSpecs = BuildCommercialDealershipVehicleSpecs(selectedVehicle);
             var dailyRent = GetSelectedCommercialVehicleDailyRent();
             if (!selectedVehicle.IsTrailer)
             {
                 return dailyRent > 0.001f
-                    ? string.Format("Vehicle price {0} | Rent {1}/day.", vehiclePrice, ModFormatting.FormatMoney(dailyRent))
-                    : string.Format("Vehicle price {0}.", vehiclePrice);
+                    ? string.Format("{0} | Rent {1}/day.", vehicleSpecs, ModFormatting.FormatMoney(dailyRent))
+                    : string.Format("{0}.", vehicleSpecs);
             }
 
             var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
             if (selectedTractor == null)
             {
                 return dailyRent > 0.001f
-                    ? string.Format("Trailer only. Price {0} | Rent {1}/day. Set Truck to None to keep it standalone.", vehiclePrice, ModFormatting.FormatMoney(dailyRent))
-                    : string.Format("Trailer only. Price {0}. Set Truck to None to keep it standalone.", vehiclePrice);
+                    ? string.Format("Trailer only. {0} | Rent {1}/day. Set Truck to None to keep it standalone.", vehicleSpecs, ModFormatting.FormatMoney(dailyRent))
+                    : string.Format("Trailer only. {0}. Set Truck to None to keep it standalone.", vehicleSpecs);
             }
 
             var totalPrice = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor.Price);
             return dailyRent > 0.001f
                 ? string.Format(
-                    "Trailer price {0} | Total with truck {1} | Rent {2}/day.",
-                    vehiclePrice,
+                    "{0} | Total with truck {1} | Rent {2}/day.",
+                    vehicleSpecs,
                     ModFormatting.FormatMoney(totalPrice),
                     ModFormatting.FormatMoney(dailyRent))
                 : string.Format(
-                    "Trailer price {0} | Total with truck {1}.",
-                    vehiclePrice,
+                    "{0} | Total with truck {1}.",
+                    vehicleSpecs,
                     ModFormatting.FormatMoney(totalPrice));
+        }
+
+        private static string BuildCommercialDealershipVehicleSpecs(VehicleDefinition definition)
+        {
+            if (definition == null)
+            {
+                return string.Empty;
+            }
+
+            return string.Format(
+                "Price {0} | Capacity {1:0.0}t | Fuel {2:0}L",
+                ModFormatting.FormatMoney(Math.Max(0f, definition.Price)),
+                Math.Max(0f, definition.CapacityTons),
+                Math.Max(0f, definition.FuelCapacityLiters));
         }
 
         private string BuildCommercialDealershipTruckSelectionDetail()

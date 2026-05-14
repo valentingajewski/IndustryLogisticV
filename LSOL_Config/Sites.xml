@@ -563,7 +563,7 @@
   </Site>
   <Site catalogId="707" legacyKey="Petrol Station 08" name="Mirror Park Blvd" role="FuelSink" district="EastLosSantos" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Regional" enabled="true">
     <Marker x="1178" y="-319" z="69" />
-    <VehicleSpawn x="1178" y="-319" z="69" heading="100" />
+    <VehicleSpawn x="1178" y="-319" z="69" heading="280" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -613,7 +613,7 @@
   </Site>
   <Site catalogId="712" legacyKey="Petrol Station 13" name="US Route 68 - Zancudo" role="FuelSink" district="NorthLosSantos" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="2.25" ownershipTier="Local" enabled="true">
     <Marker x="-2556" y="2346" z="33" />
-    <VehicleSpawn x="-2556" y="2346" z="33" heading="91" />
+    <VehicleSpawn x="-2616.35" y="2312.58" z="30" heading="114" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="6000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -673,7 +673,7 @@
   </Site>
   <Site catalogId="718" legacyKey="Petrol Station 19" name="Grapeseed Main Street" role="FuelSink" district="Grapeseed" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="1689" y="4930" z="42" />
-    <VehicleSpawn x="1689" y="4930" z="42" heading="157" />
+    <VehicleSpawn x="1679.65" y="4927.32" z="42" heading="60" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -703,7 +703,7 @@
   </Site>
   <Site catalogId="721" legacyKey="Petrol Station 22" name="Cascabel Ave" role="FuelSink" district="PaletoBay" company="XERO" startingTankRatio="0.3" density="Low" emptyingRate="0.8" ownershipTier="Local" enabled="true">
     <Marker x="-94" y="6424" z="31" />
-    <VehicleSpawn x="-94" y="6424" z="31" heading="320" />
+    <VehicleSpawn x="-99.36" y="6423" z="31" heading="320" />
     <Inputs primary="Fuel" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1000" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
