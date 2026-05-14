@@ -351,6 +351,7 @@ namespace LSOL.Config
                     CapacityTons = x.CapacityTons,
                     FuelCapacityLiters = x.FuelCapacityLiters,
                     Price = x.Price,
+                    DailyRent = x.DailyRent,
                     IsEnabled = x.IsEnabled,
                     IsTrailer = x.IsTrailer,
                     IsTractor = x.IsTractor,

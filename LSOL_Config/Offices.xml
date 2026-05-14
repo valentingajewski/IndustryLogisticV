@@ -11,7 +11,7 @@
   </Office>
   <Office id="3" legacyKey="BanningOffice" name="Banning Logistic Office" district="SouthLosSantos" price="700000" weeklyRent="35000" maxCommercialVehicles="20">
     <Marker x="167.85" y="-2223" z="7.24" />
-    <Spawn x="1757.74" y="-2232.35" z="6" heading="267" />
+    <Spawn x="161.74" y="-2232.35" z="6" heading="267" />
   </Office>
   <Office id="4" legacyKey="StrawberryOffice" name="Strawberry Logistic Office" district="SouthLosSantos" price="500000" weeklyRent="25000" maxCommercialVehicles="15">
     <Marker x="-193" y="-1260.75" z="31.3" />

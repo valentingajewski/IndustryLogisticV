@@ -2088,7 +2088,7 @@ namespace LSOL
 
             if (dailyRent <= 0.001f)
             {
-                return "Rental is not configured for the selected vehicle.";
+                return BuildCommercialDealershipRentUnavailableDetail();
             }
 
             return string.Format(
@@ -2167,10 +2167,42 @@ namespace LSOL
             }
 
             return string.Format(
-                "Price {0} | Capacity {1:0.0}t | Fuel {2:0}L",
+                "Price {0} | Capacity {1:0.0}t | Fuel {2:0}L | Rent {3}/day",
                 ModFormatting.FormatMoney(Math.Max(0f, definition.Price)),
                 Math.Max(0f, definition.CapacityTons),
-                Math.Max(0f, definition.FuelCapacityLiters));
+                Math.Max(0f, definition.FuelCapacityLiters),
+                ModFormatting.FormatMoney(Math.Max(0f, definition.DailyRent)));
+        }
+
+        private string BuildCommercialDealershipRentUnavailableDetail()
+        {
+            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            var selectedTractor = GetSelectedCommercialDealershipTruckDefinition(selectedVehicle);
+            if (selectedVehicle == null && selectedTractor == null)
+            {
+                return "Select a truck and/or trailer first.";
+            }
+
+            var parts = new List<string>();
+            if (selectedVehicle != null)
+            {
+                parts.Add(string.Format(
+                    "{0} {1}/day",
+                    string.IsNullOrWhiteSpace(selectedVehicle.DisplayName) ? selectedVehicle.ModelName : selectedVehicle.DisplayName,
+                    ModFormatting.FormatMoney(Math.Max(0f, selectedVehicle.DailyRent))));
+            }
+
+            if (selectedTractor != null && (selectedVehicle == null || !string.Equals(selectedTractor.ModelName, selectedVehicle.ModelName, StringComparison.OrdinalIgnoreCase)))
+            {
+                parts.Add(string.Format(
+                    "{0} {1}/day",
+                    string.IsNullOrWhiteSpace(selectedTractor.DisplayName) ? selectedTractor.ModelName : selectedTractor.DisplayName,
+                    ModFormatting.FormatMoney(Math.Max(0f, selectedTractor.DailyRent))));
+            }
+
+            return string.Format(
+                "Rental requires a positive daily rent. Current selection: {0}. Vehicles with dailyRent set to 0 are treated as not rentable.",
+                string.Join(" | ", parts));
         }
 
         private string BuildCommercialDealershipTruckSelectionDetail()
@@ -2234,7 +2266,7 @@ namespace LSOL
             var dailyRent = GetSelectedCommercialVehicleDailyRent();
             if (dailyRent <= 0.001f)
             {
-                return "Rental is not configured for this vehicle.";
+                return BuildCommercialDealershipRentUnavailableDetail();
             }
 
             var upfrontCost = dailyRent * 3f;

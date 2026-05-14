@@ -628,7 +628,7 @@ namespace LSOL.Systems
             var dailyRent = Math.Max(0f, cargoDefinition != null ? cargoDefinition.DailyRent : 0f) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.DailyRent : 0f);
             if (dailyRent <= 0.001f)
             {
-                message = "Rental is not available for the selected vehicle.";
+                message = "Rental requires a positive dailyRent on the selected vehicle or truck.";
                 return false;
             }
 
