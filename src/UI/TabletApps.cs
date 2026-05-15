@@ -270,10 +270,11 @@ namespace LSOL.UI
             }
 
             var cargoSummary = string.Format(
-                "{0} | {1} | {2}",
+                "{0} | {1} | {2:0.0}/{3:0.0}t",
                 snapshot.CargoVehicleName,
                 snapshot.CargoIsEmpty ? "Empty" : snapshot.CargoCommodity,
-                ModFormatting.FormatRatio(snapshot.CargoWeightTons, snapshot.CargoCapacityTons, "t"));
+                snapshot.CargoWeightTons,
+                snapshot.CargoCapacityTons);
 
             if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
             {
@@ -281,8 +282,8 @@ namespace LSOL.UI
             }
 
             var fuelSummary = snapshot.FuelVehicleMatchesCargoVehicle
-                ? string.Format("Fuel {0}", ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"))
-                : string.Format("Fuel {0} {1}", snapshot.PoweredVehicleName, ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"));
+                ? string.Format("Fuel {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
+                : string.Format("Fuel {0} {1:0}/{2:0}L", snapshot.PoweredVehicleName, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
             return string.Format("{0} | {1}", cargoSummary, fuelSummary);
         }
 
@@ -295,7 +296,7 @@ namespace LSOL.UI
 
             return string.Join(
                 " | ",
-                snapshot.MarketHighlights.Select(highlight => string.Format("{0} {1}", highlight.Commodity, ModFormatting.FormatPricePerTon(highlight.UnitPrice))).ToArray());
+                snapshot.MarketHighlights.Select(highlight => string.Format("{0} ${1:0}/t", highlight.Commodity, highlight.UnitPrice)).ToArray());
         }
 
         public static string BuildLocationCaption(TabletLocationSummary summary)
@@ -389,12 +390,12 @@ namespace LSOL.UI
             var utilizationRatio = statistics != null ? statistics.UtilizationRatio : 0f;
 
             items.Add(CreateInfoItem(
-                string.Format("Stockpile {0}", ModFormatting.FormatRatio(stockpile, totalCapacity, "t")),
+                string.Format("Stockpile {0:0.0}/{1:0.0}t", stockpile, totalCapacity),
                 "Combined input and output storage across the site.",
                 stockRatio));
             items.Add(CreateInfoItem(
-                string.Format("Production {0}", ModFormatting.FormatRatePerHour(industry.CurrentOutputPerHourTons, "t")),
-                string.Format("Utilization {0} | Omega {1}", ModFormatting.FormatPercent(industry.LastUtilizationPercent), ModFormatting.FormatRatio(industry.OmegaStorage, industry.OmegaCapacityTons, "t")),
+                string.Format("Production {0:0.0} t/h", industry.CurrentOutputPerHourTons),
+                string.Format("Utilization {0:0}% | Omega {1:0.0}/{2:0.0}t", industry.LastUtilizationPercent, industry.OmegaStorage, industry.OmegaCapacityTons),
                 utilizationRatio));
             items.Add(CreateInfoItem(
                 "Module Levels",
@@ -431,11 +432,11 @@ namespace LSOL.UI
             }
 
             items.Add(CreateInfoItem(
-                string.Format("Total Stockpile {0}", ModFormatting.FormatRatio(stockpile, totalCapacity, "t")),
+                string.Format("Total Stockpile {0:0.0}/{1:0.0}t", stockpile, totalCapacity),
                 "Combined input and output storage across the site.",
                 stockRatio));
             items.Add(CreateInfoItem(
-                string.Format("Utilization {0} | Output {1}", ModFormatting.FormatPercent(industry.LastUtilizationPercent), ModFormatting.FormatRatePerHour(industry.CurrentOutputPerHourTons, "t")),
+                string.Format("Utilization {0:0}% | Output {1:0.0} t/h", industry.LastUtilizationPercent, industry.CurrentOutputPerHourTons),
                 legendDetail));
 
             AppendIndustryCommodityItems(items, statistics);
@@ -458,7 +459,7 @@ namespace LSOL.UI
             {
                 var entry = statistics.Entries[i];
                 var caption = string.Format("{0} {1}", entry.IsInput ? "IN" : "OUT", entry.Commodity);
-                var detail = ModFormatting.FormatRatio(entry.Stock, entry.Capacity, "t");
+                var detail = string.Format("{0:0.0}/{1:0.0}t", entry.Stock, entry.Capacity);
                 items.Add(CreateInfoItem(caption, detail, entry.Ratio));
             }
         }
@@ -475,7 +476,7 @@ namespace LSOL.UI
             var fillRatio = statistics != null ? statistics.StockRatio : ModMath.Clamp01(totalStorage / Math.Max(1f, totalCapacity));
             items.Add(CreateInfoItem("Access", BuildIndustryAccessDetail(summary ?? new TabletLocationSummary { RequiresIndustryPurchase = industry.RequiresPurchase }, industry)));
             items.Add(CreateInfoItem(
-                string.Format("Storage {0}", ModFormatting.FormatRatio(totalStorage, totalCapacity, "t")),
+                string.Format("Storage {0:0.0}/{1:0.0}t", totalStorage, totalCapacity),
                 "Warehouse inventory capacity.",
                 fillRatio));
             items.Add(CreateInfoItem(
@@ -573,17 +574,17 @@ namespace LSOL.UI
                 BuildHomeOperationsStatus(snapshot));
             var marketDetail = snapshot.MarketHighlights != null && snapshot.MarketHighlights.Count > 0
                 ? string.Format(
-                    "{0} {1}\n{2} market highlights cached",
+                    "{0} ${1:0}/t\n{2} market highlights cached",
                     snapshot.MarketHighlights[0].Commodity,
-                    ModFormatting.FormatPricePerTon(snapshot.MarketHighlights[0].UnitPrice),
+                    snapshot.MarketHighlights[0].UnitPrice,
                     snapshot.MarketHighlights.Count)
                 : "No market highlights cached yet.\nOpen Network to refresh industry pricing.";
             var siteDetail = snapshot.HasNearestIndustry
                 ? string.Format(
-                    "{0}\nRate {1} | Util {2}",
+                    "{0}\nRate {1:0.0} t/h | Util {2:0}%",
                     ShortenDashboardLabel(snapshot.NearestIndustryName, 20),
-                    ModFormatting.FormatRatePerHour(snapshot.NearestIndustryProductionRateTonsPerHour, "t"),
-                    ModFormatting.FormatPercent(snapshot.NearestIndustryUtilizationPercent))
+                    snapshot.NearestIndustryProductionRateTonsPerHour,
+                    snapshot.NearestIndustryUtilizationPercent)
                 : "Browse tracked industries, stores, and stations across the region.";
             var permitDetail = permitSiteCount > 0
                 ? string.Format("{0}/{1} transport permits unlocked", unlockedPermitCount, permitSiteCount)
@@ -823,13 +824,13 @@ namespace LSOL.UI
 
             var cargoLabel = snapshot.CargoIsEmpty
                 ? "Empty"
-                : string.Format("{0} {1}", snapshot.CargoCommodity, ModFormatting.FormatRatio(snapshot.CargoWeightTons, snapshot.CargoCapacityTons, "t"));
+                : string.Format("{0} {1:0.0}/{2:0.0}t", snapshot.CargoCommodity, snapshot.CargoWeightTons, snapshot.CargoCapacityTons);
             if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
             {
                 return cargoLabel;
             }
 
-            return string.Format("{0} | Fuel {1}", cargoLabel, ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"));
+            return string.Format("{0} | Fuel {1:0}/{2:0}L", cargoLabel, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
         }
 
         private static string ShortenDashboardLabel(string value, int maxLength)
@@ -1179,6 +1180,8 @@ namespace LSOL.UI
 
     internal sealed class NetworkTabletApp : ITabletApp
     {
+        private const int InGameMinutesPerDay = 24 * 60;
+
         private enum LocationListFilterMode
         {
             All = 0,
@@ -1186,6 +1189,12 @@ namespace LSOL.UI
             NotOwned = 2,
             Open = 3,
             NotOpen = 4,
+        }
+
+        private enum DispatchDiagnosticsFilterMode
+        {
+            All = 0,
+            FailuresOnly = 1,
         }
 
         private readonly float _interactionDistance;
@@ -1198,6 +1207,7 @@ namespace LSOL.UI
         private LocationListFilterMode _permitFilterMode;
         private LocationListFilterMode _storeFilterMode;
         private LocationListFilterMode _stationFilterMode;
+        private DispatchDiagnosticsFilterMode _dispatchDiagnosticsFilterMode;
 
         public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService)
         {
@@ -1211,6 +1221,7 @@ namespace LSOL.UI
             _permitFilterMode = LocationListFilterMode.All;
             _storeFilterMode = LocationListFilterMode.All;
             _stationFilterMode = LocationListFilterMode.All;
+            _dispatchDiagnosticsFilterMode = DispatchDiagnosticsFilterMode.All;
         }
 
         public string AppId
@@ -1228,6 +1239,8 @@ namespace LSOL.UI
                     return BuildLocationListPage(context, "Construction Sites", "Delivery sinks and build-site detail pages", context.Snapshot.ConstructionSiteSummaries, true, false);
                 case "dispatch":
                     return BuildDispatchPage(context);
+                case "dispatch-diagnostics":
+                    return BuildDispatchDiagnosticsPage(context);
                 case "stores":
                     return BuildStoreListPage(context);
                 case "stations":
@@ -1480,6 +1493,166 @@ namespace LSOL.UI
             context.Refresh();
         }
 
+        private void CycleDispatchDiagnosticsFilter(TabletShellContext context)
+        {
+            _dispatchDiagnosticsFilterMode = _dispatchDiagnosticsFilterMode == DispatchDiagnosticsFilterMode.All
+                ? DispatchDiagnosticsFilterMode.FailuresOnly
+                : DispatchDiagnosticsFilterMode.All;
+            context.Refresh();
+        }
+
+        private static string BuildDispatchDiagnosticsSummary(NpcWorldDispatchOverview overview)
+        {
+            overview = overview ?? new NpcWorldDispatchOverview();
+            return string.Format(
+                "Active {0} | Listed {1} | Visible {2} | Failures {3}",
+                Math.Max(0, overview.ActiveJobCount),
+                Math.Max(0, overview.ListedOpportunityCount),
+                Math.Max(0, overview.VisibleConvoyCount),
+                Math.Max(0, overview.RecentFailureCount));
+        }
+
+        private static string BuildDispatchDiagnosticCaption(NpcWorldDispatchDiagnosticEntry entry)
+        {
+            if (entry == null)
+            {
+                return "Dispatch event";
+            }
+
+            var failureTag = entry.IsFailure ? " ~r~[FAIL]~s~" : string.Empty;
+            var jobType = entry.JobType.HasValue ? FormatWorldDispatchJobType(entry.JobType.Value) : "Dispatch";
+            var commodity = string.IsNullOrWhiteSpace(entry.Commodity) ? string.Empty : string.Format(" {0}", entry.Commodity);
+            return string.Format(
+                "{0} | {1} | {2}{3}{4}",
+                FormatDispatchDiagnosticTime(entry.ClockMinute),
+                FormatWorldDispatchDiagnosticStage(entry.Stage),
+                jobType,
+                commodity,
+                failureTag);
+        }
+
+        private static string BuildDispatchDiagnosticDetail(NpcWorldDispatchDiagnosticEntry entry)
+        {
+            if (entry == null)
+            {
+                return "No details available.";
+            }
+
+            var segments = new List<string>();
+            var route = BuildDispatchDiagnosticRoute(entry);
+            if (!string.IsNullOrWhiteSpace(route))
+            {
+                segments.Add(route);
+            }
+
+            if (entry.Tons.HasValue && entry.Tons.Value > 0.001f)
+            {
+                segments.Add(string.Format("{0:0.0}t", entry.Tons.Value));
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.Outcome))
+            {
+                segments.Add(entry.Outcome);
+            }
+
+            return segments.Count > 0
+                ? string.Join(" | ", segments)
+                : "No details available.";
+        }
+
+        private static string BuildDispatchDiagnosticRoute(NpcWorldDispatchDiagnosticEntry entry)
+        {
+            if (entry == null)
+            {
+                return string.Empty;
+            }
+
+            var origin = string.IsNullOrWhiteSpace(entry.OriginLabel) ? string.Empty : entry.OriginLabel.Trim();
+            var destination = string.IsNullOrWhiteSpace(entry.DestinationLabel) ? string.Empty : entry.DestinationLabel.Trim();
+            var usesExternalEndpoint = entry.JobType == NpcWorldJobType.ExternalImport || entry.JobType == NpcWorldJobType.ExternalExport;
+            if (string.IsNullOrWhiteSpace(origin) && string.IsNullOrWhiteSpace(destination))
+            {
+                return string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(origin))
+            {
+                return usesExternalEndpoint
+                    ? string.Format("External -> {0}", destination)
+                    : destination;
+            }
+
+            if (string.IsNullOrWhiteSpace(destination))
+            {
+                return usesExternalEndpoint
+                    ? string.Format("{0} -> External", origin)
+                    : origin;
+            }
+
+            return string.Format("{0} -> {1}", origin, destination);
+        }
+
+        private static string FormatDispatchDiagnosticTime(int? clockMinute)
+        {
+            if (!clockMinute.HasValue)
+            {
+                return "D? --:--";
+            }
+
+            var normalized = Math.Max(0, clockMinute.Value);
+            var dayIndex = (normalized / InGameMinutesPerDay) % 7;
+            var minuteOfDay = normalized % InGameMinutesPerDay;
+            var hour = minuteOfDay / 60;
+            var minute = minuteOfDay % 60;
+            return string.Format("D{0} {1:00}:{2:00}", dayIndex + 1, hour, minute);
+        }
+
+        private static string FormatWorldDispatchDiagnosticStage(NpcWorldDispatchDiagnosticStage stage)
+        {
+            switch (stage)
+            {
+                case NpcWorldDispatchDiagnosticStage.CandidateGeneration:
+                    return "Candidate";
+                case NpcWorldDispatchDiagnosticStage.EligibilityFiltering:
+                    return "Eligibility";
+                case NpcWorldDispatchDiagnosticStage.Queueing:
+                    return "Queue";
+                case NpcWorldDispatchDiagnosticStage.Revalidation:
+                    return "Revalidate";
+                case NpcWorldDispatchDiagnosticStage.VisualSpawn:
+                    return "Visual";
+                case NpcWorldDispatchDiagnosticStage.Cleanup:
+                    return "Cleanup";
+                case NpcWorldDispatchDiagnosticStage.Completion:
+                    return "Complete";
+                default:
+                    return "Evaluate";
+            }
+        }
+
+        private static string FormatWorldDispatchJobType(NpcWorldJobType type)
+        {
+            switch (type)
+            {
+                case NpcWorldJobType.OverflowRescue:
+                    return "Overflow";
+                case NpcWorldJobType.ShortageRelief:
+                    return "Shortage";
+                case NpcWorldJobType.ExternalImport:
+                    return "Import";
+                case NpcWorldJobType.ExternalExport:
+                    return "Export";
+                case NpcWorldJobType.WarehouseBalancing:
+                    return "Warehouse";
+                case NpcWorldJobType.ServiceRun:
+                    return "Service";
+                case NpcWorldJobType.RivalFreight:
+                    return "Rival";
+                default:
+                    return "Dispatch";
+            }
+        }
+
         private TabletShellPage BuildServicesPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
@@ -1509,7 +1682,7 @@ namespace LSOL.UI
             };
         }
 
-        private static TabletShellPage BuildDispatchPage(TabletShellContext context)
+        private TabletShellPage BuildDispatchPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var overview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
@@ -1589,6 +1762,11 @@ namespace LSOL.UI
                         context.Refresh();
                     },
                     iconLabel: "PRM"),
+                TabletUiHelpers.CreateActionItem(
+                    "Diagnostics",
+                    string.Format("{0}\nOpen the recent ambient dispatch pipeline log.", BuildDispatchDiagnosticsSummary(overview)),
+                    () => context.Push(TabletAppIds.Network, "dispatch-diagnostics"),
+                    iconLabel: "LOG"),
             };
 
             if (jobs.Count == 0)
@@ -1612,7 +1790,7 @@ namespace LSOL.UI
 
                     items.Add(TabletUiHelpers.CreateInfoItem(
                         label,
-                        string.Format("{0} | {1} | {2}m remaining", job.Detail, ModFormatting.FormatTons(job.Tons), Math.Max(0, job.RemainingInGameMinutes))));
+                        string.Format("{0} | {1:0.0}t | {2}m remaining", job.Detail, job.Tons, Math.Max(0, job.RemainingInGameMinutes))));
                 }
             }
 
@@ -1625,6 +1803,61 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.94f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildDispatchDiagnosticsPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var overview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
+            var diagnostics = context.StateStore.GetWorldDispatchDiagnostics()
+                .Where(entry => entry != null)
+                .Where(entry => _dispatchDiagnosticsFilterMode == DispatchDiagnosticsFilterMode.All || entry.IsFailure)
+                .ToList();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    "Ambient Dispatch Summary",
+                    BuildDispatchDiagnosticsSummary(overview)),
+                TabletUiHelpers.CreateSelectorItem(
+                    () => string.Format("Filter: < {0} >", _dispatchDiagnosticsFilterMode == DispatchDiagnosticsFilterMode.FailuresOnly ? "Failures only" : "All events"),
+                    () => "Left/right filters the recent ambient dispatch diagnostics feed.",
+                    () => CycleDispatchDiagnosticsFilter(context),
+                    () => CycleDispatchDiagnosticsFilter(context),
+                    () => CycleDispatchDiagnosticsFilter(context),
+                    "FLT"),
+            };
+
+            if (diagnostics.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    _dispatchDiagnosticsFilterMode == DispatchDiagnosticsFilterMode.FailuresOnly ? "No recent failures" : "No diagnostics captured",
+                    _dispatchDiagnosticsFilterMode == DispatchDiagnosticsFilterMode.FailuresOnly
+                        ? "The recent ambient dispatch ring buffer does not contain any failure events."
+                        : "Ambient world dispatch has not emitted any diagnostics events yet."));
+            }
+            else
+            {
+                for (int i = 0; i < diagnostics.Count; i++)
+                {
+                    var entry = diagnostics[i];
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        BuildDispatchDiagnosticCaption(entry),
+                        BuildDispatchDiagnosticDetail(entry)));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Dispatch page.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Dispatch Diagnostics",
+                Subtitle = "Recent ambient world-dispatch pipeline events",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Filter | Enter Select | Backspace/Esc Back",
+                WidthScale = 0.96f,
                 MaxVisibleItems = 6,
                 Items = items,
             };
@@ -1643,7 +1876,7 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateCommoditySelectorItem(context, "Left/right changes the market graph resource. Enter advances."),
                 TabletUiHelpers.CreateInfoItem(
                     "Market Highlights",
-                    string.Format("Scarcity x{0} | {1}", ModFormatting.FormatNumber(snapshot.MarketMultiplier), TabletUiHelpers.BuildMarketSummary(snapshot)))
+                    string.Format("Scarcity x{0:0.00} | {1}", snapshot.MarketMultiplier, TabletUiHelpers.BuildMarketSummary(snapshot)))
             };
 
             if (snapshot.MarketHighlights != null)
@@ -1655,7 +1888,7 @@ namespace LSOL.UI
                     var isSelectedCommodity = string.Equals(commodity, selectedCommodity, StringComparison.OrdinalIgnoreCase);
                     items.Add(TabletUiHelpers.CreateActionItem(
                         isSelectedCommodity ? string.Format("{0} ~g~[TREND]~s~", commodity) : commodity,
-                        string.Format("{0} | {1} | Press Enter to chart this resource.", ModFormatting.FormatPricePerTon(highlight.UnitPrice), highlight.Reason),
+                        string.Format("${0:0}/t | {1} | Press Enter to chart this resource.", highlight.UnitPrice, highlight.Reason),
                         () =>
                         {
                             context.StateStore.SetSelectedTrendCommodity(commodity);
@@ -1696,13 +1929,13 @@ namespace LSOL.UI
                         panel,
                         string.Format("{0} Price Trend", selectedPrice.Commodity),
                         string.Format(
-                            "{0} cargo | Window {1} | Current {2}",
+                            "{0} cargo | Window {1} | Current ${2:0}/t",
                             selectedPrice.CargoType.ToDisplayName(),
                             context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                            ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice)),
+                            selectedPrice.UnitPrice),
                         context.StateStore.GetCommodityPriceHistory(selectedPrice.Commodity, context.StateStore.SelectedGraphTimeframe),
                         Color.FromArgb(214, 214, 168, 94),
-                        value => ModFormatting.FormatPricePerTon(value));
+                        value => string.Format("${0:0}/t", value));
                 },
                 Items = items,
             };
@@ -1746,7 +1979,7 @@ namespace LSOL.UI
                     var isSelectedCommodity = string.Equals(commodity, selectedCommodity, StringComparison.OrdinalIgnoreCase);
                     items.Add(TabletUiHelpers.CreateActionItem(
                         isSelectedCommodity ? string.Format("{0} ~g~[TREND]~s~", commodity) : commodity,
-                        string.Format("{0} | {1} | Press Enter to set graph target.", ModFormatting.FormatPricePerTon(price.UnitPrice), price.CargoType.ToDisplayName()),
+                        string.Format("${0:0}/t | {1} | Press Enter to set graph target.", price.UnitPrice, price.CargoType.ToDisplayName()),
                         () =>
                         {
                             context.StateStore.SetSelectedTrendCommodity(commodity);
@@ -1787,13 +2020,13 @@ namespace LSOL.UI
                         panel,
                         string.Format("{0} Price Trend", selectedPrice.Commodity),
                         string.Format(
-                            "{0} cargo | Window {1} | Current {2}",
+                            "{0} cargo | Window {1} | Current ${2:0}/t",
                             selectedPrice.CargoType.ToDisplayName(),
                             context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                            ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice)),
+                            selectedPrice.UnitPrice),
                         context.StateStore.GetCommodityPriceHistory(selectedPrice.Commodity, context.StateStore.SelectedGraphTimeframe),
                         Color.FromArgb(214, 214, 168, 94),
-                        value => ModFormatting.FormatPricePerTon(value));
+                        value => string.Format("${0:0}/t", value));
                 },
                 Items = items,
             };
@@ -2717,8 +2950,8 @@ namespace LSOL.UI
             }
 
             var tankDetail = snapshot.FuelVehicleMatchesCargoVehicle
-                ? string.Format("Tank {0}", ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"))
-                : string.Format("{0} tank {1}", snapshot.PoweredVehicleName, ModFormatting.FormatRatio(snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters, "L"));
+                ? string.Format("Tank {0:0}/{1:0}L", snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters)
+                : string.Format("{0} tank {1:0}/{2:0}L", snapshot.PoweredVehicleName, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
             var pricingDetail = industry != null && industry.RefuelIsFree
                 ? "Free at office station."
                 : "Uses station stock and current fuel market price.";
@@ -2739,7 +2972,7 @@ namespace LSOL.UI
             var detail = string.Format("Deduct {0} and unlock upgrades.", ModFormatting.FormatMoney(industry.IndustryPrice));
             if (industry.IndustryOwnerCut > 0f)
             {
-                detail += string.Format(" Removes the {0} owner cut.", ModFormatting.FormatPercent(industry.IndustryOwnerCut * 100f));
+                detail += string.Format(" Removes the {0:0}% owner cut.", industry.IndustryOwnerCut * 100f);
             }
 
             if (snapshot.Balance < industry.IndustryPrice)

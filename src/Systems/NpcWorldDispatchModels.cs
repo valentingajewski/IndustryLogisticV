@@ -36,6 +36,18 @@ namespace LSOL.Systems
         Cancelled = 3,
     }
 
+    public enum NpcWorldDispatchDiagnosticStage
+    {
+        Evaluation = 0,
+        CandidateGeneration = 1,
+        EligibilityFiltering = 2,
+        Queueing = 3,
+        Revalidation = 4,
+        VisualSpawn = 5,
+        Cleanup = 6,
+        Completion = 7,
+    }
+
     public sealed class NpcWorldDispatchOverview
     {
         public bool Enabled { get; set; }
@@ -49,6 +61,8 @@ namespace LSOL.Systems
         public int VisibleConvoyCount { get; set; }
 
         public int CompletedDispatchCount { get; set; }
+
+        public int RecentFailureCount { get; set; }
 
         public NpcWorldDispatchPolicy DispatchPolicy { get; set; }
 
@@ -92,6 +106,27 @@ namespace LSOL.Systems
         public bool HasVisibleConvoy { get; set; }
     }
 
+    public sealed class NpcWorldDispatchDiagnosticEntry
+    {
+        public int? ClockMinute { get; set; }
+
+        public NpcWorldDispatchDiagnosticStage Stage { get; set; }
+
+        public NpcWorldJobType? JobType { get; set; }
+
+        public string Commodity { get; set; }
+
+        public string OriginLabel { get; set; }
+
+        public string DestinationLabel { get; set; }
+
+        public float? Tons { get; set; }
+
+        public string Outcome { get; set; }
+
+        public bool IsFailure { get; set; }
+    }
+
     internal sealed class NpcWorldLogisticsJob
     {
         public int Id { get; set; }
@@ -131,6 +166,8 @@ namespace LSOL.Systems
         public int BackhaulDepth { get; set; }
 
         public string StatusText { get; set; }
+
+        public int NextVisualSpawnAttemptMs { get; set; }
 
         public NpcLogisticsContract VisualRoute { get; set; }
     }

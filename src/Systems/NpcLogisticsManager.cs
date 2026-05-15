@@ -18,16 +18,19 @@ namespace LSOL.Systems
         private const int DefaultRouteLimit = 5;
         private const int MaxRouteLimit = 10;
         private const float ArrivalDistance = 50f;
-        private const int SpawnStaggerDelayMs = 10000;
         private const int DriveTaskRefreshIntervalMs = 4000;
         private const int InGameMinutesPerDay = 24 * 60;
         private const int InGameMinutesPerWeek = 7 * InGameMinutesPerDay;
         private const int LoadDelayMs = 2200;
         private const int UnloadDelayMs = 2400;
         private const int RetryDelayMs = 9000;
+        private const int SpawnBlockedRetryDelayMs = 3000;
         private const float BaseDriveSpeed = 20f;
         private const int DriveStyle = 786603;
         private const string DefaultNpcModel = "s_m_m_trucker_01";
+        private const int WorldDispatchDiagnosticsCapacity = 80;
+        private const float SpawnClearanceRadius = 6f;
+        private const float SpawnPedClearanceRadius = 3.5f;
 
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
@@ -45,9 +48,9 @@ namespace LSOL.Systems
         private readonly Func<OfficeDefinition> _getActiveOffice;
         private readonly List<NpcDriverTierDefinition> _driverTiers;
         private readonly List<NpcLogisticsContract> _contracts;
-        private readonly Dictionary<string, int> _lastContractSpawnMsByOriginId;
         private readonly NpcWorldDispatchConfig _worldDispatchConfig;
         private readonly List<NpcWorldLogisticsJob> _worldJobs;
+        private readonly List<NpcWorldDispatchDiagnosticEntry> _worldDispatchDiagnostics;
         private readonly Random _random;
 
         private int _nextContractId;
@@ -97,9 +100,9 @@ namespace LSOL.Systems
             _getActiveOffice = getActiveOffice;
             _driverTiers = LoadDriverTiers(configDirectory);
             _contracts = new List<NpcLogisticsContract>();
-            _lastContractSpawnMsByOriginId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _worldDispatchConfig = NpcWorldDispatchConfigLoader.Load(configDirectory);
             _worldJobs = new List<NpcWorldLogisticsJob>();
+            _worldDispatchDiagnostics = new List<NpcWorldDispatchDiagnosticEntry>(WorldDispatchDiagnosticsCapacity);
             _random = new Random();
             _nextContractId = 1;
             _nextWorldJobId = 1;
@@ -219,6 +222,19 @@ namespace LSOL.Systems
             }
         }
 
+        public IReadOnlyList<NpcWorldDispatchDiagnosticEntry> WorldDispatchDiagnostics
+        {
+            get
+            {
+                return _worldDispatchDiagnostics.Count == 0
+                    ? Array.Empty<NpcWorldDispatchDiagnosticEntry>()
+                    : _worldDispatchDiagnostics
+                        .AsEnumerable()
+                        .Reverse()
+                        .ToArray();
+            }
+        }
+
         public NpcWorldDispatchOverview GetWorldDispatchOverview()
         {
             return new NpcWorldDispatchOverview
@@ -229,6 +245,7 @@ namespace LSOL.Systems
                 RivalJobCount = _worldJobs.Count(job => job != null && job.IsRivalJob),
                 VisibleConvoyCount = _worldJobs.Count(job => job != null && job.HasVisibleConvoy),
                 CompletedDispatchCount = Math.Max(0, _completedWorldDispatches),
+                RecentFailureCount = _worldDispatchDiagnostics.Count(entry => entry != null && entry.IsFailure),
                 DispatchPolicy = _worldDispatchPolicy,
                 PriorityCommodity = _worldPriorityCommodity ?? string.Empty,
                 PriorityDistrict = _worldPriorityDistrict ?? string.Empty,
@@ -574,7 +591,7 @@ namespace LSOL.Systems
 
             _contracts.Clear();
             _worldJobs.Clear();
-            _lastContractSpawnMsByOriginId.Clear();
+            _worldDispatchDiagnostics.Clear();
             _nextContractId = 1;
             _nextWorldJobId = 1;
             _lastObservedClockMinute = -1;
@@ -850,16 +867,33 @@ namespace LSOL.Systems
                         continue;
                     }
 
+                    var restoredJobId = Math.Max(1, entry.Id);
+                    nextWorldJobId = Math.Max(nextWorldJobId, restoredJobId + 1);
+
+                    var normalizedCommodity = CommodityCatalog.Normalize(entry.Commodity);
+                    var originIndustryId = entry.OriginIndustryId ?? string.Empty;
+                    var destinationIndustryId = entry.DestinationIndustryId ?? string.Empty;
+                    var origin = FindIndustryById(originIndustryId);
+                    var destination = FindIndustryById(destinationIndustryId);
+                    if (entry.Type == NpcWorldJobType.ExternalImport
+                        || entry.Type == NpcWorldJobType.ExternalExport
+                        || origin == null
+                        || destination == null
+                        || !CanAmbientWorldDispatchBetween(origin, destination, normalizedCommodity))
+                    {
+                        continue;
+                    }
+
                     var job = new NpcWorldLogisticsJob
                     {
-                        Id = Math.Max(1, entry.Id),
+                        Id = restoredJobId,
                         Type = entry.Type,
                         Phase = entry.Phase,
-                        Commodity = CommodityCatalog.Normalize(entry.Commodity),
+                        Commodity = normalizedCommodity,
                         SourceLabel = entry.SourceLabel ?? string.Empty,
                         DestinationLabel = entry.DestinationLabel ?? string.Empty,
-                        OriginIndustryId = entry.OriginIndustryId ?? string.Empty,
-                        DestinationIndustryId = entry.DestinationIndustryId ?? string.Empty,
+                        OriginIndustryId = originIndustryId,
+                        DestinationIndustryId = destinationIndustryId,
                         Tons = Math.Max(0f, entry.Tons),
                         RemainingInGameMinutes = Math.Max(0, entry.RemainingInGameMinutes),
                         TotalInGameMinutes = Math.Max(0, entry.TotalInGameMinutes),
@@ -874,7 +908,6 @@ namespace LSOL.Systems
                     };
 
                     _worldJobs.Add(job);
-                    nextWorldJobId = Math.Max(nextWorldJobId, job.Id + 1);
                 }
             }
 
@@ -1037,6 +1070,7 @@ namespace LSOL.Systems
                             job.RemainingInGameMinutes = Math.Max(0, job.RemainingInGameMinutes - elapsedClockMinutes);
                         }
 
+                        TryRetryWorldJobVisualSpawn(job, now, currentClockMinute);
                         RefreshWorldJobVisual(job, now);
                         if (job.RemainingInGameMinutes <= 0)
                         {
@@ -1052,8 +1086,18 @@ namespace LSOL.Systems
         {
             var activeJobs = _worldJobs.Count(job => job != null && (job.Phase == NpcWorldJobPhase.Listed || job.Phase == NpcWorldJobPhase.Traveling));
             var availableSlots = Math.Max(0, _worldDispatchConfig.MaxActiveJobs - activeJobs);
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.Evaluation,
+                string.Format("Evaluation cycle started: {0} active, {1} free slot{2}.", activeJobs, availableSlots, availableSlots == 1 ? string.Empty : "s"),
+                false,
+                clockMinute: currentClockMinute);
             if (availableSlots <= 0)
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Evaluation,
+                    "Evaluation skipped because the active-job limit is already full.",
+                    false,
+                    clockMinute: currentClockMinute);
                 return;
             }
 
@@ -1064,6 +1108,11 @@ namespace LSOL.Systems
 
             if (candidates.Count == 0)
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Evaluation,
+                    "No candidates found.",
+                    false,
+                    clockMinute: currentClockMinute);
                 return;
             }
 
@@ -1095,18 +1144,34 @@ namespace LSOL.Systems
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var origin = _industryManager.Industries[i];
-                if (origin == null || !CanUseAsWorldDispatchOrigin(origin) || origin.Outputs == null || origin.Outputs.Count == 0)
+                if (IsPermanentlyInvalidAmbientOriginSite(origin))
                 {
                     continue;
                 }
 
-                var outputs = origin.GetSortedOutputs();
+                string originEligibilityBlocker;
+                if (!TryValidateAmbientWorldDispatchOrigin(origin, out originEligibilityBlocker))
+                {
+                    RecordAmbientOriginEligibilityRejected(
+                        origin != null && origin.IsWarehouse ? NpcWorldJobType.WarehouseBalancing : NpcWorldJobType.OverflowRescue,
+                        origin,
+                        originEligibilityBlocker);
+                    continue;
+                }
+
+                var outputs = GetAmbientWorldDispatchOriginCommodities(origin);
                 for (int outputIndex = 0; outputIndex < outputs.Count; outputIndex++)
                 {
                     var commodity = CommodityCatalog.Normalize(outputs[outputIndex]);
                     var availableTons = GetDispatchOriginAvailableTons(origin, commodity);
                     if (availableTons + 0.001f < _worldDispatchConfig.MinDispatchTons)
                     {
+                        RecordAmbientTonsBelowMinimum(
+                            origin != null && origin.IsWarehouse ? NpcWorldJobType.WarehouseBalancing : NpcWorldJobType.OverflowRescue,
+                            origin,
+                            null,
+                            commodity,
+                            availableTons);
                         continue;
                     }
 
@@ -1139,27 +1204,6 @@ namespace LSOL.Systems
                         }
                         continue;
                     }
-
-                    if (fillRatio + 0.001f < Math.Min(0.98f, _worldDispatchConfig.OverflowThreshold + 0.05f))
-                    {
-                        continue;
-                    }
-
-                    var exportTons = ComputeDispatchTons(availableTons, _worldDispatchConfig.MaxDispatchTons);
-                    var exportCandidate = CreateWorldJobCandidate(
-                        NpcWorldJobType.ExternalExport,
-                        origin,
-                        null,
-                        commodity,
-                        exportTons,
-                        45f + (fillRatio * 50f),
-                        false,
-                        0);
-                    if (exportCandidate != null)
-                    {
-                        exportCandidate.DestinationLabel = "Outside buyers";
-                        candidates.Add(exportCandidate);
-                    }
                 }
             }
         }
@@ -1174,8 +1218,13 @@ namespace LSOL.Systems
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var destination = _industryManager.Industries[i];
-                if (destination == null || !CanUseAsWorldDispatchDestination(destination))
+                string destinationEligibilityBlocker;
+                if (!TryValidateAmbientWorldDispatchDestination(destination, out destinationEligibilityBlocker))
                 {
+                    RecordAmbientDestinationEligibilityRejected(
+                        destination != null && destination.IsWarehouse ? NpcWorldJobType.WarehouseBalancing : NpcWorldJobType.ShortageRelief,
+                        destination,
+                        destinationEligibilityBlocker);
                     continue;
                 }
 
@@ -1195,6 +1244,12 @@ namespace LSOL.Systems
                     var destinationFreeTons = GetDispatchDestinationFreeTons(destination, commodity);
                     if (destinationFreeTons + 0.001f < _worldDispatchConfig.MinDispatchTons)
                     {
+                        RecordAmbientTonsBelowMinimum(
+                            destination != null && destination.IsWarehouse ? NpcWorldJobType.WarehouseBalancing : (IsServiceCommodity(commodity) ? NpcWorldJobType.ServiceRun : NpcWorldJobType.ShortageRelief),
+                            null,
+                            destination,
+                            commodity,
+                            destinationFreeTons);
                         continue;
                     }
 
@@ -1224,23 +1279,6 @@ namespace LSOL.Systems
 
                         continue;
                     }
-
-                    var importType = isServiceRun ? NpcWorldJobType.ServiceRun : NpcWorldJobType.ExternalImport;
-                    var importTons = ComputeDispatchTons(_worldDispatchConfig.MaxDispatchTons, destinationFreeTons);
-                    var importCandidate = CreateWorldJobCandidate(
-                        importType,
-                        null,
-                        destination,
-                        commodity,
-                        importTons,
-                        50f + ((1f - fillRatio) * 75f) + (isServiceRun ? 14f : 0f),
-                        false,
-                        0);
-                    if (importCandidate != null)
-                    {
-                        importCandidate.SourceLabel = isServiceRun ? "Regional service yard" : "External suppliers";
-                        candidates.Add(importCandidate);
-                    }
                 }
             }
         }
@@ -1261,12 +1299,19 @@ namespace LSOL.Systems
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var origin = _industryManager.Industries[i];
-                if (origin == null || !CanUseAsWorldDispatchOrigin(origin) || origin.Outputs == null || origin.Outputs.Count == 0)
+                if (IsPermanentlyInvalidAmbientOriginSite(origin))
                 {
                     continue;
                 }
 
-                var outputs = origin.GetSortedOutputs();
+                string originEligibilityBlocker;
+                if (!TryValidateAmbientWorldDispatchOrigin(origin, out originEligibilityBlocker))
+                {
+                    RecordAmbientOriginEligibilityRejected(NpcWorldJobType.RivalFreight, origin, originEligibilityBlocker);
+                    continue;
+                }
+
+                var outputs = GetAmbientWorldDispatchOriginCommodities(origin);
                 for (int outputIndex = 0; outputIndex < outputs.Count; outputIndex++)
                 {
                     var commodity = CommodityCatalog.Normalize(outputs[outputIndex]);
@@ -1279,6 +1324,7 @@ namespace LSOL.Systems
                     var originTons = GetDispatchOriginAvailableTons(origin, commodity);
                     if (originTons + 0.001f < _worldDispatchConfig.MinDispatchTons)
                     {
+                        RecordAmbientTonsBelowMinimum(NpcWorldJobType.RivalFreight, origin, null, commodity, originTons);
                         continue;
                     }
 
@@ -1326,14 +1372,70 @@ namespace LSOL.Systems
             bool isRivalJob,
             int backhaulDepth)
         {
+            var sourceLabel = origin != null ? origin.Name : "Unknown source";
+            var destinationLabel = destination != null ? destination.Name : "Unknown destination";
             commodity = CommodityCatalog.Normalize(commodity);
-            if (string.IsNullOrWhiteSpace(commodity) || tons + 0.001f < _worldDispatchConfig.MinDispatchTons)
+            if (origin == null || destination == null)
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.CandidateGeneration,
+                    "Candidate rejected because ambient dispatch requires internal origin and destination.",
+                    true,
+                    type,
+                    commodity,
+                    origin,
+                    destination,
+                    sourceLabel,
+                    destinationLabel,
+                    tons);
+                return null;
+            }
+
+            if (string.IsNullOrWhiteSpace(commodity))
+            {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.CandidateGeneration,
+                    "Candidate rejected because commodity is invalid.",
+                    true,
+                    type,
+                    commodity,
+                    origin,
+                    destination,
+                    sourceLabel,
+                    destinationLabel,
+                    tons);
+                return null;
+            }
+
+            if (tons + 0.001f < _worldDispatchConfig.MinDispatchTons)
+            {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.CandidateGeneration,
+                    "Candidate rejected because tons are below minimum.",
+                    true,
+                    type,
+                    commodity,
+                    origin,
+                    destination,
+                    sourceLabel,
+                    destinationLabel,
+                    tons);
                 return null;
             }
 
             if (HasConflictingManualRoute(origin, destination, commodity))
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.CandidateGeneration,
+                    "Candidate rejected because a conflicting manual route exists.",
+                    true,
+                    type,
+                    commodity,
+                    origin,
+                    destination,
+                    sourceLabel,
+                    destinationLabel,
+                    tons);
                 return null;
             }
 
@@ -1351,8 +1453,8 @@ namespace LSOL.Systems
                 OriginIndustry = origin,
                 DestinationIndustry = destination,
                 Commodity = commodity,
-                SourceLabel = origin != null ? origin.Name : "External suppliers",
-                DestinationLabel = destination != null ? destination.Name : "Outside buyers",
+                SourceLabel = sourceLabel,
+                DestinationLabel = destinationLabel,
                 Tons = tons,
                 Score = baseScore + GetRouteSupportScore(origin, destination) + GetPriorityScoreBonus(type, origin, destination, commodity, priorityMatch),
                 IsSpotOpportunity = isSpotOpportunity,
@@ -1367,8 +1469,19 @@ namespace LSOL.Systems
 
         private bool QueueWorldJob(NpcWorldJobCandidate candidate, int currentClockMinute)
         {
-            if (candidate == null || IsDuplicateWorldJob(candidate))
+            if (candidate == null)
             {
+                return false;
+            }
+
+            if (IsDuplicateWorldJob(candidate))
+            {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Queueing,
+                    "Job rejected as duplicate.",
+                    true,
+                    candidate,
+                    currentClockMinute);
                 return false;
             }
 
@@ -1392,10 +1505,18 @@ namespace LSOL.Systems
                 HasVisibleConvoy = candidate.HasVisibleConvoy,
                 IsRivalJob = candidate.IsRivalJob,
                 BackhaulDepth = candidate.BackhaulDepth,
+                NextVisualSpawnAttemptMs = 0,
                 StatusText = candidate.IsSpotOpportunity
                     ? "Spot market window open"
                     : (candidate.IsRivalJob ? "Rival freight listed" : "Queued for dispatch"),
             });
+
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.Queueing,
+                "Job queued.",
+                false,
+                candidate,
+                currentClockMinute);
 
             return true;
         }
@@ -1410,9 +1531,21 @@ namespace LSOL.Systems
             string blocker;
             if (!IsWorldJobStillNeeded(job, true, out blocker))
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Revalidation,
+                    string.Format("Listed job failed revalidation: {0}", blocker),
+                    true,
+                    job,
+                    currentClockMinute);
                 job.StatusText = blocker;
                 job.Phase = NpcWorldJobPhase.Cancelled;
                 CleanupWorldJobVisual(job);
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Completion,
+                    string.Format("World job cancelled with reason: {0}", blocker),
+                    true,
+                    job,
+                    currentClockMinute);
                 return;
             }
 
@@ -1424,13 +1557,46 @@ namespace LSOL.Systems
             job.StatusText = job.IsRivalJob
                 ? "Rival convoy en route"
                 : (job.IsSpotOpportunity ? "Spot window closed; NPC convoy en route" : "NPC convoy en route");
-            string visualFailure;
-            if (!TryStartWorldJobVisual(job, now, out visualFailure) && job.HasVisibleConvoy)
+            job.NextVisualSpawnAttemptMs = 0;
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.Revalidation,
+                "World job started traveling.",
+                false,
+                job,
+                currentClockMinute);
+            if (!job.HasVisibleConvoy)
             {
-                job.HasVisibleConvoy = false;
-                job.StatusText = BuildWorldVisualFailureStatus(job, visualFailure);
-                _showStatus?.Invoke(job.StatusText);
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                    "Visual convoy skipped because visible convoy is disabled for that job.",
+                    false,
+                    job,
+                    currentClockMinute);
+                return;
             }
+
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                "Visual convoy attempt started.",
+                false,
+                job,
+                currentClockMinute);
+            string visualFailure;
+            if (!TryStartWorldJobVisual(job, now, out visualFailure))
+            {
+                if (!HandleWorldJobVisualSpawnFailure(job, visualFailure, now, currentClockMinute))
+                {
+                    _showStatus?.Invoke(job.StatusText);
+                }
+                return;
+            }
+
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                "Visual convoy spawned.",
+                false,
+                job,
+                currentClockMinute);
         }
 
         private void CompleteWorldJob(NpcWorldLogisticsJob job, int now, int currentClockMinute)
@@ -1447,10 +1613,22 @@ namespace LSOL.Systems
             job.Phase = succeeded ? NpcWorldJobPhase.Completed : NpcWorldJobPhase.Cancelled;
             if (!succeeded)
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Completion,
+                    string.Format("World job cancelled with reason: {0}", outcome),
+                    true,
+                    job,
+                    currentClockMinute);
                 return;
             }
 
             _completedWorldDispatches += 1;
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.Completion,
+                string.Format("World job completed: {0}", outcome),
+                false,
+                job,
+                currentClockMinute);
             if (job.IsSpotOpportunity || job.UsesPremiumDispatch || job.IsRivalJob)
             {
                 _showStatus?.Invoke(outcome);
@@ -1470,64 +1648,19 @@ namespace LSOL.Systems
 
             var origin = FindIndustryById(job.OriginIndustryId);
             var destination = FindIndustryById(job.DestinationIndustryId);
-            if (job.Type == NpcWorldJobType.ExternalImport || (job.Type == NpcWorldJobType.ServiceRun && origin == null))
+            if (job.Type == NpcWorldJobType.ExternalImport || job.Type == NpcWorldJobType.ExternalExport)
             {
-                return TryExecuteExternalImport(job, destination, now, out outcome);
-            }
-
-            if (job.Type == NpcWorldJobType.ExternalExport)
-            {
-                return TryExecuteExternalExport(job, origin, out outcome);
+                outcome = "Ambient dispatch no longer supports external endpoints.";
+                return false;
             }
 
             return TryExecuteInternalTransfer(job, origin, destination, now, out outcome);
         }
 
-        private bool TryExecuteExternalImport(NpcWorldLogisticsJob job, Industry destination, int now, out string outcome)
-        {
-            outcome = "Import route is no longer valid.";
-            if (job == null || destination == null || !CanUseAsWorldDispatchDestination(destination))
-            {
-                return false;
-            }
-
-            var acceptedTons = TryStoreDispatchCommodity(destination, job.Commodity, Math.Min(job.Tons, GetDispatchDestinationFreeTons(destination, job.Commodity)));
-            if (acceptedTons <= 0.001f)
-            {
-                outcome = string.Format("{0} no longer needs {1}.", destination.Name, job.Commodity);
-                return false;
-            }
-
-            _globalMarket?.RegisterDelivery(job.Commodity, now);
-            _territoryManager?.RegisterDelivery(destination, job.Commodity, acceptedTons, true, string.Empty, string.Empty);
-            outcome = string.Format("{0} delivered {1} {2} to {3}.", FormatWorldJobType(job.Type), ModFormatting.FormatTons(acceptedTons), job.Commodity, destination.Name);
-            return true;
-        }
-
-        private bool TryExecuteExternalExport(NpcWorldLogisticsJob job, Industry origin, out string outcome)
-        {
-            outcome = "Export route is no longer valid.";
-            if (job == null || origin == null || !CanUseAsWorldDispatchOrigin(origin))
-            {
-                return false;
-            }
-
-            var removedTons = TryTakeDispatchCommodity(origin, job.Commodity, Math.Min(job.Tons, GetDispatchOriginAvailableTons(origin, job.Commodity)));
-            if (removedTons <= 0.001f)
-            {
-                outcome = string.Format("{0} no longer has enough {1} for export.", origin.Name, job.Commodity);
-                return false;
-            }
-
-            _territoryManager?.RegisterLoad(origin, job.Commodity, removedTons, true);
-            outcome = string.Format("Exported {0} {1} from {2} to outside buyers.", ModFormatting.FormatTons(removedTons), job.Commodity, origin.Name);
-            return true;
-        }
-
         private bool TryExecuteInternalTransfer(NpcWorldLogisticsJob job, Industry origin, Industry destination, int now, out string outcome)
         {
             outcome = "Dispatch route is no longer valid.";
-            if (job == null || origin == null || destination == null || !CanDispatchBetween(origin, destination))
+            if (job == null || origin == null || destination == null || !CanAmbientWorldDispatchBetween(origin, destination, job.Commodity))
             {
                 return false;
             }
@@ -1563,9 +1696,9 @@ namespace LSOL.Systems
             _territoryManager?.RegisterDelivery(destination, job.Commodity, acceptedTons, true, origin.Id, origin.DistrictName);
             _industryManager.ComputeDeliveryProfit(destination, job.Commodity, acceptedTons, _globalMarket, now);
             outcome = string.Format(
-                "{0} moved {1} {2} from {3} to {4}.",
+                "{0} moved {1:0.0}t {2} from {3} to {4}.",
                 FormatWorldJobType(job.Type),
-                ModFormatting.FormatTons(acceptedTons),
+                acceptedTons,
                 job.Commodity,
                 origin.Name,
                 destination.Name);
@@ -1586,23 +1719,31 @@ namespace LSOL.Systems
 
             var backhaulOrigin = FindIndustryById(completedJob.DestinationIndustryId);
             var preferredDestination = FindIndustryById(completedJob.OriginIndustryId);
-            if (backhaulOrigin == null || !CanUseAsWorldDispatchOrigin(backhaulOrigin) || backhaulOrigin.Outputs == null || backhaulOrigin.Outputs.Count == 0)
+            if (IsPermanentlyInvalidAmbientOriginSite(backhaulOrigin))
             {
                 return;
             }
 
+            string originEligibilityBlocker;
+            if (!TryValidateAmbientWorldDispatchOrigin(backhaulOrigin, out originEligibilityBlocker))
+            {
+                RecordAmbientOriginEligibilityRejected(NpcWorldJobType.WarehouseBalancing, backhaulOrigin, originEligibilityBlocker, completedJob.Commodity, completedJob.Tons);
+                return;
+            }
+
             NpcWorldJobCandidate bestCandidate = null;
-            var outputs = backhaulOrigin.GetSortedOutputs();
+            var outputs = GetAmbientWorldDispatchOriginCommodities(backhaulOrigin);
             for (int i = 0; i < outputs.Count; i++)
             {
                 var commodity = CommodityCatalog.Normalize(outputs[i]);
                 var originTons = GetDispatchOriginAvailableTons(backhaulOrigin, commodity);
                 if (originTons + 0.001f < _worldDispatchConfig.MinDispatchTons)
                 {
+                    RecordAmbientTonsBelowMinimum(NpcWorldJobType.WarehouseBalancing, backhaulOrigin, null, commodity, originTons);
                     continue;
                 }
 
-                var destination = preferredDestination != null && CanDispatchBetween(backhaulOrigin, preferredDestination) && GetDispatchDestinationFreeTons(preferredDestination, commodity) > 0.001f
+                var destination = preferredDestination != null && CanAmbientWorldDispatchBetween(backhaulOrigin, preferredDestination, commodity) && GetDispatchDestinationFreeTons(preferredDestination, commodity) > 0.001f
                     ? preferredDestination
                     : FindBackhaulDestination(backhaulOrigin, commodity);
                 if (destination == null)
@@ -1651,12 +1792,24 @@ namespace LSOL.Systems
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var origin = _industryManager.Industries[i];
-                if (origin == null || string.Equals(origin.Id, destination.Id, StringComparison.OrdinalIgnoreCase))
+                if (IsPermanentlyInvalidAmbientOriginSite(origin)
+                    || string.Equals(origin.Id, destination.Id, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
 
-                if (!CanDispatchBetween(origin, destination))
+                string originEligibilityBlocker;
+                if (!TryValidateAmbientWorldDispatchOrigin(origin, out originEligibilityBlocker))
+                {
+                    RecordAmbientOriginEligibilityRejected(
+                        destination != null && destination.IsWarehouse ? NpcWorldJobType.WarehouseBalancing : (IsServiceCommodity(commodity) ? NpcWorldJobType.ServiceRun : NpcWorldJobType.ShortageRelief),
+                        origin,
+                        originEligibilityBlocker,
+                        commodity);
+                    continue;
+                }
+
+                if (!CanAmbientWorldDispatchBetween(origin, destination, commodity))
                 {
                     continue;
                 }
@@ -1701,7 +1854,18 @@ namespace LSOL.Systems
                     continue;
                 }
 
-                if (!CanDispatchBetween(origin, destination))
+                string destinationEligibilityBlocker;
+                if (!TryValidateAmbientWorldDispatchDestination(destination, out destinationEligibilityBlocker))
+                {
+                    RecordAmbientDestinationEligibilityRejected(
+                        preferSinks ? NpcWorldJobType.RivalFreight : (origin != null && (origin.IsWarehouse || destination.IsWarehouse) ? NpcWorldJobType.WarehouseBalancing : NpcWorldJobType.OverflowRescue),
+                        destination,
+                        destinationEligibilityBlocker,
+                        commodity);
+                    continue;
+                }
+
+                if (!CanAmbientWorldDispatchBetween(origin, destination, commodity))
                 {
                     continue;
                 }
@@ -1746,7 +1910,19 @@ namespace LSOL.Systems
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
                 var destination = _industryManager.Industries[i];
-                if (destination == null || string.Equals(destination.Id, origin.Id, StringComparison.OrdinalIgnoreCase) || !CanDispatchBetween(origin, destination))
+                if (destination == null || string.Equals(destination.Id, origin.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string destinationEligibilityBlocker;
+                if (!TryValidateAmbientWorldDispatchDestination(destination, out destinationEligibilityBlocker))
+                {
+                    RecordAmbientDestinationEligibilityRejected(NpcWorldJobType.WarehouseBalancing, destination, destinationEligibilityBlocker, commodity);
+                    continue;
+                }
+
+                if (!CanAmbientWorldDispatchBetween(origin, destination, commodity))
                 {
                     continue;
                 }
@@ -1793,30 +1969,153 @@ namespace LSOL.Systems
                 .ToList();
         }
 
-        private bool CanUseAsWorldDispatchOrigin(Industry industry)
+        private bool IsAmbientConsumerOnlySite(Industry industry)
         {
             return industry != null
-                && HasGameplayAccess(industry)
-                && MeetsDistrictNpcRequirement(industry)
-                && (industry.Outputs.Count > 0 || industry.IsWarehouse);
+                && (industry.IsStore
+                    || industry.IsGasStation
+                    || industry.IsConstructionSink
+                    || industry.SiteRole == SiteRole.StoreSink
+                    || industry.SiteRole == SiteRole.FuelSink);
         }
 
-        private bool CanUseAsWorldDispatchDestination(Industry industry)
+        private bool IsPermanentlyInvalidAmbientOriginSite(Industry industry)
         {
-            return industry != null
-                && HasGameplayAccess(industry)
-                && MeetsDistrictNpcRequirement(industry)
-                && (industry.Inputs.Count > 0 || industry.OptionalInputs.Count > 0 || industry.IsWarehouse);
+            return industry == null
+                || IsAmbientConsumerOnlySite(industry)
+                || (!industry.IsWarehouse && industry.IsSink);
         }
 
-        private bool CanDispatchBetween(Industry origin, Industry destination)
+        private List<string> GetAmbientWorldDispatchOriginCommodities(Industry industry)
         {
-            if (origin == null || destination == null || !CanUseAsWorldDispatchOrigin(origin) || !CanUseAsWorldDispatchDestination(destination))
+            if (industry == null)
             {
+                return new List<string>();
+            }
+
+            if (IsAmbientConsumerOnlySite(industry) || (!industry.IsWarehouse && industry.IsSink))
+            {
+                return new List<string>();
+            }
+
+            return industry.GetSortedOutputs()
+                .Where(commodity => !string.IsNullOrWhiteSpace(commodity))
+                .Select(CommodityCatalog.Normalize)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private bool TryValidateAmbientWorldDispatchOrigin(Industry industry, out string blocker)
+        {
+            blocker = string.Empty;
+            if (industry == null)
+            {
+                blocker = "origin is unavailable";
+                return false;
+            }
+
+            if (IsAmbientConsumerOnlySite(industry))
+            {
+                blocker = "site is not a valid ambient origin";
+                return false;
+            }
+
+            if (!industry.IsWarehouse && industry.IsSink)
+            {
+                blocker = "sink-only sites cannot dispatch ambient cargo";
+                return false;
+            }
+
+            if (GetAmbientWorldDispatchOriginCommodities(industry).Count <= 0)
+            {
+                blocker = industry.IsWarehouse
+                    ? "warehouse has no dispatchable commodity catalog"
+                    : "site has no dispatchable outputs";
                 return false;
             }
 
             return true;
+        }
+
+        private bool TryValidateAmbientWorldDispatchDestination(Industry industry, out string blocker)
+        {
+            blocker = string.Empty;
+            if (industry == null)
+            {
+                blocker = "destination is unavailable";
+                return false;
+            }
+
+            if (industry.IsWarehouse)
+            {
+                if (industry.SortedAcceptedInputs == null || industry.SortedAcceptedInputs.Count <= 0)
+                {
+                    blocker = "warehouse accepts no configured commodities";
+                    return false;
+                }
+
+                return true;
+            }
+
+            if ((industry.Inputs == null || industry.Inputs.Count <= 0)
+                && (industry.OptionalInputs == null || industry.OptionalInputs.Count <= 0))
+            {
+                blocker = "site accepts no ambient-dispatch commodities";
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool CanAmbientWorldDispatchOriginCommodity(Industry industry, string commodity)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return false;
+            }
+
+            return industry.ProducesCommodity(CommodityCatalog.Normalize(commodity));
+        }
+
+        private bool CanAmbientWorldDispatchDestinationCommodity(Industry industry, string commodity)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return false;
+            }
+
+            return industry.AcceptsCommodity(CommodityCatalog.Normalize(commodity));
+        }
+
+        private bool CanAmbientWorldDispatchBetween(Industry origin, Industry destination, string commodity = null)
+        {
+            string originBlocker;
+            string destinationBlocker;
+            if (!TryValidateAmbientWorldDispatchOrigin(origin, out originBlocker)
+                || !TryValidateAmbientWorldDispatchDestination(destination, out destinationBlocker))
+            {
+                return false;
+            }
+
+            if (origin == null || destination == null || string.Equals(origin.Id, destination.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var normalizedCommodity = CommodityCatalog.Normalize(commodity);
+            if (string.IsNullOrWhiteSpace(normalizedCommodity))
+            {
+                return true;
+            }
+
+            if (!CanAmbientWorldDispatchOriginCommodity(origin, normalizedCommodity)
+                || !CanAmbientWorldDispatchDestinationCommodity(destination, normalizedCommodity))
+            {
+                return false;
+            }
+
+            return GetDispatchOriginAvailableTons(origin, normalizedCommodity) > 0.001f
+                && GetDispatchDestinationFreeTons(destination, normalizedCommodity) > 0.001f;
         }
 
         private bool HasConflictingManualRoute(Industry origin, Industry destination, string commodity)
@@ -1887,48 +2186,13 @@ namespace LSOL.Systems
 
             var origin = FindIndustryById(job.OriginIndustryId);
             var destination = FindIndustryById(job.DestinationIndustryId);
-            if (job.Type == NpcWorldJobType.ExternalImport || (job.Type == NpcWorldJobType.ServiceRun && origin == null))
+            if (job.Type == NpcWorldJobType.ExternalImport || job.Type == NpcWorldJobType.ExternalExport)
             {
-                if (destination == null || !CanUseAsWorldDispatchDestination(destination))
-                {
-                    blocker = "Destination is no longer available for dispatch.";
-                    return false;
-                }
-
-                if (strictShortageCheck)
-                {
-                    var fillRatio = GetCommodityFillRatio(destination, job.Commodity);
-                    var threshold = IsServiceCommodity(job.Commodity)
-                        ? _worldDispatchConfig.ServiceShortageThreshold
-                        : _worldDispatchConfig.ShortageThreshold;
-                    if (fillRatio - 0.001f > threshold)
-                    {
-                        blocker = string.Format("{0} no longer needs {1}.", destination.Name, job.Commodity);
-                        return false;
-                    }
-                }
-
-                return true;
+                blocker = "External ambient jobs are no longer valid.";
+                return false;
             }
 
-            if (job.Type == NpcWorldJobType.ExternalExport)
-            {
-                if (origin == null || !CanUseAsWorldDispatchOrigin(origin))
-                {
-                    blocker = "Origin is no longer available for export.";
-                    return false;
-                }
-
-                if (strictShortageCheck && GetCommodityFillRatio(origin, job.Commodity) + 0.001f < _worldDispatchConfig.OverflowThreshold)
-                {
-                    blocker = string.Format("{0} is no longer overflowing with {1}.", origin.Name, job.Commodity);
-                    return false;
-                }
-
-                return GetDispatchOriginAvailableTons(origin, job.Commodity) > 0.001f;
-            }
-
-            if (origin == null || destination == null || !CanDispatchBetween(origin, destination))
+            if (origin == null || destination == null || !CanAmbientWorldDispatchBetween(origin, destination, job.Commodity))
             {
                 blocker = "Route endpoints are no longer available.";
                 return false;
@@ -2116,6 +2380,11 @@ namespace LSOL.Systems
 
             if (!HasOperationalEntities(job.VisualRoute))
             {
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Cleanup,
+                    "Visual convoy cleaned up because entities became non-operational.",
+                    true,
+                    job);
                 CleanupWorldJobVisual(job);
                 job.HasVisibleConvoy = false;
                 return;
@@ -2131,6 +2400,78 @@ namespace LSOL.Systems
                     job.RemainingInGameMinutes = 0;
                 }
             }
+        }
+
+        private void TryRetryWorldJobVisualSpawn(NpcWorldLogisticsJob job, int now, int currentClockMinute)
+        {
+            if (job == null || !job.HasVisibleConvoy || job.VisualRoute != null || now < job.NextVisualSpawnAttemptMs)
+            {
+                return;
+            }
+
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                "Visual convoy attempt started.",
+                false,
+                job,
+                currentClockMinute);
+            string visualFailure;
+            if (TryStartWorldJobVisual(job, now, out visualFailure))
+            {
+                job.StatusText = job.IsRivalJob
+                    ? "Rival convoy en route"
+                    : (job.IsSpotOpportunity ? "Spot window closed; NPC convoy en route" : "NPC convoy en route");
+                job.NextVisualSpawnAttemptMs = 0;
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                    "Visual convoy spawned.",
+                    false,
+                    job,
+                    currentClockMinute);
+                return;
+            }
+
+            HandleWorldJobVisualSpawnFailure(job, visualFailure, now, currentClockMinute);
+        }
+
+        private bool HandleWorldJobVisualSpawnFailure(NpcWorldLogisticsJob job, string visualFailure, int now, int currentClockMinute)
+        {
+            if (job == null)
+            {
+                return false;
+            }
+
+            if (IsSpawnClearanceBlockedMessage(visualFailure))
+            {
+                job.StatusText = "Waiting for spawn clearance";
+                job.NextVisualSpawnAttemptMs = now + SpawnBlockedRetryDelayMs;
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                    string.IsNullOrWhiteSpace(visualFailure)
+                        ? "Visual convoy failed because route entities could not spawn."
+                        : visualFailure.Trim().TrimEnd('.') + ".",
+                    true,
+                    job,
+                    currentClockMinute);
+                return true;
+            }
+
+            job.HasVisibleConvoy = false;
+            job.NextVisualSpawnAttemptMs = 0;
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.VisualSpawn,
+                BuildWorldVisualFailureDiagnostic(visualFailure),
+                true,
+                job,
+                currentClockMinute);
+            job.StatusText = BuildWorldVisualFailureStatus(job, visualFailure);
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.Cleanup,
+                "Visual convoy hidden after visual failure.",
+                true,
+                job,
+                currentClockMinute);
+            return false;
         }
 
         private void CleanupWorldJobVisual(NpcWorldLogisticsJob job)
@@ -2316,9 +2657,9 @@ namespace LSOL.Systems
             switch (_worldDispatchPolicy)
             {
                 case NpcWorldDispatchPolicy.OverflowRescue:
-                    return type == NpcWorldJobType.OverflowRescue || type == NpcWorldJobType.ExternalExport || type == NpcWorldJobType.WarehouseBalancing;
+                    return type == NpcWorldJobType.OverflowRescue || type == NpcWorldJobType.WarehouseBalancing;
                 case NpcWorldDispatchPolicy.ShortageRelief:
-                    return type == NpcWorldJobType.ShortageRelief || type == NpcWorldJobType.ExternalImport || type == NpcWorldJobType.ServiceRun || type == NpcWorldJobType.WarehouseBalancing;
+                    return type == NpcWorldJobType.ShortageRelief || type == NpcWorldJobType.ServiceRun || type == NpcWorldJobType.WarehouseBalancing;
                 case NpcWorldDispatchPolicy.MarketPriority:
                     return _globalMarket != null && _globalMarket.GetUnitPrice(commodity) >= 1000f;
                 default:
@@ -2332,14 +2673,14 @@ namespace LSOL.Systems
             switch (_worldDispatchPolicy)
             {
                 case NpcWorldDispatchPolicy.OverflowRescue:
-                    if (type == NpcWorldJobType.OverflowRescue || type == NpcWorldJobType.ExternalExport || type == NpcWorldJobType.WarehouseBalancing)
+                    if (type == NpcWorldJobType.OverflowRescue || type == NpcWorldJobType.WarehouseBalancing)
                     {
                         bonus += 16f;
                     }
 
                     break;
                 case NpcWorldDispatchPolicy.ShortageRelief:
-                    if (type == NpcWorldJobType.ShortageRelief || type == NpcWorldJobType.ExternalImport || type == NpcWorldJobType.ServiceRun || type == NpcWorldJobType.WarehouseBalancing)
+                    if (type == NpcWorldJobType.ShortageRelief || type == NpcWorldJobType.ServiceRun || type == NpcWorldJobType.WarehouseBalancing)
                     {
                         bonus += 18f;
                     }
@@ -2463,9 +2804,9 @@ namespace LSOL.Systems
             if (GetDestinationRemainingNeedTons(contract) <= 0.001f)
             {
                 waitStatus = string.Format(
-                    "Waiting at office for {0} storage under {1}.",
+                    "Waiting at office for {0} storage under {1}%.",
                     contract.DestinationIndustry.Name,
-                    ModFormatting.FormatPercent(destinationThreshold));
+                    destinationThreshold);
                 return false;
             }
 
@@ -2475,7 +2816,7 @@ namespace LSOL.Systems
                 var originThreshold = ClampTriggerPercent(contract.OriginTriggerThresholdPercent, 0);
                 waitStatus = originThreshold <= 0
                     ? string.Format("Waiting at office for stock at {0}.", contract.OriginIndustry.Name)
-                    : string.Format("Waiting at office for {0} stock above {1}.", contract.OriginIndustry.Name, ModFormatting.FormatPercent(originThreshold));
+                    : string.Format("Waiting at office for {0} stock above {1}%.", contract.OriginIndustry.Name, originThreshold);
                 return false;
             }
 
@@ -2495,9 +2836,9 @@ namespace LSOL.Systems
             if (GetDestinationRemainingNeedTons(contract) <= 0.001f)
             {
                 waitStatus = string.Format(
-                    "Waiting at office for {0} storage under {1}.",
+                    "Waiting at office for {0} storage under {1}%.",
                     contract.DestinationIndustry.Name,
-                    ModFormatting.FormatPercent(destinationThreshold));
+                    destinationThreshold);
                 return false;
             }
 
@@ -2645,28 +2986,15 @@ namespace LSOL.Systems
                     return;
                 }
 
-                int nextAllowedSpawnMs;
-                if (!CanAttemptContractSpawn(contract, now, out nextAllowedSpawnMs))
-                {
-                    contract.StatusText = string.Format(
-                        "Spawn queue active at {0}; retrying in {1}s",
-                        contract.OriginIndustry != null ? contract.OriginIndustry.Name : "origin",
-                        ModFormatting.FormatNumber(Math.Max(0, nextAllowedSpawnMs - now) / 1000f));
-                    contract.Phase = NpcRoutePhase.PendingSpawn;
-                    contract.WaitUntilMs = nextAllowedSpawnMs;
-                    return;
-                }
-
                 string spawnStatus;
                 if (!TrySpawnRouteEntities(contract, out spawnStatus))
                 {
                     contract.StatusText = spawnStatus;
                     contract.Phase = NpcRoutePhase.PendingSpawn;
-                    contract.WaitUntilMs = now + RetryDelayMs;
+                    contract.WaitUntilMs = now + (IsSpawnClearanceBlockedMessage(spawnStatus) ? SpawnBlockedRetryDelayMs : RetryDelayMs);
                     return;
                 }
 
-                RegisterContractSpawn(contract, now);
                 contract.StatusText = spawnStatus;
 
                 contract.Phase = NpcRoutePhase.DrivingToOrigin;
@@ -2833,8 +3161,8 @@ namespace LSOL.Systems
             if (_officeDeliveryNotificationsEnabled && _showStatus != null)
             {
                 _showStatus(string.Format(
-                    "NPC loaded {0} {1} at {2}.",
-                    ModFormatting.FormatTons(deliveredTons),
+                    "NPC loaded {0:0.0}t {1} at {2}.",
+                    deliveredTons,
                     contract.Commodity,
                     contract.OriginIndustry != null ? contract.OriginIndustry.Name : "origin"));
             }
@@ -2916,13 +3244,12 @@ namespace LSOL.Systems
                     contract.OriginIndustry != null ? contract.OriginIndustry.DistrictName : cargoState.SourceDistrictName);
             }
 
-            var creditedRevenue = Math.Max(0f, revenue);
-            if (_addProfit != null && creditedRevenue > 0f)
+            if (_addProfit != null && revenue > 0f)
             {
-                _addProfit(creditedRevenue);
+                _addProfit(revenue);
                 RecordFinanceIncome(
                     CompanyFinanceCategory.NpcDelivery,
-                    creditedRevenue,
+                    revenue,
                     string.Format("NPC delivery to {0}", contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "destination"),
                     contract.Id,
                     BuildContractLabel(contract));
@@ -2931,11 +3258,11 @@ namespace LSOL.Systems
             if (_officeDeliveryNotificationsEnabled && _showStatus != null)
             {
                 _showStatus(string.Format(
-                    "NPC unloaded {0} {1} at {2}. Earned {3}.",
-                    ModFormatting.FormatTons(acceptedTons),
+                    "NPC unloaded {0:0.0}t {1} at {2}{3}",
+                    acceptedTons,
                     contract.Commodity,
                     contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "destination",
-                    ModFormatting.FormatMoney(creditedRevenue)));
+                    revenue > 0f ? string.Format(". Earned {0}.", ModFormatting.FormatMoney(revenue)) : "."));
             }
 
             contract.TotalDeliveredTons += acceptedTons;
@@ -2946,7 +3273,7 @@ namespace LSOL.Systems
                 cargoState.ClearCargo();
                 _fleetManager.ClearCargoVisuals(cargoState);
                 contract.CompletedDeliveries += 1;
-                contract.TotalProfitEarned += creditedRevenue;
+                contract.TotalProfitEarned += revenue;
                 if (contract.Routes.Count > 1)
                 {
                     var previousCommodity = contract.Commodity;
@@ -2983,8 +3310,8 @@ namespace LSOL.Systems
                 {
                     contract.Phase = NpcRoutePhase.DrivingToOrigin;
                     contract.StatusText = string.Format(
-                        "Delivered {0} {1}",
-                        ModFormatting.FormatTons(acceptedTons),
+                        "Delivered {0:0.0}t {1}",
+                        acceptedTons,
                         contract.Commodity);
                     contract.NextDriveTaskRefreshMs = 0;
                     contract.WaitUntilMs = now + 1000;
@@ -3013,12 +3340,18 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var spawnPosition = _getGroundPosition(GetOriginSpawnPosition(contract));
+            if (!TryEnsureRouteSpawnPointIsClear(contract, spawnPosition, out message))
+            {
+                return false;
+            }
+
             Vehicle truck;
             Vehicle cargoVehicle;
             if (!_fleetManager.SpawnSelectedVehicle(
                 contract.VehicleDefinition,
                 contract.TractorDefinition,
-                _getGroundPosition(GetOriginSpawnPosition(contract)),
+                spawnPosition,
                 GetOriginSpawnHeading(contract),
                 out truck,
                 out cargoVehicle,
@@ -3163,7 +3496,7 @@ namespace LSOL.Systems
             blip.Color = BlipColor.Blue;
             blip.Name = string.Format("NPC Route: {0}", BuildContractLabel(contract));
             blip.Scale = 0.85f;
-            blip.IsShortRange = false;
+            blip.IsShortRange = IsAmbientWorldVisualRoute(contract);
             blip.IsHiddenOnLegend = false;
             return blip;
         }
@@ -3190,7 +3523,13 @@ namespace LSOL.Systems
             if (contract.RouteBlip != null && contract.RouteBlip.Exists())
             {
                 contract.RouteBlip.Position = driverVehicle.Position;
+                contract.RouteBlip.IsShortRange = IsAmbientWorldVisualRoute(contract);
             }
+        }
+
+        private bool IsAmbientWorldVisualRoute(NpcLogisticsContract contract)
+        {
+            return contract != null && contract.Id < 0;
         }
 
         private bool HasOperationalEntities(NpcLogisticsContract contract)
@@ -3205,38 +3544,107 @@ namespace LSOL.Systems
                 && GetCargoVehicle(contract).Exists();
         }
 
-        private bool CanAttemptContractSpawn(NpcLogisticsContract contract, int now, out int nextAllowedSpawnMs)
+        private bool TryEnsureRouteSpawnPointIsClear(NpcLogisticsContract contract, Vector3 spawnPosition, out string message)
         {
-            nextAllowedSpawnMs = now;
-            var originId = contract != null && contract.OriginIndustry != null
-                ? (contract.OriginIndustry.Id ?? string.Empty).Trim()
-                : string.Empty;
-            if (string.IsNullOrWhiteSpace(originId))
+            message = string.Empty;
+            if (IsNpcRouteSpawnPointOccupied(contract, spawnPosition))
             {
-                return true;
+                message = "Spawn point blocked; waiting for spawn clearance.";
+                return false;
             }
 
-            int lastSpawnMs;
-            if (!_lastContractSpawnMsByOriginId.TryGetValue(originId, out lastSpawnMs))
+            var nearbyVehicles = World.GetNearbyVehicles(spawnPosition, SpawnClearanceRadius);
+            if (nearbyVehicles != null)
             {
-                return true;
+                for (int i = 0; i < nearbyVehicles.Length; i++)
+                {
+                    var vehicle = nearbyVehicles[i];
+                    if (vehicle == null || !vehicle.Exists() || vehicle.Position.DistanceTo(spawnPosition) > SpawnClearanceRadius)
+                    {
+                        continue;
+                    }
+
+                    message = "Marker occupied by nearby vehicle; waiting for spawn clearance.";
+                    return false;
+                }
             }
 
-            nextAllowedSpawnMs = lastSpawnMs + SpawnStaggerDelayMs;
-            return now >= nextAllowedSpawnMs;
+            var nearbyPeds = World.GetNearbyPeds(spawnPosition, SpawnPedClearanceRadius);
+            if (nearbyPeds != null)
+            {
+                for (int i = 0; i < nearbyPeds.Length; i++)
+                {
+                    var ped = nearbyPeds[i];
+                    if (ped == null || !ped.Exists() || ped.IsInVehicle() || ped.Position.DistanceTo(spawnPosition) > SpawnPedClearanceRadius)
+                    {
+                        continue;
+                    }
+
+                    message = "Marker occupied by nearby pedestrian; waiting for spawn clearance.";
+                    return false;
+                }
+            }
+
+            return true;
         }
 
-        private void RegisterContractSpawn(NpcLogisticsContract contract, int now)
+        private bool IsNpcRouteSpawnPointOccupied(NpcLogisticsContract spawningContract, Vector3 spawnPosition)
         {
-            var originId = contract != null && contract.OriginIndustry != null
-                ? (contract.OriginIndustry.Id ?? string.Empty).Trim()
-                : string.Empty;
-            if (string.IsNullOrWhiteSpace(originId))
+            for (int i = 0; i < _contracts.Count; i++)
             {
-                return;
+                var contract = _contracts[i];
+                if (contract == null || ReferenceEquals(contract, spawningContract))
+                {
+                    continue;
+                }
+
+                if (IsNpcRouteEntityNearSpawnPoint(contract, spawnPosition))
+                {
+                    return true;
+                }
             }
 
-            _lastContractSpawnMsByOriginId[originId] = now;
+            for (int i = 0; i < _worldJobs.Count; i++)
+            {
+                var worldJob = _worldJobs[i];
+                if (worldJob == null || worldJob.VisualRoute == null || ReferenceEquals(worldJob.VisualRoute, spawningContract))
+                {
+                    continue;
+                }
+
+                if (IsNpcRouteEntityNearSpawnPoint(worldJob.VisualRoute, spawnPosition))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private bool IsNpcRouteEntityNearSpawnPoint(NpcLogisticsContract contract, Vector3 spawnPosition)
+        {
+            return IsEntityNearSpawnPoint(contract != null ? contract.Truck : null, spawnPosition, SpawnClearanceRadius)
+                || IsEntityNearSpawnPoint(contract != null ? contract.CargoVehicle : null, spawnPosition, SpawnClearanceRadius)
+                || IsEntityNearSpawnPoint(contract != null ? contract.Driver : null, spawnPosition, SpawnPedClearanceRadius);
+        }
+
+        private static bool IsEntityNearSpawnPoint(Entity entity, Vector3 spawnPosition, float radius)
+        {
+            return entity != null
+                && entity.Exists()
+                && entity.Position.DistanceTo(spawnPosition) <= radius;
+        }
+
+        private static bool IsSpawnClearanceBlockedMessage(string message)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            return message.IndexOf("spawn clearance", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("spawn point blocked", StringComparison.OrdinalIgnoreCase) >= 0
+                || message.IndexOf("marker occupied", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private void CleanupContractEntities(NpcLogisticsContract contract)
@@ -4138,23 +4546,53 @@ namespace LSOL.Systems
             return true;
         }
 
-        private Vector3 GetOriginSpawnPosition(NpcLogisticsContract contract)
+        private bool TryGetConfiguredOriginSpawnAnchor(NpcLogisticsContract contract, out Vector3 position, out float heading)
         {
+            position = Vector3.Zero;
+            heading = 0f;
             var originIndustry = contract != null ? contract.OriginIndustry : null;
-            if (originIndustry != null && originIndustry.VehicleSpawnPosition.HasValue)
+            if (originIndustry == null)
             {
-                return originIndustry.VehicleSpawnPosition.Value;
+                return false;
             }
 
+            if (originIndustry.SiteRole == SiteRole.Warehouse && originIndustry.VehicleSpawnPosition.HasValue)
+            {
+                position = originIndustry.VehicleSpawnPosition.Value;
+                heading = originIndustry.VehicleSpawnHeading ?? 0f;
+                return true;
+            }
+
+            if (!originIndustry.VehicleSpawnPosition.HasValue)
+            {
+                return false;
+            }
+
+            position = originIndustry.VehicleSpawnPosition.Value;
+            heading = originIndustry.VehicleSpawnHeading ?? 0f;
+            return true;
+        }
+
+        private Vector3 GetOriginSpawnPosition(NpcLogisticsContract contract)
+        {
+            Vector3 spawnPosition;
+            float spawnHeading;
+            if (TryGetConfiguredOriginSpawnAnchor(contract, out spawnPosition, out spawnHeading))
+            {
+                return spawnPosition;
+            }
+
+            var originIndustry = contract != null ? contract.OriginIndustry : null;
             return originIndustry != null ? originIndustry.Position : Vector3.Zero;
         }
 
         private float GetOriginSpawnHeading(NpcLogisticsContract contract)
         {
-            var originIndustry = contract != null ? contract.OriginIndustry : null;
-            if (originIndustry != null && originIndustry.VehicleSpawnHeading.HasValue)
+            Vector3 spawnPosition;
+            float spawnHeading;
+            if (TryGetConfiguredOriginSpawnAnchor(contract, out spawnPosition, out spawnHeading))
             {
-                return originIndustry.VehicleSpawnHeading.Value;
+                return spawnHeading;
             }
 
             return 0f;
@@ -4282,6 +4720,169 @@ namespace LSOL.Systems
                 : 0;
         }
 
+        private void RecordAmbientOriginEligibilityRejected(NpcWorldJobType? jobType, Industry origin, string blocker, string commodity = null, float? tons = null)
+        {
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.EligibilityFiltering,
+                string.Format("Origin rejected by eligibility rules: {0}.", NormalizeWorldDispatchDiagnosticReason(blocker)),
+                true,
+                jobType,
+                commodity,
+                origin,
+                null,
+                null,
+                null,
+                tons);
+        }
+
+        private void RecordAmbientDestinationEligibilityRejected(NpcWorldJobType? jobType, Industry destination, string blocker, string commodity = null, float? tons = null)
+        {
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.EligibilityFiltering,
+                string.Format("Destination rejected by eligibility rules: {0}.", NormalizeWorldDispatchDiagnosticReason(blocker)),
+                true,
+                jobType,
+                commodity,
+                null,
+                destination,
+                null,
+                null,
+                tons);
+        }
+
+        private void RecordAmbientTonsBelowMinimum(NpcWorldJobType? jobType, Industry origin, Industry destination, string commodity, float tons)
+        {
+            RecordWorldDispatchDiagnostic(
+                NpcWorldDispatchDiagnosticStage.CandidateGeneration,
+                "Candidate rejected because tons are below minimum.",
+                true,
+                jobType,
+                commodity,
+                origin,
+                destination,
+                null,
+                null,
+                tons);
+        }
+
+        private void RecordWorldDispatchDiagnostic(
+            NpcWorldDispatchDiagnosticStage stage,
+            string outcome,
+            bool isFailure = false,
+            NpcWorldJobType? jobType = null,
+            string commodity = null,
+            Industry origin = null,
+            Industry destination = null,
+            string originLabel = null,
+            string destinationLabel = null,
+            float? tons = null,
+            int? clockMinute = null)
+        {
+            if (_worldDispatchDiagnostics.Count >= WorldDispatchDiagnosticsCapacity)
+            {
+                _worldDispatchDiagnostics.RemoveAt(0);
+            }
+
+            _worldDispatchDiagnostics.Add(new NpcWorldDispatchDiagnosticEntry
+            {
+                ClockMinute = ResolveWorldDispatchDiagnosticMinute(clockMinute),
+                Stage = stage,
+                JobType = jobType,
+                Commodity = CommodityCatalog.Normalize(commodity),
+                OriginLabel = ResolveWorldDispatchDiagnosticLabel(origin, originLabel),
+                DestinationLabel = ResolveWorldDispatchDiagnosticLabel(destination, destinationLabel),
+                Tons = tons.HasValue ? Math.Max(0f, tons.Value) : (float?)null,
+                Outcome = string.IsNullOrWhiteSpace(outcome) ? string.Empty : outcome.Trim(),
+                IsFailure = isFailure,
+            });
+        }
+
+        private void RecordWorldDispatchDiagnostic(
+            NpcWorldDispatchDiagnosticStage stage,
+            string outcome,
+            bool isFailure,
+            NpcWorldJobCandidate candidate,
+            int? clockMinute = null)
+        {
+            RecordWorldDispatchDiagnostic(
+                stage,
+                outcome,
+                isFailure,
+                candidate != null ? (NpcWorldJobType?)candidate.Type : null,
+                candidate != null ? candidate.Commodity : null,
+                candidate != null ? candidate.OriginIndustry : null,
+                candidate != null ? candidate.DestinationIndustry : null,
+                candidate != null ? candidate.SourceLabel : null,
+                candidate != null ? candidate.DestinationLabel : null,
+                candidate != null ? (float?)candidate.Tons : null,
+                clockMinute);
+        }
+
+        private void RecordWorldDispatchDiagnostic(
+            NpcWorldDispatchDiagnosticStage stage,
+            string outcome,
+            bool isFailure,
+            NpcWorldLogisticsJob job,
+            int? clockMinute = null)
+        {
+            var origin = FindIndustryById(job != null ? job.OriginIndustryId : string.Empty);
+            var destination = FindIndustryById(job != null ? job.DestinationIndustryId : string.Empty);
+            RecordWorldDispatchDiagnostic(
+                stage,
+                outcome,
+                isFailure,
+                job != null ? (NpcWorldJobType?)job.Type : null,
+                job != null ? job.Commodity : null,
+                origin,
+                destination,
+                job != null ? job.SourceLabel : null,
+                job != null ? job.DestinationLabel : null,
+                job != null ? (float?)job.Tons : null,
+                clockMinute);
+        }
+
+        private int? ResolveWorldDispatchDiagnosticMinute(int? clockMinute)
+        {
+            if (clockMinute.HasValue)
+            {
+                return Math.Max(0, clockMinute.Value);
+            }
+
+            if (_getCurrentInGameMinute != null)
+            {
+                return Math.Max(0, _getCurrentInGameMinute());
+            }
+
+            if (_lastObservedClockMinute >= 0)
+            {
+                return _lastObservedClockMinute;
+            }
+
+            return _lastWorldEvaluationClockMinute >= 0
+                ? (int?)_lastWorldEvaluationClockMinute
+                : null;
+        }
+
+        private static string ResolveWorldDispatchDiagnosticLabel(Industry industry, string fallbackLabel)
+        {
+            if (industry != null && !string.IsNullOrWhiteSpace(industry.Name))
+            {
+                return industry.Name;
+            }
+
+            return string.IsNullOrWhiteSpace(fallbackLabel)
+                ? string.Empty
+                : fallbackLabel.Trim();
+        }
+
+        private static string NormalizeWorldDispatchDiagnosticReason(string blocker)
+        {
+            var value = string.IsNullOrWhiteSpace(blocker)
+                ? "unspecified ambient eligibility blocker"
+                : blocker.Trim();
+            return value.TrimEnd('.');
+        }
+
         private NpcWorldJobSummary BuildWorldJobSummary(NpcWorldLogisticsJob job)
         {
             if (job == null)
@@ -4383,6 +4984,32 @@ namespace LSOL.Systems
                 ? "visual spawn unavailable"
                 : failureReason.Trim().TrimEnd('.');
             return string.Format("{0}: {1}.", prefix, reason);
+        }
+
+        private static string BuildWorldVisualFailureDiagnostic(string failureReason)
+        {
+            var reason = (failureReason ?? string.Empty).Trim();
+            if (reason.IndexOf("Route endpoints are unavailable", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Visual convoy failed because route endpoints are unavailable.";
+            }
+
+            if (reason.IndexOf("No enabled vehicle can carry", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Visual convoy failed because no compatible vehicle exists.";
+            }
+
+            if (reason.IndexOf("No enabled truck tractor", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Visual convoy failed because no tractor exists.";
+            }
+
+            if (reason.IndexOf("Failed to create NPC driver", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return "Visual convoy failed because NPC driver creation failed.";
+            }
+
+            return "Visual convoy failed because route entities could not spawn.";
         }
 
         private static string CycleStringSelection(IEnumerable<string> options, string currentValue, int delta, Func<string, string> normalize)

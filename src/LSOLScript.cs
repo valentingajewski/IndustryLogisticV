@@ -551,6 +551,11 @@ namespace LSOL
             {
                 DrawOpenMenus();
 
+                if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
+                {
+                    Screen.ShowSubtitle(_statusMessage, 1);
+                }
+
                 return;
             }
 
@@ -611,6 +616,11 @@ namespace LSOL
             UpdateCargoOverviewAndIntegrity(player, gameTime);
             DrawOpenMenus();
             DrawTabletShell();
+
+            if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
+            {
+                Screen.ShowSubtitle(_statusMessage, 1);
+            }
         }
 
         private void OnKeyDown(object sender, WinForms.KeyEventArgs e)
@@ -1192,18 +1202,19 @@ namespace LSOL
                 : ResolveCargoConditionColor(conditionRatio);
             var commodityLabel = isEmpty ? "No cargo loaded" : cargoState.Commodity;
             var quantityLabel = isEmpty
-                ? string.Format("Qty {0} | Empty", ModFormatting.FormatPercent(0f))
-                : string.Format("Qty {0} | {1}", ModFormatting.FormatPercent(quantityRatio * 100f), ModFormatting.FormatTons(cargoState.WeightTons));
+                ? "Qty 0% | Empty"
+                : string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons);
             var fuelLabel = fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f
                 ? "Fuel n/a"
                 : string.Format(
-                    "Fuel {0} | {1}{2}",
-                    ModFormatting.FormatPercent(fuelRatio * 100f),
-                    ModFormatting.FormatRatio(fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters, "L"),
+                    "Fuel {0:0}% | {1:0}/{2:0}L{3}",
+                    fuelRatio * 100f,
+                    fuelTelemetry.CurrentLiters,
+                    fuelTelemetry.CapacityLiters,
                     fuelTelemetry.UsesSeparatePoweredVehicle ? " | Tractor" : string.Empty);
             var conditionLabel = isEmpty
                 ? "Cond n/a"
-                : string.Format("Cargo Condition {0} | {1}", GetCargoConditionLabel(conditionRatio), ModFormatting.FormatPercent(conditionRatio * 100f));
+                : string.Format("Cargo Condition {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f);
             var contentX = x + 8f;
             var titleY = y + 5f;
             var commodityY = y + (height * 0.17f);
@@ -1779,8 +1790,8 @@ namespace LSOL
         {
             var speed = Math.Max(0f, speedMetersPerSecond);
             return _useMetricSpeedDisplay
-                ? ModFormatting.FormatSpeed(speed * 3.6f, "km/h")
-                : ModFormatting.FormatSpeed(speed * 2.2369363f, "mph");
+                ? string.Format("{0:0} km/h", speed * 3.6f)
+                : string.Format("{0:0} mph", speed * 2.2369363f);
         }
 
         private void RebuildSavingOptionsMenuItems()
@@ -2159,7 +2170,7 @@ namespace LSOL
             var detail = string.Format("Deduct {0} and unlock upgrades.", ModFormatting.FormatMoney(industry.IndustryPrice));
             if (industry.IndustryOwnerCut > 0f)
             {
-                detail += string.Format(" Removes the {0} owner cut.", ModFormatting.FormatPercent(industry.IndustryOwnerCut * 100f));
+                detail += string.Format(" Removes the {0:0}% owner cut.", industry.IndustryOwnerCut * 100f);
             }
 
             if (_profit < industry.IndustryPrice)
@@ -3367,8 +3378,8 @@ namespace LSOL
             }
 
             return string.Format(
-                "Rate {0} | Inputs {1} | Outputs {2}",
-                ModFormatting.FormatRatePerHour(industry.ProductionRate, "cyc"),
+                "Rate {0:0.0} cyc/h | Inputs {1} | Outputs {2}",
+                industry.ProductionRate,
                 industry.Inputs.Count,
                 industry.Outputs.Count);
         }
@@ -3398,12 +3409,12 @@ namespace LSOL
             var currentStock = resource.Equals("Omega", StringComparison.OrdinalIgnoreCase)
                 ? industry.OmegaStorage
                 : industry.GetStock(resource);
-            return string.Format("Current stock: {0}", ModFormatting.FormatTons(currentStock));
+            return string.Format("Current stock: {0:0.0}t", currentStock);
         }
 
         private string CurrentDebugResourceAmountCaption()
         {
-            return string.Format("Amount: < {0} >", ModFormatting.FormatTons(GetSelectedDebugResourceAmountTons()));
+            return string.Format("Amount: < {0:0.0}t >", GetSelectedDebugResourceAmountTons());
         }
 
         private void RebuildOfficeMenuItems()
@@ -3949,16 +3960,16 @@ namespace LSOL
 
             var debugOffset = _territoryManager.GetDistrictReputationDebugOffset(districtName);
             return string.Format(
-                "{0} | Influence {1} | Reputation {2} | Debug offset {3}",
+                "{0} | Influence {1:0}% | Reputation {2:0.0} | Debug offset {3:+0.0;-0.0;0.0}",
                 string.IsNullOrWhiteSpace(district.ReputationLabel) ? "Unknown" : district.ReputationLabel,
-                ModFormatting.FormatPercent(district.InfluenceRatio * 100f),
-                ModFormatting.FormatNumber(district.ReputationScore),
-                ModFormatting.FormatSignedNumber(debugOffset));
+                district.InfluenceRatio * 100f,
+                district.ReputationScore,
+                debugOffset);
         }
 
         private string CurrentDebugDistrictReputationAmountCaption()
         {
-            return string.Format("District rep amount: < {0} >", ModFormatting.FormatNumber(GetSelectedDebugDistrictReputationAmount()));
+            return string.Format("District rep amount: < {0:0.#} >", GetSelectedDebugDistrictReputationAmount());
         }
 
         private string CurrentDebugDistrictStateCaption()
@@ -4028,9 +4039,10 @@ namespace LSOL
                 ? district.ReputationLabel
                 : "Unknown";
             ShowStatus(string.Format(
-                "{0} reputation {1}. New label: {2}.",
+                "{0} reputation {1}{2:0.#}. New label: {3}.",
                 districtName,
-                ModFormatting.FormatSignedNumber(amount * direction),
+                direction >= 0f ? "+" : string.Empty,
+                amount * direction,
                 label));
         }
 
@@ -4087,7 +4099,7 @@ namespace LSOL
                 return;
             }
 
-            ShowStatus(string.Format("Added {0} {1} to {2}.", ModFormatting.FormatTons(added), resource, industry.Name));
+            ShowStatus(string.Format("Added {0:0.0}t {1} to {2}.", added, resource, industry.Name));
         }
 
         private void DeleteResolvedVehicleCargo()
@@ -4225,7 +4237,7 @@ namespace LSOL
             var removed = industry.ClearInputs();
             ShowStatus(removed <= 0.001f
                 ? "Nearby industry inputs are already empty."
-                : string.Format("Emptied {0} from input buffers on {1}.", ModFormatting.FormatTons(removed), industry.Name));
+                : string.Format("Emptied {0:0.0}t from input buffers on {1}.", removed, industry.Name));
         }
 
         private void EmptyNearbyIndustryOutputs()
@@ -4246,7 +4258,7 @@ namespace LSOL
             var removed = industry.ClearOutputs();
             ShowStatus(removed <= 0.001f
                 ? "Nearby industry outputs are already empty."
-                : string.Format("Emptied {0} from output buffers on {1}.", ModFormatting.FormatTons(removed), industry.Name));
+                : string.Format("Emptied {0:0.0}t from output buffers on {1}.", removed, industry.Name));
         }
 
         private void MultiplyNearbyIndustryProductionRate()
@@ -4259,7 +4271,7 @@ namespace LSOL
             }
 
             industry.SetProductionRate(industry.ProductionRate * 1000f);
-            ShowStatus(string.Format("{0} production rate is now {1}.", industry.Name, ModFormatting.FormatRatePerHour(industry.ProductionRate, "cyc")));
+            ShowStatus(string.Format("{0} production rate is now {1:0.0} cyc/h.", industry.Name, industry.ProductionRate));
         }
 
         private void SpawnSelectedVehicle()
@@ -4599,7 +4611,7 @@ namespace LSOL
             }
 
             _cargoTransferController.StartTimedTransfer(
-                string.Format("Refueling {0}...", ModFormatting.FormatPercent(0f)),
+                "Refueling 0%...",
                 2200,
                 () =>
                 {
@@ -4618,7 +4630,7 @@ namespace LSOL
                     _tabletStateStore.MarkNetworkDirty();
                     ShowStatus(message, 4500);
                 },
-                progress => string.Format("Refueling {0}...", ModFormatting.FormatPercent(ModMath.Clamp01(progress) * 100f)));
+                progress => string.Format("Refueling {0:0}%...", ModMath.Clamp01(progress) * 100f));
         }
 
         private void HandleCompanyServiceRefuelRequested()
@@ -4886,7 +4898,7 @@ namespace LSOL
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Profit Balance: {0}", ModFormatting.FormatMoney(_profit)),
+                    CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
                 },
                 new OfficeMenuItem
                 {
@@ -4965,7 +4977,7 @@ namespace LSOL
                 return string.Format("{0}: Unavailable", label);
             }
 
-            return string.Format("{0} Lv.{1} -> {2}", label, level, ModFormatting.FormatMoney(cost));
+            return string.Format("{0} Lv.{1} -> ${2:0}", label, level, cost);
         }
 
         private void TryApplyUpgradeModule(IndustryUpgradeModule module)

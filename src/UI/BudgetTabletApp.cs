@@ -591,7 +591,7 @@ namespace LSOL.UI
             TabletChartRenderer.DrawMetricBarsPanel(
                 panel,
                 route.Label,
-                string.Format("{0} | {1} moved", route.Detail, ModFormatting.FormatTons(route.DeliveredTons)),
+                string.Format("{0} | {1:0.0}t moved", route.Detail, route.DeliveredTons),
                 new[]
                 {
                     new TabletMetricBarEntry { Label = "Revenue", Ratio = Math.Abs(route.Revenue) / maxMetric, ValueText = ModFormatting.FormatMoney(route.Revenue), FillColor = GetIncomeAccent(214) },
@@ -658,7 +658,17 @@ namespace LSOL.UI
 
         private static string FormatSignedMoney(float amount)
         {
-            return ModFormatting.FormatSignedMoney(amount);
+            if (amount > 0.001f)
+            {
+                return "+" + ModFormatting.FormatMoney(amount);
+            }
+
+            if (amount < -0.001f)
+            {
+                return "-" + ModFormatting.FormatMoney(Math.Abs(amount));
+            }
+
+            return ModFormatting.FormatMoney(0f);
         }
 
         private static string FormatDueInMinutes(int minutes)

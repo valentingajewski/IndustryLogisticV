@@ -980,7 +980,7 @@ namespace LSOL.UI
                     locationValues.Add(new TabletInventoryValueEntry
                     {
                         Label = string.Format("{0} tank", office.DisplayName),
-                        Detail = string.Format("{0} diesel stored", ModFormatting.FormatLiters(storedLiters)),
+                        Detail = string.Format("{0:0}L diesel stored", storedLiters),
                         Value = value,
                     });
                 }
@@ -1000,7 +1000,7 @@ namespace LSOL.UI
                     locationValues.Add(new TabletInventoryValueEntry
                     {
                         Label = vehicle.DisplayName,
-                        Detail = string.Format("{0} {1} | {2}", commodity, ModFormatting.FormatTons(weightTons), vehicle.IsDeployed ? "deployed cargo" : "garage cargo"),
+                        Detail = string.Format("{0} {1:0.0}t | {2}", commodity, weightTons, vehicle.IsDeployed ? "deployed cargo" : "garage cargo"),
                         Value = value,
                     });
                 }
@@ -1040,6 +1040,13 @@ namespace LSOL.UI
             return _npcLogisticsManager != null && _npcLogisticsManager.WorldJobs != null
                 ? _npcLogisticsManager.WorldJobs
                 : Array.Empty<NpcWorldJobSummary>();
+        }
+
+        public IReadOnlyList<NpcWorldDispatchDiagnosticEntry> GetWorldDispatchDiagnostics()
+        {
+            return _npcLogisticsManager != null && _npcLogisticsManager.WorldDispatchDiagnostics != null
+                ? _npcLogisticsManager.WorldDispatchDiagnostics
+                : Array.Empty<NpcWorldDispatchDiagnosticEntry>();
         }
 
         public void CycleWorldDispatchPolicy(int delta)
@@ -1415,12 +1422,12 @@ namespace LSOL.UI
 
             if (industry.SiteRole == SiteRole.Warehouse)
             {
-                return string.Format("Storage {0} | {1} full", ModFormatting.FormatTons(storage), ModFormatting.FormatPercent(fillRatio * 100f));
+                return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);
             }
 
             if (locationKind == ExternalLocationKind.Industry)
             {
-                var detail = string.Format("Storage {0} | Omega {1}", ModFormatting.FormatTons(storage), ModFormatting.FormatTons(industry.OmegaStorage));
+                var detail = string.Format("Storage {0:0.0}t | Omega {1:0.0}t", storage, industry.OmegaStorage);
                 if (!string.IsNullOrWhiteSpace(productionWarning))
                 {
                     detail += string.Format(" | ~r~{0}~s~", productionWarning);
@@ -1432,13 +1439,13 @@ namespace LSOL.UI
             if (locationKind == ExternalLocationKind.GasStation)
             {
                 return string.Format(
-                    "Fuel {0} | {1} full{2}",
-                    ModFormatting.FormatTons(storage),
-                    ModFormatting.FormatPercent(fillRatio * 100f),
+                    "Fuel {0:0.0}t | {1:0}% full{2}",
+                    storage,
+                    fillRatio * 100f,
                     industry.RefuelIsFree ? " | Free office refuel" : string.Empty);
             }
 
-            return string.Format("Storage {0} | {1} full", ModFormatting.FormatTons(storage), ModFormatting.FormatPercent(fillRatio * 100f));
+            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);
         }
 
         private static string BuildRoutePerformanceLabel(NpcLogisticsContract contract)
@@ -1719,7 +1726,7 @@ namespace LSOL.UI
                 locationLabel = industry.IsWarehouse ? "Warehouse" : "Industry";
             }
 
-            return string.Format("{0} | {1} on hand", locationLabel, ModFormatting.FormatTons(totalTons));
+            return string.Format("{0} | {1:0.0}t on hand", locationLabel, totalTons);
         }
 
         private static string GetBudgetCategoryLabel(CompanyFinanceCategory category)
@@ -2005,10 +2012,10 @@ namespace LSOL.UI
                 var cargoValue = loadableTons * unitPrice;
 
                 subtitles[commodity.Trim()] = string.Format(
-                    "Cargo value: {0} ({1} | {2})",
-                    ModFormatting.FormatMoney(cargoValue),
-                    ModFormatting.FormatTons(loadableTons),
-                    ModFormatting.FormatPricePerTon(unitPrice));
+                    "Cargo value: ${0:0} ({1:0.0}t | ${2:0}/t)",
+                    cargoValue,
+                    loadableTons,
+                    unitPrice);
             }
         }
 

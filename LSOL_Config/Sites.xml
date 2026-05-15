@@ -331,6 +331,7 @@
   </Site>
   <Site catalogId="300" legacyKey="HarborTerminal" name="Port Terminal" role="Warehouse" district="Port" startingTankRatio="0" ownershipTier="Local" enabled="true">
     <Marker x="1243.65" y="-3135.5" z="5.53" />
+    <VehicleSpawn x="1267" y="-3099" z="5.90" heading="90" />
     <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />
@@ -340,6 +341,7 @@
   </Site>
   <Site catalogId="301" legacyKey="Warehouse2" name="San Chianski Grain Silo" role="Warehouse" district="Grapeseed" startingTankRatio="0" ownershipTier="Regional" enabled="true">
     <Marker x="2893.55" y="4381.94" z="50.36" />
+    <VehicleSpawn x="2918" y="4390" z="50" heading="300" />
     <Inputs primary="Crops" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />
@@ -349,6 +351,7 @@
   </Site>
   <Site catalogId="302" legacyKey="Warehouse3" name="The Secure Unit Storage" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true">
     <Marker x="917.03" y="-1256.81" z="25.53" />
+    <VehicleSpawn x="902" y="-1191.21" z="25.64" heading="92" />
     <Inputs primary="Plastic,Processors,Fabric,MechanicalParts,Clothes,Food,Alcohol,Chemicals,Paper,TV,Computer" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />
@@ -356,8 +359,9 @@
       <Hardcore purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="800" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="303" legacyKey="Warehouse6" name="Oil Storage Tanks" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true">
+  <Site catalogId="303" legacyKey="Warehouse4" name="Oil Storage Tanks" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true">
     <Marker x="494.06" y="-2163.26" z="5.92" />
+    <VehicleSpawn x="515.89" y="-2166.25" z="6" heading="177" />
     <Inputs primary="Oil,Fuel,Omega" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />
@@ -367,6 +371,7 @@
   </Site>
   <Site catalogId="304" legacyKey="Warehouse7" name="Ore Storage Unit" role="Warehouse" district="Port" startingTankRatio="0" ownershipTier="Regional" enabled="true">
     <Marker x="597.33" y="-2798.48" z="5.82" />
+    <VehicleSpawn x="629" y="-2707" z="6" heading="296" />
     <Inputs primary="Ore,Gravel,Coal" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />
@@ -376,6 +381,7 @@
   </Site>
   <Site catalogId="305" legacyKey="Warehouse5" name="Cold Storage Unit" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true">
     <Marker x="876.44" y="-1669.82" z="30.46" />
+    <VehicleSpawn x="863.43" y="-1656.10" z="30" heading="82" />
     <Inputs primary="Meat" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />
@@ -383,8 +389,9 @@
       <Hardcore purchasePrice="800000" inputCapacityTons="800" outputCapacityTons="800" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="306" legacyKey="Warehouse6" name="Grand Senora Container Storage" role="Warehouse" district="GrandSenora" startingTankRatio="1" ownershipTier="Regional" enabled="true">
+  <Site catalogId="306" legacyKey="Warehouse6" name="Grand Senora Container Storage" role="Warehouse" district="GrandSenora" startingTankRatio="0" ownershipTier="Regional" enabled="true">
     <Marker x="166.82" y="2761.53" z="42.91" />
+    <VehicleSpawn x="195" y="2741.33" z="43.43" heading="231" />
     <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood" />
     <Economy>
       <Casual purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1800" productionRatio="0" permitRequired="false" />

@@ -271,7 +271,7 @@ namespace LSOL.Systems
             var litersNeeded = Math.Max(0f, fuelTelemetry.CapacityLiters - fuelTelemetry.CurrentLiters);
             if (litersNeeded <= 0.05f)
             {
-                message = string.Format("Fuel tank already full ({0}).", ModFormatting.FormatRatio(fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters, "L"));
+                message = string.Format("Fuel tank already full ({0:0}/{1:0}L).", fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters);
                 return false;
             }
 
@@ -354,9 +354,10 @@ namespace LSOL.Systems
                 : string.Empty;
 
             message = string.Format(
-                "Refueled {0}. Tank {1} | {2}{3}",
-                ModFormatting.FormatLiters(addedLiters),
-                ModFormatting.FormatRatio(resultingTank, fuelTelemetry.CapacityLiters, "L"),
+                "Refueled {0:0}L. Tank {1:0}/{2:0}L | {3}{4}",
+                addedLiters,
+                resultingTank,
+                fuelTelemetry.CapacityLiters,
                 priceText,
                 noteText);
             return true;
