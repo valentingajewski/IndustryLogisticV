@@ -207,7 +207,8 @@ namespace LSOL.Systems
             VehicleCargoState cargoState,
             bool omegaOnly,
             Action beforeStart,
-            Action<float> addProfit)
+            Action<float> addProfit,
+            Action<string, float, bool, bool> recordDeliveryProgress = null)
         {
             if (!EnsureIndustryTransportPermit(industry))
             {
@@ -269,7 +270,14 @@ namespace LSOL.Systems
                         addProfit(revenue);
 
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
-                        if (cargoState.WeightTons <= 0.001f)
+                        var completedDelivery = cargoState.WeightTons <= 0.001f;
+                        recordDeliveryProgress?.Invoke(
+                            commodity,
+                            accepted,
+                            completedDelivery,
+                            completedDelivery && conditionRatio >= 0.999f);
+
+                        if (completedDelivery)
                         {
                             ClearCargoStateAndVisuals(cargoVehicle, cargoState);
                         }
@@ -422,7 +430,8 @@ namespace LSOL.Systems
             Vehicle cargoVehicle,
             VehicleCargoState cargoState,
             Action beforeStart,
-            Action<float> addProfit)
+            Action<float> addProfit,
+            Action<string, float, bool, bool> recordDeliveryProgress = null)
         {
             if (!EnsureIndustryTransportPermit(industry))
             {
@@ -431,6 +440,7 @@ namespace LSOL.Systems
 
             var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
+            var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
             var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(cargoState.CargoType)
                 || CommodityCatalog.UsesDoorAnimation(commodity);
 
@@ -464,7 +474,14 @@ namespace LSOL.Systems
                         addProfit(revenue);
 
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
-                        if (cargoState.WeightTons <= 0.001f)
+                        var completedDelivery = cargoState.WeightTons <= 0.001f;
+                        recordDeliveryProgress?.Invoke(
+                            commodity,
+                            accepted,
+                            completedDelivery,
+                            completedDelivery && conditionRatio >= 0.999f);
+
+                        if (completedDelivery)
                         {
                             ClearCargoStateAndVisuals(cargoVehicle, cargoState);
                         }

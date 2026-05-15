@@ -1119,6 +1119,7 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
                 RebuildOfficeMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1136,6 +1137,7 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
                 RebuildOfficeMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1153,6 +1155,7 @@ namespace LSOL
             {
                 RebuildOfficeMenuItems();
                 RebuildCommercialGarageMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1170,6 +1173,7 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
                 RebuildOfficeMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1428,11 +1432,13 @@ namespace LSOL
             {
                 if (_commercialGarageMenuContext == CommercialGarageMenuContext.Industry)
                 {
+                    ReevaluatePlayerSuccesses(true);
                     HandleCommercialVehicleActivate(vehicle);
                     return;
                 }
 
                 RebuildCommercialGarageMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1458,6 +1464,7 @@ namespace LSOL
                 RebuildCommercialGarageActionMenuItems();
             }
             RebuildCommercialGarageMenuItems();
+            ReevaluatePlayerSuccesses(true);
             ShowStatus(message);
         }
 
@@ -1620,6 +1627,8 @@ namespace LSOL
                     ShowStatus(message);
                     return;
                 }
+
+                ReevaluatePlayerSuccesses(true);
             }
 
             var activeOffice = _propertyManager.ActiveOffice;
@@ -1682,6 +1691,7 @@ namespace LSOL
                 _tabletStateStore.MarkCargoDirty();
                 _selectedCommercialGarageVehicle = null;
                 ReturnToCommercialGarageMenu();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1706,6 +1716,7 @@ namespace LSOL
                 _tabletStateStore.MarkCargoDirty();
                 _selectedCommercialGarageVehicle = null;
                 ReturnToCommercialGarageMenu();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1816,6 +1827,7 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
                 RebuildApartmentMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1832,6 +1844,7 @@ namespace LSOL
             if (_propertyManager.TryActivateApartment(_menuApartment.InteriorId, out message))
             {
                 RebuildApartmentMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);
@@ -1849,6 +1862,7 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
                 RebuildApartmentMenuItems();
+                ReevaluatePlayerSuccesses(true);
             }
 
             ShowStatus(message);

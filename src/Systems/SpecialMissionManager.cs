@@ -26,6 +26,7 @@ namespace LSOL.Systems
         private readonly Action<string, int> _showStatus;
         private readonly Action _markUiDirty;
         private readonly Func<int> _getCurrentInGameMinute;
+        private readonly Action _onMissionCompleted;
         private readonly Dictionary<string, SpecialMissionDefinition> _definitionsById;
         private readonly Dictionary<string, int> _completionCounts;
         private readonly Dictionary<string, int> _lastCompletedInGameMinuteByMissionId;
@@ -40,7 +41,8 @@ namespace LSOL.Systems
             Action<float> awardProfit,
             Action<string, int> showStatus,
             Action markUiDirty,
-            Func<int> getCurrentInGameMinute)
+            Func<int> getCurrentInGameMinute,
+            Action onMissionCompleted = null)
         {
             _territoryManager = territoryManager;
             _fleetManager = fleetManager;
@@ -48,6 +50,7 @@ namespace LSOL.Systems
             _showStatus = showStatus;
             _markUiDirty = markUiDirty;
             _getCurrentInGameMinute = getCurrentInGameMinute;
+            _onMissionCompleted = onMissionCompleted;
             _completionCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _lastCompletedInGameMinuteByMissionId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _announcedAvailableMissionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -883,6 +886,7 @@ namespace LSOL.Systems
             var rewardDetail = runtime.Definition.Reward > 0.001f
                 ? string.Format(" Earned {0}.", ModFormatting.FormatMoney(runtime.Definition.Reward))
                 : string.Empty;
+            _onMissionCompleted?.Invoke();
             ShowStatus(string.Format("Completed {0}. {1}{2}", missionName, detail ?? string.Empty, rewardDetail).Trim(), 5000);
         }
 

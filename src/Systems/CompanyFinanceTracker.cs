@@ -99,6 +99,8 @@ namespace LSOL.Systems
         private readonly List<CompanyFinanceTransaction> _transactions;
         private int _nextSequence;
 
+        public event Action<CompanyFinanceTransaction> TransactionRecorded;
+
         public CompanyFinanceTracker()
         {
             _transactions = new List<CompanyFinanceTransaction>(MaxTransactions);
@@ -292,6 +294,7 @@ namespace LSOL.Systems
             }
 
             _transactions.Add(transaction);
+            TransactionRecorded?.Invoke(transaction);
         }
 
         private static int GetWindowStart(int currentInGameMinute, int lookbackMinutes)

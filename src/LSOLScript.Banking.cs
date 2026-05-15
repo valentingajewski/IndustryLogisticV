@@ -345,6 +345,7 @@ namespace LSOL
             }
 
             _profit = updatedBalance;
+            SyncPlayerSuccessBalance();
             _tabletStateStore.MarkAllDirty();
             RebuildBankMenuItems();
             ShowStatus(message, 5000);

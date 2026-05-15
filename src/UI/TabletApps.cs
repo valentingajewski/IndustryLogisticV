@@ -538,13 +538,15 @@ namespace LSOL.UI
         private readonly Action _openDistrictView;
         private readonly Action _openDepotView;
         private readonly SpecialMissionManager _specialMissionManager;
+        private readonly PlayerSuccessTracker _playerSuccessTracker;
 
-        public HomeTabletApp(Action openCompanyMap, Action openDistrictView, Action openDepotView, SpecialMissionManager specialMissionManager)
+        public HomeTabletApp(Action openCompanyMap, Action openDistrictView, Action openDepotView, SpecialMissionManager specialMissionManager, PlayerSuccessTracker playerSuccessTracker)
         {
             _openCompanyMap = openCompanyMap;
             _openDistrictView = openDistrictView;
             _openDepotView = openDepotView;
             _specialMissionManager = specialMissionManager;
+            _playerSuccessTracker = playerSuccessTracker;
         }
 
         public string AppId
@@ -710,6 +712,19 @@ namespace LSOL.UI
                 Color.FromArgb(228, 112, 124, 148),
                 null,
                 "ANA"));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Successes",
+                string.Format(
+                    "{0}/{1} unlocked\nTrack locked and unlocked company milestones.",
+                    _playerSuccessTracker != null ? _playerSuccessTracker.UnlockedCount : 0,
+                    _playerSuccessTracker != null ? _playerSuccessTracker.TotalCount : 0),
+                () => context.Push(TabletAppIds.Successes, "root"),
+                Color.FromArgb(186, 60, 52, 46),
+                Color.FromArgb(228, 140, 122, 104),
+                _playerSuccessTracker != null && _playerSuccessTracker.TotalCount > 0
+                    ? (float?)_playerSuccessTracker.UnlockedCount / _playerSuccessTracker.TotalCount
+                    : null,
+                "SUC"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Missions",
                 missionDetail,

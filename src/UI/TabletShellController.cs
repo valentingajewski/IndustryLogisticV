@@ -16,6 +16,7 @@ namespace LSOL.UI
         public const string Analytics = "analytics";
         public const string Industry = "industry";
         public const string Missions = "missions";
+        public const string Successes = "successes";
     }
 
     internal sealed class TabletRoute

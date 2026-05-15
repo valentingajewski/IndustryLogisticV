@@ -189,6 +189,11 @@ namespace LSOL.Systems
                     persistenceVersion = 15;
                 }
 
+                if (metadata != null && HasPlayerStatisticsData(metadata.PlayerStatistics))
+                {
+                    persistenceVersion = 16;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -297,6 +302,11 @@ namespace LSOL.Systems
                 {
                     WriteBankLoanSnapshot(writer, metadata.BankLoans);
                 }
+
+                if (metadata != null && HasPlayerStatisticsData(metadata.PlayerStatistics))
+                {
+                    WritePlayerStatisticsSnapshot(writer, metadata.PlayerStatistics);
+                }
             }
         }
 
@@ -363,7 +373,10 @@ namespace LSOL.Systems
             metadata.PropertyOwnership = ReadPropertyOwnershipSnapshot(ini);
             metadata.Finance = ReadFinanceSnapshot(ini);
             metadata.BankLoans = ReadBankLoanSnapshot(ini);
-            metadata.HasGameplayMetadata = metadata.HasGameplayMetadata || HasBankLoanData(metadata.BankLoans);
+            metadata.PlayerStatistics = ReadPlayerStatisticsSnapshot(ini);
+            metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
+                || HasBankLoanData(metadata.BankLoans)
+                || HasPlayerStatisticsData(metadata.PlayerStatistics);
             return metadata;
         }
 
@@ -625,6 +638,122 @@ namespace LSOL.Systems
             }
 
             return hasData ? snapshot : null;
+        }
+
+        private static void WritePlayerStatisticsSnapshot(StreamWriter writer, PlayerStatisticsPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Successes]");
+            writer.WriteLine("Initialized={0}", snapshot.IsInitialized ? "true" : "false");
+            writer.WriteLine("HighestCompanyBalanceEver={0}", FormatFloat(snapshot.HighestCompanyBalanceEver));
+            writer.WriteLine("HighestCompanyBalanceBeforeFirstNpcHire={0}", FormatFloat(snapshot.HighestCompanyBalanceBeforeFirstNpcHire));
+            writer.WriteLine("HighestCompanyBalanceBeforeFirstLoan={0}", FormatFloat(snapshot.HighestCompanyBalanceBeforeFirstLoan));
+            writer.WriteLine("TotalSuccessfulDeliveries={0}", Math.Max(0, snapshot.TotalSuccessfulDeliveries));
+            writer.WriteLine("TotalSuccessfulCleanDeliveries={0}", Math.Max(0, snapshot.TotalSuccessfulCleanDeliveries));
+            writer.WriteLine("DeliveriesBeforeFirstNpcHire={0}", Math.Max(0, snapshot.DeliveriesBeforeFirstNpcHire));
+            writer.WriteLine("TotalTransportedTons={0}", FormatFloat(snapshot.TotalTransportedTons));
+            writer.WriteLine("HasEverHiredNpc={0}", snapshot.HasEverHiredNpc ? "true" : "false");
+            writer.WriteLine("HasEverTakenLoan={0}", snapshot.HasEverTakenLoan ? "true" : "false");
+            writer.WriteLine("CumulativeNpcDeliveryIncome={0}", FormatFloat(snapshot.CumulativeNpcDeliveryIncome));
+            writer.WriteLine("TotalSpecialMissionsCompleted={0}", Math.Max(0, snapshot.TotalSpecialMissionsCompleted));
+            writer.WriteLine("TotalEmergencyServiceUsages={0}", Math.Max(0, snapshot.TotalEmergencyServiceUsages));
+            writer.WriteLine();
+
+            if (snapshot.CommodityTotals != null && snapshot.CommodityTotals.Count > 0)
+            {
+                writer.WriteLine("[Successes:CommodityTotals]");
+                foreach (var commodity in snapshot.CommodityTotals
+                    .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.CommodityId) && entry.Tons > 0.001f)
+                    .OrderBy(entry => entry.CommodityId, StringComparer.OrdinalIgnoreCase))
+                {
+                    writer.WriteLine("{0}={1}", CommodityCatalog.Normalize(commodity.CommodityId), FormatFloat(commodity.Tons));
+                }
+
+                writer.WriteLine();
+            }
+
+            if (snapshot.UnlockedSuccessIds != null && snapshot.UnlockedSuccessIds.Count > 0)
+            {
+                writer.WriteLine("[Successes:Unlocked]");
+                foreach (var successId in snapshot.UnlockedSuccessIds
+                    .Where(id => !string.IsNullOrWhiteSpace(id))
+                    .OrderBy(id => id, StringComparer.OrdinalIgnoreCase))
+                {
+                    writer.WriteLine("{0}=true", successId.Trim());
+                }
+
+                writer.WriteLine();
+            }
+        }
+
+        private static PlayerStatisticsPersistenceSnapshot ReadPlayerStatisticsSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var hasMainSection = ini.HasSection("Successes");
+            var hasCommoditySection = ini.HasSection("Successes:CommodityTotals");
+            var hasUnlockedSection = ini.HasSection("Successes:Unlocked");
+            if (!hasMainSection && !hasCommoditySection && !hasUnlockedSection)
+            {
+                return null;
+            }
+
+            var snapshot = new PlayerStatisticsPersistenceSnapshot
+            {
+                IsInitialized = !hasMainSection || ini.GetBool("Successes", "Initialized", true),
+                HighestCompanyBalanceEver = ini.GetFloat("Successes", "HighestCompanyBalanceEver", 0f),
+                HighestCompanyBalanceBeforeFirstNpcHire = ini.GetFloat("Successes", "HighestCompanyBalanceBeforeFirstNpcHire", 0f),
+                HighestCompanyBalanceBeforeFirstLoan = ini.GetFloat("Successes", "HighestCompanyBalanceBeforeFirstLoan", 0f),
+                TotalSuccessfulDeliveries = ParseInt(ini.GetString("Successes", "TotalSuccessfulDeliveries", "0"), 0),
+                TotalSuccessfulCleanDeliveries = ParseInt(ini.GetString("Successes", "TotalSuccessfulCleanDeliveries", "0"), 0),
+                DeliveriesBeforeFirstNpcHire = ParseInt(ini.GetString("Successes", "DeliveriesBeforeFirstNpcHire", "0"), 0),
+                TotalTransportedTons = ini.GetFloat("Successes", "TotalTransportedTons", 0f),
+                HasEverHiredNpc = ini.GetBool("Successes", "HasEverHiredNpc", false),
+                HasEverTakenLoan = ini.GetBool("Successes", "HasEverTakenLoan", false),
+                CumulativeNpcDeliveryIncome = ini.GetFloat("Successes", "CumulativeNpcDeliveryIncome", 0f),
+                TotalSpecialMissionsCompleted = ParseInt(ini.GetString("Successes", "TotalSpecialMissionsCompleted", "0"), 0),
+                TotalEmergencyServiceUsages = ParseInt(ini.GetString("Successes", "TotalEmergencyServiceUsages", "0"), 0),
+            };
+
+            if (hasCommoditySection)
+            {
+                var commoditySection = ini.GetSection("Successes:CommodityTotals");
+                foreach (var pair in commoditySection.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    var commodityId = CommodityCatalog.Normalize(pair.Key);
+                    if (string.IsNullOrWhiteSpace(commodityId))
+                    {
+                        continue;
+                    }
+
+                    snapshot.CommodityTotals.Add(new PlayerCommodityStatisticSnapshot
+                    {
+                        CommodityId = commodityId,
+                        Tons = Math.Max(0f, ParseFloat(pair.Value, 0f)),
+                    });
+                }
+            }
+
+            if (hasUnlockedSection)
+            {
+                var unlockedSection = ini.GetSection("Successes:Unlocked");
+                foreach (var pair in unlockedSection.OrderBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (!string.IsNullOrWhiteSpace(pair.Key))
+                    {
+                        snapshot.UnlockedSuccessIds.Add(pair.Key.Trim());
+                    }
+                }
+            }
+
+            return snapshot;
         }
 
         private static void WriteNamedSeriesPersistence(
@@ -1857,6 +1986,11 @@ namespace LSOL.Systems
             return snapshot != null && snapshot.HasData;
         }
 
+        private static bool HasPlayerStatisticsData(PlayerStatisticsPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
         private static CompanyFinanceFlow ParseCompanyFinanceFlow(string raw, CompanyFinanceFlow fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -1914,5 +2048,6 @@ namespace LSOL.Systems
         public PropertyOwnershipPersistenceSnapshot PropertyOwnership { get; set; }
         public CompanyFinancePersistenceSnapshot Finance { get; set; }
         public BankLoanPersistenceSnapshot BankLoans { get; set; }
+        public PlayerStatisticsPersistenceSnapshot PlayerStatistics { get; set; }
     }
 }

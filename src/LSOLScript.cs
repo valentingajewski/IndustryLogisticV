@@ -77,6 +77,7 @@ namespace LSOL
         private readonly PropertyManager _propertyManager;
         private readonly CompanyFinanceTracker _financeTracker;
         private readonly BankLoanManager _bankLoanManager;
+        private readonly PlayerSuccessTracker _playerSuccessTracker;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
         private readonly GlobalMarketManager _globalMarket;
@@ -142,12 +143,14 @@ namespace LSOL
 
         private float _profit;
         private float _currentStartingBalance;
+        private float _lastPlayerSuccessBalanceSync;
         private GameModMode _gameModMode;
         private IndustryPurchaseMenuReturnTarget _industryPurchaseMenuReturnTarget;
         private SaveSlotMenuAction _saveSlotMenuAction;
 
         private bool _modMechanicsEnabled;
         private bool _industryPersistenceEnabled;
+        private bool _hasPlayerSuccessBalanceSync;
         private bool _difficultySettingsLocked;
         private bool _cargoDamageDifficultyEnabled;
         private bool _pendingCargoDamageDifficultyEnabled;
@@ -217,7 +220,8 @@ namespace LSOL
                         _tabletStateStore.MarkAllDirty();
                     }
                 },
-                GetCurrentInGameWeekMinute);
+                GetCurrentInGameWeekMinute,
+                HandlePlayerSuccessMissionCompleted);
             _industryOutputPropManager = new IndustryOutputPropManager(_industryManager.Industries);
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
@@ -285,7 +289,9 @@ namespace LSOL
                 () => _propertyManager != null ? _propertyManager.ActiveOfficeId : string.Empty,
                 () => _propertyManager != null ? _propertyManager.ActiveOffice : null,
                 _financeTracker,
-                GetCurrentInGameWeekMinute);
+                GetCurrentInGameWeekMinute,
+                HandlePlayerSuccessNpcContractsChanged,
+                RecordPlayerSuccessDeliveryProgress);
             _industryRefuelService = new IndustryRefuelService(
                 _fleetManager,
                 _vehicleFuelSystem,
@@ -427,10 +433,20 @@ namespace LSOL
                 () => _territoryManager != null ? _territoryManager.GetActiveCorridorCount() : 0,
                 GetSecuredSupportSiteCount,
                 () => _territoryManager != null ? _territoryManager.DistrictStates : Enumerable.Empty<TerritoryDistrictState>());
+            _playerSuccessTracker = new PlayerSuccessTracker(
+                _industryManager,
+                _propertyManager,
+                _npcLogisticsManager,
+                _territoryManager,
+                _specialMissionManager,
+                _bankLoanManager,
+                _financeTracker,
+                ShowStatus);
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
-            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager));
+            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager, _playerSuccessTracker));
             _tabletShellController.RegisterApp(new BudgetTabletApp());
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
+            _tabletShellController.RegisterApp(new SuccessesTabletApp(_playerSuccessTracker));
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
             _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
@@ -485,6 +501,8 @@ namespace LSOL
             _pendingSaveName = string.Empty;
             _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
             _saveSlotMenuAction = SaveSlotMenuAction.Load;
+            _playerSuccessTracker.ResetForNewSave(_profit);
+            SyncPlayerSuccessBalance(false);
             ApplyPresentationSettings(false);
             ApplyDifficultySettingsToSystems();
 
@@ -617,6 +635,7 @@ namespace LSOL
                 GetSelectedOfficeObjectPreviewDefinition(),
                 _officeObjectsMenu != null && _officeObjectsMenu.IsOpen,
                 gameTime);
+            SyncPlayerSuccessBalance(true, true);
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -2253,6 +2272,7 @@ namespace LSOL
             _blipLifecycleManager.Refresh();
             _tabletStateStore.MarkBalanceDirty();
             _tabletStateStore.MarkNetworkDirty();
+            ReevaluatePlayerSuccesses(true);
 
             ShowStatus(result, 4000);
             ReturnFromIndustryPurchaseMenu();
@@ -3185,6 +3205,7 @@ namespace LSOL
             _blipLifecycleManager.Refresh();
             _tabletStateStore.MarkBalanceDirty();
             _tabletStateStore.MarkNetworkDirty();
+            ReevaluatePlayerSuccesses(true);
             ShowStatus(result, 4000);
             return result;
         }
@@ -3623,6 +3644,7 @@ namespace LSOL
 
             _profit += amount;
             _financeTracker.RecordIncome(category, amount, GetCurrentInGameWeekMinute(), description, routeContractId, routeLabel);
+            SyncPlayerSuccessBalance();
             if (_tabletStateStore != null)
             {
                 _tabletStateStore.MarkBalanceDirty();
@@ -3643,6 +3665,7 @@ namespace LSOL
 
             _profit -= amount;
             _financeTracker.RecordExpense(category, amount, GetCurrentInGameWeekMinute(), description, routeContractId, routeLabel);
+            SyncPlayerSuccessBalance();
             if (_tabletStateStore != null)
             {
                 _tabletStateStore.MarkBalanceDirty();
@@ -3666,9 +3689,100 @@ namespace LSOL
                 _financeTracker.RecordExpense(expenseCategory, Math.Abs(delta), GetCurrentInGameWeekMinute(), expenseDescription ?? string.Empty);
             }
 
+            SyncPlayerSuccessBalance();
+
             if (_tabletStateStore != null)
             {
                 _tabletStateStore.MarkBalanceDirty();
+            }
+        }
+
+        private void SyncPlayerSuccessBalance(bool notifyUnlocks = true, bool markBalanceDirty = false)
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            var balanceChanged = !_hasPlayerSuccessBalanceSync || Math.Abs(_profit - _lastPlayerSuccessBalanceSync) > 0.001f;
+            _playerSuccessTracker.UpdateCompanyBalance(_profit, notifyUnlocks);
+            _lastPlayerSuccessBalanceSync = _profit;
+            _hasPlayerSuccessBalanceSync = true;
+
+            if (balanceChanged && markBalanceDirty && _tabletStateStore != null)
+            {
+                _tabletStateStore.MarkBalanceDirty();
+            }
+        }
+
+        private void ReevaluatePlayerSuccesses(bool notifyUnlocks = true)
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            SyncPlayerSuccessBalance(notifyUnlocks);
+            _playerSuccessTracker.ReevaluateCurrentState(notifyUnlocks);
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkNetworkDirty();
+            }
+        }
+
+        private void RecordPlayerSuccessDeliveryProgress(string commodity, float deliveredTons, bool completedDelivery, bool isCleanDelivery)
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            _playerSuccessTracker.RecordDeliveryProgress(commodity, deliveredTons, completedDelivery, isCleanDelivery);
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkNetworkDirty();
+            }
+        }
+
+        private void HandlePlayerSuccessNpcContractsChanged()
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            _playerSuccessTracker.NotifyNpcContractsChanged();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkNetworkDirty();
+            }
+        }
+
+        private void HandlePlayerSuccessMissionCompleted()
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            _playerSuccessTracker.RecordSpecialMissionCompleted();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkNetworkDirty();
+            }
+        }
+
+        private void RecordPlayerSuccessEmergencyServiceUsage()
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            _playerSuccessTracker.RecordEmergencyServiceUsage();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkNetworkDirty();
             }
         }
 
@@ -4318,6 +4432,7 @@ namespace LSOL
                 if (acquired)
                 {
                     _tabletStateStore.MarkBalanceDirty();
+                    ReevaluatePlayerSuccesses(true);
                 }
 
                 ShowStatus(purchaseMessage);
@@ -4666,6 +4781,7 @@ namespace LSOL
             }
 
             _tabletStateStore.MarkNetworkDirty();
+            RecordPlayerSuccessEmergencyServiceUsage();
             ShowStatus(message, 4500);
         }
 
@@ -4695,6 +4811,7 @@ namespace LSOL
             ShowStatus(trailer != null && trailer.Exists()
                 ? "Remote repair completed for the truck and trailer."
                 : "Remote repair completed.", 4500);
+            RecordPlayerSuccessEmergencyServiceUsage();
         }
 
         private void StartTabletLoadTransfer(Industry industry, Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleCargoType cargoType, string selectedProduct)
@@ -4726,7 +4843,8 @@ namespace LSOL
                 {
                     CloseIndustryTablet();
                 },
-                amount => AddProfit(CompanyFinanceCategory.PlayerDelivery, amount, deliveryDescription));
+                amount => AddProfit(CompanyFinanceCategory.PlayerDelivery, amount, deliveryDescription),
+                RecordPlayerSuccessDeliveryProgress);
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)

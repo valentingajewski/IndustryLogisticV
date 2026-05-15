@@ -28,6 +28,8 @@ namespace LSOL
             _officeObjectManager.Cleanup();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
+            _playerSuccessTracker.ResetForNewSave(_profit);
+            SyncPlayerSuccessBalance(false);
             _tabletStateStore.MarkAllDirty();
         }
 
@@ -61,6 +63,7 @@ namespace LSOL
             }
 
             _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
+            ReevaluatePlayerSuccesses(false);
             _tabletStateStore.MarkAllDirty();
         }
 
@@ -143,6 +146,8 @@ namespace LSOL
             _tabletStateStore.ResetAnalyticsState();
             _profit = GetSelectedStartingBalance();
             _currentStartingBalance = _profit;
+            _playerSuccessTracker.ResetForNewSave(_profit);
+            SyncPlayerSuccessBalance(false);
 
             if (!TrySaveIndustryPersistenceToPath(filePath))
             {
@@ -290,6 +295,8 @@ namespace LSOL
                     _tabletStateStore.ResetAnalyticsState();
                     _profit = DefaultStartingBalance;
                     _currentStartingBalance = DefaultStartingBalance;
+                    _playerSuccessTracker.ResetForNewSave(_profit);
+                    SyncPlayerSuccessBalance(false);
                 }
 
                 _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
@@ -471,6 +478,7 @@ namespace LSOL
                 SpecialMissions = _specialMissionManager.CreatePersistenceSnapshot(),
                 Finance = _financeTracker.CreatePersistenceSnapshot(),
                 BankLoans = _bankLoanManager.CreatePersistenceSnapshot(),
+                PlayerStatistics = _playerSuccessTracker.CreatePersistenceSnapshot(),
             };
         }
 
@@ -521,6 +529,8 @@ namespace LSOL
             _financeTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.Finance : null);
             _bankLoanManager.ApplyPersistenceSnapshot(metadata != null ? metadata.BankLoans : null, GetCurrentInGameWeekMinute());
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
+            _playerSuccessTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerStatistics : null, _profit);
+            SyncPlayerSuccessBalance(false);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
@@ -584,6 +594,8 @@ namespace LSOL
 
                 _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
             }
+
+            ReevaluatePlayerSuccesses(false);
 
             _tabletStateStore.MarkAllDirty();
             RebuildModControlMenuItems();

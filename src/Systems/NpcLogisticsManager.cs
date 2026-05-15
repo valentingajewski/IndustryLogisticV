@@ -43,6 +43,8 @@ namespace LSOL.Systems
         private readonly Action<string> _showStatus;
         private readonly CompanyFinanceTracker _financeTracker;
         private readonly Func<int> _getCurrentInGameMinute;
+        private readonly Action _onContractsChanged;
+        private readonly Action<string, float, bool, bool> _onDeliveryProgress;
         private readonly Func<IReadOnlyList<OwnedCommercialVehiclePersistenceEntry>> _getCommercialVehicles;
         private readonly Func<string> _getActiveOfficeId;
         private readonly Func<OfficeDefinition> _getActiveOffice;
@@ -82,7 +84,9 @@ namespace LSOL.Systems
             Func<string> getActiveOfficeId = null,
             Func<OfficeDefinition> getActiveOffice = null,
             CompanyFinanceTracker financeTracker = null,
-            Func<int> getCurrentInGameMinute = null)
+            Func<int> getCurrentInGameMinute = null,
+            Action onContractsChanged = null,
+            Action<string, float, bool, bool> onDeliveryProgress = null)
         {
             _industryManager = industryManager;
             _fleetManager = fleetManager;
@@ -95,6 +99,8 @@ namespace LSOL.Systems
             _showStatus = showStatus;
             _financeTracker = financeTracker;
             _getCurrentInGameMinute = getCurrentInGameMinute;
+            _onContractsChanged = onContractsChanged;
+            _onDeliveryProgress = onDeliveryProgress;
             _getCommercialVehicles = getCommercialVehicles;
             _getActiveOfficeId = getActiveOfficeId;
             _getActiveOffice = getActiveOffice;
@@ -558,6 +564,7 @@ namespace LSOL.Systems
             CleanupContractEntities(contract);
             _contracts.Remove(contract);
             message = string.Format("Fired NPC on route {0}.", BuildContractLabel(contract));
+            _onContractsChanged?.Invoke();
             return true;
         }
 
@@ -1007,6 +1014,7 @@ namespace LSOL.Systems
             message = isNewContract
                 ? string.Format("Hired {0} NPC with {1} route{2}.", tier.DisplayName, normalizedRoutes.Count, normalizedRoutes.Count == 1 ? string.Empty : "s")
                 : string.Format("Updated NPC route chain to {0} route{1}.", normalizedRoutes.Count, normalizedRoutes.Count == 1 ? string.Empty : "s");
+            _onContractsChanged?.Invoke();
             return true;
         }
 
@@ -3268,7 +3276,14 @@ namespace LSOL.Systems
             contract.TotalDeliveredTons += acceptedTons;
 
             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - acceptedTons);
-            if (cargoState.WeightTons <= 0.001f)
+            var completedDelivery = cargoState.WeightTons <= 0.001f;
+            _onDeliveryProgress?.Invoke(
+                contract.Commodity,
+                acceptedTons,
+                completedDelivery,
+                completedDelivery && contract.LastJourneyLossRatio <= 0.001f);
+
+            if (completedDelivery)
             {
                 cargoState.ClearCargo();
                 _fleetManager.ClearCargoVisuals(cargoState);
