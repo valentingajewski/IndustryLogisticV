@@ -502,7 +502,7 @@ namespace LSOL.UI
 
             private string ResolveAltTitle()
             {
-                return string.Empty;
+                return InvokeString(_source.IconLabelFactory);
             }
 
             private static string InvokeString(Func<string> factory)

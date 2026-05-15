@@ -287,6 +287,7 @@ namespace LSOL.UI
             CompanyFinanceCategory.NpcDelivery,
             CompanyFinanceCategory.IndustryIncome,
             CompanyFinanceCategory.MissionReward,
+            CompanyFinanceCategory.LoanDisbursement,
             CompanyFinanceCategory.OtherIncome,
         };
 
@@ -300,6 +301,7 @@ namespace LSOL.UI
             CompanyFinanceCategory.RepairCost,
             CompanyFinanceCategory.ServiceCall,
             CompanyFinanceCategory.PermitOrLicence,
+            CompanyFinanceCategory.LoanRepayment,
             CompanyFinanceCategory.OtherExpense,
         };
 
@@ -309,6 +311,7 @@ namespace LSOL.UI
         private readonly GlobalMarketManager _globalMarket;
         private readonly NpcLogisticsManager _npcLogisticsManager;
         private readonly PropertyManager _propertyManager;
+        private readonly BankLoanManager _bankLoanManager;
         private readonly CompanyFinanceTracker _financeTracker;
         private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<Ped> _getPlayer;
@@ -359,6 +362,7 @@ namespace LSOL.UI
             GlobalMarketManager globalMarket,
             NpcLogisticsManager npcLogisticsManager,
             PropertyManager propertyManager,
+            BankLoanManager bankLoanManager,
             CompanyFinanceTracker financeTracker,
             Func<int> getCurrentInGameMinute,
             Func<Ped> getPlayer,
@@ -379,6 +383,7 @@ namespace LSOL.UI
             _globalMarket = globalMarket ?? throw new ArgumentNullException(nameof(globalMarket));
             _npcLogisticsManager = npcLogisticsManager;
             _propertyManager = propertyManager;
+            _bankLoanManager = bankLoanManager;
             _financeTracker = financeTracker;
             _getCurrentInGameMinute = getCurrentInGameMinute;
             _getPlayer = getPlayer;
@@ -1622,6 +1627,23 @@ namespace LSOL.UI
                 }
             }
 
+            if (_bankLoanManager != null && _bankLoanManager.ActiveLoan != null)
+            {
+                var activeLoan = _bankLoanManager.ActiveLoan;
+                var dueInMinutes = Math.Max(0, (activeLoan.NextDueWeekIndex * InGameMinutesPerWeek) - currentMinute);
+                bills.Add(new TabletUpcomingBillEntry
+                {
+                    Category = CompanyFinanceCategory.LoanRepayment,
+                    Label = string.IsNullOrWhiteSpace(activeLoan.BankName) ? "Company loan" : activeLoan.BankName,
+                    Detail = string.Format(
+                        "Weekly company loan installment | {0} week{1} remaining",
+                        activeLoan.WeeksRemaining,
+                        activeLoan.WeeksRemaining == 1 ? string.Empty : "s"),
+                    Amount = Math.Max(0f, Math.Min(activeLoan.WeeklyInstallment, activeLoan.RemainingBalance)),
+                    DueInMinutes = dueInMinutes,
+                });
+            }
+
             return bills
                 .Where(entry => entry != null && entry.Amount > 0.01f)
                 .OrderBy(entry => entry.DueInMinutes)
@@ -1741,6 +1763,8 @@ namespace LSOL.UI
                     return "Industry income";
                 case CompanyFinanceCategory.MissionReward:
                     return "Mission rewards";
+                case CompanyFinanceCategory.LoanDisbursement:
+                    return "Loan disbursements";
                 case CompanyFinanceCategory.OfficeRent:
                     return "Office rent";
                 case CompanyFinanceCategory.ApartmentRent:
@@ -1757,6 +1781,8 @@ namespace LSOL.UI
                     return "Service calls";
                 case CompanyFinanceCategory.PermitOrLicence:
                     return "Permits and licences";
+                case CompanyFinanceCategory.LoanRepayment:
+                    return "Loan repayments";
                 case CompanyFinanceCategory.OtherExpense:
                     return "Other expenses";
                 case CompanyFinanceCategory.OtherIncome:

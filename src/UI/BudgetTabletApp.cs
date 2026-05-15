@@ -180,7 +180,7 @@ namespace LSOL.UI
                     iconLabel: "INC"),
                 TabletUiHelpers.CreateActionItem(
                     "Upcoming Bills",
-                    string.Format("Known dues {0}\nRent, payroll, and rentals", ModFormatting.FormatMoney(overview.UpcomingBills)),
+                    string.Format("Known dues {0}\nRent, payroll, rentals, and loans", ModFormatting.FormatMoney(overview.UpcomingBills)),
                     () => context.Push(TabletAppIds.Budget, "bills"),
                     iconLabel: "BIL"),
                 TabletUiHelpers.CreateActionItem(
@@ -309,7 +309,7 @@ namespace LSOL.UI
             var items = new List<MenuItem>();
             if (bills.Count == 0)
             {
-                items.Add(TabletUiHelpers.CreateInfoItem("No bills queued", "No rent, payroll, or rental charges are currently scheduled."));
+                items.Add(TabletUiHelpers.CreateInfoItem("No bills queued", "No rent, payroll, rental, or loan charges are currently scheduled."));
             }
             else
             {
@@ -327,7 +327,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Upcoming Bills",
-                Subtitle = "Known rent, payroll, and rental obligations",
+                Subtitle = "Known rent, payroll, rental, and loan obligations",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,

@@ -474,6 +474,63 @@ namespace LSOL.Config
             return catalog.OfficeDefinitions.Count > 0;
         }
 
+        public static bool TryPopulateBanks(string configDirectory, ExternalConfigCatalog catalog)
+        {
+            if (catalog == null)
+            {
+                return false;
+            }
+
+            var document = LoadDocument(
+                configDirectory,
+                "Banks.xml",
+                catalog.ValidationMessages,
+                "Banks.xml missing. Company bank loan interactions will be unavailable.");
+            if (document == null || document.Root == null)
+            {
+                return false;
+            }
+
+            foreach (var element in document.Root.Elements("Bank"))
+            {
+                var bankId = ReadAttribute(element, "id");
+                var bankName = ReadAttribute(element, "name", bankId);
+                var position = ReadOptionalVector3(element.Element("Position"));
+                var maxLoan = ReadFloatAttribute(element, "loanAmountMaxLimit", float.NaN);
+                var minInterest = ReadFloatAttribute(element, "loanInterestMin", float.NaN);
+                var maxInterest = ReadFloatAttribute(element, "loanInterestMax", float.NaN);
+                if (string.IsNullOrWhiteSpace(bankId) || string.IsNullOrWhiteSpace(bankName) || !position.HasValue)
+                {
+                    catalog.ValidationMessages.Add("Banks.xml contains a bank with missing id, name, or position.");
+                    continue;
+                }
+
+                if (float.IsNaN(maxLoan) || maxLoan <= 0f)
+                {
+                    catalog.ValidationMessages.Add(string.Format("Banks.xml bank '{0}' has an invalid loanAmountMaxLimit.", bankId));
+                    continue;
+                }
+
+                if (float.IsNaN(minInterest) || float.IsNaN(maxInterest) || minInterest < 0f || maxInterest < minInterest)
+                {
+                    catalog.ValidationMessages.Add(string.Format("Banks.xml bank '{0}' has an invalid weekly interest range.", bankId));
+                    continue;
+                }
+
+                catalog.BankDefinitions.Add(new BankDefinition
+                {
+                    BankId = bankId,
+                    Name = bankName,
+                    Position = position.Value,
+                    LoanAmountMaxLimit = maxLoan,
+                    LoanInterestMin = minInterest,
+                    LoanInterestMax = maxInterest,
+                });
+            }
+
+            return catalog.BankDefinitions.Count > 0;
+        }
+
         public static bool TryPopulateOfficeObjects(string configDirectory, ExternalConfigCatalog catalog)
         {
             if (catalog == null)

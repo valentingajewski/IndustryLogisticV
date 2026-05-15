@@ -470,6 +470,7 @@ namespace LSOL
                 NpcLogistics = _npcLogisticsManager.CreatePersistenceSnapshot(),
                 SpecialMissions = _specialMissionManager.CreatePersistenceSnapshot(),
                 Finance = _financeTracker.CreatePersistenceSnapshot(),
+                BankLoans = _bankLoanManager.CreatePersistenceSnapshot(),
             };
         }
 
@@ -518,6 +519,7 @@ namespace LSOL
 
             ApplyPresentationSettings(false);
             _financeTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.Finance : null);
+            _bankLoanManager.ApplyPersistenceSnapshot(metadata != null ? metadata.BankLoans : null, GetCurrentInGameWeekMinute());
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);

@@ -26,6 +26,8 @@ namespace LSOL.Systems
         ServiceCall = 11,
         PermitOrLicence = 12,
         OtherExpense = 13,
+        LoanDisbursement = 14,
+        LoanRepayment = 15,
     }
 
     public sealed class CompanyFinanceTransaction

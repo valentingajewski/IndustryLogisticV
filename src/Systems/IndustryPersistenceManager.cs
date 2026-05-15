@@ -184,6 +184,11 @@ namespace LSOL.Systems
                     persistenceVersion = 14;
                 }
 
+                if (metadata != null && HasBankLoanData(metadata.BankLoans))
+                {
+                    persistenceVersion = 15;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -287,6 +292,11 @@ namespace LSOL.Systems
                 {
                     WriteFinanceSnapshot(writer, metadata.Finance);
                 }
+
+                if (metadata != null && HasBankLoanData(metadata.BankLoans))
+                {
+                    WriteBankLoanSnapshot(writer, metadata.BankLoans);
+                }
             }
         }
 
@@ -352,6 +362,8 @@ namespace LSOL.Systems
             metadata.SpecialMissions = ReadSpecialMissionSnapshot(ini);
             metadata.PropertyOwnership = ReadPropertyOwnershipSnapshot(ini);
             metadata.Finance = ReadFinanceSnapshot(ini);
+            metadata.BankLoans = ReadBankLoanSnapshot(ini);
+            metadata.HasGameplayMetadata = metadata.HasGameplayMetadata || HasBankLoanData(metadata.BankLoans);
             return metadata;
         }
 
@@ -524,6 +536,95 @@ namespace LSOL.Systems
                 writer.WriteLine("RouteLabel={0}", transaction.RouteLabel ?? string.Empty);
                 writer.WriteLine();
             }
+        }
+
+        private static void WriteBankLoanSnapshot(StreamWriter writer, BankLoanPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            if (snapshot.ActiveLoan != null)
+            {
+                writer.WriteLine("[CompanyLoan]");
+                writer.WriteLine("BankId={0}", snapshot.ActiveLoan.BankId ?? string.Empty);
+                writer.WriteLine("BankName={0}", snapshot.ActiveLoan.BankName ?? string.Empty);
+                writer.WriteLine("OriginalPrincipal={0}", FormatFloat(snapshot.ActiveLoan.OriginalPrincipal));
+                writer.WriteLine("LockedInterestRatePercent={0}", FormatFloat(snapshot.ActiveLoan.LockedInterestRatePercent));
+                writer.WriteLine("TotalRepayment={0}", FormatFloat(snapshot.ActiveLoan.TotalRepayment));
+                writer.WriteLine("RemainingBalance={0}", FormatFloat(snapshot.ActiveLoan.RemainingBalance));
+                writer.WriteLine("WeeklyInstallment={0}", FormatFloat(snapshot.ActiveLoan.WeeklyInstallment));
+                writer.WriteLine("TermWeeks={0}", snapshot.ActiveLoan.TermWeeks);
+                writer.WriteLine("WeeksPaid={0}", snapshot.ActiveLoan.WeeksPaid);
+                writer.WriteLine("LastProcessedWeekIndex={0}", snapshot.ActiveLoan.LastProcessedWeekIndex);
+                writer.WriteLine();
+            }
+
+            foreach (var offer in snapshot.OfferedRates.OrderBy(entry => entry != null ? entry.BankId : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (offer == null || string.IsNullOrWhiteSpace(offer.BankId))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildBankOfferSectionName(offer.BankId));
+                writer.WriteLine("WeekIndex={0}", offer.WeekIndex);
+                writer.WriteLine("RatePercent={0}", FormatFloat(offer.RatePercent));
+                writer.WriteLine();
+            }
+        }
+
+        private static BankLoanPersistenceSnapshot ReadBankLoanSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new BankLoanPersistenceSnapshot();
+            var hasData = false;
+            if (ini.HasSection("CompanyLoan"))
+            {
+                snapshot.ActiveLoan = new CompanyLoanState
+                {
+                    BankId = ini.GetString("CompanyLoan", "BankId", string.Empty),
+                    BankName = ini.GetString("CompanyLoan", "BankName", string.Empty),
+                    OriginalPrincipal = ini.GetFloat("CompanyLoan", "OriginalPrincipal", 0f),
+                    LockedInterestRatePercent = ini.GetFloat("CompanyLoan", "LockedInterestRatePercent", 0f),
+                    TotalRepayment = ini.GetFloat("CompanyLoan", "TotalRepayment", 0f),
+                    RemainingBalance = ini.GetFloat("CompanyLoan", "RemainingBalance", 0f),
+                    WeeklyInstallment = ini.GetFloat("CompanyLoan", "WeeklyInstallment", 0f),
+                    TermWeeks = ParseInt(ini.GetString("CompanyLoan", "TermWeeks", "0"), 0),
+                    WeeksPaid = ParseInt(ini.GetString("CompanyLoan", "WeeksPaid", "0"), 0),
+                    LastProcessedWeekIndex = ParseInt(ini.GetString("CompanyLoan", "LastProcessedWeekIndex", "-1"), -1),
+                };
+                hasData = true;
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("BankOffer:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var bankId = section.Substring("BankOffer:".Length).Trim();
+                if (string.IsNullOrWhiteSpace(bankId))
+                {
+                    continue;
+                }
+
+                snapshot.OfferedRates.Add(new BankOfferRateSnapshot
+                {
+                    BankId = bankId,
+                    WeekIndex = ParseInt(ini.GetString(section, "WeekIndex", "0"), 0),
+                    RatePercent = ini.GetFloat(section, "RatePercent", 0f),
+                });
+                hasData = true;
+            }
+
+            return hasData ? snapshot : null;
         }
 
         private static void WriteNamedSeriesPersistence(
@@ -1580,6 +1681,11 @@ namespace LSOL.Systems
             return "PropertyPersonalVehicle:" + (assetId ?? string.Empty).Trim();
         }
 
+        private static string BuildBankOfferSectionName(string bankId)
+        {
+            return "BankOffer:" + (bankId ?? string.Empty).Trim();
+        }
+
         private static string BuildSpecialMissionProgressSectionName(string missionId)
         {
             return "SpecialMissionProgress:" + (missionId ?? string.Empty).Trim();
@@ -1746,6 +1852,11 @@ namespace LSOL.Systems
             return snapshot != null && snapshot.HasData;
         }
 
+        private static bool HasBankLoanData(BankLoanPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
         private static CompanyFinanceFlow ParseCompanyFinanceFlow(string raw, CompanyFinanceFlow fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -1802,5 +1913,6 @@ namespace LSOL.Systems
         public SpecialMissionPersistenceSnapshot SpecialMissions { get; set; }
         public PropertyOwnershipPersistenceSnapshot PropertyOwnership { get; set; }
         public CompanyFinancePersistenceSnapshot Finance { get; set; }
+        public BankLoanPersistenceSnapshot BankLoans { get; set; }
     }
 }

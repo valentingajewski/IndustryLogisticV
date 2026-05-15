@@ -19,6 +19,7 @@ namespace LSOL.Config
         public ControlBindings Controls { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
+        public List<BankDefinition> BankDefinitions { get; private set; }
         public List<OfficeDefinition> OfficeDefinitions { get; private set; }
         public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; private set; }
         public List<InteriorDefinition> InteriorDefinitions { get; private set; }
@@ -51,6 +52,7 @@ namespace LSOL.Config
                 ExternalCatalog = externalCatalog,
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
+                BankDefinitions = new List<BankDefinition>(),
                 OfficeDefinitions = new List<OfficeDefinition>(),
                 OfficeObjectDefinitions = new List<OfficeObjectDefinition>(),
                 InteriorDefinitions = new List<InteriorDefinition>(),
@@ -72,6 +74,11 @@ namespace LSOL.Config
             if (externalCatalog.VehicleDefinitions.Count > 0)
             {
                 config.VehicleDefinitions.AddRange(CloneVehicleDefinitions(externalCatalog.VehicleDefinitions));
+            }
+
+            if (externalCatalog.BankDefinitions.Count > 0)
+            {
+                config.BankDefinitions.AddRange(CloneBankDefinitions(externalCatalog.BankDefinitions));
             }
 
             if (externalCatalog.OfficeDefinitions.Count > 0)
@@ -357,6 +364,24 @@ namespace LSOL.Config
                     IsTractor = x.IsTractor,
                 })
                 .ToList();
+        }
+
+        private static IEnumerable<BankDefinition> CloneBankDefinitions(IEnumerable<BankDefinition> source)
+        {
+            return source == null
+                ? new BankDefinition[0]
+                : source
+                    .Where(x => x != null)
+                    .Select(x => new BankDefinition
+                    {
+                        BankId = x.BankId,
+                        Name = x.Name,
+                        Position = x.Position,
+                        LoanAmountMaxLimit = x.LoanAmountMaxLimit,
+                        LoanInterestMin = x.LoanInterestMin,
+                        LoanInterestMax = x.LoanInterestMax,
+                    })
+                    .ToList();
         }
 
             private static IEnumerable<OfficeDefinition> CloneOfficeDefinitions(IEnumerable<OfficeDefinition> source)

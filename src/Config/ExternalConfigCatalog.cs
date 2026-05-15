@@ -17,6 +17,7 @@ namespace LSOL.Config
             ResourcesByCommodity = new Dictionary<string, ExternalResourceConfig>(StringComparer.OrdinalIgnoreCase);
             ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             VehicleDefinitions = new List<VehicleDefinition>();
+            BankDefinitions = new List<BankDefinition>();
             OfficeDefinitions = new List<OfficeDefinition>();
             OfficeObjectDefinitions = new List<OfficeObjectDefinition>();
             InteriorDefinitions = new List<InteriorDefinition>();
@@ -30,6 +31,7 @@ namespace LSOL.Config
         public Dictionary<string, ExternalResourceConfig> ResourcesByCommodity { get; }
         public Dictionary<string, List<string>> ObjectModels { get; }
         public List<VehicleDefinition> VehicleDefinitions { get; }
+        public List<BankDefinition> BankDefinitions { get; }
         public List<OfficeDefinition> OfficeDefinitions { get; }
         public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; }
         public List<InteriorDefinition> InteriorDefinitions { get; }
@@ -65,6 +67,7 @@ namespace LSOL.Config
             XmlConfigImport.TryPopulateDistricts(configDirectory, catalog);
             XmlConfigImport.TryPopulateSites(configDirectory, catalog);
             XmlConfigImport.TryPopulateVehicles(configDirectory, catalog);
+            XmlConfigImport.TryPopulateBanks(configDirectory, catalog);
             XmlConfigImport.TryPopulateOffices(configDirectory, catalog);
             XmlConfigImport.TryPopulateOfficeObjects(configDirectory, catalog);
             XmlConfigImport.TryPopulateInteriors(configDirectory, catalog);

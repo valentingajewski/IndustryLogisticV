@@ -1,0 +1,8 @@
+BankID,BankName,BankX,BankY,BankZ,LoanAmountMaxLimit,LoanInterestMin,LoanInterestMax
+1,Los Santos Downtown Bank,150,-1040,29.37,1000000,8,11
+2,Vinewood Bank,314.15,-279,54.17,1000000,7,12
+3,Rockford Hills Bank,-350.73,-49.3,49,1000000,7,15
+4,Richman Bank,-1213,-330.39,37.79,1500000,9,15
+5,Pacific Bluffs Bank,-2963.14,483,15.7,750000,7,11
+6,Grand Senora Desert Bank,1175,2706.37,38,500000,6,10
+7,Paleto Bank,-111.23,6462,31.64,500000,6,10

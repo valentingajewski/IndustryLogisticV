@@ -76,6 +76,7 @@ namespace LSOL
         private readonly FleetManager _fleetManager;
         private readonly PropertyManager _propertyManager;
         private readonly CompanyFinanceTracker _financeTracker;
+        private readonly BankLoanManager _bankLoanManager;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
         private readonly GlobalMarketManager _globalMarket;
@@ -197,6 +198,7 @@ namespace LSOL
             _fleetManager = new FleetManager(_config);
             _propertyManager = new PropertyManager(_config);
             _financeTracker = new CompanyFinanceTracker();
+            _bankLoanManager = new BankLoanManager(_config.BankDefinitions, _financeTracker);
             _propertyManager.ConfigureFinanceTracking(_financeTracker, GetCurrentInGameWeekMinute);
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _vehicleLoadPowerService = new VehicleLoadPowerService(_fleetManager);
@@ -227,6 +229,7 @@ namespace LSOL
                 () => _propertyManager != null ? _propertyManager.ActiveOfficeId : string.Empty,
                 () => _propertyManager != null ? _propertyManager.Interiors : new InteriorDefinition[0],
                 () => _propertyManager != null ? _propertyManager.ActiveApartmentId : string.Empty,
+                () => _bankLoanManager != null ? _bankLoanManager.Banks : Array.Empty<BankDefinition>(),
                 ResolveOfficeBlipSeed,
                 ResolveVehicleSpawnBlipSeed,
                 CommercialDealershipMarker,
@@ -386,6 +389,7 @@ namespace LSOL
             };
             _debugMenuProvider = new DebugMenuProvider();
             InitializePropertyMenus();
+            InitializeBankingMenus();
             _npcLogisticsController = new NpcLogisticsController(
                 _controls,
                 _npcLogisticsManager,
@@ -409,6 +413,7 @@ namespace LSOL
                 _globalMarket,
                 _npcLogisticsManager,
                 _propertyManager,
+                _bankLoanManager,
                 _financeTracker,
                 GetCurrentInGameWeekMinute,
                 () => Game.Player.Character,
@@ -509,6 +514,7 @@ namespace LSOL
             get
             {
                 return _officeMenu.IsOpen
+                    || (_bankMenu != null && _bankMenu.IsOpen)
                     || _vehicleCargoMenu.IsOpen
                     || _upgradeMenu.IsOpen
                     || _modControlMenu.IsOpen
@@ -594,6 +600,7 @@ namespace LSOL
                 _tabletStateStore.MarkNetworkDirty();
             }
             ProcessPropertyWeeklyCharges();
+            ProcessBankLoanRepayments();
             _tabletStateStore.CaptureHistory(gameTime);
 
             if (_vehicleFuelSystem.Update(player, gameTime))
@@ -705,6 +712,11 @@ namespace LSOL
                 if (player != null && player.Exists())
                 {
                     if (HandlePropertyInteraction(player))
+                    {
+                        return;
+                    }
+
+                    if (HandleBankInteraction(player))
                     {
                         return;
                     }
@@ -878,6 +890,12 @@ namespace LSOL
                 return true;
             }
 
+            if (_bankMenu != null && _bankMenu.IsOpen)
+            {
+                _bankMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_officeMenu.IsOpen)
             {
                 _officeMenu.HandleKey(key, _controls);
@@ -936,6 +954,7 @@ namespace LSOL
             _optionsMenu.Draw();
             _notificationsMenu.Draw();
             _officeMenu.Draw();
+            DrawBankMenu();
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
             _debugMissionMenu.Draw();
@@ -943,7 +962,7 @@ namespace LSOL
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -966,6 +985,7 @@ namespace LSOL
             var promptShown = false;
 
             DrawPropertyMarkers(player, canShowPrompts, ref promptShown);
+            DrawBankMarkers(player, canShowPrompts, ref promptShown);
 
             var drawDistanceSq = IndustryMarkerDrawDistance * IndustryMarkerDrawDistance;
             for (int i = 0; i < _industryManager.Industries.Count; i++)
@@ -1551,6 +1571,7 @@ namespace LSOL
             _difficultyMenu.Close();
             _debugMenu.Close();
             _debugMissionMenu.Close();
+            CloseBankMenu();
             CloseIndustryTablet();
         }
 
@@ -1571,6 +1592,7 @@ namespace LSOL
             _debugMenu.Close();
             _debugMissionMenu.Close();
             _officeMenu.Close();
+            CloseBankMenu();
             _vehicleCargoMenu.Close();
             _upgradeMenu.Close();
             CloseIndustryTablet();

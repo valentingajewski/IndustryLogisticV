@@ -14,6 +14,7 @@ namespace LSOL.Systems
         private readonly Func<string> _getActiveOfficeId;
         private readonly Func<IReadOnlyList<InteriorDefinition>> _getApartmentDefinitions;
         private readonly Func<string> _getActiveApartmentId;
+        private readonly Func<IReadOnlyList<BankDefinition>> _getBankDefinitions;
         private readonly Func<Vector3> _getOfficeMarkerSeed;
         private readonly Func<Vector3> _getVehicleSpawnMarkerSeed;
         private readonly Vector3 _commercialDealershipMarker;
@@ -24,6 +25,7 @@ namespace LSOL.Systems
         private readonly TerritoryManager _territoryManager;
         private readonly List<Blip> _officeBlips;
         private readonly List<Blip> _apartmentBlips;
+        private readonly List<Blip> _bankBlips;
         private readonly List<Blip> _industryBlips;
 
         private Blip _commercialDealershipBlip;
@@ -36,6 +38,7 @@ namespace LSOL.Systems
             Func<string> getActiveOfficeId,
             Func<IReadOnlyList<InteriorDefinition>> getApartmentDefinitions,
             Func<string> getActiveApartmentId,
+            Func<IReadOnlyList<BankDefinition>> getBankDefinitions,
             Func<Vector3> getOfficeMarkerSeed,
             Func<Vector3> getVehicleSpawnMarkerSeed,
             Vector3 commercialDealershipMarker,
@@ -50,6 +53,7 @@ namespace LSOL.Systems
             _getActiveOfficeId = getActiveOfficeId;
             _getApartmentDefinitions = getApartmentDefinitions;
             _getActiveApartmentId = getActiveApartmentId;
+            _getBankDefinitions = getBankDefinitions;
             _getOfficeMarkerSeed = getOfficeMarkerSeed;
             _getVehicleSpawnMarkerSeed = getVehicleSpawnMarkerSeed;
             _commercialDealershipMarker = commercialDealershipMarker;
@@ -60,6 +64,7 @@ namespace LSOL.Systems
             _territoryManager = territoryManager;
             _officeBlips = new List<Blip>();
             _apartmentBlips = new List<Blip>();
+            _bankBlips = new List<Blip>();
             _industryBlips = new List<Blip>();
         }
 
@@ -69,6 +74,7 @@ namespace LSOL.Systems
 
             CreateOfficeBlips();
             CreateApartmentBlips();
+            CreateBankBlips();
             CreateDealershipBlips();
             _vehicleSpawnBlip = CreateStaticBlip(_getGroundPosition(ResolveVehicleSpawnMarkerSeed()), BlipSprite.Garage2, BlipColor.White, "Vehicle Spawn", 0.9f);
 
@@ -164,6 +170,30 @@ namespace LSOL.Systems
                 blip.Scale = isActive ? 0.95f : 0.85f;
             }
 
+            var banks = ResolveBankDefinitions();
+            if (_bankBlips.Count != banks.Count)
+            {
+                Create();
+                return;
+            }
+
+            for (int i = 0; i < banks.Count; i++)
+            {
+                var bank = banks[i];
+                var blip = _bankBlips[i];
+                if (blip == null || !blip.Exists())
+                {
+                    Create();
+                    return;
+                }
+
+                blip.Position = _getGroundPosition(bank.Position);
+                blip.Sprite = BlipSprite.GarageForSale;
+                blip.Color = BlipColor.White;
+                blip.Name = ResolveBankBlipName(bank);
+                blip.Scale = 0.9f;
+            }
+
             if (_commercialDealershipBlip == null || !_commercialDealershipBlip.Exists()
                 || _personalDealershipBlip == null || !_personalDealershipBlip.Exists())
             {
@@ -217,6 +247,15 @@ namespace LSOL.Systems
                 }
             }
 
+            for (int i = 0; i < _bankBlips.Count; i++)
+            {
+                var blip = _bankBlips[i];
+                if (blip != null && blip.Exists())
+                {
+                    blip.Delete();
+                }
+            }
+
             if (_commercialDealershipBlip != null && _commercialDealershipBlip.Exists())
             {
                 _commercialDealershipBlip.Delete();
@@ -243,6 +282,7 @@ namespace LSOL.Systems
 
             _officeBlips.Clear();
             _apartmentBlips.Clear();
+            _bankBlips.Clear();
             _industryBlips.Clear();
             _commercialDealershipBlip = null;
             _personalDealershipBlip = null;
@@ -320,6 +360,25 @@ namespace LSOL.Systems
                 0.95f);
         }
 
+        private void CreateBankBlips()
+        {
+            var banks = ResolveBankDefinitions();
+            for (int i = 0; i < banks.Count; i++)
+            {
+                var bank = banks[i];
+                var blip = CreateStaticBlip(
+                    _getGroundPosition(bank.Position),
+                    BlipSprite.GarageForSale,
+                    BlipColor.White,
+                    ResolveBankBlipName(bank),
+                    0.9f);
+                if (blip != null && blip.Exists())
+                {
+                    _bankBlips.Add(blip);
+                }
+            }
+        }
+
         private IReadOnlyList<OfficeDefinition> ResolveOfficeDefinitions()
         {
             var offices = _getOfficeDefinitions != null ? _getOfficeDefinitions() : null;
@@ -348,6 +407,14 @@ namespace LSOL.Systems
             return _getActiveApartmentId != null
                 ? _getActiveApartmentId() ?? string.Empty
                 : string.Empty;
+        }
+
+        private IReadOnlyList<BankDefinition> ResolveBankDefinitions()
+        {
+            var banks = _getBankDefinitions != null ? _getBankDefinitions() : null;
+            return banks != null
+                ? banks.Where(bank => bank != null).ToList()
+                : new BankDefinition[0];
         }
 
         private Vector3 ResolveOfficeMarkerSeed()
@@ -389,6 +456,16 @@ namespace LSOL.Systems
             return isActive
                 ? baseName + " [Active]"
                 : baseName;
+        }
+
+        private static string ResolveBankBlipName(BankDefinition bank)
+        {
+            if (bank == null)
+            {
+                return "Bank";
+            }
+
+            return bank.DisplayName;
         }
 
         private static Blip CreateStaticBlip(Vector3 position, BlipSprite sprite, BlipColor color, string name, float scale)
