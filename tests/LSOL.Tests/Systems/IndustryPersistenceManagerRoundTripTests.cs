@@ -146,6 +146,46 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void Save_WithClearedFinanceSnapshot_DoesNotWriteFinanceSections()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("fresh-finance.state.ini");
+
+            try
+            {
+                var financeTracker = new CompanyFinanceTracker();
+                financeTracker.RecordIncome(CompanyFinanceCategory.OtherIncome, 50000f, 1440, "Previous save carry-over");
+                financeTracker.RecordExpense(CompanyFinanceCategory.OtherExpense, 2500f, 1500, "Previous save expense");
+                financeTracker.Clear();
+
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    Profit = 20000f,
+                    StartingBalance = 20000f,
+                    Finance = financeTracker.CreatePersistenceSnapshot(),
+                };
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+
+                Assert.IsFalse(rawSave.Contains("[FinanceMeta]"));
+                Assert.IsFalse(rawSave.Contains("[Finance:Transaction:"));
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+
+                Assert.IsNotNull(result.Metadata);
+                Assert.IsTrue(result.Metadata.HasGameplayMetadata);
+                Assert.IsNull(result.Metadata.Finance);
+                Assert.AreEqual(20000f, result.Metadata.Profit, 0.01f);
+                Assert.AreEqual(20000f, result.Metadata.StartingBalance, 0.01f);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
         public void LoadWithMetadata_WithTerritorySnapshot_AppliesSavedSiteAndCorridorState()
         {
             var filePath = TestWorkspace.CreateTempFilePath("territory.state.ini");
