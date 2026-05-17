@@ -547,7 +547,6 @@ namespace LSOL
             _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
             _pendingNpcRouteLimit = _npcRouteLimit;
             ApplyDifficultySettingsToSystems();
-            _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
             var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;
             var propertySnapshot = metadata != null ? metadata.PropertyOwnership : null;
             var specialMissionSnapshot = metadata != null ? metadata.SpecialMissions : null;
@@ -561,6 +560,7 @@ namespace LSOL
             }
 
             _propertyManager.ApplySnapshot(propertySnapshot, GetCurrentInGameWeekMinute());
+            _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
             if (_isConstructing)
             {
                 _pendingOwnedFleetRestore = ownedFleetSnapshot != null && ownedFleetSnapshot.HasData

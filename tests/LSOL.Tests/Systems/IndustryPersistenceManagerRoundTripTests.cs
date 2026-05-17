@@ -93,6 +93,59 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void SaveAndLoad_WithApartmentRentalPropertyState_RestoresRentalFlags()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("apartment-rental.state.ini");
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    PropertyOwnership = new PropertyOwnershipPersistenceSnapshot
+                    {
+                        ActiveApartmentId = "bravo",
+                    },
+                };
+
+                metadata.PropertyOwnership.Apartments.Add(new ApartmentOwnershipPersistenceEntry
+                {
+                    InteriorId = "alpha",
+                    IsOwned = true,
+                    LastChargedWeekIndex = -1,
+                });
+                metadata.PropertyOwnership.Apartments.Add(new ApartmentOwnershipPersistenceEntry
+                {
+                    InteriorId = "bravo",
+                    IsRented = true,
+                    IsAccessSuspended = true,
+                    OutstandingRent = 225f,
+                    LastChargedWeekIndex = 4,
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "IsRented=true");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var snapshot = result.Metadata.PropertyOwnership;
+                var bravoApartment = snapshot.Apartments.Single(entry => string.Equals(entry.InteriorId, "bravo", StringComparison.OrdinalIgnoreCase));
+
+                Assert.IsNotNull(snapshot);
+                Assert.AreEqual("bravo", snapshot.ActiveApartmentId);
+                Assert.IsTrue(bravoApartment.IsRented);
+                Assert.IsFalse(bravoApartment.IsOwned);
+                Assert.IsTrue(bravoApartment.IsAccessSuspended);
+                Assert.AreEqual(225f, bravoApartment.OutstandingRent, 0.01f);
+                Assert.AreEqual(4, bravoApartment.LastChargedWeekIndex);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
         public void LoadWithMetadata_WithTerritorySnapshot_AppliesSavedSiteAndCorridorState()
         {
             var filePath = TestWorkspace.CreateTempFilePath("territory.state.ini");

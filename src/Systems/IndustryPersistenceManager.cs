@@ -946,6 +946,7 @@ namespace LSOL.Systems
             writer.WriteLine("[Properties]");
             writer.WriteLine("ActiveOfficeId={0}", snapshot.ActiveOfficeId ?? string.Empty);
             writer.WriteLine("ActiveApartmentId={0}", snapshot.ActiveApartmentId ?? string.Empty);
+            writer.WriteLine("LastSuccessfulApartmentSleepMinute={0}", snapshot.LastSuccessfulApartmentSleepMinute);
             writer.WriteLine();
 
             foreach (var office in snapshot.Offices.OrderBy(entry => entry != null ? entry.OfficeId : string.Empty, StringComparer.OrdinalIgnoreCase))
@@ -990,6 +991,7 @@ namespace LSOL.Systems
 
                 writer.WriteLine("[{0}]", BuildPropertyApartmentSectionName(apartment.InteriorId));
                 writer.WriteLine("IsOwned={0}", apartment.IsOwned ? "true" : "false");
+                writer.WriteLine("IsRented={0}", apartment.IsRented ? "true" : "false");
                 writer.WriteLine("IsAccessSuspended={0}", apartment.IsAccessSuspended ? "true" : "false");
                 writer.WriteLine("OutstandingRent={0}", FormatFloat(apartment.OutstandingRent));
                 writer.WriteLine("LastChargedWeekIndex={0}", apartment.LastChargedWeekIndex);
@@ -1061,6 +1063,7 @@ namespace LSOL.Systems
             {
                 snapshot.ActiveOfficeId = ini.GetString("Properties", "ActiveOfficeId", string.Empty);
                 snapshot.ActiveApartmentId = ini.GetString("Properties", "ActiveApartmentId", string.Empty);
+                snapshot.LastSuccessfulApartmentSleepMinute = ParseInt(ini.GetString("Properties", "LastSuccessfulApartmentSleepMinute", "-1"), -1);
             }
 
             foreach (var section in ini.Sections)
@@ -1098,6 +1101,7 @@ namespace LSOL.Systems
                         {
                             InteriorId = interiorId,
                             IsOwned = ini.GetBool(section, "IsOwned", false),
+                            IsRented = ini.GetBool(section, "IsRented", false),
                             IsAccessSuspended = ini.GetBool(section, "IsAccessSuspended", false),
                             OutstandingRent = ini.GetFloat(section, "OutstandingRent", 0f),
                             LastChargedWeekIndex = ParseInt(ini.GetString(section, "LastChargedWeekIndex", "-1"), -1),

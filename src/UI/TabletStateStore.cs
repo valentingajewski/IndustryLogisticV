@@ -1466,7 +1466,7 @@ namespace LSOL.UI
                 foreach (var apartment in _propertyManager.Interiors.Where(entry => entry != null))
                 {
                     var state = _propertyManager.GetApartmentState(apartment.InteriorId);
-                    if (state == null || !state.IsOwned)
+                    if (state == null || state.IsOwned || !state.IsRented)
                     {
                         continue;
                     }

@@ -550,7 +550,11 @@ namespace LSOL.Systems
                 return 0;
             }
 
-            return _propertyManager.Interiors.Count(interior => interior != null && GetApartmentState(interior.InteriorId)?.IsOwned == true);
+            return _propertyManager.Interiors.Count(interior =>
+            {
+                var state = interior != null ? GetApartmentState(interior.InteriorId) : null;
+                return state != null && (state.IsOwned || state.IsRented);
+            });
         }
 
         private IEnumerable<OwnedCommercialVehiclePersistenceEntry> GetOwnedCommercialVehicles()

@@ -31,6 +31,55 @@ namespace LSOL.Systems
         private const int WorldDispatchDiagnosticsCapacity = 80;
         private const float SpawnClearanceRadius = 6f;
         private const float SpawnPedClearanceRadius = 3.5f;
+        private const float RouteMarkerFallbackMinDistance = 8f;
+        private const float GateWaypointArrivalDistance = 28f;
+        private const float DriveProgressDistance = 10f;
+        private const float DriveProgressDistanceImprovement = 8f;
+        private const int DriveNoProgressTimeoutMs = 12000;
+        private const float RouteNearTargetBuffer = 12f;
+        private const float MinDriverAbility = 0.65f;
+        private const float MaxDriverAbility = 0.85f;
+        private const float MinDriverAggressiveness = 0.18f;
+        private const float MaxDriverAggressiveness = 0.30f;
+        private const float RoadSafeFallbackOffsetDistance = 24f;
+
+        private enum NpcDriveRecoveryOutcome
+        {
+            None = 0,
+            Continue = 1,
+            Completed = 2,
+        }
+
+        private struct NpcDriveContext
+        {
+            public Vector3 ActiveTarget;
+            public Vector3 FinalTarget;
+            public Vector3? GateTarget;
+            public bool HasValidFinalPad;
+        }
+
+        private sealed class NpcCargoSnapshot
+        {
+            public bool HasCargo { get; set; }
+
+            public VehicleCargoType CargoType { get; set; }
+
+            public string Commodity { get; set; }
+
+            public float WeightTons { get; set; }
+
+            public float CargoCondition { get; set; }
+
+            public float TotalLostTons { get; set; }
+
+            public float LastTrackedRigHealth { get; set; }
+
+            public float LastTrackedRigSpeed { get; set; }
+
+            public string SourceIndustryId { get; set; }
+
+            public string SourceDistrictName { get; set; }
+        }
 
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
@@ -2398,6 +2447,7 @@ namespace LSOL.Systems
 
             visualRoute.Phase = NpcRoutePhase.DrivingToDestination;
             visualRoute.NextDriveTaskRefreshMs = 0;
+            ResetDriveRecoveryState(visualRoute);
             EnsureDriveTask(visualRoute, GetDestinationRoutePosition(visualRoute), now);
             job.VisualRoute = visualRoute;
             return true;
@@ -2422,12 +2472,44 @@ namespace LSOL.Systems
                 return;
             }
 
+            var destinationContext = BuildDestinationDriveContext(job.VisualRoute);
+            if (HasReachedDriveTarget(
+                job.VisualRoute,
+                destinationContext,
+                !destinationContext.HasValidFinalPad || job.VisualRoute.ForceGateWaypoint || job.VisualRoute.DriveRecoveryAttempts >= 2))
+            {
+                job.RemainingInGameMinutes = 0;
+                return;
+            }
+
+            var recoveryOutcome = TryHandleDriveRecovery(job.VisualRoute, destinationContext, now, job);
+            if (recoveryOutcome == NpcDriveRecoveryOutcome.Completed)
+            {
+                return;
+            }
+
+            if (recoveryOutcome != NpcDriveRecoveryOutcome.None)
+            {
+                destinationContext = BuildDestinationDriveContext(job.VisualRoute);
+                if (HasReachedDriveTarget(
+                    job.VisualRoute,
+                    destinationContext,
+                    !destinationContext.HasValidFinalPad || job.VisualRoute.ForceGateWaypoint || job.VisualRoute.DriveRecoveryAttempts >= 2))
+                {
+                    job.RemainingInGameMinutes = 0;
+                    return;
+                }
+            }
+
             RefreshBlip(job.VisualRoute);
-            EnsureDriveTask(job.VisualRoute, GetDestinationRoutePosition(job.VisualRoute), now);
+            EnsureDriveTask(job.VisualRoute, destinationContext.ActiveTarget, now);
             var driverVehicle = GetDriverVehicle(job.VisualRoute);
             if (driverVehicle != null && driverVehicle.Exists())
             {
-                if (driverVehicle.Position.DistanceTo(GetDestinationRoutePosition(job.VisualRoute)) <= ArrivalDistance)
+                if (HasReachedDriveTarget(
+                    job.VisualRoute,
+                    destinationContext,
+                    !destinationContext.HasValidFinalPad || job.VisualRoute.ForceGateWaypoint || job.VisualRoute.DriveRecoveryAttempts >= 2))
                 {
                     job.RemainingInGameMinutes = 0;
                 }
@@ -2877,18 +2959,20 @@ namespace LSOL.Systems
             return true;
         }
 
-        private bool TryGetActiveOfficeReturnTarget(out Vector3 position)
+        private bool TryGetActiveOfficeDriveContext(NpcLogisticsContract contract, out NpcDriveContext driveContext)
         {
-            position = Vector3.Zero;
+            driveContext = new NpcDriveContext();
             var office = _getActiveOffice != null ? _getActiveOffice() : null;
             if (office == null)
             {
                 return false;
             }
 
-            position = _getGroundPosition != null
-                ? _getGroundPosition(office.SpawnPosition)
-                : office.SpawnPosition;
+            var driverVehicle = GetDriverVehicle(contract);
+            var referencePosition = driverVehicle != null && driverVehicle.Exists()
+                ? driverVehicle.Position
+                : office.MarkerPosition;
+            driveContext = BuildOfficeDriveContext(contract, office, referencePosition);
             return true;
         }
 
@@ -2899,12 +2983,13 @@ namespace LSOL.Systems
                 return;
             }
 
-            Vector3 officePosition;
-            if (!TryGetActiveOfficeReturnTarget(out officePosition))
+            NpcDriveContext officeContext;
+            if (!TryGetActiveOfficeDriveContext(contract, out officeContext))
             {
                 contract.Phase = NpcRoutePhase.WaitingAtOffice;
                 contract.StatusText = string.IsNullOrWhiteSpace(reason) ? "Waiting at office" : reason;
                 contract.WaitUntilMs = now + RetryDelayMs;
+                ResetDriveRecoveryState(contract);
                 return;
             }
 
@@ -2914,21 +2999,23 @@ namespace LSOL.Systems
                 : string.Format("Returning to office: {0}", reason.TrimEnd('.'));
             contract.WaitUntilMs = 0;
             contract.NextDriveTaskRefreshMs = 0;
-            EnsureDriveTask(contract, officePosition, now);
+            ResetDriveRecoveryState(contract);
+            EnsureDriveTask(contract, officeContext.ActiveTarget, now);
         }
 
         private void UpdateReturnToOffice(NpcLogisticsContract contract, int now)
         {
-            Vector3 officePosition;
-            if (!TryGetActiveOfficeReturnTarget(out officePosition))
+            NpcDriveContext officeContext;
+            if (!TryGetActiveOfficeDriveContext(contract, out officeContext))
             {
                 contract.Phase = NpcRoutePhase.WaitingAtOffice;
                 contract.StatusText = "Waiting at office";
                 contract.WaitUntilMs = now + RetryDelayMs;
+                ResetDriveRecoveryState(contract);
                 return;
             }
 
-            if (GetDriverVehicle(contract).Position.DistanceTo(officePosition) <= ArrivalDistance)
+            if (HasReachedDriveTarget(contract, officeContext, contract.ForceGateWaypoint || contract.DriveRecoveryAttempts >= 2))
             {
                 ClearPedTasks(contract.Driver);
                 contract.Phase = NpcRoutePhase.WaitingAtOffice;
@@ -2938,10 +3025,43 @@ namespace LSOL.Systems
                 contract.StatusText = cargoState != null && !cargoState.IsEmpty
                     ? "Holding cargo at office"
                     : "Waiting at office";
+                ResetDriveRecoveryState(contract);
                 return;
             }
 
-            EnsureDriveTask(contract, officePosition, now);
+            var recoveryOutcome = TryHandleDriveRecovery(contract, officeContext, now);
+            if (recoveryOutcome == NpcDriveRecoveryOutcome.Completed)
+            {
+                return;
+            }
+
+            if (recoveryOutcome != NpcDriveRecoveryOutcome.None)
+            {
+                if (!TryGetActiveOfficeDriveContext(contract, out officeContext))
+                {
+                    contract.Phase = NpcRoutePhase.WaitingAtOffice;
+                    contract.StatusText = "Waiting at office";
+                    contract.WaitUntilMs = now + RetryDelayMs;
+                    ResetDriveRecoveryState(contract);
+                    return;
+                }
+
+                if (HasReachedDriveTarget(contract, officeContext, contract.ForceGateWaypoint || contract.DriveRecoveryAttempts >= 2))
+                {
+                    ClearPedTasks(contract.Driver);
+                    contract.Phase = NpcRoutePhase.WaitingAtOffice;
+                    contract.NextDriveTaskRefreshMs = 0;
+                    contract.WaitUntilMs = now + 1000;
+                    var cargoState = _fleetManager.GetOrCreateCargoState(GetCargoVehicle(contract));
+                    contract.StatusText = cargoState != null && !cargoState.IsEmpty
+                        ? "Holding cargo at office"
+                        : "Waiting at office";
+                    ResetDriveRecoveryState(contract);
+                    return;
+                }
+            }
+
+            EnsureDriveTask(contract, officeContext.ActiveTarget, now);
             contract.StatusText = "Returning to office";
         }
 
@@ -2964,6 +3084,7 @@ namespace LSOL.Systems
                 contract.NextDriveTaskRefreshMs = 0;
                 contract.WaitUntilMs = 0;
                 contract.StatusText = string.Format("Resuming delivery to {0}", contract.DestinationIndustry.Name);
+                ResetDriveRecoveryState(contract);
                 EnsureDriveTask(contract, GetDestinationRoutePosition(contract), now);
                 return;
             }
@@ -2979,6 +3100,7 @@ namespace LSOL.Systems
             contract.NextDriveTaskRefreshMs = 0;
             contract.WaitUntilMs = 0;
             contract.StatusText = string.Format("Driving to {0}", contract.OriginIndustry.Name);
+            ResetDriveRecoveryState(contract);
             EnsureDriveTask(contract, GetOriginRoutePosition(contract), now);
         }
 
@@ -3119,17 +3241,38 @@ namespace LSOL.Systems
                 return;
             }
 
-            var originPosition = GetOriginRoutePosition(contract);
-            if (GetDriverVehicle(contract).Position.DistanceTo(originPosition) <= ArrivalDistance)
+            var originContext = BuildOriginDriveContext(contract);
+            if (HasReachedDriveTarget(contract, originContext, !originContext.HasValidFinalPad))
             {
                 ClearPedTasks(contract.Driver);
                 contract.Phase = NpcRoutePhase.Loading;
                 contract.StatusText = "Loading cargo";
                 contract.WaitUntilMs = now + LoadDelayMs;
+                ResetDriveRecoveryState(contract);
                 return;
             }
 
-            EnsureDriveTask(contract, originPosition, now);
+            var recoveryOutcome = TryHandleDriveRecovery(contract, originContext, now);
+            if (recoveryOutcome == NpcDriveRecoveryOutcome.Completed)
+            {
+                return;
+            }
+
+            if (recoveryOutcome != NpcDriveRecoveryOutcome.None)
+            {
+                originContext = BuildOriginDriveContext(contract);
+                if (HasReachedDriveTarget(contract, originContext, !originContext.HasValidFinalPad))
+                {
+                    ClearPedTasks(contract.Driver);
+                    contract.Phase = NpcRoutePhase.Loading;
+                    contract.StatusText = "Loading cargo";
+                    contract.WaitUntilMs = now + LoadDelayMs;
+                    ResetDriveRecoveryState(contract);
+                    return;
+                }
+            }
+
+            EnsureDriveTask(contract, originContext.ActiveTarget, now);
             contract.StatusText = string.Format("Driving to {0}", contract.OriginIndustry.Name);
         }
 
@@ -3204,6 +3347,7 @@ namespace LSOL.Systems
             contract.NextDriveTaskRefreshMs = 0;
             contract.WaitUntilMs = 0;
             contract.StatusText = string.Format("Delivering {0}", contract.Commodity);
+            ResetDriveRecoveryState(contract);
             EnsureDriveTask(contract, GetDestinationRoutePosition(contract), now);
         }
 
@@ -3216,17 +3360,44 @@ namespace LSOL.Systems
                 return;
             }
 
-            var destinationPosition = GetDestinationRoutePosition(contract);
-            if (GetDriverVehicle(contract).Position.DistanceTo(destinationPosition) <= ArrivalDistance)
+            var destinationContext = BuildDestinationDriveContext(contract);
+            if (HasReachedDriveTarget(
+                contract,
+                destinationContext,
+                !destinationContext.HasValidFinalPad || contract.ForceGateWaypoint || contract.DriveRecoveryAttempts >= 2))
             {
                 ClearPedTasks(contract.Driver);
                 contract.Phase = NpcRoutePhase.Unloading;
                 contract.StatusText = "Unloading cargo";
                 contract.WaitUntilMs = now + UnloadDelayMs;
+                ResetDriveRecoveryState(contract);
                 return;
             }
 
-            EnsureDriveTask(contract, destinationPosition, now);
+            var recoveryOutcome = TryHandleDriveRecovery(contract, destinationContext, now);
+            if (recoveryOutcome == NpcDriveRecoveryOutcome.Completed)
+            {
+                return;
+            }
+
+            if (recoveryOutcome != NpcDriveRecoveryOutcome.None)
+            {
+                destinationContext = BuildDestinationDriveContext(contract);
+                if (HasReachedDriveTarget(
+                    contract,
+                    destinationContext,
+                    !destinationContext.HasValidFinalPad || contract.ForceGateWaypoint || contract.DriveRecoveryAttempts >= 2))
+                {
+                    ClearPedTasks(contract.Driver);
+                    contract.Phase = NpcRoutePhase.Unloading;
+                    contract.StatusText = "Unloading cargo";
+                    contract.WaitUntilMs = now + UnloadDelayMs;
+                    ResetDriveRecoveryState(contract);
+                    return;
+                }
+            }
+
+            EnsureDriveTask(contract, destinationContext.ActiveTarget, now);
             contract.StatusText = string.Format("En route to {0}", contract.DestinationIndustry.Name);
         }
 
@@ -3246,6 +3417,7 @@ namespace LSOL.Systems
                 contract.Phase = NpcRoutePhase.DrivingToOrigin;
                 contract.NextDriveTaskRefreshMs = 0;
                 contract.StatusText = string.Format("Returning to {0}", contract.OriginIndustry.Name);
+                ResetDriveRecoveryState(contract);
                 return;
             }
 
@@ -3337,6 +3509,7 @@ namespace LSOL.Systems
                     contract.StatusText = string.Format("Queued route {0}/{1}.", contract.CurrentRouteIndex + 1, contract.Routes.Count);
                     contract.NextDriveTaskRefreshMs = 0;
                     contract.WaitUntilMs = now + 1000;
+                    ResetDriveRecoveryState(contract);
                     return;
                 }
 
@@ -3354,6 +3527,7 @@ namespace LSOL.Systems
                         contract.Commodity);
                     contract.NextDriveTaskRefreshMs = 0;
                     contract.WaitUntilMs = now + 1000;
+                    ResetDriveRecoveryState(contract);
                 }
                 return;
             }
@@ -3379,7 +3553,19 @@ namespace LSOL.Systems
                 return false;
             }
 
-            var spawnPosition = _getGroundPosition(GetOriginSpawnPosition(contract));
+            var spawnPosition = SnapRoutePosition(GetOriginSpawnPosition(contract));
+            return TrySpawnRouteEntitiesAt(contract, spawnPosition, GetOriginSpawnHeading(contract), out message);
+        }
+
+        private bool TrySpawnRouteEntitiesAt(NpcLogisticsContract contract, Vector3 spawnPosition, float spawnHeading, out string message)
+        {
+            message = string.Empty;
+            if (contract == null || contract.VehicleDefinition == null || contract.Tier == null)
+            {
+                message = "Route configuration is incomplete.";
+                return false;
+            }
+
             if (!TryEnsureRouteSpawnPointIsClear(contract, spawnPosition, out message))
             {
                 return false;
@@ -3391,7 +3577,7 @@ namespace LSOL.Systems
                 contract.VehicleDefinition,
                 contract.TractorDefinition,
                 spawnPosition,
-                GetOriginSpawnHeading(contract),
+                spawnHeading,
                 out truck,
                 out cargoVehicle,
                 out message))
@@ -3434,6 +3620,8 @@ namespace LSOL.Systems
                 cargoState.CargoType = CommodityCatalog.GetCargoTypeForCommodity(contract.Commodity);
             }
 
+            ResetDriveRecoveryState(contract);
+
             return true;
         }
 
@@ -3471,10 +3659,22 @@ namespace LSOL.Systems
             Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, driver.Handle, true);
             Function.Call(Hash.SET_PED_KEEP_TASK, driver.Handle, true);
             Function.Call(Hash.SET_PED_CAN_BE_DRAGGED_OUT, driver.Handle, false);
-            Function.Call(Hash.SET_DRIVER_ABILITY, driver.Handle, Math.Max(0f, Math.Min(1f, contract.Tier.SpeedMultiplier)));
-            Function.Call(Hash.SET_DRIVER_AGGRESSIVENESS, driver.Handle, Math.Max(0f, Math.Min(1f, contract.Tier.SpeedMultiplier)));
+            Function.Call(Hash.SET_DRIVER_ABILITY, driver.Handle, GetDriverAbility(contract.Tier));
+            Function.Call(Hash.SET_DRIVER_AGGRESSIVENESS, driver.Handle, GetDriverAggressiveness(contract.Tier));
             Function.Call(Hash.SET_VEHICLE_ENGINE_ON, truck.Handle, true, true, false);
             return driver;
+        }
+
+        private float GetDriverAbility(NpcDriverTierDefinition tier)
+        {
+            var normalizedSpeed = tier != null ? Math.Max(0.1f, tier.SpeedMultiplier) : 0.6f;
+            return Math.Max(MinDriverAbility, Math.Min(MaxDriverAbility, 0.58f + (normalizedSpeed * 0.30f)));
+        }
+
+        private float GetDriverAggressiveness(NpcDriverTierDefinition tier)
+        {
+            var normalizedSpeed = tier != null ? Math.Max(0.1f, tier.SpeedMultiplier) : 0.6f;
+            return Math.Max(MinDriverAggressiveness, Math.Min(MaxDriverAggressiveness, 0.12f + (normalizedSpeed * 0.16f)));
         }
 
         private void EnsureDriveTask(NpcLogisticsContract contract, Vector3 targetPosition, int now)
@@ -3505,6 +3705,317 @@ namespace LSOL.Systems
                 DriveStyle,
                 ArrivalDistance * 0.5f);
             contract.NextDriveTaskRefreshMs = now + DriveTaskRefreshIntervalMs;
+        }
+
+        private NpcDriveRecoveryOutcome TryHandleDriveRecovery(
+            NpcLogisticsContract contract,
+            NpcDriveContext driveContext,
+            int now,
+            NpcWorldLogisticsJob worldJob = null)
+        {
+            var driverVehicle = GetDriverVehicle(contract);
+            if (contract == null || driverVehicle == null || !driverVehicle.Exists())
+            {
+                return NpcDriveRecoveryOutcome.None;
+            }
+
+            var distanceToTarget = driverVehicle.Position.DistanceTo(driveContext.ActiveTarget);
+            if (distanceToTarget <= ArrivalDistance + RouteNearTargetBuffer)
+            {
+                ArmDriveProgressTracking(contract, driverVehicle.Position, driveContext.ActiveTarget, distanceToTarget, now);
+                return NpcDriveRecoveryOutcome.None;
+            }
+
+            if (contract.LastDriveProgressCheckMs <= 0
+                || contract.LastDriveTargetPosition.DistanceToSquared(driveContext.ActiveTarget)
+                    > DriveProgressDistance * DriveProgressDistance)
+            {
+                ArmDriveProgressTracking(contract, driverVehicle.Position, driveContext.ActiveTarget, distanceToTarget, now);
+                return NpcDriveRecoveryOutcome.None;
+            }
+
+            var movedDistance = driverVehicle.Position.DistanceTo(contract.LastDriveProgressPosition);
+            var improvedDistance = contract.LastDriveProgressDistance - distanceToTarget;
+            if (movedDistance >= DriveProgressDistance || improvedDistance >= DriveProgressDistanceImprovement)
+            {
+                contract.DriveRecoveryAttempts = 0;
+                contract.ForceGateWaypoint = false;
+                contract.ForceRoadSafeTarget = false;
+                ArmDriveProgressTracking(contract, driverVehicle.Position, driveContext.ActiveTarget, distanceToTarget, now);
+                return NpcDriveRecoveryOutcome.None;
+            }
+
+            if (now - contract.LastDriveProgressMs < DriveNoProgressTimeoutMs)
+            {
+                return NpcDriveRecoveryOutcome.None;
+            }
+
+            contract.DriveRecoveryAttempts += 1;
+            ClearPedTasks(contract.Driver);
+            contract.NextDriveTaskRefreshMs = 0;
+
+            string recoveryReason;
+            switch (contract.DriveRecoveryAttempts)
+            {
+                case 1:
+                    recoveryReason = "Reissuing drive task after no progress";
+                    UpdateDriveRecoveryStatus(contract, worldJob, recoveryReason, false);
+                    ArmDriveProgressTracking(contract, driverVehicle.Position, driveContext.ActiveTarget, distanceToTarget, now);
+                    return NpcDriveRecoveryOutcome.Continue;
+                case 2:
+                    if (driveContext.GateTarget.HasValue && !contract.HasReachedGateWaypoint)
+                    {
+                        contract.ForceGateWaypoint = true;
+                        contract.ForceRoadSafeTarget = false;
+                        recoveryReason = "Recovering via gate waypoint";
+                    }
+                    else
+                    {
+                        contract.ForceGateWaypoint = false;
+                        contract.ForceRoadSafeTarget = true;
+                        recoveryReason = "Recovering via road-safe waypoint";
+                    }
+
+                    UpdateDriveRecoveryStatus(contract, worldJob, recoveryReason, false);
+                    ArmDriveProgressTracking(contract, driverVehicle.Position, driveContext.ActiveTarget, distanceToTarget, now);
+                    return NpcDriveRecoveryOutcome.Continue;
+                case 3:
+                    contract.ForceGateWaypoint = false;
+                    contract.ForceRoadSafeTarget = true;
+                    recoveryReason = "Retrying via road-safe waypoint";
+                    UpdateDriveRecoveryStatus(contract, worldJob, recoveryReason, false);
+                    ArmDriveProgressTracking(contract, driverVehicle.Position, driveContext.ActiveTarget, distanceToTarget, now);
+                    return NpcDriveRecoveryOutcome.Continue;
+                default:
+                    if (worldJob != null)
+                    {
+                        worldJob.StatusText = worldJob.IsRivalJob
+                            ? "Rival convoy hidden after repeated path failure."
+                            : "Ambient convoy hidden after repeated path failure.";
+                        RecordWorldDispatchDiagnostic(
+                            NpcWorldDispatchDiagnosticStage.Cleanup,
+                            "Visual convoy hidden after repeated no-progress recovery failures.",
+                            true,
+                            worldJob);
+                        CleanupWorldJobVisual(worldJob);
+                        worldJob.HasVisibleConvoy = false;
+                        worldJob.NextVisualSpawnAttemptMs = 0;
+                        return NpcDriveRecoveryOutcome.Completed;
+                    }
+
+                    RecoverContractAtSafeAnchor(contract, now);
+                    return NpcDriveRecoveryOutcome.Completed;
+            }
+        }
+
+        private void UpdateDriveRecoveryStatus(NpcLogisticsContract contract, NpcWorldLogisticsJob worldJob, string reason, bool isFailure)
+        {
+            if (contract != null)
+            {
+                contract.StatusText = reason;
+            }
+
+            if (worldJob != null)
+            {
+                worldJob.StatusText = reason;
+                RecordWorldDispatchDiagnostic(
+                    NpcWorldDispatchDiagnosticStage.Revalidation,
+                    reason.Trim().TrimEnd('.') + ".",
+                    isFailure,
+                    worldJob);
+            }
+        }
+
+        private void ArmDriveProgressTracking(NpcLogisticsContract contract, Vector3 vehiclePosition, Vector3 targetPosition, float distanceToTarget, int now)
+        {
+            if (contract == null)
+            {
+                return;
+            }
+
+            contract.LastDriveProgressPosition = vehiclePosition;
+            contract.LastDriveProgressDistance = distanceToTarget;
+            contract.LastDriveProgressMs = now;
+            contract.LastDriveProgressCheckMs = now;
+            contract.LastDriveTargetPosition = targetPosition;
+        }
+
+        private void ResetDriveRecoveryState(NpcLogisticsContract contract)
+        {
+            if (contract == null)
+            {
+                return;
+            }
+
+            contract.LastDriveTargetPosition = Vector3.Zero;
+            contract.LastDriveProgressPosition = Vector3.Zero;
+            contract.LastDriveProgressDistance = 0f;
+            contract.LastDriveProgressMs = 0;
+            contract.LastDriveProgressCheckMs = 0;
+            contract.DriveRecoveryAttempts = 0;
+            contract.ForceGateWaypoint = false;
+            contract.ForceRoadSafeTarget = false;
+            contract.HasReachedGateWaypoint = false;
+        }
+
+        private void RecoverContractAtSafeAnchor(NpcLogisticsContract contract, int now)
+        {
+            if (contract == null)
+            {
+                return;
+            }
+
+            var originalPhase = contract.Phase;
+            var cargoSnapshot = CaptureCargoSnapshot(contract);
+
+            Vector3 spawnPosition;
+            float spawnHeading;
+            NpcRoutePhase recoveryPhase;
+            int recoveryWaitMs;
+            string recoveryStatus;
+            if (!TryResolveRecoveryAnchor(contract, originalPhase, cargoSnapshot.HasCargo, out spawnPosition, out spawnHeading, out recoveryPhase, out recoveryWaitMs, out recoveryStatus))
+            {
+                CleanupContractEntities(contract);
+                contract.StatusText = "Waiting to respawn route after path blockage";
+                contract.Phase = NpcRoutePhase.PendingSpawn;
+                contract.WaitUntilMs = now + RetryDelayMs;
+                return;
+            }
+
+            CleanupContractEntities(contract);
+
+            string spawnStatus;
+            if (!TrySpawnRouteEntitiesAt(contract, spawnPosition, spawnHeading, out spawnStatus))
+            {
+                contract.StatusText = string.IsNullOrWhiteSpace(spawnStatus)
+                    ? "Waiting to respawn route after path blockage"
+                    : spawnStatus;
+                contract.Phase = NpcRoutePhase.PendingSpawn;
+                contract.WaitUntilMs = now + RetryDelayMs;
+                return;
+            }
+
+            RestoreCargoSnapshot(contract, cargoSnapshot);
+            contract.Phase = recoveryPhase;
+            contract.WaitUntilMs = now + recoveryWaitMs;
+            contract.NextDriveTaskRefreshMs = 0;
+            contract.StatusText = recoveryStatus;
+            ResetDriveRecoveryState(contract);
+        }
+
+        private bool TryResolveRecoveryAnchor(
+            NpcLogisticsContract contract,
+            NpcRoutePhase originalPhase,
+            bool hasCargo,
+            out Vector3 spawnPosition,
+            out float spawnHeading,
+            out NpcRoutePhase recoveryPhase,
+            out int recoveryWaitMs,
+            out string recoveryStatus)
+        {
+            spawnPosition = Vector3.Zero;
+            spawnHeading = 0f;
+            recoveryPhase = NpcRoutePhase.PendingSpawn;
+            recoveryWaitMs = RetryDelayMs;
+            recoveryStatus = "Recovering route after path blockage";
+
+            switch (originalPhase)
+            {
+                case NpcRoutePhase.DrivingToOrigin:
+                case NpcRoutePhase.Loading:
+                    spawnPosition = GetOriginSpawnPosition(contract);
+                    spawnHeading = GetOriginSpawnHeading(contract);
+                    recoveryPhase = NpcRoutePhase.Loading;
+                    recoveryWaitMs = LoadDelayMs;
+                    recoveryStatus = "Recovered at origin after path blockage";
+                    return spawnPosition != Vector3.Zero;
+                case NpcRoutePhase.DrivingToDestination:
+                case NpcRoutePhase.Unloading:
+                    spawnPosition = ResolveIndustrySpawnAnchor(
+                        contract != null ? contract.DestinationIndustry : null,
+                        ResolveIndustryReferencePosition(contract != null ? contract.OriginIndustry : null, Vector3.Zero));
+                    spawnHeading = ComputeHeadingFromPositions(
+                        spawnPosition,
+                        ResolveIndustryReferencePosition(contract != null ? contract.OriginIndustry : null, spawnPosition));
+                    recoveryPhase = hasCargo ? NpcRoutePhase.Unloading : NpcRoutePhase.DrivingToOrigin;
+                    recoveryWaitMs = hasCargo ? UnloadDelayMs : 1000;
+                    recoveryStatus = hasCargo
+                        ? "Recovered at destination after path blockage"
+                        : "Recovered destination approach after path blockage";
+                    return spawnPosition != Vector3.Zero;
+                case NpcRoutePhase.ReturningToOffice:
+                case NpcRoutePhase.WaitingAtOffice:
+                    var office = _getActiveOffice != null ? _getActiveOffice() : null;
+                    if (office == null)
+                    {
+                        return false;
+                    }
+
+                    spawnPosition = SnapRoutePosition(office.SpawnPosition);
+                    spawnHeading = office.SpawnHeading;
+                    recoveryPhase = NpcRoutePhase.WaitingAtOffice;
+                    recoveryWaitMs = 1000;
+                    recoveryStatus = hasCargo
+                        ? "Recovered at office with cargo on hold"
+                        : "Recovered at office after path blockage";
+                    return true;
+                default:
+                    spawnPosition = GetOriginSpawnPosition(contract);
+                    spawnHeading = GetOriginSpawnHeading(contract);
+                    recoveryPhase = NpcRoutePhase.PendingSpawn;
+                    recoveryWaitMs = RetryDelayMs;
+                    recoveryStatus = "Recovering route after path blockage";
+                    return spawnPosition != Vector3.Zero;
+            }
+        }
+
+        private NpcCargoSnapshot CaptureCargoSnapshot(NpcLogisticsContract contract)
+        {
+            var snapshot = new NpcCargoSnapshot();
+            var cargoState = _fleetManager.GetOrCreateCargoState(GetCargoVehicle(contract));
+            if (cargoState == null || cargoState.IsEmpty)
+            {
+                return snapshot;
+            }
+
+            snapshot.HasCargo = true;
+            snapshot.CargoType = cargoState.CargoType;
+            snapshot.Commodity = cargoState.Commodity;
+            snapshot.WeightTons = cargoState.WeightTons;
+            snapshot.CargoCondition = cargoState.CargoCondition;
+            snapshot.TotalLostTons = cargoState.TotalLostTons;
+            snapshot.LastTrackedRigHealth = cargoState.LastTrackedRigHealth;
+            snapshot.LastTrackedRigSpeed = cargoState.LastTrackedRigSpeed;
+            snapshot.SourceIndustryId = cargoState.SourceIndustryId;
+            snapshot.SourceDistrictName = cargoState.SourceDistrictName;
+            return snapshot;
+        }
+
+        private void RestoreCargoSnapshot(NpcLogisticsContract contract, NpcCargoSnapshot snapshot)
+        {
+            if (contract == null || snapshot == null || !snapshot.HasCargo)
+            {
+                return;
+            }
+
+            var cargoVehicle = GetCargoVehicle(contract);
+            var cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
+            if (cargoState == null)
+            {
+                return;
+            }
+
+            cargoState.ClearCargo();
+            cargoState.CargoType = snapshot.CargoType;
+            cargoState.Commodity = snapshot.Commodity;
+            cargoState.WeightTons = Math.Max(0f, snapshot.WeightTons);
+            cargoState.CargoCondition = Math.Max(0f, snapshot.CargoCondition);
+            cargoState.TotalLostTons = Math.Max(0f, snapshot.TotalLostTons);
+            cargoState.LastTrackedRigHealth = Math.Max(0f, snapshot.LastTrackedRigHealth);
+            cargoState.LastTrackedRigSpeed = Math.Max(0f, snapshot.LastTrackedRigSpeed);
+            cargoState.SourceIndustryId = snapshot.SourceIndustryId ?? string.Empty;
+            cargoState.SourceDistrictName = snapshot.SourceDistrictName ?? string.Empty;
+            _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
         }
 
         private void ClearPedTasks(Ped driver)
@@ -3728,6 +4239,7 @@ namespace LSOL.Systems
             contract.Phase = NpcRoutePhase.PendingSpawn;
             contract.WaitUntilMs = 0;
             contract.NextDriveTaskRefreshMs = 0;
+            ResetDriveRecoveryState(contract);
         }
 
         private bool CanUseAsOrigin(Industry industry)
@@ -4647,7 +5159,7 @@ namespace LSOL.Systems
         private bool TryGetConfiguredOriginSpawnAnchor(NpcLogisticsContract contract, out Vector3 position, out float heading)
         {
             position = Vector3.Zero;
-            heading = 0f;
+            heading = float.NaN;
             var originIndustry = contract != null ? contract.OriginIndustry : null;
             if (originIndustry == null)
             {
@@ -4657,7 +5169,7 @@ namespace LSOL.Systems
             if (originIndustry.SiteRole == SiteRole.Warehouse && originIndustry.VehicleSpawnPosition.HasValue)
             {
                 position = originIndustry.VehicleSpawnPosition.Value;
-                heading = originIndustry.VehicleSpawnHeading ?? 0f;
+                heading = originIndustry.VehicleSpawnHeading.HasValue ? originIndustry.VehicleSpawnHeading.Value : float.NaN;
                 return true;
             }
 
@@ -4667,7 +5179,7 @@ namespace LSOL.Systems
             }
 
             position = originIndustry.VehicleSpawnPosition.Value;
-            heading = originIndustry.VehicleSpawnHeading ?? 0f;
+            heading = originIndustry.VehicleSpawnHeading.HasValue ? originIndustry.VehicleSpawnHeading.Value : float.NaN;
             return true;
         }
 
@@ -4677,43 +5189,288 @@ namespace LSOL.Systems
             float spawnHeading;
             if (TryGetConfiguredOriginSpawnAnchor(contract, out spawnPosition, out spawnHeading))
             {
-                return spawnPosition;
+                return SnapRoutePosition(spawnPosition);
             }
 
             var originIndustry = contract != null ? contract.OriginIndustry : null;
-            return originIndustry != null ? originIndustry.Position : Vector3.Zero;
+            var referencePosition = ResolveIndustryReferencePosition(
+                contract != null ? contract.DestinationIndustry : null,
+                originIndustry != null ? originIndustry.Position : Vector3.Zero);
+            return ResolveIndustrySpawnAnchor(originIndustry, referencePosition);
         }
 
         private float GetOriginSpawnHeading(NpcLogisticsContract contract)
         {
             Vector3 spawnPosition;
             float spawnHeading;
-            if (TryGetConfiguredOriginSpawnAnchor(contract, out spawnPosition, out spawnHeading))
+            if (TryGetConfiguredOriginSpawnAnchor(contract, out spawnPosition, out spawnHeading) && !float.IsNaN(spawnHeading))
             {
                 return spawnHeading;
             }
 
-            return 0f;
+            var resolvedSpawn = GetOriginSpawnPosition(contract);
+            var targetPosition = ResolveIndustryReferencePosition(
+                contract != null ? contract.DestinationIndustry : null,
+                resolvedSpawn);
+            return ComputeHeadingFromPositions(resolvedSpawn, targetPosition);
         }
 
         private Vector3 GetOriginRoutePosition(NpcLogisticsContract contract)
         {
-            return _getGroundPosition(GetOriginSpawnPosition(contract));
+            return BuildOriginDriveContext(contract).ActiveTarget;
         }
 
         private Vector3 GetDestinationRoutePosition(NpcLogisticsContract contract)
         {
-            if (contract == null || contract.DestinationIndustry == null)
+            return BuildDestinationDriveContext(contract).ActiveTarget;
+        }
+
+        private NpcDriveContext BuildOriginDriveContext(NpcLogisticsContract contract)
+        {
+            var referencePosition = ResolveIndustryReferencePosition(
+                contract != null ? contract.DestinationIndustry : null,
+                contract != null && contract.OriginIndustry != null ? contract.OriginIndustry.Position : Vector3.Zero);
+            return BuildIndustryDriveContext(contract, contract != null ? contract.OriginIndustry : null, referencePosition);
+        }
+
+        private NpcDriveContext BuildDestinationDriveContext(NpcLogisticsContract contract)
+        {
+            var referencePosition = ResolveIndustryReferencePosition(
+                contract != null ? contract.OriginIndustry : null,
+                contract != null && contract.DestinationIndustry != null ? contract.DestinationIndustry.Position : Vector3.Zero);
+            return BuildIndustryDriveContext(contract, contract != null ? contract.DestinationIndustry : null, referencePosition);
+        }
+
+        private NpcDriveContext BuildIndustryDriveContext(NpcLogisticsContract contract, Industry industry, Vector3 referencePosition)
+        {
+            var gateTarget = industry != null && industry.GatePosition.HasValue
+                ? (Vector3?)SnapRoutePosition(industry.GatePosition.Value)
+                : null;
+            var hasValidFinalPad = HasUsableVehicleSpawnAnchor(industry);
+            var finalTarget = hasValidFinalPad
+                ? SnapRoutePosition(industry.VehicleSpawnPosition.Value)
+                : ResolveIndustrySpawnAnchor(industry, referencePosition);
+
+            return new NpcDriveContext
             {
-                return Vector3.Zero;
+                ActiveTarget = ResolveDriveActiveTarget(contract, finalTarget, gateTarget, referencePosition),
+                FinalTarget = finalTarget,
+                GateTarget = gateTarget,
+                HasValidFinalPad = hasValidFinalPad,
+            };
+        }
+
+        private NpcDriveContext BuildOfficeDriveContext(NpcLogisticsContract contract, OfficeDefinition office, Vector3 referencePosition)
+        {
+            var finalTarget = SnapRoutePosition(office != null ? office.SpawnPosition : referencePosition);
+            var gateTarget = office != null && office.GatePosition.HasValue
+                ? (Vector3?)SnapRoutePosition(office.GatePosition.Value)
+                : null;
+            return new NpcDriveContext
+            {
+                ActiveTarget = ResolveDriveActiveTarget(contract, finalTarget, gateTarget, referencePosition),
+                FinalTarget = finalTarget,
+                GateTarget = gateTarget,
+                HasValidFinalPad = true,
+            };
+        }
+
+        private Vector3 ResolveDriveActiveTarget(NpcLogisticsContract contract, Vector3 finalTarget, Vector3? gateTarget, Vector3 referencePosition)
+        {
+            var driverVehicle = GetDriverVehicle(contract);
+            var vehiclePosition = driverVehicle != null && driverVehicle.Exists()
+                ? driverVehicle.Position
+                : referencePosition;
+
+            if (gateTarget.HasValue && contract != null && vehiclePosition.DistanceTo(gateTarget.Value) <= GateWaypointArrivalDistance)
+            {
+                contract.HasReachedGateWaypoint = true;
             }
 
-            if (contract.DestinationIndustry.VehicleSpawnPosition.HasValue)
+            if (gateTarget.HasValue && contract != null && !contract.HasReachedGateWaypoint)
             {
-                return _getGroundPosition(contract.DestinationIndustry.VehicleSpawnPosition.Value);
+                return contract.ForceRoadSafeTarget
+                    ? ResolveRoadSafePosition(gateTarget.Value, vehiclePosition, contract.DriveRecoveryAttempts)
+                    : gateTarget.Value;
             }
 
-            return _getGroundPosition(contract.DestinationIndustry.Position);
+            if (contract != null && contract.ForceGateWaypoint && gateTarget.HasValue)
+            {
+                return contract.ForceRoadSafeTarget
+                    ? ResolveRoadSafePosition(gateTarget.Value, vehiclePosition, contract.DriveRecoveryAttempts)
+                    : gateTarget.Value;
+            }
+
+            if (contract != null && contract.ForceRoadSafeTarget)
+            {
+                return ResolveRoadSafePosition(finalTarget, vehiclePosition, contract.DriveRecoveryAttempts);
+            }
+
+            return finalTarget;
+        }
+
+        private bool HasReachedDriveTarget(NpcLogisticsContract contract, NpcDriveContext context, bool allowGateCompletion)
+        {
+            var driverVehicle = GetDriverVehicle(contract);
+            if (driverVehicle == null || !driverVehicle.Exists())
+            {
+                return false;
+            }
+
+            if (driverVehicle.Position.DistanceTo(context.FinalTarget) <= ArrivalDistance)
+            {
+                return true;
+            }
+
+            return allowGateCompletion
+                && context.GateTarget.HasValue
+                && driverVehicle.Position.DistanceTo(context.GateTarget.Value) <= ArrivalDistance;
+        }
+
+        private Vector3 ResolveIndustrySpawnAnchor(Industry industry, Vector3 referencePosition)
+        {
+            if (HasUsableVehicleSpawnAnchor(industry))
+            {
+                return SnapRoutePosition(industry.VehicleSpawnPosition.Value);
+            }
+
+            if (industry != null && industry.GatePosition.HasValue)
+            {
+                return SnapRoutePosition(industry.GatePosition.Value);
+            }
+
+            return ResolveRoadSafePosition(industry != null ? industry.Position : Vector3.Zero, referencePosition, 0);
+        }
+
+        private Vector3 ResolveIndustryReferencePosition(Industry industry, Vector3 fallbackPosition)
+        {
+            return HasUsableVehicleSpawnAnchor(industry)
+                ? SnapRoutePosition(industry.VehicleSpawnPosition.Value)
+                : (industry != null && industry.GatePosition.HasValue
+                    ? SnapRoutePosition(industry.GatePosition.Value)
+                    : ResolveRoadSafePosition(industry != null ? industry.Position : fallbackPosition, fallbackPosition, 0));
+        }
+
+        private static bool HasUsableVehicleSpawnAnchor(Industry industry)
+        {
+            return industry != null
+                && industry.VehicleSpawnPosition.HasValue
+                && industry.VehicleSpawnPosition.Value != Vector3.Zero
+                && industry.VehicleSpawnPosition.Value.DistanceToSquared(industry.Position)
+                    > RouteMarkerFallbackMinDistance * RouteMarkerFallbackMinDistance;
+        }
+
+        private Vector3 ResolveRoadSafePosition(Vector3 seedPosition, Vector3 referencePosition, int recoveryAttempt)
+        {
+            Vector3 roadPosition;
+            if (TryGetClosestVehicleNode(seedPosition, out roadPosition))
+            {
+                return roadPosition;
+            }
+
+            var direction = seedPosition - referencePosition;
+            if (direction.LengthSquared() <= 0.001f)
+            {
+                direction = new Vector3(1f, 0f, 0f);
+            }
+
+            direction.Normalize();
+            var offsetDistance = RoadSafeFallbackOffsetDistance + (Math.Max(0, recoveryAttempt) * 4f);
+            return SnapRoutePosition(seedPosition - (direction * offsetDistance));
+        }
+
+        private bool TryGetClosestVehicleNode(Vector3 seedPosition, out Vector3 roadPosition)
+        {
+            roadPosition = Vector3.Zero;
+            var nodeArg = new OutputArgument();
+            try
+            {
+                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE, seedPosition.X, seedPosition.Y, seedPosition.Z, nodeArg, 1, 3f, 0f))
+                {
+                    roadPosition = SnapRoutePosition(nodeArg.GetResult<Vector3>());
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private Vector3 SnapRoutePosition(Vector3 position)
+        {
+            var fallback = _getGroundPosition != null ? _getGroundPosition(position) : position;
+            float groundZ;
+            if (TryProbeGroundZ(position, out groundZ))
+            {
+                return new Vector3(position.X, position.Y, groundZ);
+            }
+
+            return fallback;
+        }
+
+        private static bool TryProbeGroundZ(Vector3 position, out float groundZ)
+        {
+            groundZ = position.Z;
+            var sampleHeights = new[]
+            {
+                Math.Max(position.Z + 4f, 8f),
+                Math.Max(position.Z + 25f, 40f),
+                250f,
+                1000f,
+            };
+
+            for (int i = 0; i < sampleHeights.Length; i++)
+            {
+                if (TryProbeGroundZAtHeight(position.X, position.Y, sampleHeights[i], out groundZ))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryProbeGroundZAtHeight(float x, float y, float z, out float groundZ)
+        {
+            groundZ = z;
+
+            var groundArg = new OutputArgument();
+            try
+            {
+                if (Function.Call<bool>(Hash.GET_GROUND_Z_FOR_3D_COORD, x, y, z, groundArg, false, false))
+                {
+                    groundZ = groundArg.GetResult<float>();
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            groundArg = new OutputArgument();
+            try
+            {
+                if (Function.Call<bool>(Hash.GET_GROUND_Z_FOR_3D_COORD, x, y, z, groundArg, false))
+                {
+                    groundZ = groundArg.GetResult<float>();
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private static float ComputeHeadingFromPositions(Vector3 from, Vector3 to)
+        {
+            var delta = to - from;
+            return delta.LengthSquared() <= 0.001f
+                ? 0f
+                : Function.Call<float>(Hash.GET_HEADING_FROM_VECTOR_2D, delta.X, delta.Y);
         }
 
         private Vehicle GetDriverVehicle(NpcLogisticsContract contract)
@@ -5382,6 +6139,24 @@ namespace LSOL.Systems
         internal int WaitUntilMs { get; set; }
 
         internal int NextDriveTaskRefreshMs { get; set; }
+
+        internal Vector3 LastDriveTargetPosition { get; set; }
+
+        internal Vector3 LastDriveProgressPosition { get; set; }
+
+        internal float LastDriveProgressDistance { get; set; }
+
+        internal int LastDriveProgressMs { get; set; }
+
+        internal int LastDriveProgressCheckMs { get; set; }
+
+        internal int DriveRecoveryAttempts { get; set; }
+
+        internal bool ForceGateWaypoint { get; set; }
+
+        internal bool ForceRoadSafeTarget { get; set; }
+
+        internal bool HasReachedGateWaypoint { get; set; }
 
         internal Ped Driver { get; set; }
 

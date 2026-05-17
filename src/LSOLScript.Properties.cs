@@ -4,6 +4,7 @@ using System.Drawing;
 using System.Linq;
 using GTA;
 using GTA.Math;
+using GTA.Native;
 using GTA.UI;
 using LSOL.Domain;
 using LSOL.Systems;
@@ -15,7 +16,13 @@ namespace LSOL
 {
     public sealed partial class LSOLScript
     {
-        private const float ApartmentInteriorInteractionDistance = 3.2f;
+        private const int ApartmentSleepHours = 8;
+        private const int ApartmentSleepCooldownMinutes = 16 * 60;
+        private const int ApartmentSleepFadeDurationMs = 650;
+        private const int ApartmentSleepFadeSafetyBufferMs = 250;
+        private const int ApartmentSleepBlackoutDurationMs = 2000;
+        private const float ApartmentExteriorMarkerScale = 1.3f;
+        private const float ApartmentInteriorMarkerScale = 1.2f;
         private const float DealershipInteractionDistance = 4.6f;
 
         private static readonly Vector3 CommercialDealershipMarker = new Vector3(-979.56f, -2232.48f, 8.86f);
@@ -26,6 +33,7 @@ namespace LSOL
         private LemonMenu _officeObjectsMenu;
         private LemonMenu _officeObjectPurchaseMenu;
         private LemonMenu _apartmentMenu;
+        private LemonMenu _apartmentInteriorMenu;
         private LemonMenu _personalGarageMenu;
         private LemonMenu _personalDealershipMenu;
         private OfficeDefinition _menuOffice;
@@ -35,6 +43,17 @@ namespace LSOL
         private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
         private List<OfficeObjectDefinition> _officeObjectPreviewSlots;
         private OfficeObjectDefinition _pendingOfficeObjectPurchaseDefinition;
+        private ApartmentSleepTransitionPhase _apartmentSleepTransitionPhase;
+        private int _apartmentSleepTransitionPhaseStartedAt;
+        private bool _apartmentSleepClockApplied;
+
+        private enum ApartmentSleepTransitionPhase
+        {
+            None = 0,
+            FadingOut = 1,
+            HoldingBlack = 2,
+            FadingIn = 3,
+        }
 
         private void InitializePropertyMenus()
         {
@@ -68,6 +87,12 @@ namespace LSOL
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
+            _apartmentInteriorMenu = new LemonMenu("Apartment")
+            {
+                Subtitle = "Sleep or leave the active residence",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
             _personalGarageMenu = new LemonMenu("Personal Garage")
             {
                 Subtitle = "Retrieve and store owned personal vehicles",
@@ -92,6 +117,7 @@ namespace LSOL
                 || (_officeObjectsMenu != null && _officeObjectsMenu.IsOpen)
                 || (_officeObjectPurchaseMenu != null && _officeObjectPurchaseMenu.IsOpen)
                 || (_apartmentMenu != null && _apartmentMenu.IsOpen)
+                || (_apartmentInteriorMenu != null && _apartmentInteriorMenu.IsOpen)
                 || (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
                 || (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen);
         }
@@ -121,6 +147,11 @@ namespace LSOL
             if (_apartmentMenu != null)
             {
                 _apartmentMenu.Draw();
+            }
+
+            if (_apartmentInteriorMenu != null)
+            {
+                _apartmentInteriorMenu.Draw();
             }
 
             if (_personalGarageMenu != null)
@@ -159,6 +190,11 @@ namespace LSOL
             if (_apartmentMenu != null)
             {
                 _apartmentMenu.Close();
+            }
+
+            if (_apartmentInteriorMenu != null)
+            {
+                _apartmentInteriorMenu.Close();
             }
 
             if (_personalGarageMenu != null)
@@ -246,6 +282,12 @@ namespace LSOL
                 return true;
             }
 
+            if (_apartmentInteriorMenu != null && _apartmentInteriorMenu.IsOpen)
+            {
+                _apartmentInteriorMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             return false;
         }
 
@@ -272,6 +314,8 @@ namespace LSOL
         {
             var playerPos = player.Position;
             var drawDistanceSq = IndustryMarkerDrawDistance * IndustryMarkerDrawDistance;
+            var apartmentExteriorInteractionDistance = GetApartmentExteriorInteractionDistance();
+            var apartmentInteriorInteractionDistance = GetApartmentInteriorInteractionDistance();
             var activeOffice = _propertyManager.ActiveOffice;
             var activeApartment = _propertyManager.ActiveApartment;
 
@@ -319,7 +363,7 @@ namespace LSOL
                     apartment.ExteriorPosition,
                     Vector3.Zero,
                     Vector3.Zero,
-                    new Vector3(_config.MarkerRadius * 1.3f, _config.MarkerRadius * 1.3f, _config.MarkerHeight),
+                    new Vector3(apartmentExteriorInteractionDistance, apartmentExteriorInteractionDistance, _config.MarkerHeight),
                     isActive ? Color.FromArgb(210, 220, 188, 84) : Color.FromArgb(205, 188, 134, 82),
                     false,
                     false,
@@ -328,7 +372,7 @@ namespace LSOL
                     null,
                     false);
 
-                if (canShowPrompts && !promptShown && playerPos.DistanceTo(apartment.ExteriorPosition) <= OfficeInteractionDistance)
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(apartment.ExteriorPosition) <= apartmentExteriorInteractionDistance)
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to manage {1}.", KeyName(_controls.Interact), apartment.DisplayName)));
                     promptShown = true;
@@ -342,7 +386,7 @@ namespace LSOL
                     activeApartment.InteriorPosition,
                     Vector3.Zero,
                     Vector3.Zero,
-                    new Vector3(_config.MarkerRadius * 1.2f, _config.MarkerRadius * 1.2f, _config.MarkerHeight),
+                    new Vector3(apartmentInteriorInteractionDistance, apartmentInteriorInteractionDistance, _config.MarkerHeight),
                     Color.FromArgb(205, 234, 196, 110),
                     false,
                     false,
@@ -351,9 +395,9 @@ namespace LSOL
                     null,
                     false);
 
-                if (canShowPrompts && !promptShown && playerPos.DistanceTo(activeApartment.InteriorPosition) <= ApartmentInteriorInteractionDistance)
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(activeApartment.InteriorPosition) <= apartmentInteriorInteractionDistance)
                 {
-                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to leave the apartment.", KeyName(_controls.Interact))));
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} for apartment options.", KeyName(_controls.Interact))));
                     promptShown = true;
                 }
             }
@@ -394,9 +438,9 @@ namespace LSOL
         private bool HandlePropertyInteraction(Ped player)
         {
             var activeApartment = _propertyManager.ActiveApartment;
-            if (activeApartment != null && player.Position.DistanceTo(activeApartment.InteriorPosition) <= ApartmentInteriorInteractionDistance)
+            if (activeApartment != null && player.Position.DistanceTo(activeApartment.InteriorPosition) <= GetApartmentInteriorInteractionDistance())
             {
-                ExitActiveApartment();
+                OpenActiveApartmentInteriorMenu();
                 return true;
             }
 
@@ -445,16 +489,27 @@ namespace LSOL
 
         private InteriorDefinition GetApartmentInInteractionRange(Vector3 position)
         {
+            var apartmentExteriorInteractionDistance = GetApartmentExteriorInteractionDistance();
             for (int i = 0; i < _propertyManager.Interiors.Count; i++)
             {
                 var apartment = _propertyManager.Interiors[i];
-                if (apartment != null && position.DistanceTo(apartment.ExteriorPosition) <= OfficeInteractionDistance)
+                if (apartment != null && position.DistanceTo(apartment.ExteriorPosition) <= apartmentExteriorInteractionDistance)
                 {
                     return apartment;
                 }
             }
 
             return null;
+        }
+
+        private float GetApartmentExteriorInteractionDistance()
+        {
+            return _config.MarkerRadius * ApartmentExteriorMarkerScale;
+        }
+
+        private float GetApartmentInteriorInteractionDistance()
+        {
+            return _config.MarkerRadius * ApartmentInteriorMarkerScale;
         }
 
         private bool IsNearCommercialDealership(Vector3 position)
@@ -1773,13 +1828,34 @@ namespace LSOL
             _apartmentMenu.Open();
         }
 
+        private void OpenActiveApartmentInteriorMenu()
+        {
+            var apartment = _propertyManager.ActiveApartment;
+            if (apartment == null)
+            {
+                return;
+            }
+
+            CloseAllMenus();
+            RebuildApartmentInteriorMenuItems(apartment);
+            _apartmentInteriorMenu.Open();
+        }
+
         private void RebuildApartmentMenuItems()
         {
             var items = new List<OfficeMenuItem>();
             var apartment = _menuApartment;
             var apartmentState = apartment != null ? _propertyManager.GetApartmentState(apartment.InteriorId) : null;
+            var transferSourceState = apartment != null
+                ? _propertyManager.Interiors
+                    .Where(candidate => candidate != null && !string.Equals(candidate.InteriorId, apartment.InteriorId, StringComparison.OrdinalIgnoreCase))
+                    .Select(candidate => _propertyManager.GetApartmentState(candidate.InteriorId))
+                    .FirstOrDefault(state => state != null && state.IsRented && !state.IsOwned)
+                : null;
             var isActiveApartment = apartment != null && string.Equals(_propertyManager.ActiveApartmentId, apartment.InteriorId, StringComparison.OrdinalIgnoreCase);
-            var hasAccess = apartmentState != null && apartmentState.IsOwned;
+            var isOwned = apartmentState != null && apartmentState.IsOwned;
+            var isRentalOnly = apartmentState != null && apartmentState.IsRented && !apartmentState.IsOwned;
+            var hasAccess = apartment != null && apartmentState != null && (apartmentState.IsOwned || apartmentState.IsRented);
             var hasArrears = apartmentState != null && apartmentState.OutstandingRent > 0.01f;
 
             _apartmentMenu.Title = apartment != null ? apartment.DisplayName : "Apartment";
@@ -1790,7 +1866,12 @@ namespace LSOL
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
-                DetailFactory = () => apartment != null ? (apartment.InteriorIgName ?? apartment.InteriorType ?? string.Empty) : string.Empty,
+                DetailFactory = () => apartment == null
+                    ? string.Empty
+                    : string.Format(
+                        "{0} | {1}",
+                        apartment.InteriorIgName ?? apartment.InteriorType ?? string.Empty,
+                        isOwned ? "Owned" : isRentalOnly ? "Rented" : "Available"),
             });
 
             if (apartment == null)
@@ -1799,16 +1880,34 @@ namespace LSOL
                 return;
             }
 
-            if (!hasAccess)
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => apartment.DisplayName,
+                DetailFactory = () => string.Format("Weekly rent {0} | Purchase {1}", ModFormatting.FormatMoney(apartment.InteriorWeeklyRent), ModFormatting.FormatMoney(apartment.InteriorPrice)),
+            });
+
+            if (!isOwned)
             {
                 items.Add(new OfficeMenuItem
                 {
                     CaptionFactory = () => "Purchase Apartment",
-                    DetailFactory = () => string.Format("Pay {0} to purchase this apartment.", ModFormatting.FormatMoney(apartment.InteriorPrice)),
+                    DetailFactory = () => isRentalOnly
+                        ? string.Format("Pay {0} to convert this apartment to owned access.", ModFormatting.FormatMoney(apartment.InteriorPrice))
+                        : string.Format("Pay {0} to purchase this apartment.", ModFormatting.FormatMoney(apartment.InteriorPrice)),
                     OnActivate = PurchaseSelectedApartment,
                 });
-                _apartmentMenu.SetItems(items);
-                return;
+            }
+
+            if (!hasAccess)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Rent Apartment",
+                    DetailFactory = () => transferSourceState != null
+                        ? string.Format("Pay {0} to move your current rental to this apartment.", ModFormatting.FormatMoney(apartment.InteriorWeeklyRent))
+                        : string.Format("Pay {0} to rent this apartment.", ModFormatting.FormatMoney(apartment.InteriorWeeklyRent)),
+                    OnActivate = RentSelectedApartment,
+                });
             }
 
             if (hasArrears)
@@ -1818,6 +1917,34 @@ namespace LSOL
                     CaptionFactory = () => "Settle Apartment Arrears",
                     DetailFactory = () => string.Format("Outstanding balance: {0}", ModFormatting.FormatMoney(apartmentState.OutstandingRent)),
                     OnActivate = PaySelectedApartmentArrears,
+                });
+            }
+
+            if (!hasAccess)
+            {
+                _apartmentMenu.SetItems(items);
+                return;
+            }
+
+            if (isRentalOnly)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Cancel Rent",
+                    DetailFactory = () => isActiveApartment
+                        ? "Stop renting this apartment and switch to another available residence if one exists."
+                        : "Stop renting this apartment and end future weekly rent charges.",
+                    OnActivate = CancelSelectedApartmentRental,
+                });
+            }
+
+            if (isOwned)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Sell Apartment",
+                    DetailFactory = () => "Sell this apartment and remove ownership access.",
+                    OnActivate = SellSelectedApartment,
                 });
             }
 
@@ -1850,6 +1977,37 @@ namespace LSOL
             _apartmentMenu.SetItems(items);
         }
 
+        private void RebuildApartmentInteriorMenuItems(InteriorDefinition apartment)
+        {
+            var items = new List<OfficeMenuItem>();
+
+            _apartmentInteriorMenu.Title = apartment != null ? apartment.DisplayName : "Apartment";
+            _apartmentInteriorMenu.Subtitle = apartment != null
+                ? string.Format("{0} | Rest or step outside", apartment.InteriorIgName ?? apartment.InteriorType ?? apartment.DisplayName)
+                : "Sleep or leave the active residence";
+
+            if (apartment == null)
+            {
+                _apartmentInteriorMenu.SetItems(items);
+                return;
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Sleep ({0} Hours)", ApartmentSleepHours),
+                DetailFactory = BuildApartmentSleepMenuDetail,
+                OnActivate = SleepInActiveApartment,
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Exit Apartment",
+                DetailFactory = () => string.Format("Return to the exterior marker for {0}.", apartment.DisplayName),
+                OnActivate = ExitActiveApartment,
+            });
+
+            _apartmentInteriorMenu.SetItems(items);
+        }
+
         private void PurchaseSelectedApartment()
         {
             if (_menuApartment == null)
@@ -1859,6 +2017,24 @@ namespace LSOL
 
             string message;
             if (_propertyManager.TryPurchaseApartment(_menuApartment.InteriorId, ref _profit, GetCurrentInGameWeekMinute(), out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                RebuildApartmentMenuItems();
+                ReevaluatePlayerSuccesses(true);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void RentSelectedApartment()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryRentApartment(_menuApartment.InteriorId, ref _profit, GetCurrentInGameWeekMinute(), out message))
             {
                 _tabletStateStore.MarkBalanceDirty();
                 RebuildApartmentMenuItems();
@@ -1878,6 +2054,41 @@ namespace LSOL
             string message;
             if (_propertyManager.TryActivateApartment(_menuApartment.InteriorId, out message))
             {
+                RebuildApartmentMenuItems();
+                ReevaluatePlayerSuccesses(true);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void CancelSelectedApartmentRental()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryCancelApartmentRental(_menuApartment.InteriorId, out message))
+            {
+                RebuildApartmentMenuItems();
+                ReevaluatePlayerSuccesses(true);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void SellSelectedApartment()
+        {
+            if (_menuApartment == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TrySellApartment(_menuApartment.InteriorId, ref _profit, out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
                 RebuildApartmentMenuItems();
                 ReevaluatePlayerSuccesses(true);
             }
@@ -1925,7 +2136,6 @@ namespace LSOL
 
             player.Position = _menuApartment.InteriorPosition;
             CloseAllMenus();
-            ShowStatus(string.Format("Entered {0}.", _menuApartment.InteriorIgName));
         }
 
         private void ExitActiveApartment()
@@ -1938,7 +2148,204 @@ namespace LSOL
             }
 
             player.Position = apartment.ExteriorPosition;
-            ShowStatus(string.Format("Exited {0}.", apartment.DisplayName));
+            CloseAllMenus();
+        }
+
+        private void SleepInActiveApartment()
+        {
+            if (IsApartmentSleepTransitionActive)
+            {
+                return;
+            }
+
+            var apartment = _propertyManager.ActiveApartment;
+            var player = Game.Player.Character;
+            if (apartment == null || player == null || !player.Exists())
+            {
+                return;
+            }
+
+            string reason;
+            if (!_propertyManager.CanUseApartmentSystems(out reason))
+            {
+                ShowStatus(reason);
+                return;
+            }
+
+            var remainingCooldownMinutes = GetApartmentSleepCooldownRemainingMinutes(GetCurrentInGameWeekMinute());
+            if (remainingCooldownMinutes > 0)
+            {
+                ShowStatus(string.Format("You can sleep again in {0}.", FormatApartmentSleepCooldown(remainingCooldownMinutes)));
+                return;
+            }
+
+            StartApartmentSleepTransition(player, Game.GameTime);
+        }
+
+        private string BuildApartmentSleepMenuDetail()
+        {
+            var remainingCooldownMinutes = GetApartmentSleepCooldownRemainingMinutes(GetCurrentInGameWeekMinute());
+            if (remainingCooldownMinutes > 0)
+            {
+                return string.Format("Available again in {0}.", FormatApartmentSleepCooldown(remainingCooldownMinutes));
+            }
+
+            return string.Format("Advance the city clock by {0} hours and stay inside.", ApartmentSleepHours);
+        }
+
+        private int GetApartmentSleepCooldownRemainingMinutes(int currentInGameMinute)
+        {
+            var lastSuccessfulSleepMinute = _propertyManager != null ? _propertyManager.LastSuccessfulApartmentSleepMinute : -1;
+            if (lastSuccessfulSleepMinute < 0)
+            {
+                return 0;
+            }
+
+            var elapsedMinutes = currentInGameMinute - lastSuccessfulSleepMinute;
+            if (elapsedMinutes < 0)
+            {
+                return 0;
+            }
+
+            return Math.Max(0, ApartmentSleepCooldownMinutes - elapsedMinutes);
+        }
+
+        private static string FormatApartmentSleepCooldown(int remainingMinutes)
+        {
+            var hours = Math.Max(0, remainingMinutes) / 60;
+            var minutes = Math.Max(0, remainingMinutes) % 60;
+            if (hours <= 0)
+            {
+                return string.Format("{0}m", minutes);
+            }
+
+            return string.Format("{0}h {1:D2}m", hours, minutes);
+        }
+
+        private void StartApartmentSleepTransition(Ped player, int gameTime)
+        {
+            CloseAllMenus();
+            _apartmentSleepTransitionPhase = ApartmentSleepTransitionPhase.FadingOut;
+            _apartmentSleepTransitionPhaseStartedAt = gameTime;
+            _apartmentSleepClockApplied = false;
+
+            if (player != null && player.Exists())
+            {
+                Function.Call(Hash.FREEZE_ENTITY_POSITION, player.Handle, true);
+            }
+
+            Function.Call(Hash.DO_SCREEN_FADE_OUT, ApartmentSleepFadeDurationMs);
+        }
+
+        private void UpdateApartmentSleepTransition(Ped player, int gameTime)
+        {
+            if (!IsApartmentSleepTransitionActive)
+            {
+                return;
+            }
+
+            Function.Call(Hash.DISABLE_ALL_CONTROL_ACTIONS, 0);
+            if (player != null && player.Exists())
+            {
+                Function.Call(Hash.FREEZE_ENTITY_POSITION, player.Handle, true);
+            }
+
+            switch (_apartmentSleepTransitionPhase)
+            {
+                case ApartmentSleepTransitionPhase.FadingOut:
+                    if (Function.Call<bool>(Hash.IS_SCREEN_FADED_OUT) || gameTime - _apartmentSleepTransitionPhaseStartedAt >= ApartmentSleepFadeDurationMs + ApartmentSleepFadeSafetyBufferMs)
+                    {
+                        ApplyApartmentSleepTimeAdvance();
+                        _apartmentSleepTransitionPhase = ApartmentSleepTransitionPhase.HoldingBlack;
+                        _apartmentSleepTransitionPhaseStartedAt = gameTime;
+                    }
+
+                    break;
+
+                case ApartmentSleepTransitionPhase.HoldingBlack:
+                    if (gameTime - _apartmentSleepTransitionPhaseStartedAt >= ApartmentSleepBlackoutDurationMs)
+                    {
+                        Function.Call(Hash.DO_SCREEN_FADE_IN, ApartmentSleepFadeDurationMs);
+                        _apartmentSleepTransitionPhase = ApartmentSleepTransitionPhase.FadingIn;
+                        _apartmentSleepTransitionPhaseStartedAt = gameTime;
+                    }
+
+                    break;
+
+                case ApartmentSleepTransitionPhase.FadingIn:
+                    if (Function.Call<bool>(Hash.IS_SCREEN_FADED_IN) || gameTime - _apartmentSleepTransitionPhaseStartedAt >= ApartmentSleepFadeDurationMs + ApartmentSleepFadeSafetyBufferMs)
+                    {
+                        CompleteApartmentSleepTransition(player);
+                    }
+
+                    break;
+            }
+        }
+
+        private void ApplyApartmentSleepTimeAdvance()
+        {
+            if (_apartmentSleepClockApplied)
+            {
+                return;
+            }
+
+            AdvanceWorldClockHours(ApartmentSleepHours);
+            if (_propertyManager != null)
+            {
+                _propertyManager.RecordSuccessfulApartmentSleep(GetCurrentInGameWeekMinute());
+            }
+
+            _tabletStateStore.MarkAllDirty();
+            _apartmentSleepClockApplied = true;
+        }
+
+        private void CompleteApartmentSleepTransition(Ped player)
+        {
+            if (player != null && player.Exists())
+            {
+                Function.Call(Hash.FREEZE_ENTITY_POSITION, player.Handle, false);
+            }
+
+            _apartmentSleepTransitionPhase = ApartmentSleepTransitionPhase.None;
+            _apartmentSleepTransitionPhaseStartedAt = 0;
+            _apartmentSleepClockApplied = false;
+        }
+
+        private void CancelApartmentSleepTransition()
+        {
+            var player = Game.Player.Character;
+            CompleteApartmentSleepTransition(player);
+
+            if (!Function.Call<bool>(Hash.IS_SCREEN_FADED_IN))
+            {
+                Function.Call(Hash.DO_SCREEN_FADE_IN, 0);
+            }
+        }
+
+        private bool IsApartmentSleepTransitionActive
+        {
+            get { return _apartmentSleepTransitionPhase != ApartmentSleepTransitionPhase.None; }
+        }
+
+        private static void AdvanceWorldClockHours(int hours)
+        {
+            if (hours == 0)
+            {
+                return;
+            }
+
+            var year = Math.Max(2000, Function.Call<int>(Hash.GET_CLOCK_YEAR));
+            var month = Math.Max(1, Math.Min(12, Function.Call<int>(Hash.GET_CLOCK_MONTH) + 1));
+            var day = Math.Max(1, Function.Call<int>(Hash.GET_CLOCK_DAY_OF_MONTH));
+            var clockHours = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_HOURS)) % 24;
+            var minutes = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_MINUTES)) % 60;
+            var seconds = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_SECONDS)) % 60;
+            var clampedDay = Math.Min(day, DateTime.DaysInMonth(year, month));
+            var currentClock = new DateTime(year, month, clampedDay, clockHours, minutes, seconds, DateTimeKind.Unspecified);
+            var advancedClock = currentClock.AddHours(hours);
+
+            Function.Call(Hash.SET_CLOCK_DATE, advancedClock.Day, advancedClock.Month - 1, advancedClock.Year);
+            Function.Call(Hash.SET_CLOCK_TIME, advancedClock.Hour, advancedClock.Minute, advancedClock.Second);
         }
 
         private string BuildPersonalGarageSummary()

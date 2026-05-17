@@ -22,6 +22,7 @@ namespace LSOL.Systems
     {
         private const int MinutesPerWeek = 7 * 24 * 60;
         private const int MinutesPerDay = 24 * 60;
+        private const float ApartmentSaleRefundRatio = 0.5f;
         private const float CommercialVehicleSaleRefundRatio = 0.5f;
         private const int CommercialRentalRefundDays = 2;
 
@@ -120,6 +121,11 @@ namespace LSOL.Systems
             get { return _state.ActiveApartmentId ?? string.Empty; }
         }
 
+        public int LastSuccessfulApartmentSleepMinute
+        {
+            get { return _state.LastSuccessfulApartmentSleepMinute; }
+        }
+
         public OfficeDefinition ActiveOffice
         {
             get { return GetOfficeDefinition(_state.ActiveOfficeId); }
@@ -128,6 +134,11 @@ namespace LSOL.Systems
         public InteriorDefinition ActiveApartment
         {
             get { return GetInteriorDefinition(_state.ActiveApartmentId); }
+        }
+
+        public void RecordSuccessfulApartmentSleep(int currentInGameMinute)
+        {
+            _state.LastSuccessfulApartmentSleepMinute = currentInGameMinute;
         }
 
         public void SetOfficeGarageLimitEnforced(bool enforced)
@@ -162,6 +173,7 @@ namespace LSOL.Systems
             _state = snapshot != null ? CloneSnapshot(snapshot) : new PropertyOwnershipPersistenceSnapshot();
             EnsureValidSelections();
             NormalizeOfficeAccessContracts();
+            NormalizeApartmentAccessContracts();
             PruneInvalidOfficeObjects();
             InitializeRentTracking(currentInGameMinute);
             NormalizeCommercialGarageAssignments();
@@ -320,9 +332,9 @@ namespace LSOL.Systems
             reason = string.Empty;
             var apartment = ActiveApartment;
             var apartmentState = GetApartmentState(_state.ActiveApartmentId);
-            if (apartment == null || apartmentState == null || !apartmentState.IsOwned)
+            if (apartment == null || apartmentState == null || !HasApartmentAccess(apartmentState))
             {
-                reason = "Purchase and activate an apartment to access personal storage.";
+                reason = "Rent or purchase and activate an apartment to access personal storage.";
                 return false;
             }
 
@@ -545,6 +557,62 @@ namespace LSOL.Systems
             return true;
         }
 
+        public bool TryRentApartment(string interiorId, ref float balance, int currentInGameMinute, out string message)
+        {
+            return TryAcquireApartmentRental(interiorId, ref balance, currentInGameMinute, out message);
+        }
+
+        private bool TryAcquireApartmentRental(string interiorId, ref float balance, int currentInGameMinute, out string message)
+        {
+            message = string.Empty;
+            var definition = GetInteriorDefinition(interiorId);
+            if (definition == null)
+            {
+                message = "Apartment definition unavailable.";
+                return false;
+            }
+
+            var state = GetOrCreateApartmentState(interiorId);
+            if (state.IsOwned || state.IsRented)
+            {
+                message = string.Format("{0} already has access.", definition.DisplayName);
+                return false;
+            }
+
+            if (state.OutstandingRent > 0.01f)
+            {
+                message = string.Format("Settle {0} in outstanding rent before renting {1} again.", ModFormatting.FormatMoney(state.OutstandingRent), definition.DisplayName);
+                return false;
+            }
+
+            var sourceRental = GetTransferableApartmentRental(interiorId);
+            var upfrontRent = Math.Max(0f, definition.InteriorWeeklyRent);
+            if (balance < upfrontRent)
+            {
+                message = string.Format("Need {0} to rent {1}.", ModFormatting.FormatMoney(upfrontRent), definition.DisplayName);
+                return false;
+            }
+
+            balance -= upfrontRent;
+            RecordFinanceExpense(CompanyFinanceCategory.ApartmentRent, upfrontRent, currentInGameMinute, string.Format("Apartment access for {0}", definition.DisplayName));
+            if (sourceRental != null)
+            {
+                ReleaseApartmentRental(sourceRental, false);
+            }
+
+            state.IsOwned = false;
+            state.IsRented = true;
+            state.IsAccessSuspended = false;
+            state.OutstandingRent = 0f;
+            state.LastChargedWeekIndex = GetWeekIndex(currentInGameMinute);
+            _state.ActiveApartmentId = definition.InteriorId;
+            ReassignPersonalVehiclesToActiveApartment();
+            message = sourceRental != null
+                ? string.Format("Transferred apartment rental to {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(upfrontRent))
+                : string.Format("Rented {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(upfrontRent));
+            return true;
+        }
+
         public bool TryPurchaseApartment(string interiorId, ref float balance, int currentInGameMinute, out string message)
         {
             message = string.Empty;
@@ -562,6 +630,13 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var wasRental = state.IsRented;
+            if (!wasRental && state.OutstandingRent > 0.01f)
+            {
+                message = string.Format("Settle {0} in outstanding rent before purchasing {1}.", ModFormatting.FormatMoney(state.OutstandingRent), definition.DisplayName);
+                return false;
+            }
+
             if (balance < definition.InteriorPrice)
             {
                 message = string.Format("Need {0} to purchase {1}.", ModFormatting.FormatMoney(definition.InteriorPrice), definition.DisplayName);
@@ -571,16 +646,16 @@ namespace LSOL.Systems
             balance -= definition.InteriorPrice;
             RecordFinanceExpense(CompanyFinanceCategory.OtherExpense, definition.InteriorPrice, currentInGameMinute, string.Format("Purchased apartment {0}", definition.DisplayName));
             state.IsOwned = true;
+            state.IsRented = false;
             state.IsAccessSuspended = false;
             state.OutstandingRent = 0f;
-            state.LastChargedWeekIndex = GetWeekIndex(currentInGameMinute);
-            if (string.IsNullOrWhiteSpace(_state.ActiveApartmentId))
-            {
-                _state.ActiveApartmentId = definition.InteriorId;
-            }
+            state.LastChargedWeekIndex = -1;
+            _state.ActiveApartmentId = definition.InteriorId;
 
             ReassignPersonalVehiclesToActiveApartment();
-            message = string.Format("Purchased {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(definition.InteriorPrice));
+            message = wasRental
+                ? string.Format("Purchased {0} for {1}. Rental access was converted to owned access.", definition.DisplayName, ModFormatting.FormatMoney(definition.InteriorPrice))
+                : string.Format("Purchased {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(definition.InteriorPrice));
             return true;
         }
 
@@ -589,9 +664,9 @@ namespace LSOL.Systems
             message = string.Empty;
             var definition = GetInteriorDefinition(interiorId);
             var state = GetApartmentState(interiorId);
-            if (definition == null || state == null || !state.IsOwned)
+            if (definition == null || state == null || !HasApartmentAccess(state))
             {
-                message = "Purchase the apartment before activating it.";
+                message = "Acquire the apartment before activating it.";
                 return false;
             }
 
@@ -604,6 +679,82 @@ namespace LSOL.Systems
             _state.ActiveApartmentId = definition.InteriorId;
             ReassignPersonalVehiclesToActiveApartment();
             message = string.Format("Activated {0}.", definition.DisplayName);
+            return true;
+        }
+
+        public bool TryCancelApartmentRental(string interiorId, out string message)
+        {
+            message = string.Empty;
+            var definition = GetInteriorDefinition(interiorId);
+            var state = GetApartmentState(interiorId);
+            if (definition == null || !IsRentalOnlyApartmentAccess(state))
+            {
+                message = "No apartment rental to cancel.";
+                return false;
+            }
+
+            var hasOutstandingRent = state.OutstandingRent > 0.01f;
+            var isActiveApartment = string.Equals(_state.ActiveApartmentId, definition.InteriorId, StringComparison.OrdinalIgnoreCase);
+            if (isActiveApartment)
+            {
+                var fallbackState = FindOperationalFallbackApartmentState(definition.InteriorId);
+                var fallbackDefinition = fallbackState != null ? GetInteriorDefinition(fallbackState.InteriorId) : null;
+                ReleaseApartmentRental(state, false);
+                _state.ActiveApartmentId = fallbackDefinition != null ? fallbackDefinition.InteriorId : string.Empty;
+                ReassignPersonalVehiclesToActiveApartment();
+                message = hasOutstandingRent
+                    ? string.Format(
+                        "Canceled rental for {0}. Outstanding arrears remain due.{1}",
+                        definition.DisplayName,
+                        fallbackDefinition != null ? string.Format(" Active residence moved to {0}.", fallbackDefinition.DisplayName) : " No active apartment is selected.")
+                    : string.Format(
+                        "Canceled rental for {0}.{1}",
+                        definition.DisplayName,
+                        fallbackDefinition != null ? string.Format(" Active residence moved to {0}.", fallbackDefinition.DisplayName) : " No active apartment is selected.");
+                return true;
+            }
+
+            ReleaseApartmentRental(state, false);
+            message = hasOutstandingRent
+                ? string.Format("Canceled rental for {0}. Outstanding arrears remain due.", definition.DisplayName)
+                : string.Format("Canceled rental for {0}.", definition.DisplayName);
+            return true;
+        }
+
+        public bool TrySellApartment(string interiorId, ref float balance, out string message)
+        {
+            message = string.Empty;
+            var definition = GetInteriorDefinition(interiorId);
+            var state = GetApartmentState(interiorId);
+            if (definition == null || state == null || !state.IsOwned)
+            {
+                message = "No owned apartment to sell.";
+                return false;
+            }
+
+            var refund = Math.Max(0f, definition.InteriorPrice * ApartmentSaleRefundRatio);
+            var isActiveApartment = string.Equals(_state.ActiveApartmentId, definition.InteriorId, StringComparison.OrdinalIgnoreCase);
+            var fallbackState = isActiveApartment ? FindOperationalFallbackApartmentState(definition.InteriorId) : null;
+            var fallbackDefinition = fallbackState != null ? GetInteriorDefinition(fallbackState.InteriorId) : null;
+
+            balance += refund;
+            RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Sold apartment {0}", definition.DisplayName));
+            ReleaseApartmentOwnership(state);
+            if (isActiveApartment)
+            {
+                _state.ActiveApartmentId = fallbackDefinition != null ? fallbackDefinition.InteriorId : string.Empty;
+                ReassignPersonalVehiclesToActiveApartment();
+            }
+
+            message = string.Format(
+                "Sold {0} for {1}.{2}",
+                definition.DisplayName,
+                ModFormatting.FormatMoney(refund),
+                isActiveApartment
+                    ? fallbackDefinition != null
+                        ? string.Format(" Active residence moved to {0}.", fallbackDefinition.DisplayName)
+                        : " No active apartment is selected."
+                    : string.Empty);
             return true;
         }
 
@@ -1642,8 +1793,23 @@ namespace LSOL.Systems
 
         private void ProcessApartmentWeeklyCharge(InteriorDefinition definition, ApartmentOwnershipPersistenceEntry state, int currentWeekIndex, ref float balance, List<string> messages)
         {
-            if (definition == null || state == null || !state.IsOwned)
+            if (definition == null || state == null)
             {
+                return;
+            }
+
+            if (state.IsOwned)
+            {
+                state.IsRented = false;
+                state.IsAccessSuspended = false;
+                state.OutstandingRent = 0f;
+                state.LastChargedWeekIndex = -1;
+                return;
+            }
+
+            if (!IsRentalOnlyApartmentAccess(state))
+            {
+                state.LastChargedWeekIndex = -1;
                 return;
             }
 
@@ -1727,17 +1893,14 @@ namespace LSOL.Systems
 
         private void ReassignPersonalVehiclesToActiveApartment()
         {
-            if (string.IsNullOrWhiteSpace(_state.ActiveApartmentId))
-            {
-                return;
-            }
+            var assignedApartmentId = _state.ActiveApartmentId ?? string.Empty;
 
             for (int i = 0; i < _state.PersonalVehicles.Count; i++)
             {
                 var entry = _state.PersonalVehicles[i];
                 if (entry != null)
                 {
-                    entry.AssignedApartmentId = _state.ActiveApartmentId;
+                    entry.AssignedApartmentId = assignedApartmentId;
                 }
             }
         }
@@ -1785,6 +1948,44 @@ namespace LSOL.Systems
             _state.ActiveOfficeId = fallbackOfficeState != null ? fallbackOfficeState.OfficeId : string.Empty;
         }
 
+        private void NormalizeApartmentAccessContracts()
+        {
+            for (int i = 0; i < _state.Apartments.Count; i++)
+            {
+                var state = _state.Apartments[i];
+                if (state == null)
+                {
+                    continue;
+                }
+
+                if (state.IsOwned)
+                {
+                    state.IsRented = false;
+                    state.IsAccessSuspended = false;
+                    state.OutstandingRent = 0f;
+                    state.LastChargedWeekIndex = -1;
+                    continue;
+                }
+
+                if (!state.IsRented)
+                {
+                    state.LastChargedWeekIndex = -1;
+                }
+            }
+
+            var retainedRentalApartmentId = ResolveRetainedRentalApartmentId();
+            RelinquishOtherApartmentRentals(retainedRentalApartmentId, true);
+
+            var activeApartmentState = GetApartmentState(_state.ActiveApartmentId);
+            if (HasApartmentAccess(activeApartmentState))
+            {
+                return;
+            }
+
+            var fallbackApartmentState = FindRetainedApartmentAccessState();
+            _state.ActiveApartmentId = fallbackApartmentState != null ? fallbackApartmentState.InteriorId : string.Empty;
+        }
+
         private void InitializeRentTracking(int currentInGameMinute)
         {
             var currentWeekIndex = GetWeekIndex(currentInGameMinute);
@@ -1799,9 +2000,14 @@ namespace LSOL.Systems
 
             for (int i = 0; i < _state.Apartments.Count; i++)
             {
-                if (_state.Apartments[i] != null && _state.Apartments[i].LastChargedWeekIndex < 0)
+                var apartment = _state.Apartments[i];
+                if (IsRentalOnlyApartmentAccess(apartment) && apartment.LastChargedWeekIndex < 0)
                 {
-                    _state.Apartments[i].LastChargedWeekIndex = currentWeekIndex;
+                    apartment.LastChargedWeekIndex = currentWeekIndex;
+                }
+                else if (apartment != null && !IsRentalOnlyApartmentAccess(apartment))
+                {
+                    apartment.LastChargedWeekIndex = -1;
                 }
             }
 
@@ -1938,6 +2144,21 @@ namespace LSOL.Systems
             return HasOfficeAccess(state) && !state.IsAccessSuspended && state.OutstandingRent <= 0.01f;
         }
 
+        private static bool HasApartmentAccess(ApartmentOwnershipPersistenceEntry state)
+        {
+            return state != null && (state.IsOwned || state.IsRented);
+        }
+
+        private static bool IsRentalOnlyApartmentAccess(ApartmentOwnershipPersistenceEntry state)
+        {
+            return state != null && state.IsRented && !state.IsOwned;
+        }
+
+        private static bool HasOperationalApartmentAccess(ApartmentOwnershipPersistenceEntry state)
+        {
+            return HasApartmentAccess(state) && !state.IsAccessSuspended && state.OutstandingRent <= 0.01f;
+        }
+
         private static void ReleaseOfficeRental(OfficeOwnershipPersistenceEntry state, bool clearOutstandingBalance)
         {
             if (!IsRentalOnlyOfficeAccess(state))
@@ -1956,6 +2177,115 @@ namespace LSOL.Systems
                 state.IsAccessSuspended = state.OutstandingRent > 0.01f;
             }
 
+            state.LastChargedWeekIndex = -1;
+        }
+
+        private ApartmentOwnershipPersistenceEntry GetTransferableApartmentRental(string excludedInteriorId)
+        {
+            var activeRental = GetApartmentState(_state.ActiveApartmentId);
+            if (IsRentalOnlyApartmentAccess(activeRental)
+                && !string.Equals(activeRental.InteriorId, excludedInteriorId, StringComparison.OrdinalIgnoreCase))
+            {
+                return activeRental;
+            }
+
+            return _state.Apartments.FirstOrDefault(entry => IsRentalOnlyApartmentAccess(entry)
+                && !string.Equals(entry.InteriorId, excludedInteriorId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private ApartmentOwnershipPersistenceEntry FindOperationalFallbackApartmentState(string excludedInteriorId)
+        {
+            return _state.Apartments
+                .Where(entry => entry != null
+                    && !string.Equals(entry.InteriorId, excludedInteriorId, StringComparison.OrdinalIgnoreCase)
+                    && GetInteriorDefinition(entry.InteriorId) != null
+                    && HasOperationalApartmentAccess(entry))
+                .OrderByDescending(entry => entry.IsOwned)
+                .ThenBy(entry => GetApartmentDisplayName(entry.InteriorId), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+
+        private string ResolveRetainedRentalApartmentId()
+        {
+            var activeApartmentState = GetApartmentState(_state.ActiveApartmentId);
+            if (IsRentalOnlyApartmentAccess(activeApartmentState))
+            {
+                return activeApartmentState.InteriorId;
+            }
+
+            var fallbackRentalState = _state.Apartments
+                .Where(entry => entry != null && GetInteriorDefinition(entry.InteriorId) != null && IsRentalOnlyApartmentAccess(entry))
+                .OrderBy(entry => entry.InteriorId, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            return fallbackRentalState != null ? fallbackRentalState.InteriorId : string.Empty;
+        }
+
+        private List<string> RelinquishOtherApartmentRentals(string retainedInteriorId, bool clearOutstandingBalance)
+        {
+            var relinquishedApartmentNames = new List<string>();
+            for (int i = 0; i < _state.Apartments.Count; i++)
+            {
+                var state = _state.Apartments[i];
+                if (!IsRentalOnlyApartmentAccess(state)
+                    || string.Equals(state.InteriorId, retainedInteriorId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                relinquishedApartmentNames.Add(GetApartmentDisplayName(state.InteriorId));
+                ReleaseApartmentRental(state, clearOutstandingBalance);
+            }
+
+            return relinquishedApartmentNames;
+        }
+
+        private ApartmentOwnershipPersistenceEntry FindRetainedApartmentAccessState()
+        {
+            return _state.Apartments
+                .Where(entry => entry != null && GetInteriorDefinition(entry.InteriorId) != null && HasApartmentAccess(entry))
+                .OrderByDescending(entry => entry.IsOwned)
+                .ThenBy(entry => entry.InteriorId, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+
+        private string GetApartmentDisplayName(string interiorId)
+        {
+            var definition = GetInteriorDefinition(interiorId);
+            return definition != null ? definition.DisplayName : (interiorId ?? string.Empty);
+        }
+
+        private static void ReleaseApartmentRental(ApartmentOwnershipPersistenceEntry state, bool clearOutstandingBalance)
+        {
+            if (!IsRentalOnlyApartmentAccess(state))
+            {
+                return;
+            }
+
+            state.IsRented = false;
+            if (clearOutstandingBalance)
+            {
+                state.OutstandingRent = 0f;
+                state.IsAccessSuspended = false;
+            }
+            else
+            {
+                state.IsAccessSuspended = state.OutstandingRent > 0.01f;
+            }
+
+            state.LastChargedWeekIndex = -1;
+        }
+
+        private static void ReleaseApartmentOwnership(ApartmentOwnershipPersistenceEntry state)
+        {
+            if (state == null || !state.IsOwned)
+            {
+                return;
+            }
+
+            state.IsOwned = false;
+            state.IsRented = false;
+            state.IsAccessSuspended = false;
+            state.OutstandingRent = 0f;
             state.LastChargedWeekIndex = -1;
         }
 
@@ -2071,6 +2401,7 @@ namespace LSOL.Systems
             {
                 ActiveOfficeId = source != null ? source.ActiveOfficeId : string.Empty,
                 ActiveApartmentId = source != null ? source.ActiveApartmentId : string.Empty,
+                LastSuccessfulApartmentSleepMinute = source != null ? source.LastSuccessfulApartmentSleepMinute : -1,
             };
 
             if (source == null)
@@ -2129,6 +2460,7 @@ namespace LSOL.Systems
                 {
                     InteriorId = entry.InteriorId,
                     IsOwned = entry.IsOwned,
+                    IsRented = entry.IsRented,
                     IsAccessSuspended = entry.IsAccessSuspended,
                     OutstandingRent = entry.OutstandingRent,
                     LastChargedWeekIndex = entry.LastChargedWeekIndex,

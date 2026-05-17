@@ -19,6 +19,8 @@ namespace LSOL.Systems
 
         public string ActiveApartmentId { get; set; }
 
+        public int LastSuccessfulApartmentSleepMinute { get; set; } = -1;
+
         public List<OfficeOwnershipPersistenceEntry> Offices { get; }
 
         public List<OfficeObjectPersistenceEntry> OfficeObjects { get; }
@@ -35,6 +37,7 @@ namespace LSOL.Systems
             {
                 return !string.IsNullOrWhiteSpace(ActiveOfficeId)
                     || !string.IsNullOrWhiteSpace(ActiveApartmentId)
+                    || LastSuccessfulApartmentSleepMinute >= 0
                     || Offices.Count > 0
                     || OfficeObjects.Count > 0
                     || Apartments.Count > 0
@@ -81,6 +84,8 @@ namespace LSOL.Systems
         public string InteriorId { get; set; }
 
         public bool IsOwned { get; set; }
+
+        public bool IsRented { get; set; }
 
         public bool IsAccessSuspended { get; set; }
 

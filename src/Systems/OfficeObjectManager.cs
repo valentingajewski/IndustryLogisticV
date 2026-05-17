@@ -24,7 +24,7 @@ namespace LSOL.Systems
         private const float FuelDeliveryPriceMultiplier = 0.85f;
         private const float ServiceArrivalDistance = 18f;
         private const int ServiceDriveRefreshIntervalMs = 4000;
-        private const int ServiceTimeoutMs = 180000;
+        private const int ServiceTimeoutMs = 900000;
         private const int ServiceDriveStyle = 786603;
         private const string DefaultDriverModel = "s_m_m_trucker_01";
         private const string OfficeObjectHaulTruckModelName = "phantom3";

@@ -564,6 +564,7 @@ namespace LSOL
             RestorePendingWorldState();
 
             var gameTime = Game.GameTime;
+            UpdateApartmentSleepTransition(player, gameTime);
             SweepIndustryObjectDeletions(player, gameTime);
 
             if (_lastIndustryTickMs == 0)
@@ -944,6 +945,11 @@ namespace LSOL
 
         private bool CanHandleKeyPress(WinForms.Keys key)
         {
+            if (IsApartmentSleepTransitionActive)
+            {
+                return false;
+            }
+
             var now = Game.GameTime;
             var cooldownMs = AnyMenuOpen ? 95 : 220;
 
@@ -5851,6 +5857,7 @@ namespace LSOL
         private void OnAborted(object sender, EventArgs e)
         {
             TrySaveIndustryPersistence();
+            CancelApartmentSleepTransition();
             _specialMissionManager.Shutdown();
             _npcLogisticsManager.ClearAll();
             DestroyMapBlips();
