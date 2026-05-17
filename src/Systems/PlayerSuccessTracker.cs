@@ -5,6 +5,12 @@ using LSOL.Domain;
 
 namespace LSOL.Systems
 {
+    public enum DeliveryProgressSource
+    {
+        Player = 0,
+        Npc = 1,
+    }
+
     public sealed class PlayerCommodityStatisticSnapshot
     {
         public string CommodityId { get; set; }
@@ -338,8 +344,13 @@ namespace LSOL.Systems
             EvaluateUnlocks(notifyUnlocks);
         }
 
-        public void RecordDeliveryProgress(string commodity, float deliveredTons, bool completedDelivery, bool isCleanDelivery)
+        public void RecordDeliveryProgress(string commodity, float deliveredTons, bool completedDelivery, bool isCleanDelivery, DeliveryProgressSource source = DeliveryProgressSource.Player)
         {
+            if (source != DeliveryProgressSource.Player)
+            {
+                return;
+            }
+
             deliveredTons = Math.Max(0f, deliveredTons);
             if (deliveredTons <= 0.001f)
             {

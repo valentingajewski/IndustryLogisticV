@@ -61,6 +61,7 @@ Systems/
  AmbientWorldDispatchTextTests.cs
  IndustryPersistenceManagerRoundTripTests.cs
  NpcLogisticsManagerPersistenceTests.cs
+ PlayerSuccessTrackerDeliveryProgressTests.cs
  PropertyManagerApartmentOwnershipTests.cs
  PropertyManagerOfficeRentalTests.cs
 TestSupport/TestWorkspace.cs

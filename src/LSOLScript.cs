@@ -291,7 +291,7 @@ namespace LSOL
                 _financeTracker,
                 GetCurrentInGameWeekMinute,
                 HandlePlayerSuccessNpcContractsChanged,
-                RecordPlayerSuccessDeliveryProgress);
+                RecordNpcSuccessDeliveryProgress);
             _industryRefuelService = new IndustryRefuelService(
                 _fleetManager,
                 _vehicleFuelSystem,
@@ -3738,6 +3738,21 @@ namespace LSOL
             {
                 _tabletStateStore.MarkNetworkDirty();
             }
+        }
+
+        private void RecordNpcSuccessDeliveryProgress(string commodity, float deliveredTons, bool completedDelivery, bool isCleanDelivery)
+        {
+            if (_playerSuccessTracker == null)
+            {
+                return;
+            }
+
+            _playerSuccessTracker.RecordDeliveryProgress(
+                commodity,
+                deliveredTons,
+                completedDelivery,
+                isCleanDelivery,
+                DeliveryProgressSource.Npc);
         }
 
         private void HandlePlayerSuccessNpcContractsChanged()
