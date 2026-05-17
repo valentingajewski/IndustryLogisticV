@@ -64,7 +64,9 @@ Systems/
  PropertyManagerApartmentOwnershipTests.cs
  PropertyManagerOfficeRentalTests.cs
 TestSupport/TestWorkspace.cs
-UI/TabletLocationFiltersTests.cs
+UI/
+ TabletLocationFiltersTests.cs
+ TabletLocationRowFormattingTests.cs
 
 [metadataReferences]
 ../../

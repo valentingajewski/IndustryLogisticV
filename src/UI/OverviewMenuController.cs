@@ -834,11 +834,7 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
-            var permitTag = !industry.RequiresContractorPermit
-                ? "~g~[OPEN]~s~"
-                : (industry.HasContractorPermit ? "~g~[PERMIT]~s~" : "~r~[LOCKED]~s~");
-
-            return string.Format("{0} {1}", industry.Name, permitTag);
+            return TabletUiHelpers.BuildPermitCaption(industry.Name);
         }
 
         private string GetIndustryPermitDetail(Industry industry)

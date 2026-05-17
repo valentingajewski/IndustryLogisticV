@@ -306,7 +306,7 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
-            return string.Format("{0} {1}", summary.Name, summary.OwnershipTag);
+            return summary.Name ?? string.Empty;
         }
 
         public static string BuildLocationOverviewDetail(TabletLocationSummary summary)
@@ -316,17 +316,39 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
-            if (string.IsNullOrWhiteSpace(summary.OverviewDetail))
+            var segments = new List<string>();
+            var ownership = FormatLocationListStatusTag(summary.OwnershipTag);
+            if (!string.IsNullOrWhiteSpace(ownership))
             {
-                return summary.PermitTag ?? string.Empty;
+                segments.Add(ownership);
             }
 
-            if (string.IsNullOrWhiteSpace(summary.PermitTag))
+            var permit = FormatLocationListStatusTag(summary.PermitTag);
+            if (!string.IsNullOrWhiteSpace(permit))
             {
-                return summary.OverviewDetail;
+                segments.Add(permit);
             }
 
-            return string.Format("{0} | {1}", summary.PermitTag, summary.OverviewDetail);
+            if (!string.IsNullOrWhiteSpace(summary.OverviewDetail))
+            {
+                segments.Add(summary.OverviewDetail);
+            }
+
+            return segments.Count > 0
+                ? string.Join(" | ", segments)
+                : string.Empty;
+        }
+
+        private static string FormatLocationListStatusTag(string tag)
+        {
+            return string.IsNullOrWhiteSpace(tag)
+                ? string.Empty
+                : tag.Replace("[", string.Empty).Replace("]", string.Empty);
+        }
+
+        public static string BuildPermitCaption(string siteName)
+        {
+            return siteName ?? string.Empty;
         }
 
         public static string BuildPermitCaption(TabletLocationSummary summary)
@@ -336,7 +358,7 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
-            return string.Format("{0} {1}", summary.Name, summary.PermitTag);
+            return BuildPermitCaption(summary.Name);
         }
 
         public static TabletLocationSummary FindSummary(TabletShellContext context, Industry industry)
