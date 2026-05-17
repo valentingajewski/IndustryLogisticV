@@ -1,6 +1,6 @@
 ﻿<Resources>
   <Group name="Aggregates" cargoType="Aggregates" commodities="Coal,Gravel,Ore,Crops" />
-  <Group name="OpenHull" cargoType="OpenHull" commodities="Bricks,Lumber,Steel,Alloy" />
+  <Group name="OpenHull" cargoType="OpenHull" commodities="Beam,Bricks,Lumber,Steel,Alloy" />
   <Group name="Wood" cargoType="Wood" commodities="Wood" />
   <Group name="CraftedGoods" cargoType="CraftedGoods" commodities="Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer" />
   <Group name="Liquid" cargoType="Liquid" commodities="Fuel,LiquidFertilizer,Oil" />

@@ -137,7 +137,7 @@ You can view:
 
 ### Special Missions
 
-LSOL supports special community mission packs loaded from the `missions` folder.
+LSOL supports special community mission packs loaded from `LSOL_Config/missions`.
 
 These missions can add custom jobs such as:
 
@@ -215,8 +215,9 @@ GTA V/
 Notes:
 
 - `LSOL_Config/Dealership.xml` is required for the personal vehicle dealership.
-- `LSOL_Config` is the runtime content root for player-editable XML data.
+- `LSOL_Config` is the sole runtime content root for player-editable data.
 - Mission packs are loaded only from `LSOL_Config/missions/*.xml`.
+- Root `configs/` and root `missions/` are legacy reference folders and are not loaded at runtime.
 
 ## Controls
 

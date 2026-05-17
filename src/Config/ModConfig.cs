@@ -470,67 +470,6 @@ namespace LSOL.Config
                         .ToList();
             }
 
-        private static float ResolveLegacyFuelCapacityLiters(IniFile ini, string section, string modelName, VehicleCargoType cargoType, float capacityTons, bool isTractor, bool isTrailer)
-        {
-            if (isTrailer || cargoType == VehicleCargoType.Trailer)
-            {
-                return 0f;
-            }
-
-            var configuredValue = ResolveFuelCapacityOverride(ini, section, modelName);
-            if (configuredValue > 0f)
-            {
-                return configuredValue;
-            }
-
-            if (isTractor)
-            {
-                return 400f;
-            }
-
-            if (capacityTons >= 18f)
-            {
-                return 200f;
-            }
-
-            if (capacityTons >= 8f)
-            {
-                return 150f;
-            }
-
-            return 90f;
-        }
-
-        private static float ResolveFuelCapacityOverride(IniFile ini, string section, string modelName)
-        {
-            if (ini == null)
-            {
-                return 0f;
-            }
-
-            var aliases = new[]
-            {
-                "VehicleFuelCapacity",
-                "FuelCapacity",
-            };
-
-            for (int i = 0; i < aliases.Length; i++)
-            {
-                var alias = aliases[i];
-                if (ini.HasKey(section, alias))
-                {
-                    return Math.Max(0f, ini.GetFloat(section, alias, 0f));
-                }
-
-                if (!string.IsNullOrWhiteSpace(modelName) && ini.HasKey(modelName, alias))
-                {
-                    return Math.Max(0f, ini.GetFloat(modelName, alias, 0f));
-                }
-            }
-
-            return 0f;
-        }
-
         private static void MergeExternalObjects(ExternalConfigCatalog externalCatalog, ModConfig config)
         {
             if (externalCatalog == null || config == null)

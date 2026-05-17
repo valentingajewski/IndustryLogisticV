@@ -161,6 +161,7 @@ namespace LSOL.Systems
             ClearRuntimeState();
             _state = snapshot != null ? CloneSnapshot(snapshot) : new PropertyOwnershipPersistenceSnapshot();
             EnsureValidSelections();
+            NormalizeOfficeAccessContracts();
             PruneInvalidOfficeObjects();
             InitializeRentTracking(currentInGameMinute);
             NormalizeCommercialGarageAssignments();
@@ -336,43 +337,12 @@ namespace LSOL.Systems
 
         public bool TryRentOffice(string officeId, ref float balance, int currentInGameMinute, out string message)
         {
-            message = string.Empty;
-            var definition = GetOfficeDefinition(officeId);
-            if (definition == null)
-            {
-                message = "Office definition unavailable.";
-                return false;
-            }
+            return TryAcquireOfficeRental(officeId, ref balance, currentInGameMinute, false, out message);
+        }
 
-            var state = GetOrCreateOfficeState(officeId);
-            if (state.IsOwned || state.IsRented)
-            {
-                message = string.Format("{0} already has access.", definition.DisplayName);
-                return false;
-            }
-
-            var upfrontRent = Math.Max(0f, definition.WeeklyOfficeRent);
-            if (balance < upfrontRent)
-            {
-                message = string.Format("Need {0} to rent {1}.", ModFormatting.FormatMoney(upfrontRent), definition.DisplayName);
-                return false;
-            }
-
-            balance -= upfrontRent;
-            RecordFinanceExpense(CompanyFinanceCategory.OfficeRent, upfrontRent, currentInGameMinute, string.Format("Office access for {0}", definition.DisplayName));
-            state.IsRented = true;
-            state.IsAccessSuspended = false;
-            state.OutstandingRent = 0f;
-            state.LastChargedWeekIndex = GetWeekIndex(currentInGameMinute);
-
-            if (string.IsNullOrWhiteSpace(_state.ActiveOfficeId))
-            {
-                _state.ActiveOfficeId = definition.OfficeId;
-            }
-
-            NormalizeCommercialGarageAssignments();
-            message = string.Format("Rented {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(upfrontRent));
-            return true;
+        public bool TryTransferOfficeRental(string officeId, ref float balance, int currentInGameMinute, out string message)
+        {
+            return TryAcquireOfficeRental(officeId, ref balance, currentInGameMinute, true, out message);
         }
 
         public bool TryPurchaseOffice(string officeId, ref float balance, int currentInGameMinute, out string message)
@@ -389,6 +359,12 @@ namespace LSOL.Systems
             if (state.IsOwned)
             {
                 message = string.Format("{0} is already owned.", definition.DisplayName);
+                return false;
+            }
+
+            if (!state.IsRented && state.OutstandingRent > 0.01f)
+            {
+                message = string.Format("Settle {0} in outstanding rent before purchasing {1}.", ModFormatting.FormatMoney(state.OutstandingRent), definition.DisplayName);
                 return false;
             }
 
@@ -432,11 +408,55 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var relinquishedRentals = RelinquishOtherOfficeRentals(definition.OfficeId, false);
             _state.ActiveOfficeId = definition.OfficeId;
             TransferCommercialVehiclesToActiveOffice();
             message = _officeGarageLimitEnforced
                 ? string.Format("Activated {0}. Commercial garage capacity is now {1}.", definition.DisplayName, Math.Max(0, definition.MaxCommercialVehicles))
                 : string.Format("Activated {0}. Commercial garage limit is disabled for this save.", definition.DisplayName);
+            if (relinquishedRentals.Count > 0)
+            {
+                message += string.Format(" Relinquished rental{0} at {1}.", relinquishedRentals.Count == 1 ? string.Empty : "s", string.Join(", ", relinquishedRentals));
+            }
+
+            return true;
+        }
+
+        public bool TryRelinquishOfficeRental(string officeId, out string message)
+        {
+            message = string.Empty;
+            var definition = GetOfficeDefinition(officeId);
+            var state = GetOfficeState(officeId);
+            if (definition == null || !IsRentalOnlyOfficeAccess(state))
+            {
+                message = "No office rental to relinquish.";
+                return false;
+            }
+
+            var hasOutstandingRent = state.OutstandingRent > 0.01f;
+            if (string.Equals(_state.ActiveOfficeId, definition.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                var fallbackState = FindOperationalFallbackOfficeState(definition.OfficeId);
+                if (fallbackState == null)
+                {
+                    message = "Activate or acquire another available office before relinquishing this rental.";
+                    return false;
+                }
+
+                var fallbackDefinition = GetOfficeDefinition(fallbackState.OfficeId);
+                ReleaseOfficeRental(state, false);
+                _state.ActiveOfficeId = fallbackDefinition != null ? fallbackDefinition.OfficeId : string.Empty;
+                TransferCommercialVehiclesToActiveOffice();
+                message = hasOutstandingRent
+                    ? string.Format("Relinquished rental for {0}. Outstanding arrears remain due. Operations moved to {1}.", definition.DisplayName, fallbackDefinition != null ? fallbackDefinition.DisplayName : "another office")
+                    : string.Format("Relinquished rental for {0}. Operations moved to {1}.", definition.DisplayName, fallbackDefinition != null ? fallbackDefinition.DisplayName : "another office");
+                return true;
+            }
+
+            ReleaseOfficeRental(state, false);
+            message = hasOutstandingRent
+                ? string.Format("Relinquished rental for {0}. Outstanding arrears remain due.", definition.DisplayName)
+                : string.Format("Relinquished rental for {0}.", definition.DisplayName);
             return true;
         }
 
@@ -463,6 +483,65 @@ namespace LSOL.Systems
             state.IsAccessSuspended = false;
             RecordFinanceExpense(CompanyFinanceCategory.OfficeRent, rentDue, string.Format("Office arrears for {0}", definition.DisplayName));
             message = string.Format("Settled office rent for {0}.", definition.DisplayName);
+            return true;
+        }
+
+        private bool TryAcquireOfficeRental(string officeId, ref float balance, int currentInGameMinute, bool allowTransfer, out string message)
+        {
+            message = string.Empty;
+            var definition = GetOfficeDefinition(officeId);
+            if (definition == null)
+            {
+                message = "Office definition unavailable.";
+                return false;
+            }
+
+            var state = GetOrCreateOfficeState(officeId);
+            if (state.IsOwned || state.IsRented)
+            {
+                message = string.Format("{0} already has access.", definition.DisplayName);
+                return false;
+            }
+
+            if (state.OutstandingRent > 0.01f)
+            {
+                message = string.Format("Settle {0} in outstanding rent before renting {1} again.", ModFormatting.FormatMoney(state.OutstandingRent), definition.DisplayName);
+                return false;
+            }
+
+            var sourceRental = GetTransferableOfficeRental(officeId);
+            if (sourceRental != null && !allowTransfer)
+            {
+                var sourceDefinition = GetOfficeDefinition(sourceRental.OfficeId);
+                message = sourceDefinition != null
+                    ? string.Format("Relinquish or transfer your current rental at {0} before renting {1}.", sourceDefinition.DisplayName, definition.DisplayName)
+                    : string.Format("Relinquish or transfer your current office rental before renting {0}.", definition.DisplayName);
+                return false;
+            }
+
+            var upfrontRent = Math.Max(0f, definition.WeeklyOfficeRent);
+            if (balance < upfrontRent)
+            {
+                message = string.Format("Need {0} to rent {1}.", ModFormatting.FormatMoney(upfrontRent), definition.DisplayName);
+                return false;
+            }
+
+            balance -= upfrontRent;
+            RecordFinanceExpense(CompanyFinanceCategory.OfficeRent, upfrontRent, currentInGameMinute, string.Format("Office access for {0}", definition.DisplayName));
+            if (sourceRental != null)
+            {
+                ReleaseOfficeRental(sourceRental, false);
+            }
+
+            state.IsRented = true;
+            state.IsAccessSuspended = false;
+            state.OutstandingRent = 0f;
+            state.LastChargedWeekIndex = GetWeekIndex(currentInGameMinute);
+            _state.ActiveOfficeId = definition.OfficeId;
+            TransferCommercialVehiclesToActiveOffice();
+            message = sourceRental != null
+                ? string.Format("Transferred office rental to {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(upfrontRent))
+                : string.Format("Rented {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(upfrontRent));
             return true;
         }
 
@@ -1676,6 +1755,36 @@ namespace LSOL.Systems
             }
         }
 
+        private void NormalizeOfficeAccessContracts()
+        {
+            for (int i = 0; i < _state.Offices.Count; i++)
+            {
+                var state = _state.Offices[i];
+                if (state != null && state.IsOwned && state.IsRented)
+                {
+                    state.IsRented = false;
+                }
+            }
+
+            var retainedRentalOfficeId = ResolveRetainedRentalOfficeId();
+            RelinquishOtherOfficeRentals(retainedRentalOfficeId, true);
+
+            var activeOfficeState = GetOfficeState(_state.ActiveOfficeId);
+            if (HasOfficeAccess(activeOfficeState))
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(retainedRentalOfficeId))
+            {
+                _state.ActiveOfficeId = retainedRentalOfficeId;
+                return;
+            }
+
+            var fallbackOfficeState = _state.Offices.FirstOrDefault(entry => entry != null && GetOfficeDefinition(entry.OfficeId) != null && HasOfficeAccess(entry));
+            _state.ActiveOfficeId = fallbackOfficeState != null ? fallbackOfficeState.OfficeId : string.Empty;
+        }
+
         private void InitializeRentTracking(int currentInGameMinute)
         {
             var currentWeekIndex = GetWeekIndex(currentInGameMinute);
@@ -1750,6 +1859,104 @@ namespace LSOL.Systems
             };
             _state.Offices.Add(state);
             return state;
+        }
+
+        private OfficeOwnershipPersistenceEntry GetTransferableOfficeRental(string excludedOfficeId)
+        {
+            var activeRental = GetOfficeState(_state.ActiveOfficeId);
+            if (IsRentalOnlyOfficeAccess(activeRental)
+                && !string.Equals(activeRental.OfficeId, excludedOfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return activeRental;
+            }
+
+            return _state.Offices.FirstOrDefault(entry => IsRentalOnlyOfficeAccess(entry)
+                && !string.Equals(entry.OfficeId, excludedOfficeId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private OfficeOwnershipPersistenceEntry FindOperationalFallbackOfficeState(string excludedOfficeId)
+        {
+            return _state.Offices
+                .Where(entry => entry != null
+                    && !string.Equals(entry.OfficeId, excludedOfficeId, StringComparison.OrdinalIgnoreCase)
+                    && GetOfficeDefinition(entry.OfficeId) != null
+                    && HasOperationalOfficeAccess(entry))
+                .OrderByDescending(entry => entry.IsOwned)
+                .ThenBy(entry => GetOfficeDisplayName(entry.OfficeId), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+        }
+
+        private List<string> RelinquishOtherOfficeRentals(string retainedOfficeId, bool clearOutstandingBalance)
+        {
+            var relinquishedOfficeNames = new List<string>();
+            for (int i = 0; i < _state.Offices.Count; i++)
+            {
+                var state = _state.Offices[i];
+                if (!IsRentalOnlyOfficeAccess(state)
+                    || string.Equals(state.OfficeId, retainedOfficeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                relinquishedOfficeNames.Add(GetOfficeDisplayName(state.OfficeId));
+                ReleaseOfficeRental(state, clearOutstandingBalance);
+            }
+
+            return relinquishedOfficeNames;
+        }
+
+        private string ResolveRetainedRentalOfficeId()
+        {
+            var activeOfficeState = GetOfficeState(_state.ActiveOfficeId);
+            if (IsRentalOnlyOfficeAccess(activeOfficeState))
+            {
+                return activeOfficeState.OfficeId;
+            }
+
+            var fallbackRentalState = _state.Offices.FirstOrDefault(entry => entry != null && GetOfficeDefinition(entry.OfficeId) != null && IsRentalOnlyOfficeAccess(entry));
+            return fallbackRentalState != null ? fallbackRentalState.OfficeId : string.Empty;
+        }
+
+        private string GetOfficeDisplayName(string officeId)
+        {
+            var definition = GetOfficeDefinition(officeId);
+            return definition != null ? definition.DisplayName : (officeId ?? string.Empty);
+        }
+
+        private static bool HasOfficeAccess(OfficeOwnershipPersistenceEntry state)
+        {
+            return state != null && (state.IsOwned || state.IsRented);
+        }
+
+        private static bool IsRentalOnlyOfficeAccess(OfficeOwnershipPersistenceEntry state)
+        {
+            return state != null && state.IsRented && !state.IsOwned;
+        }
+
+        private static bool HasOperationalOfficeAccess(OfficeOwnershipPersistenceEntry state)
+        {
+            return HasOfficeAccess(state) && !state.IsAccessSuspended && state.OutstandingRent <= 0.01f;
+        }
+
+        private static void ReleaseOfficeRental(OfficeOwnershipPersistenceEntry state, bool clearOutstandingBalance)
+        {
+            if (!IsRentalOnlyOfficeAccess(state))
+            {
+                return;
+            }
+
+            state.IsRented = false;
+            if (clearOutstandingBalance)
+            {
+                state.OutstandingRent = 0f;
+                state.IsAccessSuspended = false;
+            }
+            else
+            {
+                state.IsAccessSuspended = state.OutstandingRent > 0.01f;
+            }
+
+            state.LastChargedWeekIndex = -1;
         }
 
         private ApartmentOwnershipPersistenceEntry GetOrCreateApartmentState(string interiorId)

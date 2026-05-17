@@ -28,6 +28,7 @@ namespace LSOL
             _officeObjectManager.Cleanup();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
+            _bankLoanManager.ApplyPersistenceSnapshot(null, GetCurrentInGameWeekMinute());
             _playerSuccessTracker.ResetForNewSave(_profit);
             SyncPlayerSuccessBalance(false);
             _tabletStateStore.MarkAllDirty();

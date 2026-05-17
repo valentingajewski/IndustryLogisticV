@@ -1,8 +1,12 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LSOL", "LSOL.csproj", "{C729B8D2-C808-0039-DF55-CD8A4DDF03CF}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{4382932F-92F5-4B72-A4BD-F722F88D6407}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LSOL.Tests", "tests\LSOL.Tests\LSOL.Tests.csproj", "{4D7DE215-831D-47E7-9BF1-7E26C815A9A2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -14,11 +18,18 @@ Global
 		{C729B8D2-C808-0039-DF55-CD8A4DDF03CF}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C729B8D2-C808-0039-DF55-CD8A4DDF03CF}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C729B8D2-C808-0039-DF55-CD8A4DDF03CF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D7DE215-831D-47E7-9BF1-7E26C815A9A2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D7DE215-831D-47E7-9BF1-7E26C815A9A2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D7DE215-831D-47E7-9BF1-7E26C815A9A2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D7DE215-831D-47E7-9BF1-7E26C815A9A2}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0D767435-EBDB-4E69-B98A-DF9CAFED180A}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{4D7DE215-831D-47E7-9BF1-7E26C815A9A2} = {4382932F-92F5-4B72-A4BD-F722F88D6407}
 	EndGlobalSection
 EndGlobal

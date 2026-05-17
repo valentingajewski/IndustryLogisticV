@@ -499,10 +499,17 @@ namespace LSOL
             var items = new List<OfficeMenuItem>();
             var office = _menuOffice;
             var officeState = office != null ? _propertyManager.GetOfficeState(office.OfficeId) : null;
+            var transferSourceState = office != null
+                ? _propertyManager.Offices
+                    .Where(candidate => candidate != null && !string.Equals(candidate.OfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase))
+                    .Select(candidate => _propertyManager.GetOfficeState(candidate.OfficeId))
+                    .FirstOrDefault(state => state != null && state.IsRented && !state.IsOwned)
+                : null;
             var isActiveOffice = office != null && string.Equals(_propertyManager.ActiveOfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase);
             var isOwned = officeState != null && officeState.IsOwned;
             var hasAccess = office != null && officeState != null && (officeState.IsOwned || officeState.IsRented);
             var hasArrears = officeState != null && officeState.OutstandingRent > 0.01f;
+            var isRentalOnly = officeState != null && officeState.IsRented && !officeState.IsOwned;
 
             items.Add(new OfficeMenuItem
             {
@@ -527,9 +534,11 @@ namespace LSOL
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Rent Office",
-                    DetailFactory = () => string.Format("Pay {0} to unlock access at this office.", ModFormatting.FormatMoney(office.WeeklyOfficeRent)),
-                    OnActivate = RentSelectedOffice,
+                    CaptionFactory = () => transferSourceState != null ? "Transfer Office Rental" : "Rent Office",
+                    DetailFactory = () => transferSourceState != null
+                        ? string.Format("Pay {0} to move your current rental contract to this office.", ModFormatting.FormatMoney(office.WeeklyOfficeRent))
+                        : string.Format("Pay {0} to unlock access at this office.", ModFormatting.FormatMoney(office.WeeklyOfficeRent)),
+                    OnActivate = transferSourceState != null ? (Action)TransferSelectedOfficeRental : RentSelectedOffice,
                 });
             }
 
@@ -543,11 +552,6 @@ namespace LSOL
                 });
             }
 
-            if (!hasAccess)
-            {
-                return items;
-            }
-
             if (hasArrears)
             {
                 items.Add(new OfficeMenuItem
@@ -555,6 +559,23 @@ namespace LSOL
                     CaptionFactory = () => "Settle Office Arrears",
                     DetailFactory = () => string.Format("Outstanding balance: {0}", ModFormatting.FormatMoney(officeState.OutstandingRent)),
                     OnActivate = PaySelectedOfficeArrears,
+                });
+            }
+
+            if (!hasAccess)
+            {
+                return items;
+            }
+
+            if (isRentalOnly)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Relinquish Rental",
+                    DetailFactory = () => isActiveOffice
+                        ? "Close this rental and move operations to another available office you already control."
+                        : "Close this inactive rental to stop future weekly charges.",
+                    OnActivate = RelinquishSelectedOfficeRental,
                 });
             }
 
@@ -1125,6 +1146,26 @@ namespace LSOL
             ShowStatus(message);
         }
 
+        private void TransferSelectedOfficeRental()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryTransferOfficeRental(_menuOffice.OfficeId, ref _profit, GetCurrentInGameWeekMinute(), out message))
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                _tabletStateStore.MarkNetworkDirty();
+                RebuildOfficeMenuItems();
+                RebuildCommercialGarageMenuItems();
+                ReevaluatePlayerSuccesses(true);
+            }
+
+            ShowStatus(message);
+        }
+
         private void PurchaseSelectedOffice()
         {
             if (_menuOffice == null)
@@ -1153,6 +1194,26 @@ namespace LSOL
             string message;
             if (_propertyManager.TryActivateOffice(_menuOffice.OfficeId, out message))
             {
+                _tabletStateStore.MarkNetworkDirty();
+                RebuildOfficeMenuItems();
+                RebuildCommercialGarageMenuItems();
+                ReevaluatePlayerSuccesses(true);
+            }
+
+            ShowStatus(message);
+        }
+
+        private void RelinquishSelectedOfficeRental()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryRelinquishOfficeRental(_menuOffice.OfficeId, out message))
+            {
+                _tabletStateStore.MarkNetworkDirty();
                 RebuildOfficeMenuItems();
                 RebuildCommercialGarageMenuItems();
                 ReevaluatePlayerSuccesses(true);
@@ -1312,33 +1373,7 @@ namespace LSOL
                 return null;
             }
 
-            var contracts = _npcLogisticsManager.Contracts;
-            if (contracts == null || contracts.Count == 0)
-            {
-                return null;
-            }
-
-            for (int i = 0; i < contracts.Count; i++)
-            {
-                var contract = contracts[i];
-                if (contract == null)
-                {
-                    continue;
-                }
-
-                var usesVehicle = contract.Routes != null && contract.Routes.Count > 0
-                    ? contract.Routes.Any(route => route != null
-                        && !string.IsNullOrWhiteSpace(route.AssignedVehicleAssetId)
-                        && string.Equals(route.AssignedVehicleAssetId, vehicle.AssetId, StringComparison.OrdinalIgnoreCase))
-                    : !string.IsNullOrWhiteSpace(contract.AssignedVehicleAssetId)
-                        && string.Equals(contract.AssignedVehicleAssetId, vehicle.AssetId, StringComparison.OrdinalIgnoreCase);
-                if (usesVehicle)
-                {
-                    return contract;
-                }
-            }
-
-            return null;
+            return _npcLogisticsManager.FindContractUsingAssignedVehicle(vehicle.AssetId);
         }
 
         private bool IsCommercialVehicleAssignedToNpcContract(OwnedCommercialVehiclePersistenceEntry vehicle)

@@ -23,7 +23,7 @@
   </Site>
   <Site catalogId="102" legacyKey="Refinery" name="El Burro Heights Refinery" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true">
     <Marker x="1725" y="-1659" z="112.5" />
-    <VehicleSpawn x="1379.44" y="-1612.73" z="55.64" heading="78" />
+    <VehicleSpawn x="1401" y="-1570" z="58" heading="125" />
     <Worker x="2770.84" y="1482.36" z="24.52" />
     <Inputs outputs="Fuel" primary="Oil" optional="Omega" />
     <Economy>
@@ -82,7 +82,7 @@
   </Site>
   <Site catalogId="107" legacyKey="ConsumerElectronicsFactory" name="Consumer Electronics Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.5" enabled="true" groundLevel="true">
     <Marker x="-1051.3" y="-2013.19" z="13.16" />
-    <VehicleSpawn x="-1064" y="-2023" z="13.16" heading="41" />
+    <VehicleSpawn x="-1073.65" y="-2051.26" z="13.16" heading="223" />
     <DisplaySpawn x="-1053" y="-2029" z="13.16" heading="228" />
     <Display maxLine="3" objectModelHash="1935071027" maxRow="1" />
     <Inputs outputs="TV,Computer,Recyclable" primary="Processors,MechanicalParts" optional="Omega" />
@@ -176,8 +176,8 @@
   <Site catalogId="115" legacyKey="Slaughterhouse" name="Elysian Island Slaughterhouse" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
     <Marker x="951" y="-2185" z="30.55" />
     <VehicleSpawn x="926.93" y="-2188.71" z="30.3" heading="354" />
-    <DisplaySpawn x="939.37" y="-2177.21" z="30.53" heading="357" />
-    <Display maxLine="5" objectModelHash="379464063" maxRow="2" />
+    <DisplaySpawn x="939.67" y="-2173.91" z="30.53" heading="357" />
+    <Display maxLine="6" objectModelHash="379464063" maxRow="2" />
     <Inputs outputs="Meat" primary="Livestock" optional="Omega" />
     <Economy>
       <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />
@@ -200,7 +200,7 @@
   <Site catalogId="117" legacyKey="FabricFactory" name="La Mesa Fabric Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
     <Marker x="1000" y="-1533.32" z="29.9" />
     <VehicleSpawn x="983.81" y="-1543.32" z="30.43" heading="0" />
-    <DisplaySpawn x="1002.49" y="-1547.89" z="30.82" heading="180" />
+    <DisplaySpawn x="1002.49" y="-1547.89" z="30.82" heading="0" />
     <Display maxLine="3" objectModelHash="153748523" maxRow="5" />
     <Inputs outputs="Fabric" primary="Crops,Chemicals" optional="Omega" />
     <Economy>
@@ -211,7 +211,7 @@
   </Site>
   <Site catalogId="118" legacyKey="ClothingFactory" name="La Mesa Clothing Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.5" enabled="true" groundLevel="true">
     <Marker x="766.24" y="-1261.72" z="26.36" />
-    <VehicleSpawn x="749.88" y="-1256.6" z="26.35" heading="269" />
+    <VehicleSpawn x="786.75" y="-1259.52" z="26.39" heading="267" />
     <DisplaySpawn x="762.15" y="-1261" z="26.35" heading="180" />
     <Display maxLine="4" objectModelHash="153748523" maxRow="1" />
     <Inputs outputs="Clothes" primary="Fabric" optional="Omega" />
@@ -275,8 +275,8 @@
   <Site catalogId="123" legacyKey="BricksFactory" name="Grand Senora Bricks Factory" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.5" enabled="true" groundLevel="true">
     <Marker x="346" y="3407.65" z="36.57" />
     <VehicleSpawn x="334" y="3424.55" z="36.38" heading="318" />
-    <DisplaySpawn x="367.42" y="3416.49" z="36.33" heading="203" />
-    <Display maxLine="5" objectModelHash="1711856655" maxRow="4" />
+    <DisplaySpawn x="370.21" y="3409.53" z="36.33" heading="203" />
+    <Display maxLine="5" objectModelHash="1711856655" maxRow="10" />
     <Inputs outputs="Bricks" primary="Cement,Gravel" optional="Omega" />
     <Economy>
       <Casual productionRate="40" licencePrice="8000" purchasePrice="200000" inputCapacityTons="1800" outputCapacityTons="1500" productionRatio="1" permitRequired="true" />

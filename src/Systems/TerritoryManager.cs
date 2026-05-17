@@ -948,6 +948,20 @@ namespace LSOL.Systems
                 });
             }
 
+            foreach (var debugOffset in _districtReputationDebugOffsets.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(debugOffset.Key) || Math.Abs(debugOffset.Value) <= 0.001f)
+                {
+                    continue;
+                }
+
+                snapshot.DistrictReputationOffsets.Add(new TerritoryDistrictReputationOffsetSnapshot
+                {
+                    DistrictName = debugOffset.Key,
+                    Offset = debugOffset.Value,
+                });
+            }
+
             return snapshot;
         }
 
@@ -1003,6 +1017,17 @@ namespace LSOL.Systems
                 corridorState.DeliveryCount = Math.Max(0, source.DeliveryCount);
                 corridorState.TotalDeliveredTons = Math.Max(0f, source.TotalDeliveredTons);
                 corridorState.RightLevel = source.RightLevel;
+            }
+
+            for (int i = 0; i < snapshot.DistrictReputationOffsets.Count; i++)
+            {
+                var source = snapshot.DistrictReputationOffsets[i];
+                if (source == null || string.IsNullOrWhiteSpace(source.DistrictName) || Math.Abs(source.Offset) <= 0.001f)
+                {
+                    continue;
+                }
+
+                _districtReputationDebugOffsets[source.DistrictName.Trim()] = source.Offset;
             }
 
             RefreshComputedState();
@@ -1802,10 +1827,12 @@ namespace LSOL.Systems
         {
             Sites = new List<TerritorySiteSnapshot>();
             Corridors = new List<TerritoryCorridorSnapshot>();
+            DistrictReputationOffsets = new List<TerritoryDistrictReputationOffsetSnapshot>();
         }
 
         public List<TerritorySiteSnapshot> Sites { get; private set; }
         public List<TerritoryCorridorSnapshot> Corridors { get; private set; }
+        public List<TerritoryDistrictReputationOffsetSnapshot> DistrictReputationOffsets { get; private set; }
     }
 
     public sealed class TerritorySiteSnapshot
@@ -1836,5 +1863,11 @@ namespace LSOL.Systems
         public int DeliveryCount { get; set; }
         public float TotalDeliveredTons { get; set; }
         public CorridorRightLevel RightLevel { get; set; }
+    }
+
+    public sealed class TerritoryDistrictReputationOffsetSnapshot
+    {
+        public string DistrictName { get; set; }
+        public float Offset { get; set; }
     }
 }

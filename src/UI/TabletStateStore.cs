@@ -273,7 +273,7 @@ namespace LSOL.UI
         public int SecuredSupportSiteCount { get; set; }
     }
 
-    internal sealed class TabletStateStore
+    internal sealed partial class TabletStateStore
     {
         private const int SnapshotRefreshIntervalMs = 250;
         private const int LoadOptionsRefreshIntervalMs = 250;
@@ -354,6 +354,7 @@ namespace LSOL.UI
         private bool _marketDirty;
         private bool _networkDirty;
         private bool _statusDirty;
+        private bool _viewDirty;
 
         public TabletStateStore(
             IndustryManager industryManager,
@@ -430,27 +431,33 @@ namespace LSOL.UI
         {
             var now = Game.GameTime;
             CaptureHistory(now);
-            if (_hasSnapshot
-                && !_balanceDirty
-                && !_cargoDirty
-                && !_nearestIndustryDirty
-                && !_marketDirty
-                && !_networkDirty
-                && !_statusDirty
-                && now - _lastRefreshMs < SnapshotRefreshIntervalMs)
+
+            if (!_hasSnapshot || now - _lastRefreshMs >= SnapshotRefreshIntervalMs)
+            {
+                MarkVolatileSlicesDirty();
+            }
+
+            var hasSnapshotDirtyState = HasSnapshotDirtyState();
+            if (_hasSnapshot && !hasSnapshotDirtyState && !_viewDirty)
             {
                 return;
             }
 
-            Snapshot = BuildSnapshot();
-            _lastRefreshMs = now;
-            _hasSnapshot = true;
-            _balanceDirty = false;
-            _cargoDirty = false;
-            _nearestIndustryDirty = false;
-            _marketDirty = false;
-            _networkDirty = false;
-            _statusDirty = false;
+            if (!_hasSnapshot || Snapshot == null)
+            {
+                Snapshot = BuildSnapshot();
+                _lastRefreshMs = now;
+                _hasSnapshot = true;
+                ClearSnapshotDirtyState();
+            }
+            else if (hasSnapshotDirtyState)
+            {
+                RefreshDirtySnapshotSlices(Snapshot);
+                _lastRefreshMs = now;
+                ClearSnapshotDirtyState();
+            }
+
+            _viewDirty = false;
             Version += 1;
         }
 
@@ -533,11 +540,13 @@ namespace LSOL.UI
         public void MarkCargoDirty()
         {
             _cargoDirty = true;
+            _marketDirty = true;
         }
 
         public void MarkNearestIndustryDirty()
         {
             _nearestIndustryDirty = true;
+            _marketDirty = true;
         }
 
         public void MarkMarketDirty()
@@ -579,7 +588,7 @@ namespace LSOL.UI
         public void CycleGraphTimeframe(int delta)
         {
             _selectedGraphTimeframe = TabletGraphTimeframeCatalog.Cycle(_selectedGraphTimeframe, delta == 0 ? 1 : delta);
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void CycleSelectedTrendCommodity(int delta)
@@ -588,7 +597,7 @@ namespace LSOL.UI
             if (commodities.Count == 0)
             {
                 _selectedTrendCommodity = string.Empty;
-                MarkAllDirty();
+                MarkViewDirty();
                 return;
             }
 
@@ -612,7 +621,7 @@ namespace LSOL.UI
             }
 
             _selectedTrendCommodity = commodities[nextIndex];
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void SetSelectedTrendCommodity(string commodity)
@@ -622,7 +631,7 @@ namespace LSOL.UI
                 ? string.Empty
                 : normalizedCommodity;
             EnsureSelectedTrendCommodity();
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void CycleSelectedUtilizationIndustry(int delta)
@@ -631,7 +640,7 @@ namespace LSOL.UI
             if (industries.Count == 0)
             {
                 _selectedUtilizationIndustryId = string.Empty;
-                MarkAllDirty();
+                MarkViewDirty();
                 return;
             }
 
@@ -655,7 +664,7 @@ namespace LSOL.UI
             }
 
             _selectedUtilizationIndustryId = industries[nextIndex].Id;
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void CycleSelectedStorageIndustry(int delta)
@@ -664,7 +673,7 @@ namespace LSOL.UI
             if (industries.Count == 0)
             {
                 _selectedStorageIndustryId = string.Empty;
-                MarkAllDirty();
+                MarkViewDirty();
                 return;
             }
 
@@ -688,7 +697,7 @@ namespace LSOL.UI
             }
 
             _selectedStorageIndustryId = industries[nextIndex].Id;
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public TabletAnalyticsPersistenceSnapshot CreatePersistenceSnapshot()
@@ -719,7 +728,7 @@ namespace LSOL.UI
                 _selectedStorageIndustryId = string.Empty;
                 _lastHistorySampleMs = int.MinValue;
                 _hasHistorySamples = false;
-                MarkAllDirty();
+                MarkViewDirty();
                 return;
             }
 
@@ -736,7 +745,7 @@ namespace LSOL.UI
             EnsureSelectedStorageIndustryId();
             _lastHistorySampleMs = Game.GameTime;
             _hasHistorySamples = snapshot.HasData;
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void ResetAnalyticsState()
@@ -1062,7 +1071,7 @@ namespace LSOL.UI
             }
 
             _npcLogisticsManager.CycleWorldDispatchPolicy(delta);
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void CycleWorldPriorityCommodity(int delta)
@@ -1073,7 +1082,7 @@ namespace LSOL.UI
             }
 
             _npcLogisticsManager.CycleWorldPriorityCommodity(delta);
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void CycleWorldPriorityDistrict(int delta)
@@ -1084,7 +1093,7 @@ namespace LSOL.UI
             }
 
             _npcLogisticsManager.CycleWorldPriorityDistrict(delta);
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public void TogglePremiumDispatch()
@@ -1095,7 +1104,7 @@ namespace LSOL.UI
             }
 
             _npcLogisticsManager.TogglePremiumDispatch();
-            MarkAllDirty();
+            MarkViewDirty();
         }
 
         public bool IsIndustryInRange(Industry industry, float interactionDistance, out float distance)
@@ -1194,95 +1203,7 @@ namespace LSOL.UI
         private TabletStateSnapshot BuildSnapshot()
         {
             var snapshot = new TabletStateSnapshot();
-            snapshot.Balance = _getProfit != null ? _getProfit() : 0f;
-            snapshot.MarketMultiplier = _globalMarket.PriceMultiplier;
-            snapshot.TransferInProgress = _hasPendingTransfer != null && _hasPendingTransfer();
-            snapshot.StatusBanner = _getStatusBanner != null ? _getStatusBanner() ?? string.Empty : string.Empty;
-            snapshot.ActiveNpcRouteCount = _npcLogisticsManager != null && _npcLogisticsManager.Contracts != null
-                ? _npcLogisticsManager.Contracts.Count()
-                : 0;
-            snapshot.ControlledDistrictCount = _getControlledDistrictCount != null ? _getControlledDistrictCount() : 0;
-            snapshot.ActiveCorridorCount = _getActiveCorridorCount != null ? _getActiveCorridorCount() : 0;
-            snapshot.SecuredSupportSiteCount = _getSecuredSupportSiteCount != null ? _getSecuredSupportSiteCount() : 0;
-
-            var player = _getPlayer != null ? _getPlayer() : null;
-            Vehicle poweredVehicle = null;
-            Vehicle cargoVehicle = null;
-            var hasVehicleContext = player != null
-                && player.Exists()
-                && _fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle);
-            var cargoState = cargoVehicle != null && cargoVehicle.Exists()
-                ? _fleetManager.GetOrCreateCargoState(cargoVehicle)
-                : null;
-            if (cargoVehicle != null && cargoVehicle.Exists() && cargoState != null)
-            {
-                snapshot.HasCargoVehicle = true;
-                snapshot.CargoVehicleName = cargoVehicle.DisplayName;
-                snapshot.CargoType = cargoState.CargoType;
-                snapshot.CargoCommodity = cargoState.IsEmpty ? "Empty" : cargoState.Commodity;
-                snapshot.CargoIsEmpty = cargoState.IsEmpty;
-                snapshot.CargoWeightTons = Math.Max(0f, cargoState.WeightTons);
-                snapshot.CargoCapacityTons = Math.Max(0f, cargoState.CapacityTons);
-                snapshot.CargoCapacityRatio = snapshot.CargoCapacityTons <= 0.001f
-                    ? 0f
-                    : ModMath.Clamp01(snapshot.CargoWeightTons / snapshot.CargoCapacityTons);
-            }
-
-            if (hasVehicleContext)
-            {
-                var fuelTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
-                if (fuelTelemetry != null)
-                {
-                    snapshot.HasPoweredVehicle = true;
-                    snapshot.PoweredVehicleName = poweredVehicle.DisplayName;
-                    snapshot.FuelVehicleMatchesCargoVehicle = !fuelTelemetry.UsesSeparatePoweredVehicle;
-                    snapshot.FuelIsEmpty = fuelTelemetry.IsOutOfFuel;
-                    snapshot.FuelCurrentLiters = Math.Max(0f, fuelTelemetry.CurrentLiters);
-                    snapshot.FuelCapacityLiters = Math.Max(0f, fuelTelemetry.CapacityLiters);
-                    snapshot.FuelRatio = fuelTelemetry.FuelRatio;
-                }
-            }
-
-            var nearestIndustry = _getNearestIndustry != null ? _getNearestIndustry() : null;
-            if (nearestIndustry != null)
-            {
-                snapshot.NearestIndustry = nearestIndustry;
-                snapshot.HasNearestIndustry = true;
-                snapshot.NearestIndustryName = nearestIndustry.Name;
-                snapshot.NearestIndustryInputs = nearestIndustry.SortedAcceptedInputs != null
-                    ? nearestIndustry.SortedAcceptedInputs.ToArray()
-                    : Array.Empty<string>();
-                snapshot.NearestIndustryOutputs = nearestIndustry.SortedOutputs != null
-                    ? nearestIndustry.SortedOutputs.ToArray()
-                    : Array.Empty<string>();
-                snapshot.NearestIndustryProductionRateTonsPerHour = nearestIndustry.CurrentOutputPerHourTons;
-                snapshot.NearestIndustryUtilizationPercent = nearestIndustry.LastUtilizationPercent;
-                snapshot.NearestIndustryOmegaStorageTons = nearestIndustry.OmegaStorage;
-                snapshot.NearestIndustryOmegaCapacityTons = nearestIndustry.OmegaCapacityTons;
-                snapshot.NearestIndustryOwnedForGameplay = _industryManager.IsIndustryOwnedForGameplay(nearestIndustry);
-                snapshot.NearestIndustryRequiresPurchase = _industryManager.RequiresIndustryPurchase(nearestIndustry);
-                snapshot.NearestIndustryHasPermitForGameplay = _industryManager.HasContractorPermitForGameplay(nearestIndustry);
-                snapshot.NearestIndustryRequiresPermit = _industryManager.RequiresContractorPermit(nearestIndustry);
-                snapshot.NearestIndustryProductionWarning = nearestIndustry.GetProductionWarning() ?? string.Empty;
-
-                float distance;
-                snapshot.CanInteractWithNearestIndustry = IsIndustryInRange(nearestIndustry, 4.8f, out distance);
-                snapshot.NearestIndustryDistance = distance;
-            }
-
-            snapshot.IndustrySummaries = BuildLocationSummaries(
-                ExternalLocationKind.Industry,
-                industry => industry.SiteRole != SiteRole.Warehouse && industry.SiteRole != SiteRole.ConstructionSiteSink);
-            snapshot.ConstructionSiteSummaries = BuildLocationSummaries(
-                ExternalLocationKind.Industry,
-                industry => industry.SiteRole == SiteRole.ConstructionSiteSink);
-            snapshot.WarehouseSummaries = BuildLocationSummaries(
-                ExternalLocationKind.Industry,
-                industry => industry.SiteRole == SiteRole.Warehouse);
-            snapshot.StoreSummaries = BuildLocationSummaries(ExternalLocationKind.Store);
-            snapshot.GasStationSummaries = BuildLocationSummaries(ExternalLocationKind.GasStation);
-            snapshot.MarketHighlights = BuildMarketHighlights(nearestIndustry, cargoState);
-            snapshot.MarketPrices = BuildMarketPrices();
+            RefreshAllSnapshotSlices(snapshot);
             return snapshot;
         }
 
@@ -1829,9 +1750,7 @@ namespace LSOL.UI
         {
             return _industryManager.Industries
                 .Where(industry => industry != null
-                    && industry.LocationKind == ExternalLocationKind.Industry
-                    && industry.SiteRole != SiteRole.Warehouse
-                    && industry.SiteRole != SiteRole.ConstructionSiteSink
+                    && TabletLocationFilters.IsProductionIndustry(industry)
                     && !string.IsNullOrWhiteSpace(industry.Id))
                 .OrderBy(industry => industry.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -1842,10 +1761,14 @@ namespace LSOL.UI
             return _industryManager.Industries
                 .Where(industry => industry != null
                     && !string.IsNullOrWhiteSpace(industry.Id)
-                    && industry.SiteRole != SiteRole.ConstructionSiteSink
-                    && (industry.SiteRole == SiteRole.Warehouse || industry.LocationKind == ExternalLocationKind.Industry))
+                    && TabletLocationFilters.IsStorageTrackedSite(industry))
                 .OrderBy(industry => industry.Name, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        private void MarkViewDirty()
+        {
+            _viewDirty = true;
         }
 
         private string EnsureSelectedTrendCommodity()

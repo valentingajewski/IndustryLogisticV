@@ -194,6 +194,11 @@ namespace LSOL.Systems
                     persistenceVersion = 16;
                 }
 
+                if (HasTerritoryDistrictReputationOffsetData(territorySnapshot))
+                {
+                    persistenceVersion = 17;
+                }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -1693,6 +1698,19 @@ namespace LSOL.Systems
                 writer.WriteLine("RightLevel={0}", corridor.RightLevel);
                 writer.WriteLine();
             }
+
+            foreach (var offset in territorySnapshot.DistrictReputationOffsets.OrderBy(x => x.DistrictName, StringComparer.OrdinalIgnoreCase))
+            {
+                if (offset == null || string.IsNullOrWhiteSpace(offset.DistrictName) || Math.Abs(offset.Offset) <= 0.001f)
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildTerritoryDistrictReputationSectionName(offset.DistrictName));
+                writer.WriteLine("DistrictName={0}", offset.DistrictName);
+                writer.WriteLine("Offset={0}", FormatFloat(offset.Offset));
+                writer.WriteLine();
+            }
         }
 
         private static TerritoryPersistenceSnapshot ReadTerritorySnapshot(IniFile ini)
@@ -1752,6 +1770,23 @@ namespace LSOL.Systems
                         TotalDeliveredTons = ini.GetFloat(section, "TotalDeliveredTons", 0f),
                         RightLevel = ParseCorridorRightLevel(ini.GetString(section, "RightLevel", CorridorRightLevel.None.ToString())),
                     });
+
+                    continue;
+                }
+
+                if (section.StartsWith("TerritoryDistrictReputation:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var districtName = ini.GetString(section, "DistrictName", section.Substring("TerritoryDistrictReputation:".Length).Trim());
+                    if (string.IsNullOrWhiteSpace(districtName))
+                    {
+                        continue;
+                    }
+
+                    snapshot.DistrictReputationOffsets.Add(new TerritoryDistrictReputationOffsetSnapshot
+                    {
+                        DistrictName = districtName,
+                        Offset = ini.GetFloat(section, "Offset", 0f),
+                    });
                 }
             }
 
@@ -1762,12 +1797,25 @@ namespace LSOL.Systems
         {
             return snapshot != null
                 && ((snapshot.Sites != null && snapshot.Sites.Count > 0)
-                    || (snapshot.Corridors != null && snapshot.Corridors.Count > 0));
+                    || (snapshot.Corridors != null && snapshot.Corridors.Count > 0)
+                    || HasTerritoryDistrictReputationOffsetData(snapshot));
+        }
+
+        private static bool HasTerritoryDistrictReputationOffsetData(TerritoryPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && snapshot.DistrictReputationOffsets != null
+                && snapshot.DistrictReputationOffsets.Any(offset => offset != null && !string.IsNullOrWhiteSpace(offset.DistrictName) && Math.Abs(offset.Offset) > 0.001f);
         }
 
         private static string BuildTerritorySiteSectionName(string siteId)
         {
             return "TerritorySite:" + (siteId ?? string.Empty).Trim();
+        }
+
+        private static string BuildTerritoryDistrictReputationSectionName(string districtName)
+        {
+            return "TerritoryDistrictReputation:" + (districtName ?? string.Empty).Trim();
         }
 
         private static string BuildOwnedFleetSectionName(int index)
