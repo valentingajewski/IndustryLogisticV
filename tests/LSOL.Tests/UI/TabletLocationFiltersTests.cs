@@ -43,6 +43,66 @@ namespace LSOL.Tests.UI
             Assert.IsFalse(TabletLocationFilters.IsStorageTrackedSite(construction));
         }
 
+        [TestMethod]
+        public void IsGameplayOpenToPlayer_UsesImmediateGameplayAccessSemantics()
+        {
+            var ownedIndustry = CreateSummary(
+                industryId: "owned",
+                isOwnedByPlayer: true,
+                requiresIndustryPurchase: true,
+                requiresContractorPermit: true,
+                hasContractorPermitForGameplay: false);
+            var permitOpenIndustry = CreateSummary(
+                industryId: "permit-open",
+                isOwnedByPlayer: false,
+                requiresIndustryPurchase: true,
+                requiresContractorPermit: true,
+                hasContractorPermitForGameplay: true);
+            var noPermitRequiredIndustry = CreateSummary(
+                industryId: "open-no-permit",
+                isOwnedByPlayer: false,
+                requiresIndustryPurchase: true,
+                requiresContractorPermit: false,
+                hasContractorPermitForGameplay: false);
+            var permitLockedIndustry = CreateSummary(
+                industryId: "permit-locked",
+                isOwnedByPlayer: false,
+                requiresIndustryPurchase: false,
+                requiresContractorPermit: true,
+                hasContractorPermitForGameplay: false);
+            var purchaseLockedIndustry = CreateSummary(
+                industryId: "purchase-locked",
+                isOwnedByPlayer: false,
+                requiresIndustryPurchase: true,
+                requiresContractorPermit: true,
+                hasContractorPermitForGameplay: false);
+
+            Assert.IsTrue(TabletLocationFilters.IsGameplayOpenToPlayer(ownedIndustry));
+            Assert.IsTrue(TabletLocationFilters.IsGameplayOpenToPlayer(permitOpenIndustry));
+            Assert.IsTrue(TabletLocationFilters.IsGameplayOpenToPlayer(noPermitRequiredIndustry));
+            Assert.IsFalse(TabletLocationFilters.IsGameplayOpenToPlayer(permitLockedIndustry));
+            Assert.IsFalse(TabletLocationFilters.IsGameplayOpenToPlayer(purchaseLockedIndustry));
+        }
+
+        private static TabletLocationSummary CreateSummary(
+            string industryId,
+            bool isOwnedByPlayer,
+            bool requiresIndustryPurchase,
+            bool requiresContractorPermit,
+            bool hasContractorPermitForGameplay)
+        {
+            return new TabletLocationSummary
+            {
+                Industry = CreateIndustry(industryId, SiteRole.ProcessingPlant),
+                LocationKind = ExternalLocationKind.Industry,
+                Name = industryId,
+                IsOwnedByPlayer = isOwnedByPlayer,
+                RequiresIndustryPurchase = requiresIndustryPurchase,
+                RequiresContractorPermit = requiresContractorPermit,
+                HasContractorPermitForGameplay = hasContractorPermitForGameplay,
+            };
+        }
+
         private static Industry CreateIndustry(string id, SiteRole siteRole)
         {
             return new Industry(

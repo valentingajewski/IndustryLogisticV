@@ -119,7 +119,7 @@ namespace LSOL.UI
         public static MenuItem CreateCommoditySelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Trend Resource: {0}", context != null ? context.StateStore.SelectedTrendCommodity : "None"),
+                () => string.Format("Trend Resource: < {0} >", context != null ? context.StateStore.SelectedTrendCommodity : "None"),
                 () => detail ?? "Left/right changes the graph resource. Enter advances.",
                 () =>
                 {
@@ -1429,17 +1429,6 @@ namespace LSOL.UI
             return values[nextIndex];
         }
 
-        private static bool IsSummaryOpenForFilter(TabletLocationSummary summary)
-        {
-            if (summary == null || summary.Industry == null)
-            {
-                return false;
-            }
-
-            return !summary.RequiresIndustryPurchase
-                && (!summary.RequiresContractorPermit || summary.HasContractorPermitForGameplay);
-        }
-
         private static bool MatchesFilter(TabletLocationSummary summary, LocationListFilterMode filterMode)
         {
             switch (filterMode)
@@ -1449,9 +1438,9 @@ namespace LSOL.UI
                 case LocationListFilterMode.NotOwned:
                     return summary != null && !summary.IsOwnedByPlayer;
                 case LocationListFilterMode.Open:
-                    return IsSummaryOpenForFilter(summary);
+                    return TabletLocationFilters.IsGameplayOpenToPlayer(summary);
                 case LocationListFilterMode.NotOpen:
-                    return !IsSummaryOpenForFilter(summary);
+                    return !TabletLocationFilters.IsGameplayOpenToPlayer(summary);
                 default:
                     return true;
             }
@@ -1462,26 +1451,6 @@ namespace LSOL.UI
             return summaries == null
                 ? new List<TabletLocationSummary>()
                 : summaries.Where(summary => summary != null && MatchesFilter(summary, filterMode)).ToList();
-        }
-
-        private static bool MatchesIndustryFilter(TabletLocationSummary summary, LocationListFilterMode filterMode)
-        {
-            switch (filterMode)
-            {
-                case LocationListFilterMode.Open:
-                    return summary != null && summary.Industry != null && !summary.RequiresIndustryPurchase;
-                case LocationListFilterMode.NotOpen:
-                    return summary != null && summary.Industry != null && summary.RequiresIndustryPurchase;
-                default:
-                    return MatchesFilter(summary, filterMode);
-            }
-        }
-
-        private static List<TabletLocationSummary> ApplyIndustryFilter(IEnumerable<TabletLocationSummary> summaries, LocationListFilterMode filterMode)
-        {
-            return summaries == null
-                ? new List<TabletLocationSummary>()
-                : summaries.Where(summary => summary != null && MatchesIndustryFilter(summary, filterMode)).ToList();
         }
 
         private void CycleIndustryFilter(TabletShellContext context, int delta)
@@ -2051,7 +2020,7 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var items = new List<MenuItem>();
-            var industrySummaries = ApplyIndustryFilter(snapshot.IndustrySummaries, _industryFilterMode);
+            var industrySummaries = ApplyFilter(snapshot.IndustrySummaries, _industryFilterMode);
 
             items.Add(TabletUiHelpers.CreateSelectorItem(
                 () => BuildFilterCaption(_industryFilterMode),

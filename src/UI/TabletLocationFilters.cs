@@ -5,6 +5,17 @@ namespace LSOL.UI
 {
     internal static class TabletLocationFilters
     {
+        // "Open" in tablet filters means the player can already use the site for gameplay.
+        // Purchase state only affects ownership/upgrades; immediate site access is permit-driven.
+        public static bool IsGameplayOpenToPlayer(TabletLocationSummary summary)
+        {
+            return summary != null
+                && summary.Industry != null
+                && (summary.IsOwnedByPlayer
+                    || !summary.RequiresContractorPermit
+                    || summary.HasContractorPermitForGameplay);
+        }
+
         public static bool IsProductionIndustry(Industry industry)
         {
             return industry != null

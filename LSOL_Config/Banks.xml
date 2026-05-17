@@ -1,23 +1,23 @@
 <Banks>
-  <Bank id="1" name="Los Santos Downtown Bank" loanAmountMaxLimit="1000000" loanInterestMin="8" loanInterestMax="11">
+  <Bank id="1" name="Bank" loanAmountMaxLimit="1000000" loanInterestMin="8" loanInterestMax="11">
     <Position x="150" y="-1040" z="29.37" />
   </Bank>
-  <Bank id="2" name="Vinewood Bank" loanAmountMaxLimit="1000000" loanInterestMin="7" loanInterestMax="12">
+  <Bank id="2" name="Bank" loanAmountMaxLimit="1000000" loanInterestMin="7" loanInterestMax="12">
     <Position x="314.15" y="-279" z="54.17" />
   </Bank>
-  <Bank id="3" name="Rockford Hills Bank" loanAmountMaxLimit="1000000" loanInterestMin="7" loanInterestMax="15">
+  <Bank id="3" name="Bank" loanAmountMaxLimit="1000000" loanInterestMin="7" loanInterestMax="15">
     <Position x="-350.73" y="-49.3" z="49" />
   </Bank>
-  <Bank id="4" name="Richman Bank" loanAmountMaxLimit="1500000" loanInterestMin="9" loanInterestMax="15">
+  <Bank id="4" name="Bank" loanAmountMaxLimit="1500000" loanInterestMin="9" loanInterestMax="15">
     <Position x="-1213" y="-330.39" z="37.79" />
   </Bank>
-  <Bank id="5" name="Pacific Bluffs Bank" loanAmountMaxLimit="750000" loanInterestMin="7" loanInterestMax="11">
+  <Bank id="5" name="Bank" loanAmountMaxLimit="750000" loanInterestMin="7" loanInterestMax="11">
     <Position x="-2963.14" y="483" z="15.7" />
   </Bank>
-  <Bank id="6" name="Grand Senora Desert Bank" loanAmountMaxLimit="500000" loanInterestMin="6" loanInterestMax="10">
+  <Bank id="6" name="Bank" loanAmountMaxLimit="500000" loanInterestMin="6" loanInterestMax="10">
     <Position x="1175" y="2706.37" z="38" />
   </Bank>
-  <Bank id="7" name="Paleto Bank" loanAmountMaxLimit="500000" loanInterestMin="6" loanInterestMax="10">
+  <Bank id="7" name="Bank" loanAmountMaxLimit="500000" loanInterestMin="6" loanInterestMax="10">
     <Position x="-111.23" y="6462" z="31.64" />
   </Bank>
 </Banks>
