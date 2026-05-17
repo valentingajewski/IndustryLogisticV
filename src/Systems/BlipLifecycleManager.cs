@@ -16,7 +16,6 @@ namespace LSOL.Systems
         private readonly Func<string> _getActiveApartmentId;
         private readonly Func<IReadOnlyList<BankDefinition>> _getBankDefinitions;
         private readonly Func<Vector3> _getOfficeMarkerSeed;
-        private readonly Func<Vector3> _getVehicleSpawnMarkerSeed;
         private readonly Vector3 _commercialDealershipMarker;
         private readonly Vector3 _personalDealershipMarker;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
@@ -30,7 +29,6 @@ namespace LSOL.Systems
 
         private Blip _commercialDealershipBlip;
         private Blip _personalDealershipBlip;
-        private Blip _vehicleSpawnBlip;
 
         public BlipLifecycleManager(
             IndustryManager industryManager,
@@ -40,7 +38,6 @@ namespace LSOL.Systems
             Func<string> getActiveApartmentId,
             Func<IReadOnlyList<BankDefinition>> getBankDefinitions,
             Func<Vector3> getOfficeMarkerSeed,
-            Func<Vector3> getVehicleSpawnMarkerSeed,
             Vector3 commercialDealershipMarker,
             Vector3 personalDealershipMarker,
             Func<Vector3, Vector3> getGroundPosition,
@@ -55,7 +52,6 @@ namespace LSOL.Systems
             _getActiveApartmentId = getActiveApartmentId;
             _getBankDefinitions = getBankDefinitions;
             _getOfficeMarkerSeed = getOfficeMarkerSeed;
-            _getVehicleSpawnMarkerSeed = getVehicleSpawnMarkerSeed;
             _commercialDealershipMarker = commercialDealershipMarker;
             _personalDealershipMarker = personalDealershipMarker;
             _getGroundPosition = getGroundPosition;
@@ -76,7 +72,6 @@ namespace LSOL.Systems
             CreateApartmentBlips();
             CreateBankBlips();
             CreateDealershipBlips();
-            _vehicleSpawnBlip = CreateStaticBlip(_getGroundPosition(ResolveVehicleSpawnMarkerSeed()), BlipSprite.Garage2, BlipColor.White, "Vehicle Spawn", 0.9f);
 
             for (int i = 0; i < _industryManager.Industries.Count; i++)
             {
@@ -204,11 +199,6 @@ namespace LSOL.Systems
             _commercialDealershipBlip.Position = _getGroundPosition(_commercialDealershipMarker);
             _personalDealershipBlip.Position = _getGroundPosition(_personalDealershipMarker);
 
-            if (_vehicleSpawnBlip != null && _vehicleSpawnBlip.Exists())
-            {
-                _vehicleSpawnBlip.Position = _getGroundPosition(ResolveVehicleSpawnMarkerSeed());
-            }
-
             var count = Math.Min(_industryBlips.Count, _industryManager.Industries.Count);
             for (int i = 0; i < count; i++)
             {
@@ -266,11 +256,6 @@ namespace LSOL.Systems
                 _personalDealershipBlip.Delete();
             }
 
-            if (_vehicleSpawnBlip != null && _vehicleSpawnBlip.Exists())
-            {
-                _vehicleSpawnBlip.Delete();
-            }
-
             for (int i = 0; i < _industryBlips.Count; i++)
             {
                 var blip = _industryBlips[i];
@@ -286,7 +271,6 @@ namespace LSOL.Systems
             _industryBlips.Clear();
             _commercialDealershipBlip = null;
             _personalDealershipBlip = null;
-            _vehicleSpawnBlip = null;
         }
 
         private void CreateOfficeBlips()
@@ -421,13 +405,6 @@ namespace LSOL.Systems
         {
             return _getOfficeMarkerSeed != null
                 ? _getOfficeMarkerSeed()
-                : Vector3.Zero;
-        }
-
-        private Vector3 ResolveVehicleSpawnMarkerSeed()
-        {
-            return _getVehicleSpawnMarkerSeed != null
-                ? _getVehicleSpawnMarkerSeed()
                 : Vector3.Zero;
         }
 

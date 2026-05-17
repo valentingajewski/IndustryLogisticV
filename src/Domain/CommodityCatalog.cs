@@ -144,7 +144,6 @@ namespace LSOL.Domain
         public static bool UsesCenteredPropVisual(VehicleCargoType cargoType)
         {
             return cargoType == VehicleCargoType.OpenHull
-                || cargoType == VehicleCargoType.Wood
                 || cargoType == VehicleCargoType.Vehicles;
         }
 
@@ -152,6 +151,7 @@ namespace LSOL.Domain
         {
             return !RequiresCommodityResolution(cargoType)
                 && cargoType != VehicleCargoType.Liquid
+                && cargoType != VehicleCargoType.Wood
                 && !UsesLooseVisual(cargoType);
         }
 

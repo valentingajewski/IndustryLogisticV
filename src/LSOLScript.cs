@@ -235,7 +235,6 @@ namespace LSOL
                 () => _propertyManager != null ? _propertyManager.ActiveApartmentId : string.Empty,
                 () => _bankLoanManager != null ? _bankLoanManager.Banks : Array.Empty<BankDefinition>(),
                 ResolveOfficeBlipSeed,
-                ResolveVehicleSpawnBlipSeed,
                 CommercialDealershipMarker,
                 PersonalDealershipMarker,
                 GetGroundPosition,
@@ -5443,12 +5442,6 @@ namespace LSOL
 
             var fallbackOffice = _propertyManager != null ? _propertyManager.Offices.FirstOrDefault() : null;
             return fallbackOffice != null ? fallbackOffice.MarkerPosition : _mainOfficeMarkerSeed;
-        }
-
-        private Vector3 ResolveVehicleSpawnBlipSeed()
-        {
-            var activeOffice = _propertyManager != null ? _propertyManager.ActiveOffice : null;
-            return activeOffice != null ? activeOffice.SpawnPosition : _vehicleSpawnMarkerSeed;
         }
 
         private bool IsNearMainOffice(Vector3 position)

@@ -59,6 +59,7 @@ obj/Debug/net48/
  LSOL.Tests.AssemblyInfo.cs
 Systems/
  AmbientWorldDispatchTextTests.cs
+ FleetManagerCargoVisualModelSelectionTests.cs
  IndustryPersistenceManagerRoundTripTests.cs
  NpcLogisticsManagerPersistenceTests.cs
  PlayerSuccessTrackerDeliveryProgressTests.cs

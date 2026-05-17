@@ -14,7 +14,6 @@ namespace LSOL.Systems
     {
         private const string AlloySolidPropModel = "prop_pipes_01b";
         private const string MetalSolidPropModel = "prop_pipes_04a";
-        private const string DefaultWoodPropModel = "prop_woodpile_01b";
         private const string DefaultLittleBoxPropModel = "prop_boxpile_07d";
         private const string DefaultTinyBoxPropModel = "prop_rub_boxpile_02";
         private readonly List<VehicleDefinition> _definitions;
@@ -951,15 +950,6 @@ namespace LSOL.Systems
                 return modelNames;
             }
 
-            if (cargoType == VehicleCargoType.Wood)
-            {
-                var woodModel = ResolveWoodPropModel();
-                if (!string.IsNullOrWhiteSpace(woodModel))
-                {
-                    return new List<string> { woodModel };
-                }
-            }
-
             if (cargoType == VehicleCargoType.OpenHull)
             {
                 var solidModel = ResolveSolidPropModel(commodity);
@@ -1046,22 +1036,6 @@ namespace LSOL.Systems
             }
 
             return null;
-        }
-
-        private string ResolveWoodPropModel()
-        {
-            List<string> modelNames;
-            if (_objectModels.TryGetValue("Wood", out modelNames) && modelNames.Count > 0)
-            {
-                return modelNames[0];
-            }
-
-            if (_objectModels.TryGetValue("Lumber", out modelNames) && modelNames.Count > 0)
-            {
-                return modelNames[0];
-            }
-
-            return DefaultWoodPropModel;
         }
 
         private static bool TryGetTruckBedBounds(
