@@ -58,6 +58,7 @@ obj/Debug/net48/
  .NETFramework,Version=v4.8.AssemblyAttributes.cs
  LSOL.Tests.AssemblyInfo.cs
 Systems/
+ AmbientWorldDispatchTextTests.cs
  IndustryPersistenceManagerRoundTripTests.cs
  NpcLogisticsManagerPersistenceTests.cs
  PropertyManagerApartmentOwnershipTests.cs

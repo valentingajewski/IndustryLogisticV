@@ -1616,25 +1616,7 @@ namespace LSOL.UI
 
         private static string FormatWorldDispatchJobType(NpcWorldJobType type)
         {
-            switch (type)
-            {
-                case NpcWorldJobType.OverflowRescue:
-                    return "Overflow";
-                case NpcWorldJobType.ShortageRelief:
-                    return "Shortage";
-                case NpcWorldJobType.ExternalImport:
-                    return "Import";
-                case NpcWorldJobType.ExternalExport:
-                    return "Export";
-                case NpcWorldJobType.WarehouseBalancing:
-                    return "Warehouse";
-                case NpcWorldJobType.ServiceRun:
-                    return "Service";
-                case NpcWorldJobType.RivalFreight:
-                    return "Rival";
-                default:
-                    return "Dispatch";
-            }
+            return AmbientWorldDispatchText.FormatJobType(type);
         }
 
         private TabletShellPage BuildServicesPage(TabletShellContext context)
@@ -1755,25 +1737,15 @@ namespace LSOL.UI
 
             if (jobs.Count == 0)
             {
-                items.Add(TabletUiHelpers.CreateInfoItem("No ambient jobs queued", "Overflow rescues, shortage runs, rival hauls, and spot market windows will appear here as the economy shifts."));
+                items.Add(TabletUiHelpers.CreateInfoItem("No ambient jobs queued", "Overflow rescues, shortage runs, warehouse balancing, and other ambient freight listings will appear here as the economy shifts."));
             }
             else
             {
                 for (int i = 0; i < jobs.Count; i++)
                 {
                     var job = jobs[i];
-                    var label = job.Label;
-                    if (job.IsSpotOpportunity)
-                    {
-                        label += " ~g~[SPOT]~s~";
-                    }
-                    else if (job.IsRivalJob)
-                    {
-                        label += " ~r~[RIVAL]~s~";
-                    }
-
                     items.Add(TabletUiHelpers.CreateInfoItem(
-                        label,
+                        job.Label,
                         string.Format("{0} | {1:0.0}t | {2}m remaining", job.Detail, job.Tons, Math.Max(0, job.RemainingInGameMinutes))));
                 }
             }
@@ -1783,7 +1755,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Dispatch",
-                Subtitle = "Ambient freight jobs, rival traffic, and player priority controls",
+                Subtitle = "Ambient freight jobs, convoy status, and player priority controls",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.94f,

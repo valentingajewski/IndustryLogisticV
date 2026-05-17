@@ -87,6 +87,7 @@ src/
  ModUtilities.cs
  Properties/AssemblyInfo.cs
  Systems/
+  AmbientWorldDispatchText.cs
   BankLoanManager.cs
   BarrierInteractionHandler.cs
   BlipLifecycleManager.cs

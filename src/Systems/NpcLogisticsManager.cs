@@ -778,7 +778,7 @@ namespace LSOL.Systems
                     HasVisibleConvoy = job.HasVisibleConvoy,
                     IsRivalJob = job.IsRivalJob,
                     BackhaulDepth = job.BackhaulDepth,
-                    StatusText = job.StatusText,
+                    StatusText = AmbientWorldDispatchText.NormalizeStatusText(job.StatusText),
                 });
             }
 
@@ -991,7 +991,7 @@ namespace LSOL.Systems
                         HasVisibleConvoy = entry.HasVisibleConvoy,
                         IsRivalJob = entry.IsRivalJob,
                         BackhaulDepth = Math.Max(0, entry.BackhaulDepth),
-                        StatusText = entry.StatusText ?? string.Empty,
+                        StatusText = AmbientWorldDispatchText.NormalizeStatusText(entry.StatusText),
                     };
 
                     _worldJobs.Add(job);
@@ -1594,9 +1594,7 @@ namespace LSOL.Systems
                 IsRivalJob = candidate.IsRivalJob,
                 BackhaulDepth = candidate.BackhaulDepth,
                 NextVisualSpawnAttemptMs = 0,
-                StatusText = candidate.IsSpotOpportunity
-                    ? "Spot market window open"
-                    : (candidate.IsRivalJob ? "Rival freight listed" : "Queued for dispatch"),
+                StatusText = AmbientWorldDispatchText.BuildQueuedStatusText(),
             });
 
             RecordWorldDispatchDiagnostic(
@@ -1642,9 +1640,7 @@ namespace LSOL.Systems
             job.RemainingInGameMinutes = ComputeTravelMinutes(job);
             job.TotalInGameMinutes = Math.Max(job.TotalInGameMinutes, job.RemainingInGameMinutes);
             job.CreatedClockMinute = Math.Max(0, currentClockMinute);
-            job.StatusText = job.IsRivalJob
-                ? "Rival convoy en route"
-                : (job.IsSpotOpportunity ? "Spot window closed; NPC convoy en route" : "NPC convoy en route");
+            job.StatusText = AmbientWorldDispatchText.BuildTravelingStatusText();
             job.NextVisualSpawnAttemptMs = 0;
             RecordWorldDispatchDiagnostic(
                 NpcWorldDispatchDiagnosticStage.Revalidation,
@@ -2439,9 +2435,7 @@ namespace LSOL.Systems
 
             if (visualRoute.RouteBlip != null && visualRoute.RouteBlip.Exists())
             {
-                visualRoute.RouteBlip.Name = job.IsRivalJob
-                    ? string.Format("Rival Freight: {0}", job.Commodity)
-                    : string.Format("World Freight: {0}", job.Commodity);
+                visualRoute.RouteBlip.Name = AmbientWorldDispatchText.BuildBlipName(job.Commodity);
                 visualRoute.RouteBlip.Color = job.IsRivalJob ? BlipColor.Red : (job.IsSpotOpportunity ? BlipColor.Yellow : BlipColor.White);
             }
 
@@ -2532,9 +2526,7 @@ namespace LSOL.Systems
             string visualFailure;
             if (TryStartWorldJobVisual(job, now, out visualFailure))
             {
-                job.StatusText = job.IsRivalJob
-                    ? "Rival convoy en route"
-                    : (job.IsSpotOpportunity ? "Spot window closed; NPC convoy en route" : "NPC convoy en route");
+                job.StatusText = AmbientWorldDispatchText.BuildTravelingStatusText();
                 job.NextVisualSpawnAttemptMs = 0;
                 RecordWorldDispatchDiagnostic(
                     NpcWorldDispatchDiagnosticStage.VisualSpawn,
@@ -3789,9 +3781,7 @@ namespace LSOL.Systems
                 default:
                     if (worldJob != null)
                     {
-                        worldJob.StatusText = worldJob.IsRivalJob
-                            ? "Rival convoy hidden after repeated path failure."
-                            : "Ambient convoy hidden after repeated path failure.";
+                        worldJob.StatusText = AmbientWorldDispatchText.BuildRepeatedPathFailureStatusText();
                         RecordWorldDispatchDiagnostic(
                             NpcWorldDispatchDiagnosticStage.Cleanup,
                             "Visual convoy hidden after repeated no-progress recovery failures.",
@@ -5750,7 +5740,7 @@ namespace LSOL.Systems
                 Id = job.Id,
                 Type = job.Type,
                 Label = string.Format("{0}: {1}", FormatWorldJobType(job.Type), job.Commodity),
-                Detail = string.Format("{0} -> {1} | {2}", job.SourceLabel, job.DestinationLabel, job.StatusText),
+                Detail = string.Format("{0} -> {1} | {2}", job.SourceLabel, job.DestinationLabel, AmbientWorldDispatchText.NormalizeStatusText(job.StatusText)),
                 Commodity = job.Commodity,
                 SourceLabel = job.SourceLabel,
                 DestinationLabel = job.DestinationLabel,
@@ -5773,10 +5763,10 @@ namespace LSOL.Systems
             }
 
             return string.Format(
-                "{0} active | {1} listed | {2} rivals",
+                "{0} active | {1} listed | {2} visible",
                 _worldJobs.Count(job => job != null && (job.Phase == NpcWorldJobPhase.Listed || job.Phase == NpcWorldJobPhase.Traveling)),
                 _worldJobs.Count(job => job != null && job.Phase == NpcWorldJobPhase.Listed),
-                _worldJobs.Count(job => job != null && job.IsRivalJob));
+                _worldJobs.Count(job => job != null && job.HasVisibleConvoy));
         }
 
         private string BuildWorldDispatchDetail()
@@ -5809,36 +5799,12 @@ namespace LSOL.Systems
 
         private static string FormatWorldJobType(NpcWorldJobType type)
         {
-            switch (type)
-            {
-                case NpcWorldJobType.OverflowRescue:
-                    return "Overflow";
-                case NpcWorldJobType.ShortageRelief:
-                    return "Shortage";
-                case NpcWorldJobType.ExternalImport:
-                    return "Import";
-                case NpcWorldJobType.ExternalExport:
-                    return "Export";
-                case NpcWorldJobType.WarehouseBalancing:
-                    return "Warehouse";
-                case NpcWorldJobType.ServiceRun:
-                    return "Service";
-                case NpcWorldJobType.RivalFreight:
-                    return "Rival";
-                default:
-                    return "Dispatch";
-            }
+            return AmbientWorldDispatchText.FormatJobType(type);
         }
 
         private static string BuildWorldVisualFailureStatus(NpcWorldLogisticsJob job, string failureReason)
         {
-            var prefix = job != null && job.IsRivalJob
-                ? "Rival convoy hidden"
-                : "Ambient convoy hidden";
-            var reason = string.IsNullOrWhiteSpace(failureReason)
-                ? "visual spawn unavailable"
-                : failureReason.Trim().TrimEnd('.');
-            return string.Format("{0}: {1}.", prefix, reason);
+            return AmbientWorldDispatchText.BuildHiddenStatusText(failureReason);
         }
 
         private static string BuildWorldVisualFailureDiagnostic(string failureReason)
