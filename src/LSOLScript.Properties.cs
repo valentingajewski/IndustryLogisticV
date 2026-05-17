@@ -794,7 +794,7 @@ namespace LSOL
             var freeLiters = Math.Max(0f, definition.Capacity - tank.StoredResourceAmount);
             return freeLiters <= 0.05f
                 ? "The office diesel tank is already full."
-                : string.Format("Dispatch a refinery tanker to deliver up to {0} at a discounted price.", ModFormatting.FormatLiters(freeLiters));
+                : string.Format("Dispatch a refinery tanker to deliver up to {0} at a service premium.", ModFormatting.FormatLiters(freeLiters));
         }
 
         private string BuildOfficeRepairDetail()

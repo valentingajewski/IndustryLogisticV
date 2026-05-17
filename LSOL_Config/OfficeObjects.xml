@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <OfficeObjects>
-  <Object id="1" model="prop_gas_tank_01a" hash="2165440626" name="Dieseltank" size="Small" function="Refuel" resource="Fuel" capacity="10000" limit="1" price="10000" />
-  <Object id="2" model="prop_portacabin01" hash="3196461136" name="Construction Site Cabin" size="Big" function="Npc" capacity="5" limit="5" price="20000" />
-  <Object id="3" model="prop_toolchest_02" hash="2968855998" name="Maintenance Bay" size="Medium" function="Repair" limit="1" price="3000" />
+  <Object id="1" model="prop_gas_tank_01a" hash="2165440626" name="Dieseltank" size="Small" function="Refuel" resource="Fuel" capacity="15000" limit="1" price="15000" />
+  <Object id="2" model="prop_portacabin01" hash="3196461136" name="Construction Site Cabin" size="Big" function="Npc" capacity="3" limit="4" price="25000" />
+  <Object id="3" model="prop_toolchest_02" hash="2968855998" name="Maintenance Bay" size="Medium" function="Repair" limit="1" price="8000" />
   <Object id="4" model="prop_mp_cone_02" hash="1245865676" name="Cone" size="Small" function="Decorative" limit="20" price="250" />
   <Object id="5" model="prop_pallettruck_01" hash="2400924923" name="Pallet truck" size="Small" function="Decorative" limit="5" price="250" />
   <Object id="6" model="prop_wheelbarrow02a" hash="1133730678" name="Wheel Barrow" size="Small" function="Decorative" limit="5" price="250" />

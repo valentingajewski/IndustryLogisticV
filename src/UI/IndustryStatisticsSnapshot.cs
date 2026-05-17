@@ -41,7 +41,11 @@ namespace LSOL.UI
             }
 
             Stockpile = industry.GetInputStockTotal() + industry.GetOutputStockTotal();
-            TotalCapacity = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
+            TotalCapacity = Math.Max(
+                1f,
+                industry.InputCapacityTons
+                + industry.OutputCapacityTons
+                + (industry.SupportsOmegaBoost ? industry.OmegaCapacityTons : 0f));
             StockRatio = ModMath.Clamp01(Stockpile / TotalCapacity);
             UtilizationRatio = industry.SiteRole == SiteRole.Warehouse
                 ? StockRatio
@@ -92,7 +96,7 @@ namespace LSOL.UI
             if (capacity <= 0.001f)
             {
                 var bucketCount = isInput
-                    ? Math.Max(1, industry.Inputs.Count + industry.OptionalInputs.Count)
+                    ? Math.Max(1, industry.SortedAcceptedInputs != null ? industry.SortedAcceptedInputs.Count : industry.Inputs.Count + industry.OptionalInputs.Count + industry.BoostInputs.Count)
                     : Math.Max(1, industry.Outputs.Count);
                 var totalCapacity = isInput
                     ? Math.Max(1f, industry.InputCapacityTons)

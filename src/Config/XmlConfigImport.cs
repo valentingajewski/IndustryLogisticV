@@ -111,7 +111,48 @@ namespace LSOL.Config
             {
                 var groupName = ReadAttribute(element, "name");
                 var cargoType = ParseCargoType(ReadAttribute(element, "cargoType", groupName));
-                var commodities = ParseCommodityList(ReadAttribute(element, "commodities"), catalog.ValidationMessages, "Resources.xml", groupName);
+                var commodities = new List<string>();
+                var commodityBasePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                var commodityElements = element.Elements("Commodity").ToList();
+
+                if (commodityElements.Count > 0)
+                {
+                    foreach (var commodityElement in commodityElements)
+                    {
+                        var rawCommodity = ReadAttribute(commodityElement, "name");
+                        var commodity = CommodityCatalog.Normalize(rawCommodity);
+                        if (string.IsNullOrWhiteSpace(commodity) || commodity.Equals("None", StringComparison.OrdinalIgnoreCase))
+                        {
+                            continue;
+                        }
+
+                        if (!commodities.Contains(commodity, StringComparer.OrdinalIgnoreCase))
+                        {
+                            commodities.Add(commodity);
+                        }
+
+                        if (!CommodityCatalog.IsKnownCommodity(commodity))
+                        {
+                            catalog.ValidationMessages.Add(string.Format("Resources.xml '{0}' references unknown commodity '{1}'.", groupName, rawCommodity.Trim()));
+                        }
+
+                        var basePrice = Math.Max(0f, ReadFloatAttribute(commodityElement, "basePrice", 0f));
+                        if (basePrice > 0f)
+                        {
+                            commodityBasePrices[commodity] = basePrice;
+                        }
+                    }
+                }
+                else
+                {
+                    commodities = ParseCommodityList(ReadAttribute(element, "commodities"), catalog.ValidationMessages, "Resources.xml", groupName);
+                    var groupBasePrice = Math.Max(0f, ReadFloatAttribute(element, "basePrice", 0f));
+                    if (groupBasePrice > 0f && commodities.Count == 1)
+                    {
+                        commodityBasePrices[commodities[0]] = groupBasePrice;
+                    }
+                }
+
                 if (string.IsNullOrWhiteSpace(groupName) || cargoType == VehicleCargoType.Unknown || commodities.Count == 0)
                 {
                     catalog.ValidationMessages.Add("Resources.xml contains a group with missing or invalid attributes.");
@@ -127,12 +168,20 @@ namespace LSOL.Config
 
                 for (int i = 0; i < commodities.Count; i++)
                 {
+                    float basePrice;
+                    commodityBasePrices.TryGetValue(commodities[i], out basePrice);
                     catalog.ResourcesByCommodity[commodities[i]] = new ExternalResourceConfig
                     {
                         Commodity = commodities[i],
                         GroupName = groupName,
                         CargoType = cargoType,
+                        BasePrice = Math.Max(0f, basePrice),
                     };
+
+                    if (basePrice > 0f)
+                    {
+                        catalog.CommodityBasePrices[commodities[i]] = basePrice;
+                    }
                 }
             }
 
@@ -270,6 +319,7 @@ namespace LSOL.Config
                     Company = ReadAttribute(element, "company"),
                     Enabled = ReadBoolAttribute(element, "enabled", true),
                     IndustryOwnerCut = Clamp01(ReadFloatAttribute(element, "industryOwnerCut", 0.5f)),
+                    DeliveryPayoutMultiplier = Math.Max(0f, ReadFloatAttribute(element, "deliveryPayoutMultiplier", 1f)),
                     StartingTankRatio = Clamp01(ReadFloatAttribute(element, "startingTankRatio", 0f)),
                     Density = NormalizeDensity(ReadAttribute(element, "density"), string.Empty),
                     RefuelIsFree = ReadBoolAttribute(element, "refuelIsFree", false),
@@ -291,7 +341,12 @@ namespace LSOL.Config
                 var inputsElement = element.Element("Inputs");
                 location.Inputs = ParseCommoditySet(ReadAttribute(inputsElement, "primary"), catalog.ValidationMessages, "Sites.xml", legacyKey);
                 location.OptionalInputs = ParseCommoditySet(ReadAttribute(inputsElement, "optional"), catalog.ValidationMessages, "Sites.xml", legacyKey);
+                location.BoostInputs = ParseCommoditySet(ReadAttribute(inputsElement, "boost"), catalog.ValidationMessages, "Sites.xml", legacyKey);
                 location.Outputs = ParseCommoditySet(ReadAttribute(inputsElement, "outputs"), catalog.ValidationMessages, "Sites.xml", legacyKey);
+                location.RecipeInputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeInputs"), catalog.ValidationMessages, "Sites.xml", legacyKey);
+                location.RecipeOutputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeOutputs"), catalog.ValidationMessages, "Sites.xml", legacyKey);
+                location.InputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "inputCapacityWeights"), catalog.ValidationMessages, "Sites.xml", legacyKey);
+                location.OutputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "outputCapacityWeights"), catalog.ValidationMessages, "Sites.xml", legacyKey);
                 location.Kind = ResolveLocationKind(location.SiteRole, location.Inputs, location.Outputs);
 
                 if (!TryReadFloatAttribute(element, "emptyingRate", out var emptyingRate))
@@ -768,6 +823,54 @@ namespace LSOL.Config
                 {
                     validationMessages?.Add(string.Format("{0} '{1}' references unknown commodity '{2}'.", sourceName, context, part.Trim()));
                 }
+            }
+
+            return result;
+        }
+
+        private static Dictionary<string, float> ParseCommodityWeightMap(string raw, ICollection<string> validationMessages, string sourceName, string context)
+        {
+            var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            foreach (var part in SplitCsv(raw))
+            {
+                var token = (part ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    continue;
+                }
+
+                var split = token.Split(new[] { ':', '=' }, 2, StringSplitOptions.RemoveEmptyEntries);
+                if (split.Length != 2)
+                {
+                    validationMessages?.Add(string.Format("{0} '{1}' has an invalid weighted commodity token '{2}'.", sourceName, context, token));
+                    continue;
+                }
+
+                var commodity = CommodityCatalog.Normalize(split[0]);
+                if (string.IsNullOrWhiteSpace(commodity) || commodity.Equals("None", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (!CommodityCatalog.IsKnownCommodity(commodity))
+                {
+                    validationMessages?.Add(string.Format("{0} '{1}' references unknown commodity '{2}'.", sourceName, context, split[0].Trim()));
+                }
+
+                float weight;
+                if (!float.TryParse(split[1].Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out weight)
+                    && !float.TryParse(split[1].Trim(), NumberStyles.Float, CultureInfo.CurrentCulture, out weight))
+                {
+                    validationMessages?.Add(string.Format("{0} '{1}' has an invalid weight '{2}' for commodity '{3}'.", sourceName, context, split[1].Trim(), split[0].Trim()));
+                    continue;
+                }
+
+                if (weight <= 0f)
+                {
+                    continue;
+                }
+
+                result[commodity] = weight;
             }
 
             return result;

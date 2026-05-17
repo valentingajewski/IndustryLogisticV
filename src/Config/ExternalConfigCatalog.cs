@@ -15,6 +15,7 @@ namespace LSOL.Config
             Districts = new Dictionary<string, DistrictConfig>(StringComparer.OrdinalIgnoreCase);
             ResourceGroups = new List<ResourceGroupConfig>();
             ResourcesByCommodity = new Dictionary<string, ExternalResourceConfig>(StringComparer.OrdinalIgnoreCase);
+            CommodityBasePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             VehicleDefinitions = new List<VehicleDefinition>();
             BankDefinitions = new List<BankDefinition>();
@@ -29,6 +30,7 @@ namespace LSOL.Config
         public Dictionary<string, DistrictConfig> Districts { get; }
         public List<ResourceGroupConfig> ResourceGroups { get; }
         public Dictionary<string, ExternalResourceConfig> ResourcesByCommodity { get; }
+        public Dictionary<string, float> CommodityBasePrices { get; }
         public Dictionary<string, List<string>> ObjectModels { get; }
         public List<VehicleDefinition> VehicleDefinitions { get; }
         public List<BankDefinition> BankDefinitions { get; }
@@ -107,7 +109,12 @@ namespace LSOL.Config
         public float FactoryProductionRatio { get; set; }
         public HashSet<string> Inputs { get; set; }
         public HashSet<string> OptionalInputs { get; set; }
+        public HashSet<string> BoostInputs { get; set; }
         public HashSet<string> Outputs { get; set; }
+        public Dictionary<string, float> RecipeInputWeights { get; set; }
+        public Dictionary<string, float> RecipeOutputWeights { get; set; }
+        public Dictionary<string, float> InputCapacityWeights { get; set; }
+        public Dictionary<string, float> OutputCapacityWeights { get; set; }
         public string Density { get; set; }
         public float StartingTankRatio { get; set; }
         public float EmptyingRate { get; set; }
@@ -115,6 +122,7 @@ namespace LSOL.Config
         public bool RefuelIsFree { get; set; }
         public float IndustryPrice { get; set; }
         public float IndustryOwnerCut { get; set; }
+        public float DeliveryPayoutMultiplier { get; set; }
         public string SpawnedVehicleModel { get; set; }
         public Vector3? SpawnedVehiclePosition { get; set; }
         public float? SpawnedVehicleHeading { get; set; }
@@ -140,5 +148,6 @@ namespace LSOL.Config
         public string Commodity { get; set; }
         public string GroupName { get; set; }
         public VehicleCargoType CargoType { get; set; }
+        public float BasePrice { get; set; }
     }
 }

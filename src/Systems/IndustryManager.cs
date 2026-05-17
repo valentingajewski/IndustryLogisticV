@@ -10,6 +10,7 @@ namespace LSOL.Systems
     public sealed class IndustryManager
     {
         private const float NearestIndustryCellSize = 160f;
+        private const float NonSinkDeliveryPayoutMultiplier = 0.35f;
 
         private readonly List<Industry> _industries;
         private readonly Dictionary<long, List<Industry>> _industriesBySpatialCell;
@@ -95,6 +96,8 @@ namespace LSOL.Systems
                 _defaultIndustryConfigs[pair.Key] = CloneIndustryConfig(effectiveConfig);
             }
 
+            _sinkDrainRatePerMinuteByIndustryId.Clear();
+
             for (int i = 0; i < _industries.Count; i++)
             {
                 var industry = _industries[i];
@@ -117,6 +120,12 @@ namespace LSOL.Systems
                     Math.Max(1f, effectiveConfig.InputCapacityTons * Math.Max(0.01f, _industryOmegaCapacityMultiplier)),
                     industry.OmegaStorageModuleLevel);
 
+                float drainRatePerMinute;
+                if (TryGetSinkDrainRatePerMinute(effectiveConfig, out drainRatePerMinute))
+                {
+                    _sinkDrainRatePerMinuteByIndustryId[industry.Id] = drainRatePerMinute;
+                }
+
                 industry.ApplyPersistentState(
                     liveBuffers,
                     industry.OmegaStorage,
@@ -131,7 +140,10 @@ namespace LSOL.Systems
                     industry.IsOwned,
                     industry.HasContractorPermit,
                     effectiveConfig.IndustryPrice,
-                    effectiveConfig.IndustryLicencePrice);
+                    effectiveConfig.IndustryLicencePrice,
+                    effectiveConfig.EmptyingRate,
+                    effectiveConfig.IndustryOwnerCut,
+                    effectiveConfig.DeliveryPayoutMultiplier);
             }
         }
 
@@ -212,7 +224,10 @@ namespace LSOL.Systems
                     defaultConfig.IsOwned,
                     defaultConfig.HasContractorPermit,
                     defaultConfig.IndustryPrice,
-                    defaultConfig.IndustryLicencePrice);
+                    defaultConfig.IndustryLicencePrice,
+                    defaultConfig.EmptyingRate,
+                    defaultConfig.IndustryOwnerCut,
+                    defaultConfig.DeliveryPayoutMultiplier);
 
                 SeedIndustryStartingState(industry, defaultConfig);
             }
@@ -476,8 +491,10 @@ namespace LSOL.Systems
             }
             else
             {
-                payout = deliveredTons * unitPrice * 0.15f;
+                payout = deliveredTons * unitPrice * NonSinkDeliveryPayoutMultiplier;
             }
+
+            payout *= Math.Max(0f, industry.DeliveryPayoutMultiplier <= 0f ? 1f : industry.DeliveryPayoutMultiplier);
 
             if (RequiresIndustryPurchase(industry))
             {
@@ -489,7 +506,17 @@ namespace LSOL.Systems
 
         private static bool ShouldUseOmegaBoost(IndustryConfig config)
         {
-            if (!config.Inputs.Contains("Omega"))
+            if (config == null)
+            {
+                return false;
+            }
+
+            var usesOmegaBoost = config.Inputs.Contains("Omega")
+                || (config.BoostInputs != null && config.BoostInputs.Contains("Omega"))
+                || ((config.BoostInputs == null || config.BoostInputs.Count == 0)
+                    && config.OptionalInputs != null
+                    && config.OptionalInputs.Contains("Omega"));
+            if (!usesOmegaBoost)
             {
                 return false;
             }
@@ -534,6 +561,7 @@ namespace LSOL.Systems
 
             var acceptedInputs = industry.Inputs
                 .Concat(industry.OptionalInputs)
+                .Concat(industry.BoostInputs)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToList();
             if (acceptedInputs.Count > 0)
@@ -591,7 +619,10 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (config.Outputs.Count != 0 || (config.Inputs.Count == 0 && config.OptionalInputs.Count == 0))
+            if (config.Outputs.Count != 0
+                || (config.Inputs.Count == 0
+                    && config.OptionalInputs.Count == 0
+                    && (config.BoostInputs == null || config.BoostInputs.Count == 0)))
             {
                 return false;
             }
@@ -639,37 +670,59 @@ namespace LSOL.Systems
                 return recipes;
             }
 
-            var effectiveInputs = config.Inputs
-                .Where(x => !supportsOmegaBoost || !x.Equals("Omega", StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            if (effectiveInputs.Count == 0)
+            var boostInputs = GetEffectiveBoostInputs(config);
+            var weightedInputs = ClonePositiveWeights(config.RecipeInputWeights);
+            if (weightedInputs.Count == 0)
             {
-                var outputOnly = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-                foreach (var output in config.Outputs)
+                var fallbackInputs = config.Inputs
+                    .Concat(config.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+                foreach (var input in fallbackInputs)
                 {
-                    outputOnly[output] = 1f;
+                    if (boostInputs.Contains(input))
+                    {
+                        continue;
+                    }
+
+                    if (supportsOmegaBoost && input.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    weightedInputs[input] = 1f;
+                }
+            }
+            else
+            {
+                foreach (var boostInput in boostInputs)
+                {
+                    weightedInputs.Remove(boostInput);
                 }
 
+                if (supportsOmegaBoost)
+                {
+                    weightedInputs.Remove("Omega");
+                }
+            }
+
+            var weightedOutputs = ClonePositiveWeights(config.RecipeOutputWeights);
+            if (weightedOutputs.Count == 0)
+            {
+                foreach (var output in config.Outputs)
+                {
+                    weightedOutputs[output] = 1f;
+                }
+            }
+
+            if (weightedInputs.Count == 0)
+            {
                 recipes.Add(new ProductionRecipe(
                     new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase),
-                    outputOnly));
+                    weightedOutputs));
                 return recipes;
             }
 
-            var genericInputs = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < effectiveInputs.Count; i++)
-            {
-                genericInputs[effectiveInputs[i]] = 1f;
-            }
-
-            var genericOutputs = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            foreach (var output in config.Outputs)
-            {
-                genericOutputs[output] = 1f;
-            }
-
-            recipes.Add(new ProductionRecipe(genericInputs, genericOutputs));
+            recipes.Add(new ProductionRecipe(weightedInputs, weightedOutputs));
             return recipes;
         }
 
@@ -706,7 +759,12 @@ namespace LSOL.Systems
                 ObjectToDeleteModelHashes = source.ObjectToDeleteModelHashes != null ? new List<int>(source.ObjectToDeleteModelHashes) : new List<int>(),
                 Inputs = new HashSet<string>(source.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 OptionalInputs = new HashSet<string>(source.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                BoostInputs = new HashSet<string>(source.BoostInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 Outputs = new HashSet<string>(source.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                RecipeInputWeights = ClonePositiveWeights(source.RecipeInputWeights),
+                RecipeOutputWeights = ClonePositiveWeights(source.RecipeOutputWeights),
+                InputCapacityWeights = ClonePositiveWeights(source.InputCapacityWeights),
+                OutputCapacityWeights = ClonePositiveWeights(source.OutputCapacityWeights),
                 FactoryProductionRatio = source.FactoryProductionRatio,
                 InputCapacityTons = source.InputCapacityTons,
                 OutputCapacityTons = source.OutputCapacityTons,
@@ -719,6 +777,7 @@ namespace LSOL.Systems
                 IndustryPrice = source.IndustryPrice,
                 IndustryLicencePrice = source.IndustryLicencePrice,
                 IndustryOwnerCut = source.IndustryOwnerCut,
+                DeliveryPayoutMultiplier = source.DeliveryPayoutMultiplier,
                 IsOwned = source.IsOwned,
                 HasContractorPermit = source.HasContractorPermit,
                 IsCsvBacked = source.IsCsvBacked,
@@ -731,14 +790,14 @@ namespace LSOL.Systems
         private static IndustryConfig BuildEffectiveIndustryConfig(IndustryConfig baseConfig, EconomyDifficultyPreset preset)
         {
             var effectiveConfig = CloneIndustryConfig(baseConfig);
-            if (effectiveConfig == null || effectiveConfig.LocationKind != ExternalLocationKind.Industry)
+            if (effectiveConfig == null)
             {
                 return effectiveConfig;
             }
 
             if (effectiveConfig.IsCsvBacked)
             {
-                var sitePreset = ResolveSitePresetValues(effectiveConfig, preset);
+                var sitePreset = ResolveAuthoredSitePresetValues(effectiveConfig, preset);
                 if (sitePreset == null)
                 {
                     sitePreset = SiteEconomyPresetValues.Create(0f, 0f, 0f, effectiveConfig.InputCapacityTons, effectiveConfig.OutputCapacityTons, effectiveConfig.FactoryProductionRatio, false);
@@ -749,15 +808,22 @@ namespace LSOL.Systems
                     : ResolveFactoryProductionMultiplier(effectiveConfig.LegacyKey ?? effectiveConfig.Id, preset);
 
                 effectiveConfig.FactoryProductionRatio = Math.Max(0.1f, productionRatio <= 0f ? 1f : productionRatio);
-                effectiveConfig.ProductionRate = Math.Max(1f, sitePreset.ProductionRate > 0f
-                    ? sitePreset.ProductionRate * effectiveConfig.FactoryProductionRatio
-                    : effectiveConfig.ProductionRate);
+                if (effectiveConfig.Outputs.Count > 0)
+                {
+                    effectiveConfig.ProductionRate = sitePreset.ProductionRate > 0f
+                        ? Math.Max(1f, sitePreset.ProductionRate * effectiveConfig.FactoryProductionRatio)
+                        : effectiveConfig.ProductionRate;
+                }
+
                 effectiveConfig.InputCapacityTons = Math.Max(1f, sitePreset.InputCapacityTons > 0f ? sitePreset.InputCapacityTons : effectiveConfig.InputCapacityTons);
                 effectiveConfig.OutputCapacityTons = effectiveConfig.Outputs.Count == 0
                     ? Math.Max(1f, sitePreset.InputCapacityTons > 0f ? sitePreset.InputCapacityTons : effectiveConfig.OutputCapacityTons)
                     : Math.Max(1f, sitePreset.OutputCapacityTons > 0f ? sitePreset.OutputCapacityTons : effectiveConfig.OutputCapacityTons);
                 effectiveConfig.IndustryPrice = Math.Max(0f, sitePreset.PurchasePrice);
                 effectiveConfig.IndustryLicencePrice = sitePreset.PermitRequired ? Math.Max(0f, sitePreset.LicencePrice) : 0f;
+                effectiveConfig.EmptyingRate = ApplySinkEmptyingRateForPreset(effectiveConfig, preset);
+                effectiveConfig.IndustryOwnerCut = ApplyIndustryOwnerCutForPreset(effectiveConfig.IndustryOwnerCut, preset);
+                effectiveConfig.DeliveryPayoutMultiplier = Math.Max(0f, effectiveConfig.DeliveryPayoutMultiplier <= 0f ? 1f : effectiveConfig.DeliveryPayoutMultiplier);
                 var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(effectiveConfig.SiteRole);
                 var hasStarterPermitAccess = SiteMetadataParser.GrantsStarterPermitAccess(effectiveConfig.SiteRole, effectiveConfig.OwnershipTier);
                 effectiveConfig.IsOwned = hasStarterOwnership || effectiveConfig.IsOwned;
@@ -789,6 +855,41 @@ namespace LSOL.Systems
                     return CloneSiteEconomy(config.HardcoreEconomy ?? config.StandardEconomy ?? config.CasualEconomy);
                 default:
                     return CloneSiteEconomy(config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy);
+            }
+        }
+
+        private static SiteEconomyPresetValues ResolveAuthoredSitePresetValues(IndustryConfig config, EconomyDifficultyPreset preset)
+        {
+            var authoredStandard = CloneSiteEconomy(config != null
+                ? (config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy)
+                : null);
+            if (authoredStandard == null)
+            {
+                return ResolveSitePresetValues(config, preset);
+            }
+
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    return SiteEconomyPresetValues.Create(
+                        authoredStandard.ProductionRate * 1.20f,
+                        authoredStandard.LicencePrice * 0.70f,
+                        authoredStandard.PurchasePrice * 0.75f,
+                        authoredStandard.InputCapacityTons * 1.30f,
+                        authoredStandard.OutputCapacityTons * 1.30f,
+                        authoredStandard.ProductionRatio,
+                        authoredStandard.PermitRequired);
+                case EconomyDifficultyPreset.Hardcore:
+                    return SiteEconomyPresetValues.Create(
+                        authoredStandard.ProductionRate * 0.85f,
+                        authoredStandard.LicencePrice * 1.35f,
+                        authoredStandard.PurchasePrice * 1.40f,
+                        authoredStandard.InputCapacityTons * 0.80f,
+                        authoredStandard.OutputCapacityTons * 0.80f,
+                        authoredStandard.ProductionRatio,
+                        authoredStandard.PermitRequired);
+                default:
+                    return authoredStandard;
             }
         }
 
@@ -856,6 +957,78 @@ namespace LSOL.Systems
         private static float ConvertRawCapacityToTons(float rawCapacity)
         {
             return Math.Max(1f, rawCapacity / 1000f);
+        }
+
+        private static HashSet<string> GetEffectiveBoostInputs(IndustryConfig config)
+        {
+            if (config == null)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            if (config.BoostInputs != null && config.BoostInputs.Count > 0)
+            {
+                return new HashSet<string>(config.BoostInputs, StringComparer.OrdinalIgnoreCase);
+            }
+
+            return new HashSet<string>(config.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static Dictionary<string, float> ClonePositiveWeights(IEnumerable<KeyValuePair<string, float>> source)
+        {
+            var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            if (source == null)
+            {
+                return result;
+            }
+
+            foreach (var pair in source)
+            {
+                var commodity = CommodityCatalog.Normalize(pair.Key);
+                if (string.IsNullOrWhiteSpace(commodity) || pair.Value <= 0f)
+                {
+                    continue;
+                }
+
+                result[commodity] = pair.Value;
+            }
+
+            return result;
+        }
+
+        private static float ApplyIndustryOwnerCutForPreset(float ownerCut, EconomyDifficultyPreset preset)
+        {
+            var baseOwnerCut = Math.Max(0f, Math.Min(1f, ownerCut));
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    return Math.Max(0.15f, baseOwnerCut - 0.05f);
+                case EconomyDifficultyPreset.Hardcore:
+                    return Math.Min(0.45f, baseOwnerCut + 0.05f);
+                default:
+                    return baseOwnerCut;
+            }
+        }
+
+        private static float ApplySinkEmptyingRateForPreset(IndustryConfig config, EconomyDifficultyPreset preset)
+        {
+            if (config == null || config.Outputs.Count != 0)
+            {
+                return config != null ? config.EmptyingRate : 0f;
+            }
+
+            var multiplier = 1f;
+            switch (preset)
+            {
+                case EconomyDifficultyPreset.Casual:
+                    multiplier = 0.90f;
+                    break;
+                case EconomyDifficultyPreset.Hardcore:
+                    multiplier = 1.15f;
+                    break;
+            }
+
+            return Math.Max(0f, config.EmptyingRate * multiplier);
         }
 
         private static float ApplyProductionModuleLevels(float productionRate, int moduleLevel)

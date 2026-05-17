@@ -13,29 +13,64 @@ namespace LSOL.Systems
 
         private static readonly Dictionary<string, float> BasePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
         {
-            { "Coal", 300f },
-            { "Ore", 380f },
-            { "Oil", 450f },
-            { "Plastic", 900f },
-            { "Fuel", 750f },
-            { "Metal", 1200f },
-            { "Alloy", 1500f },
-            { "Processors", 2600f },
-            { "ProcessedFood", 900f },
-            { "Medicine", 4200f },
-            { "TV", 6500f },
-            { "Computer", 8200f },
-            { "Omega", 12000f },
-            { "Recyclable", 500f },
+            { "Coal", 250f },
+            { "Gravel", 260f },
+            { "Ore", 320f },
+            { "Water", 220f },
+            { "Wood", 320f },
+            { "Crops", 340f },
+            { "Oil", 380f },
+            { "Livestock", 420f },
+            { "Recyclable", 180f },
+            { "Fuel", 700f },
+            { "Cement", 450f },
+            { "Lumber", 520f },
+            { "Paper", 550f },
+            { "Plastic", 800f },
+            { "Alcohol", 650f },
+            { "Chemicals", 750f },
+            { "Fabric", 700f },
+            { "ProcessedFood", 850f },
+            { "Meat", 900f },
+            { "LiquidFertilizer", 600f },
+            { "Steel", 900f },
+            { "Alloy", 1100f },
+            { "Metal", 850f },
+            { "Bricks", 650f },
+            { "Concrete", 700f },
+            { "Beam", 950f },
+            { "MechanicalParts", 1100f },
+            { "Electronic", 1400f },
+            { "Clothes", 1200f },
+            { "Furniture", 1500f },
+            { "Medicine", 2400f },
+            { "TV", 3000f },
+            { "Computer", 3800f },
+            { "Vehicles", 5000f },
+            { "Omega", 7000f },
         };
 
         private readonly Dictionary<string, float> _basePrices;
         private readonly Dictionary<string, CommodityMarketState> _commodityStates;
         private int _lastUpdatedGameTimeMs;
 
-        public GlobalMarketManager(int startGameTimeMs)
+        public GlobalMarketManager(int startGameTimeMs, IReadOnlyDictionary<string, float> commodityBasePrices = null)
         {
             _basePrices = new Dictionary<string, float>(BasePrices, StringComparer.OrdinalIgnoreCase);
+            if (commodityBasePrices != null)
+            {
+                foreach (var pair in commodityBasePrices)
+                {
+                    var commodity = Domain.CommodityCatalog.Normalize(pair.Key);
+                    if (string.IsNullOrWhiteSpace(commodity) || pair.Value <= 0f)
+                    {
+                        continue;
+                    }
+
+                    _basePrices[commodity] = pair.Value;
+                }
+            }
+
             _commodityStates = new Dictionary<string, CommodityMarketState>(StringComparer.OrdinalIgnoreCase);
             _lastUpdatedGameTimeMs = startGameTimeMs;
 

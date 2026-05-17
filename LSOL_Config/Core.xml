@@ -1,12 +1,12 @@
-﻿<Core>
+<Core>
   <General omegaMultiplier="2" industryOmegaCapacityMultiplier="0.2" />
   <Markers radius="0.5" height="1" />
   <MainOffice x="-115.15" y="-2517" z="6" />
   <VehicleSpawn x="-97.75" y="-2498.41" z="6" heading="234" />
   <Controls openModMenu="F7" gateInteract="E" />
   <DensityProfiles>
-    <Stores veryLowCapacity="5000" lowCapacity="10000" mediumCapacity="60000" highCapacity="100000" veryLowEmptyingRate="0.35" lowEmptyingRate="0.8" mediumEmptyingRate="2.25" highEmptyingRate="4" />
-    <GasStations veryLowCapacity="5000" lowCapacity="10000" mediumCapacity="60000" highCapacity="100000" veryLowEmptyingRate="0.35" lowEmptyingRate="0.8" mediumEmptyingRate="2.25" highEmptyingRate="4" />
+    <Stores veryLowCapacity="6000" lowCapacity="12000" mediumCapacity="24000" highCapacity="40000" veryLowEmptyingRate="0.03" lowEmptyingRate="0.07" mediumEmptyingRate="0.12" highEmptyingRate="0.18" />
+    <GasStations veryLowCapacity="20000" lowCapacity="35000" mediumCapacity="60000" highCapacity="90000" veryLowEmptyingRate="0.02" lowEmptyingRate="0.04" mediumEmptyingRate="0.07" highEmptyingRate="0.10" />
   </DensityProfiles>
   <Workers>
     <Model name="s_m_m_trucker_01" />

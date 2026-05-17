@@ -1,11 +1,56 @@
-﻿<Resources>
-  <Group name="Aggregates" cargoType="Aggregates" commodities="Coal,Gravel,Ore,Crops" />
-  <Group name="OpenHull" cargoType="OpenHull" commodities="Beam,Bricks,Lumber,Steel,Alloy" />
-  <Group name="Wood" cargoType="Wood" commodities="Wood" />
-  <Group name="CraftedGoods" cargoType="CraftedGoods" commodities="Livestock,Alcohol,Chemicals,Clothes,Fabric,Food,Plastic,Paper,ProcessedFood,Medicine,MechanicalParts,TV,Computer" />
-  <Group name="Liquid" cargoType="Liquid" commodities="Fuel,LiquidFertilizer,Oil" />
-  <Group name="DryBulk" cargoType="DryBulk" commodities="Asphalt,Cement,Concrete" />
-  <Group name="Refrigeration" cargoType="Refrigeration" commodities="Meat" />
-  <Group name="Recyclable" cargoType="Recyclable" commodities="Recyclable" />
-  <Group name="Vehicles" cargoType="Vehicles" commodities="Vehicles" />
+<Resources>
+  <Group name="Aggregates" cargoType="Aggregates">
+    <Commodity name="Coal" basePrice="250" />
+    <Commodity name="Gravel" basePrice="260" />
+    <Commodity name="Ore" basePrice="320" />
+    <Commodity name="Crops" basePrice="340" />
+  </Group>
+  <Group name="OpenHull" cargoType="OpenHull">
+    <Commodity name="Beam" basePrice="950" />
+    <Commodity name="Bricks" basePrice="650" />
+    <Commodity name="Lumber" basePrice="520" />
+    <Commodity name="Steel" basePrice="900" />
+    <Commodity name="Alloy" basePrice="1100" />
+    <Commodity name="Metal" basePrice="850" />
+  </Group>
+  <Group name="Wood" cargoType="Wood">
+    <Commodity name="Wood" basePrice="320" />
+  </Group>
+  <Group name="CraftedGoods" cargoType="CraftedGoods">
+    <Commodity name="Livestock" basePrice="420" />
+    <Commodity name="Alcohol" basePrice="650" />
+    <Commodity name="Chemicals" basePrice="750" />
+    <Commodity name="Clothes" basePrice="1200" />
+    <Commodity name="Fabric" basePrice="700" />
+    <Commodity name="ProcessedFood" basePrice="850" />
+    <Commodity name="Plastic" basePrice="800" />
+    <Commodity name="Paper" basePrice="550" />
+    <Commodity name="Medicine" basePrice="2400" />
+    <Commodity name="MechanicalParts" basePrice="1100" />
+    <Commodity name="TV" basePrice="3000" />
+    <Commodity name="Computer" basePrice="3800" />
+    <Commodity name="Electronic" basePrice="1400" />
+    <Commodity name="Furniture" basePrice="1500" />
+  </Group>
+  <Group name="Liquid" cargoType="Liquid">
+    <Commodity name="Fuel" basePrice="700" />
+    <Commodity name="LiquidFertilizer" basePrice="600" />
+    <Commodity name="Oil" basePrice="380" />
+    <Commodity name="Water" basePrice="220" />
+    <Commodity name="Omega" basePrice="7000" />
+  </Group>
+  <Group name="DryBulk" cargoType="DryBulk">
+    <Commodity name="Asphalt" basePrice="400" />
+    <Commodity name="Cement" basePrice="450" />
+    <Commodity name="Concrete" basePrice="700" />
+  </Group>
+  <Group name="Refrigeration" cargoType="Refrigeration">
+    <Commodity name="Meat" basePrice="900" />
+  </Group>
+  <Group name="Recyclable" cargoType="Recyclable">
+    <Commodity name="Recyclable" basePrice="180" />
+  </Group>
+  <Group name="Vehicles" cargoType="Vehicles">
+    <Commodity name="Vehicles" basePrice="5000" />
+  </Group>
 </Resources>

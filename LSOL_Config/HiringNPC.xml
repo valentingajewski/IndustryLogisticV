@@ -1,5 +1,5 @@
-﻿<HiringNPC>
-  <Tier id="Rookie" name="Rookie" model="s_m_m_trucker_01" cargoLossRate="0.4" speedMultiplier="0.6" priceMultiplier="25" weeklyWageCasual="1500" weeklyWageStandard="2000" weeklyWageHardcore="3000" />
-  <Tier id="Professional" name="Professional" model="s_m_y_construct_01" cargoLossRate="0.2" speedMultiplier="0.8" priceMultiplier="50" weeklyWageCasual="3000" weeklyWageStandard="4000" weeklyWageHardcore="6000" />
-  <Tier id="Veteran" name="Veteran" model="s_m_m_dockwork_01" cargoLossRate="0.1" speedMultiplier="0.9" priceMultiplier="100" weeklyWageCasual="6000" weeklyWageStandard="8000" weeklyWageHardcore="12000" />
+<HiringNPC>
+  <Tier id="Rookie" name="Rookie" model="s_m_m_trucker_01" cargoLossRate="0.35" speedMultiplier="0.65" priceMultiplier="4" weeklyWageCasual="1200" weeklyWageStandard="1600" weeklyWageHardcore="2200" />
+  <Tier id="Professional" name="Professional" model="s_m_y_construct_01" cargoLossRate="0.18" speedMultiplier="0.82" priceMultiplier="7" weeklyWageCasual="2500" weeklyWageStandard="3300" weeklyWageHardcore="4500" />
+  <Tier id="Veteran" name="Veteran" model="s_m_m_dockwork_01" cargoLossRate="0.08" speedMultiplier="0.92" priceMultiplier="11" weeklyWageCasual="4500" weeklyWageStandard="5600" weeklyWageHardcore="7500" />
 </HiringNPC>

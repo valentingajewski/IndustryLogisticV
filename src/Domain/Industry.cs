@@ -10,8 +10,11 @@ namespace LSOL.Domain
     {
         private readonly List<ProductionRecipe> _recipes;
         private readonly bool _supportsOmegaBoost;
+        private readonly Dictionary<string, float> _inputCapacityWeights;
+        private readonly Dictionary<string, float> _outputCapacityWeights;
         private readonly List<string> _sortedInputs;
         private readonly List<string> _sortedOptionalInputs;
+        private readonly List<string> _sortedBoostInputs;
         private readonly List<string> _sortedAcceptedInputs;
         private readonly List<string> _sortedOutputs;
 
@@ -41,6 +44,7 @@ namespace LSOL.Domain
             ObjectToDeleteModelHashes = (config.ObjectToDeleteModelHashes ?? new List<int>()).AsReadOnly();
             Inputs = new HashSet<string>(config.Inputs, StringComparer.OrdinalIgnoreCase);
             OptionalInputs = new HashSet<string>(config.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            BoostInputs = new HashSet<string>(config.BoostInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             Outputs = new HashSet<string>(config.Outputs, StringComparer.OrdinalIgnoreCase);
             BufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             ProductionRate = NormalizeProductionRate(config.ProductionRate);
@@ -53,15 +57,22 @@ namespace LSOL.Domain
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
             IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
+            DeliveryPayoutMultiplier = Math.Max(0f, config.DeliveryPayoutMultiplier <= 0f ? 1f : config.DeliveryPayoutMultiplier);
             IsOwned = config.IsOwned || HasStarterOwnership;
             HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f || HasStarterPermitAccess;
 
             _recipes = recipes ?? new List<ProductionRecipe>();
             _supportsOmegaBoost = supportsOmegaBoost;
+            _inputCapacityWeights = CloneCommodityWeightMap(config.InputCapacityWeights);
+            _outputCapacityWeights = CloneCommodityWeightMap(config.OutputCapacityWeights);
             _sortedInputs = Inputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
             _sortedOptionalInputs = OptionalInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            _sortedBoostInputs = BoostInputs.Count > 0
+                ? BoostInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList()
+                : new List<string>(_sortedOptionalInputs);
             _sortedAcceptedInputs = Inputs
                 .Concat(OptionalInputs)
+                .Concat(BoostInputs)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(x => x, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -90,6 +101,14 @@ namespace LSOL.Domain
                     BufferStorage[optionalInput] = 0f;
                 }
             }
+
+            foreach (var boostInput in BoostInputs)
+            {
+                if (!BufferStorage.ContainsKey(boostInput))
+                {
+                    BufferStorage[boostInput] = 0f;
+                }
+            }
         }
 
         public string CatalogId { get; }
@@ -116,6 +135,7 @@ namespace LSOL.Domain
         public IReadOnlyList<int> ObjectToDeleteModelHashes { get; }
         public HashSet<string> Inputs { get; }
         public HashSet<string> OptionalInputs { get; }
+        public HashSet<string> BoostInputs { get; }
         public HashSet<string> Outputs { get; }
         public Dictionary<string, float> BufferStorage { get; }
         public IReadOnlyList<string> SortedInputs
@@ -149,7 +169,8 @@ namespace LSOL.Domain
         public bool RefuelIsFree { get; }
         public float IndustryPrice { get; private set; }
         public float IndustryLicencePrice { get; private set; }
-        public float IndustryOwnerCut { get; }
+        public float IndustryOwnerCut { get; private set; }
+        public float DeliveryPayoutMultiplier { get; private set; }
         public bool IsOwned { get; private set; }
         public bool HasContractorPermit { get; private set; }
         public float LastUtilizationPercent { get; private set; }
@@ -242,14 +263,15 @@ namespace LSOL.Domain
         public float GetInputStockTotal()
         {
             float total = 0f;
-            foreach (var input in Inputs)
+            foreach (var input in _sortedAcceptedInputs)
             {
-                total += GetStock(input);
-            }
+                if (_supportsOmegaBoost && input.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+                {
+                    total += OmegaStorage;
+                    continue;
+                }
 
-            foreach (var optionalInput in OptionalInputs)
-            {
-                total += GetStock(optionalInput);
+                total += GetStock(input);
             }
 
             return total;
@@ -274,7 +296,7 @@ namespace LSOL.Domain
                 return true;
             }
 
-            return Inputs.Contains(commodity) || OptionalInputs.Contains(commodity);
+            return Inputs.Contains(commodity) || OptionalInputs.Contains(commodity) || BoostInputs.Contains(commodity);
         }
 
         public bool ProducesCommodity(string commodity)
@@ -304,7 +326,7 @@ namespace LSOL.Domain
                 return addedOmega;
             }
 
-            if (!Inputs.Contains(commodity) && !OptionalInputs.Contains(commodity))
+            if (!Inputs.Contains(commodity) && !OptionalInputs.Contains(commodity) && !BoostInputs.Contains(commodity))
             {
                 return 0f;
             }
@@ -364,7 +386,7 @@ namespace LSOL.Domain
                 return removedOmega;
             }
 
-            if (!Inputs.Contains(commodity) && !OptionalInputs.Contains(commodity))
+            if (!Inputs.Contains(commodity) && !OptionalInputs.Contains(commodity) && !BoostInputs.Contains(commodity))
             {
                 return 0f;
             }
@@ -402,23 +424,18 @@ namespace LSOL.Domain
         public float ClearInputs()
         {
             float removed = 0f;
-            foreach (var input in Inputs)
+            foreach (var acceptedInput in _sortedAcceptedInputs)
             {
-                removed += GetStock(input);
-                BufferStorage[input] = 0f;
-            }
+                if (_supportsOmegaBoost && acceptedInput.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+                {
+                    removed += OmegaStorage;
+                    OmegaStorage = 0f;
+                    HasOmegaBoost = false;
+                    continue;
+                }
 
-            foreach (var optionalInput in OptionalInputs)
-            {
-                removed += GetStock(optionalInput);
-                BufferStorage[optionalInput] = 0f;
-            }
-
-            if (_supportsOmegaBoost)
-            {
-                removed += OmegaStorage;
-                OmegaStorage = 0f;
-                HasOmegaBoost = false;
+                removed += GetStock(acceptedInput);
+                BufferStorage[acceptedInput] = 0f;
             }
 
             return removed;
@@ -733,6 +750,11 @@ namespace LSOL.Domain
         public float GetMaxTransferTonsForCommodity(string commodity)
         {
             commodity = CommodityCatalog.Normalize(commodity);
+            if (_supportsOmegaBoost && commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            {
+                return Math.Max(0f, OmegaCapacityTons - OmegaStorage);
+            }
+
             var capacity = GetCommodityCapacityTons(commodity);
             var current = GetStock(commodity);
             return Math.Max(0f, capacity - current);
@@ -858,7 +880,10 @@ namespace LSOL.Domain
             bool isOwned = false,
             bool hasContractorPermit = false,
             float? industryPrice = null,
-            float? industryLicencePrice = null)
+            float? industryLicencePrice = null,
+            float? emptyingRate = null,
+            float? industryOwnerCut = null,
+            float? deliveryPayoutMultiplier = null)
         {
             foreach (var key in BufferStorage.Keys.ToList())
             {
@@ -899,6 +924,21 @@ namespace LSOL.Domain
                 IndustryLicencePrice = Math.Max(0f, industryLicencePrice.Value);
             }
 
+            if (emptyingRate.HasValue)
+            {
+                EmptyingRate = Math.Max(0f, emptyingRate.Value);
+            }
+
+            if (industryOwnerCut.HasValue)
+            {
+                IndustryOwnerCut = Math.Max(0f, Math.Min(1f, industryOwnerCut.Value));
+            }
+
+            if (deliveryPayoutMultiplier.HasValue)
+            {
+                DeliveryPayoutMultiplier = Math.Max(0f, deliveryPayoutMultiplier.Value <= 0f ? 1f : deliveryPayoutMultiplier.Value);
+            }
+
             OmegaStorage = Math.Max(0f, omegaStorage);
             SetOwned(isOwned);
             SetContractorPermitOwned(hasContractorPermit);
@@ -916,15 +956,19 @@ namespace LSOL.Domain
 
         private float ResolveOptionalInputBoostMultiplier()
         {
-            if (OptionalInputs.Count == 0)
+            if (_sortedBoostInputs.Count == 0)
             {
                 return 1f;
             }
 
             var multiplier = 1f;
-            foreach (var optionalInput in OptionalInputs)
+            for (int i = 0; i < _sortedBoostInputs.Count; i++)
             {
-                if (GetStock(optionalInput) > 0.05f)
+                var boostInput = _sortedBoostInputs[i];
+                var stock = _supportsOmegaBoost && boostInput.Equals("Omega", StringComparison.OrdinalIgnoreCase)
+                    ? OmegaStorage
+                    : GetStock(boostInput);
+                if (stock > 0.05f)
                 {
                     multiplier += 0.12f;
                 }
@@ -935,7 +979,7 @@ namespace LSOL.Domain
 
         private void ConsumeOptionalInputs(float cyclesUsed)
         {
-            if (cyclesUsed <= 0f || OptionalInputs.Count == 0)
+            if (cyclesUsed <= 0f || _sortedBoostInputs.Count == 0)
             {
                 return;
             }
@@ -946,15 +990,10 @@ namespace LSOL.Domain
                 return;
             }
 
-            foreach (var optionalInput in OptionalInputs)
+            for (int i = 0; i < _sortedBoostInputs.Count; i++)
             {
-                var current = GetStock(optionalInput);
-                if (current <= 0f)
-                {
-                    continue;
-                }
-
-                BufferStorage[optionalInput] = Math.Max(0f, current - Math.Min(current, perInputConsumption));
+                var boostInput = _sortedBoostInputs[i];
+                RemoveInput(boostInput, perInputConsumption);
             }
         }
 
@@ -1024,10 +1063,18 @@ namespace LSOL.Domain
 
         private float GetCommodityCapacityTons(string commodity)
         {
-            var inCount = Math.Max(1, Inputs.Count + OptionalInputs.Count);
-            var outCount = Math.Max(1, Outputs.Count);
-            var inputShare = (Inputs.Contains(commodity) || OptionalInputs.Contains(commodity)) ? InputCapacityTons / inCount : 0f;
-            var outputShare = Outputs.Contains(commodity) ? OutputCapacityTons / outCount : 0f;
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (_supportsOmegaBoost && commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+            {
+                return Math.Max(0f, OmegaCapacityTons);
+            }
+
+            var inputShare = _sortedAcceptedInputs.Contains(commodity, StringComparer.OrdinalIgnoreCase)
+                ? ResolveWeightedCapacityShare(commodity, _sortedAcceptedInputs, InputCapacityTons, _inputCapacityWeights)
+                : 0f;
+            var outputShare = Outputs.Contains(commodity)
+                ? ResolveWeightedCapacityShare(commodity, _sortedOutputs, OutputCapacityTons, _outputCapacityWeights)
+                : 0f;
 
             var max = Math.Max(inputShare, outputShare);
             if (max <= 0f)
@@ -1036,6 +1083,73 @@ namespace LSOL.Domain
             }
 
             return max;
+        }
+
+        private static float ResolveWeightedCapacityShare(string commodity, IEnumerable<string> commodities, float totalCapacity, Dictionary<string, float> weights)
+        {
+            var normalizedCommodity = CommodityCatalog.Normalize(commodity);
+            var bucketCommodities = (commodities ?? Enumerable.Empty<string>())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(CommodityCatalog.Normalize)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (bucketCommodities.Count == 0 || !bucketCommodities.Contains(normalizedCommodity, StringComparer.OrdinalIgnoreCase))
+            {
+                return 0f;
+            }
+
+            if (weights == null || weights.Count == 0)
+            {
+                return totalCapacity / Math.Max(1, bucketCommodities.Count);
+            }
+
+            var totalWeight = 0f;
+            for (int i = 0; i < bucketCommodities.Count; i++)
+            {
+                totalWeight += ResolveWeight(weights, bucketCommodities[i]);
+            }
+
+            if (totalWeight <= 0f)
+            {
+                return totalCapacity / Math.Max(1, bucketCommodities.Count);
+            }
+
+            return totalCapacity * (ResolveWeight(weights, normalizedCommodity) / totalWeight);
+        }
+
+        private static float ResolveWeight(Dictionary<string, float> weights, string commodity)
+        {
+            if (weights == null)
+            {
+                return 1f;
+            }
+
+            float configuredWeight;
+            return weights.TryGetValue(commodity, out configuredWeight) && configuredWeight > 0f
+                ? configuredWeight
+                : 1f;
+        }
+
+        private static Dictionary<string, float> CloneCommodityWeightMap(IEnumerable<KeyValuePair<string, float>> source)
+        {
+            var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            if (source == null)
+            {
+                return result;
+            }
+
+            foreach (var pair in source)
+            {
+                var commodity = CommodityCatalog.Normalize(pair.Key);
+                if (string.IsNullOrWhiteSpace(commodity) || pair.Value <= 0f)
+                {
+                    continue;
+                }
+
+                result[commodity] = pair.Value;
+            }
+
+            return result;
         }
     }
 }

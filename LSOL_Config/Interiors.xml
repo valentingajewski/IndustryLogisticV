@@ -1,25 +1,25 @@
-﻿<Interiors>
-  <Interior id="100000" name="Modern Apartment" igName="Tinsel Towers Apt 29" type="ModernApt" price="300000" weeklyRent="15000">
+<Interiors>
+  <Interior id="100000" name="Modern Apartment" igName="Tinsel Towers Apt 29" type="ModernApt" price="320000" weeklyRent="9500">
     <InteriorPosition x="-601.78" y="42.29" z="93.63" />
     <ExteriorPosition x="-594.8" y="36.58" z="43.61" />
     <GaragePosition x="-570.24" y="55.95" z="49.21" />
   </Interior>
-  <Interior id="100001" name="Modern Apartment" igName="Eclispse Towers Apt 5" type="ModernApt" price="300000" weeklyRent="15000">
+  <Interior id="100001" name="Modern Apartment" igName="Eclispse Towers Apt 5" type="ModernApt" price="320000" weeklyRent="9500">
     <InteriorPosition x="-777.45" y="339.78" z="207.62" />
     <ExteriorPosition x="-774.82" y="312.81" z="85.7" />
     <GaragePosition x="-795.56" y="312.22" z="85.71" />
   </Interior>
-  <Interior id="100002" name="Low Tier Apt" igName="Janitor Apartment" type="LowTierApt" price="100000" weeklyRent="1000">
+  <Interior id="100002" name="Low Tier Apt" igName="Janitor Apartment" type="LowTierApt" price="90000" weeklyRent="2500">
     <InteriorPosition x="-107.74" y="-8.29" z="70.52" />
     <ExteriorPosition x="-106.57" y="-8.63" z="70.52" />
     <GaragePosition x="-82" y="-22.56" z="66.32" />
   </Interior>
-  <Interior id="100003" name="Mid Range Apt" igName="Midrange Apartment" type="MidTierApt" price="200000" weeklyRent="5000">
+  <Interior id="100003" name="Mid Range Apt" igName="Midrange Apartment" type="MidTierApt" price="180000" weeklyRent="5000">
     <InteriorPosition x="346.83" y="-1002" z="-99.2" />
     <ExteriorPosition x="349.51" y="-1027.65" z="29.33" />
     <GaragePosition x="348.34" y="-997.59" z="29.32" />
   </Interior>
-  <Interior id="100004" name="Low Range Apt" igName="Low End Apartment" type="LowTierApt" price="100000" weeklyRent="1000">
+  <Interior id="100004" name="Low Range Apt" igName="Low End Apartment" type="LowTierApt" price="90000" weeklyRent="2500">
     <InteriorPosition x="264.77" y="-1000.82" z="-99.01" />
     <ExteriorPosition x="45.1" y="-92.03" z="65.76" />
     <GaragePosition x="39.73" y="-97" z="56.47" />

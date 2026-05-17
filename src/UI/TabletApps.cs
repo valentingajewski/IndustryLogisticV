@@ -81,7 +81,7 @@ namespace LSOL.UI
         public static MenuItem CreateGraphTimeframeSelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Timeframe: {0}", context != null ? context.StateStore.SelectedGraphTimeframe.ToDisplayLabel() : TabletGraphTimeframe.ThirtyMinutes.ToDisplayLabel()),
+                () => string.Format("Timeframe: < {0} >", context != null ? context.StateStore.SelectedGraphTimeframe.ToDisplayLabel() : TabletGraphTimeframe.ThirtyMinutes.ToDisplayLabel()),
                 () => detail ?? "Left/right changes the graph window. Enter advances.",
                 () =>
                 {

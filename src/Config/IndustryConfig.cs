@@ -30,7 +30,12 @@ namespace LSOL.Config
         public List<int> ObjectToDeleteModelHashes { get; set; }
         public HashSet<string> Inputs { get; set; }
         public HashSet<string> OptionalInputs { get; set; }
+        public HashSet<string> BoostInputs { get; set; }
         public HashSet<string> Outputs { get; set; }
+        public Dictionary<string, float> RecipeInputWeights { get; set; }
+        public Dictionary<string, float> RecipeOutputWeights { get; set; }
+        public Dictionary<string, float> InputCapacityWeights { get; set; }
+        public Dictionary<string, float> OutputCapacityWeights { get; set; }
         public float FactoryProductionRatio { get; set; }
         public float InputCapacityTons { get; set; }
         public float OutputCapacityTons { get; set; }
@@ -43,6 +48,7 @@ namespace LSOL.Config
         public float IndustryPrice { get; set; }
         public float IndustryLicencePrice { get; set; }
         public float IndustryOwnerCut { get; set; }
+        public float DeliveryPayoutMultiplier { get; set; }
         public bool IsOwned { get; set; }
         public bool HasContractorPermit { get; set; }
         public bool IsCsvBacked { get; set; }

@@ -17,6 +17,7 @@ namespace LSOL.Config
         public Vector3 VehicleSpawnPosition { get; private set; }
         public float VehicleSpawnHeading { get; private set; }
         public ControlBindings Controls { get; private set; }
+        public Dictionary<string, float> CommodityBasePrices { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
         public List<BankDefinition> BankDefinitions { get; private set; }
@@ -49,6 +50,7 @@ namespace LSOL.Config
                 VehicleSpawnPosition = coreConfig.VehicleSpawnPosition,
                 VehicleSpawnHeading = coreConfig.VehicleSpawnHeading,
                 Controls = coreConfig.Controls ?? new ControlBindings(),
+                CommodityBasePrices = new Dictionary<string, float>(externalCatalog.CommodityBasePrices, StringComparer.OrdinalIgnoreCase),
                 ExternalCatalog = externalCatalog,
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
@@ -149,7 +151,19 @@ namespace LSOL.Config
             var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(location.SiteRole);
             var hasStarterPermitAccess = SiteMetadataParser.GrantsStarterPermitAccess(location.SiteRole, location.OwnershipTier);
             var inputs = new HashSet<string>(location.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            var optionalInputs = new HashSet<string>(location.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            var boostInputs = new HashSet<string>(location.BoostInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             var outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
+            var recipeInputWeights = CloneCommodityWeightMap(location.RecipeInputWeights);
+            var recipeOutputWeights = CloneCommodityWeightMap(location.RecipeOutputWeights);
+            var inputCapacityWeights = CloneCommodityWeightMap(
+                location.InputCapacityWeights != null && location.InputCapacityWeights.Count > 0
+                    ? location.InputCapacityWeights
+                    : location.RecipeInputWeights);
+            var outputCapacityWeights = CloneCommodityWeightMap(
+                location.OutputCapacityWeights != null && location.OutputCapacityWeights.Count > 0
+                    ? location.OutputCapacityWeights
+                    : location.RecipeOutputWeights);
 
             if (location.SiteRole == SiteRole.Warehouse)
             {
@@ -182,8 +196,13 @@ namespace LSOL.Config
                 MaxDisplayObjectRow = location.MaxSpawnedVehiclesRow,
                 ObjectToDeleteModelHashes = ParseObjectModelHashes(location.ObjectToDelete),
                 Inputs = inputs,
-                OptionalInputs = new HashSet<string>(location.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                OptionalInputs = optionalInputs,
+                BoostInputs = boostInputs,
                 Outputs = outputs,
+                RecipeInputWeights = recipeInputWeights,
+                RecipeOutputWeights = recipeOutputWeights,
+                InputCapacityWeights = inputCapacityWeights,
+                OutputCapacityWeights = outputCapacityWeights,
                 FactoryProductionRatio = productionRatio,
                 InputCapacityTons = inputCapacityTons,
                 OutputCapacityTons = outputCapacityTons,
@@ -196,6 +215,7 @@ namespace LSOL.Config
                 IndustryPrice = purchasePrice,
                 IndustryLicencePrice = licencePrice,
                 IndustryOwnerCut = Math.Max(0f, Math.Min(1f, location.IndustryOwnerCut)),
+                DeliveryPayoutMultiplier = Math.Max(0f, location.DeliveryPayoutMultiplier <= 0f ? 1f : location.DeliveryPayoutMultiplier),
                 IsOwned = hasStarterOwnership,
                 HasContractorPermit = hasStarterPermitAccess || !standardValues.PermitRequired || licencePrice <= 0f,
                 IsCsvBacked = true,
@@ -259,6 +279,28 @@ namespace LSOL.Config
                 ? profile.GetCapacity(density)
                 : defaultCapacityRaw;
             return Math.Max(10f, rawCapacity / 1000f);
+        }
+
+        private static Dictionary<string, float> CloneCommodityWeightMap(IEnumerable<KeyValuePair<string, float>> source)
+        {
+            var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            if (source == null)
+            {
+                return result;
+            }
+
+            foreach (var pair in source)
+            {
+                var commodity = CommodityCatalog.Normalize(pair.Key);
+                if (string.IsNullOrWhiteSpace(commodity) || pair.Value <= 0f)
+                {
+                    continue;
+                }
+
+                result[commodity] = pair.Value;
+            }
+
+            return result;
         }
 
         private static List<int> ParseObjectModelHashes(string raw)

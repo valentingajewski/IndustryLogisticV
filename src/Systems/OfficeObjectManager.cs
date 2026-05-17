@@ -21,7 +21,7 @@ namespace LSOL.Systems
         private const float PlacementRotationStep = 15f;
         private const float PlacementPadding = 0.2f;
         private const float HaulUnloadDistance = 6f;
-        private const float FuelDeliveryPriceMultiplier = 0.85f;
+        private const float FuelDeliveryPriceMultiplier = 1.05f;
         private const float ServiceArrivalDistance = 18f;
         private const int ServiceDriveRefreshIntervalMs = 4000;
         private const int ServiceTimeoutMs = 900000;

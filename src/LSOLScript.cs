@@ -205,7 +205,7 @@ namespace LSOL
             _propertyManager.ConfigureFinanceTracking(_financeTracker, GetCurrentInGameWeekMinute);
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _vehicleLoadPowerService = new VehicleLoadPowerService(_fleetManager);
-            _globalMarket = new GlobalMarketManager(Game.GameTime);
+            _globalMarket = new GlobalMarketManager(Game.GameTime, _config.CommodityBasePrices);
             _territoryManager = new TerritoryManager(_config, _industryManager);
             _specialMissionManager = new SpecialMissionManager(
                 _configDirectory,
@@ -576,11 +576,6 @@ namespace LSOL
             {
                 DrawOpenMenus();
 
-                if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
-                {
-                    Screen.ShowSubtitle(_statusMessage, 1);
-                }
-
                 return;
             }
 
@@ -643,11 +638,6 @@ namespace LSOL
             UpdateCargoOverviewAndIntegrity(player, gameTime);
             DrawOpenMenus();
             DrawTabletShell();
-
-            if (!string.IsNullOrWhiteSpace(_statusMessage) && gameTime <= _statusMessageUntil)
-            {
-                Screen.ShowSubtitle(_statusMessage, 1);
-            }
         }
 
         private void OnKeyDown(object sender, WinForms.KeyEventArgs e)
