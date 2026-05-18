@@ -81,6 +81,59 @@ namespace LSOL.Systems
                     var dominant = tracker.GetDominantDistrictCount();
                     return new PlayerSuccessEvaluation(dominant >= total, BuildRatio(dominant, total), string.Format("{0}/{1} dominant districts", dominant, total));
                 }),
+                CreateCustomDefinition("regional_backbone_doctrine", "Regional Backbone", "Establish the Regional Backbone doctrine at Tier II through district control, depots, charters, and corridors.", tracker =>
+                {
+                    var currentTier = tracker.GetDoctrineTier(CompanyDoctrine.Territorial);
+                    return new PlayerSuccessEvaluation(
+                        currentTier >= 2,
+                        BuildRatio(currentTier, 2),
+                        string.Format("Tier {0}/II", CompanyDoctrineSystem.BuildTierLabel(currentTier)));
+                }),
+                CreateCustomDefinition("integrated_chain_doctrine", "Integrated Chain", "Establish the Integrated Chain doctrine at Tier II through owned production depth and warehouse coverage.", tracker =>
+                {
+                    var currentTier = tracker.GetDoctrineTier(CompanyDoctrine.Industrial);
+                    return new PlayerSuccessEvaluation(
+                        currentTier >= 2,
+                        BuildRatio(currentTier, 2),
+                        string.Format("Tier {0}/II", CompanyDoctrineSystem.BuildTierLabel(currentTier)));
+                }),
+                CreateCustomDefinition("client_priority_doctrine", "Client Priority", "Establish the Client Priority doctrine at Tier II through service sites, routes, and special contracts.", tracker =>
+                {
+                    var currentTier = tracker.GetDoctrineTier(CompanyDoctrine.Service);
+                    return new PlayerSuccessEvaluation(
+                        currentTier >= 2,
+                        BuildRatio(currentTier, 2),
+                        string.Format("Tier {0}/II", CompanyDoctrineSystem.BuildTierLabel(currentTier)));
+                }),
+                CreateCustomDefinition("landmark_headquarters", "Landmark Headquarters", "Place the Landmark HQ Annex at an owned office to turn your leading doctrine into a capstone identity.", tracker =>
+                {
+                    var hasHeadquarters = tracker.HasLandmarkHeadquarters();
+                    return new PlayerSuccessEvaluation(
+                        hasHeadquarters,
+                        hasHeadquarters ? 1f : 0f,
+                        hasHeadquarters ? "HQ online" : "Place 1/1 landmark HQ");
+                }),
+                CreateCustomDefinition("market_defender", "Market Defender", "Hold districts against outside carrier pressure and record six competition wins.", tracker =>
+                {
+                    var wins = tracker.GetCompetitiveWinCount();
+                    return new PlayerSuccessEvaluation(wins >= 6, BuildRatio(wins, 6), BuildCountProgress(wins, 6, "competition wins"));
+                }),
+                CreateCustomDefinition("resilient_holdings", "Resilient Holdings", "Keep three dominant districts under control while their competition pressure stays low.", tracker =>
+                {
+                    var stableDistricts = tracker.GetLowPressureDominantDistrictCount();
+                    return new PlayerSuccessEvaluation(stableDistricts >= 3, BuildRatio(stableDistricts, 3), BuildCountProgress(stableDistricts, 3, "stable dominant districts"));
+                }),
+                CreateCustomDefinition("prestige_capstone", "Prestige Capstone", "Reach 75 prestige with an active doctrine and a Landmark HQ online.", tracker =>
+                {
+                    var prestige = tracker.GetCurrentPrestigeScore();
+                    var hasHeadquarters = tracker.HasLandmarkHeadquarters();
+                    if (!hasHeadquarters)
+                    {
+                        return PlayerSuccessEvaluation.Incomplete(BuildRatio(prestige, 75f) * 0.4f, string.Format("Landmark HQ required | Prestige {0:0}/75", prestige));
+                    }
+
+                    return new PlayerSuccessEvaluation(prestige >= 75f, BuildRatio(prestige, 75f), string.Format("Prestige {0:0}/75 | HQ online", prestige));
+                }),
                 CreateIntThresholdDefinition("solo_grinder", "Solo Grinder", "Complete 100 deliveries before hiring any NPC.", tracker => tracker._snapshot.DeliveriesBeforeFirstNpcHire, DeliveryThresholdSoloGrinder, (current, target) => BuildCountProgress(current, target, "deliveries before first NPC")),
                 CreateFloatThresholdDefinition("no_debt_needed", "No Debt Needed", "Reach $1,000,000 without taking a loan", tracker => tracker._snapshot.HighestCompanyBalanceBeforeFirstLoan, MoneyThresholdMillionaireHauler, BuildMoneyProgress),
                 CreateFloatThresholdDefinition("freight_specialist", "Freight Specialist", "Deliver a large amount of one specific commodity type.", tracker => tracker.GetBestCommodityTonnage(), CommodityThresholdFreightSpecialist, BuildTonnageProgress),

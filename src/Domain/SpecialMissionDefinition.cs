@@ -9,6 +9,24 @@ namespace LSOL.Domain
         Unknown = 0,
         HandlerContainerTransfer = 1,
         TrailerDelivery = 2,
+        DynamicCargoDelivery = 3,
+    }
+
+    public enum GeneratedContractFamily
+    {
+        None = 0,
+        CrisisRelief = 1,
+        WeeklyTender = 2,
+        PriorityLinehaul = 3,
+    }
+
+    public enum DistrictCrisisType
+    {
+        None = 0,
+        FuelShortage = 1,
+        ConstructionSurge = 2,
+        SupplyDisruption = 3,
+        EmergencyRestock = 4,
     }
 
     public sealed class SpecialMissionDefinition
@@ -19,6 +37,12 @@ namespace LSOL.Domain
             Name = string.Empty;
             Summary = string.Empty;
             Description = string.Empty;
+            SourceIndustryId = string.Empty;
+            DestinationIndustryId = string.Empty;
+            Commodity = string.Empty;
+            CrisisEventId = string.Empty;
+            CrisisDistrictName = string.Empty;
+            EligibilitySummary = string.Empty;
             Unlock = new SpecialMissionUnlockRequirement();
             Vehicles = new Dictionary<string, SpecialMissionVehicleSpawn>(StringComparer.OrdinalIgnoreCase);
             Props = new Dictionary<string, SpecialMissionPropSpawn>(StringComparer.OrdinalIgnoreCase);
@@ -41,6 +65,12 @@ namespace LSOL.Domain
 
         public bool Repeatable { get; set; }
 
+        public bool IsGenerated { get; set; }
+
+        public GeneratedContractFamily ContractFamily { get; set; }
+
+        public bool IsTender { get; set; }
+
         public int RepeatCooldownInGameMinutes { get; set; }
 
         public int RepeatCooldownInGameMonths { get; set; }
@@ -48,6 +78,30 @@ namespace LSOL.Domain
         public int AvailabilityDelayInGameMinutes { get; set; }
 
         public int AvailabilityDelayInGameMonths { get; set; }
+
+        public int PostedAtInGameMinute { get; set; }
+
+        public int AvailableUntilInGameMinute { get; set; }
+
+        public string SourceIndustryId { get; set; }
+
+        public string DestinationIndustryId { get; set; }
+
+        public string Commodity { get; set; }
+
+        public float TargetTons { get; set; }
+
+        public VehicleCargoType RequiredCargoType { get; set; }
+
+        public float MinimumVehicleCapacityTons { get; set; }
+
+        public string CrisisEventId { get; set; }
+
+        public DistrictCrisisType CrisisType { get; set; }
+
+        public string CrisisDistrictName { get; set; }
+
+        public string EligibilitySummary { get; set; }
 
         public SpecialMissionUnlockRequirement Unlock { get; set; }
 
@@ -89,6 +143,11 @@ namespace LSOL.Domain
         public bool HasAvailabilityDelay
         {
             get { return AvailabilityDelayInGameMinutes > 0 || AvailabilityDelayInGameMonths > 0; }
+        }
+
+        public bool HasAvailabilityWindow
+        {
+            get { return AvailableUntilInGameMinute > 0; }
         }
     }
 

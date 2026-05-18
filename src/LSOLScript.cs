@@ -206,11 +206,17 @@ namespace LSOL
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _vehicleLoadPowerService = new VehicleLoadPowerService(_fleetManager);
             _globalMarket = new GlobalMarketManager(Game.GameTime, _config.CommodityBasePrices);
+            _industryManager.ConfigureMarketPressure(_globalMarket);
             _territoryManager = new TerritoryManager(_config, _industryManager);
+            _globalMarket.ConfigureShockContext(GetCurrentInGameWeekMinute, () => _territoryManager != null ? _territoryManager.DistrictStates : Enumerable.Empty<TerritoryDistrictState>());
+            _industryManager.ConfigureStoragePressure(_territoryManager, _financeTracker, GetCurrentInGameWeekMinute, message => ShowStatus(message, 4500));
             _specialMissionManager = new SpecialMissionManager(
                 _configDirectory,
+                _industryManager,
                 _territoryManager,
                 _fleetManager,
+                _globalMarket,
+                () => _propertyManager != null ? _propertyManager.CommercialVehicles : Array.Empty<OwnedCommercialVehiclePersistenceEntry>(),
                 amount => AddProfit(CompanyFinanceCategory.MissionReward, amount, "Mission reward"),
                 ShowStatus,
                 () =>
@@ -291,6 +297,18 @@ namespace LSOL
                 GetCurrentInGameWeekMinute,
                 HandlePlayerSuccessNpcContractsChanged,
                 RecordNpcSuccessDeliveryProgress);
+            _propertyManager.ConfigureEconomicPressure(
+                () => _industryManager != null
+                    ? _industryManager.Industries.Count(industry => industry != null && industry.IsOwned && !industry.IsStarterHeadquarters)
+                    : 0,
+                () => _npcLogisticsManager != null && _npcLogisticsManager.Contracts != null
+                    ? _npcLogisticsManager.Contracts.Count(contract => contract != null)
+                    : 0,
+                () => _territoryManager != null && _territoryManager.DistrictStates != null
+                    ? _territoryManager.DistrictStates.Count(state => state != null && (state.LicenseStatus == DistrictLicenseStatus.Active || state.LicenseStatus == DistrictLicenseStatus.Probation))
+                    : 0,
+                GetSecuredSupportSiteCount,
+                () => _territoryManager != null ? _territoryManager.GetActiveCorridorCount() : 0);
             _industryRefuelService = new IndustryRefuelService(
                 _fleetManager,
                 _vehicleFuelSystem,
@@ -315,7 +333,15 @@ namespace LSOL
                 _financeTracker,
                 GetCurrentInGameWeekMinute,
                 GetGroundPosition,
-                message => ShowStatus(message, 4500));
+                message => ShowStatus(message, 4500),
+                () =>
+                {
+                    ReevaluatePlayerSuccesses(true);
+                    if (_tabletStateStore != null)
+                    {
+                        _tabletStateStore.MarkAllDirty();
+                    }
+                });
 
             _officeMenu = new LemonMenu("Office")
             {
@@ -407,9 +433,11 @@ namespace LSOL
                 _industryManager,
                 CloseAllMenus,
                 () => _profit,
+                AcquireDistrictLicenseFromOffice,
                 SecureSupportSiteFromOffice,
                 AssignSupportCrewFromOffice,
                 HireSupportStaffFromOffice,
+                SetDepotSpecializationFromOffice,
                 message => ShowStatus(message));
             _tabletStateStore = new TabletStateStore(
                 _industryManager,
@@ -431,7 +459,9 @@ namespace LSOL
                 () => _territoryManager != null ? _territoryManager.GetControlledDistrictCount() : 0,
                 () => _territoryManager != null ? _territoryManager.GetActiveCorridorCount() : 0,
                 GetSecuredSupportSiteCount,
-                () => _territoryManager != null ? _territoryManager.DistrictStates : Enumerable.Empty<TerritoryDistrictState>());
+                () => _territoryManager != null ? _territoryManager.DistrictStates : Enumerable.Empty<TerritoryDistrictState>(),
+                () => _territoryManager != null ? _territoryManager.GetOperationsSummary() : new TerritoryOperationsSummary(),
+                currentMinute => _territoryManager != null ? _territoryManager.GetRemainingOperationsChargeMinutes(currentMinute) : (7 * 24 * 60));
             _playerSuccessTracker = new PlayerSuccessTracker(
                 _industryManager,
                 _propertyManager,
@@ -441,6 +471,9 @@ namespace LSOL
                 _bankLoanManager,
                 _financeTracker,
                 ShowStatus);
+            _territoryManager.ConfigureEndgameContext(
+                () => _playerSuccessTracker != null ? _playerSuccessTracker.GetEndgameSummary() : new CompanyEndgameSummary(),
+                () => _npcLogisticsManager != null ? _npcLogisticsManager.GetDistrictCompetitionSummaries() : Array.Empty<NpcDistrictCompetitionSummary>());
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
             _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager, _playerSuccessTracker));
             _tabletShellController.RegisterApp(new BudgetTabletApp());
@@ -583,6 +616,12 @@ namespace LSOL
             {
                 _lastIndustryTickMs = gameTime;
                 _globalMarket.Update(gameTime);
+                var shockAnnouncement = _globalMarket.ConsumePendingShockAnnouncement();
+                if (!string.IsNullOrWhiteSpace(shockAnnouncement))
+                {
+                    ShowStatus(shockAnnouncement, 4500);
+                }
+
                 _industryManager.Update(elapsed / 60000f, _config.OmegaMultiplier);
                 _industryOutputPropManager.Update(player.Position);
                 _fleetManager.CleanupStates();
@@ -614,6 +653,8 @@ namespace LSOL
             }
             ProcessPropertyWeeklyCharges();
             ProcessBankLoanRepayments();
+            ProcessTerritoryWeeklyCharges();
+            ProcessTerritoryWeeklyMaintenance();
             _tabletStateStore.CaptureHistory(gameTime);
 
             if (_vehicleFuelSystem.Update(player, gameTime))
@@ -3334,7 +3375,7 @@ namespace LSOL
             var missionCount = _specialMissionManager.Definitions.Count();
             if (missionCount <= 0)
             {
-                return "No loaded mission packs. Add XML mission packs to scripts/LSOL_Config/missions.";
+                return "No mission board entries available. Grow district presence or add XML mission packs to scripts/LSOL_Config/missions.";
             }
 
             var warningCount = _specialMissionManager.Catalog != null
@@ -3343,13 +3384,13 @@ namespace LSOL
             if (_specialMissionManager.HasActiveMission)
             {
                 return warningCount > 0
-                    ? string.Format("{0} mission pack(s) loaded | Active: {1} | {2} validation warning(s).", missionCount, _specialMissionManager.ActiveMissionName, warningCount)
-                    : string.Format("{0} mission pack(s) loaded | Active: {1}.", missionCount, _specialMissionManager.ActiveMissionName);
+                    ? string.Format("{0} mission board entries available | Active: {1} | {2} validation warning(s).", missionCount, _specialMissionManager.ActiveMissionName, warningCount)
+                    : string.Format("{0} mission board entries available | Active: {1}.", missionCount, _specialMissionManager.ActiveMissionName);
             }
 
             return warningCount > 0
-                ? string.Format("{0} mission pack(s) loaded | Force-start any mission | {1} validation warning(s).", missionCount, warningCount)
-                : string.Format("{0} mission pack(s) loaded. Force-start any mission regardless of unlock or cooldown.", missionCount);
+                ? string.Format("{0} mission board entries available | Force-start any mission | {1} validation warning(s).", missionCount, warningCount)
+                : string.Format("{0} mission board entries available. Force-start any mission regardless of unlock or cooldown.", missionCount);
         }
 
         private static string BuildDebugMissionCaption(SpecialMissionDefinition definition, SpecialMissionListing listing)
@@ -3725,14 +3766,40 @@ namespace LSOL
             }
         }
 
-        private void RecordPlayerSuccessDeliveryProgress(string commodity, float deliveredTons, bool completedDelivery, bool isCleanDelivery)
+        private void RecordPlayerSuccessDeliveryProgress(
+            Industry destinationIndustry,
+            string commodity,
+            float deliveredTons,
+            string sourceIndustryId,
+            string sourceDistrictName,
+            bool completedDelivery,
+            bool isCleanDelivery)
         {
             if (_playerSuccessTracker == null)
             {
-                return;
+                if (_specialMissionManager == null)
+                {
+                    return;
+                }
             }
 
-            _playerSuccessTracker.RecordDeliveryProgress(commodity, deliveredTons, completedDelivery, isCleanDelivery);
+            if (_playerSuccessTracker != null)
+            {
+                _playerSuccessTracker.RecordDeliveryProgress(commodity, deliveredTons, completedDelivery, isCleanDelivery);
+            }
+
+            if (_specialMissionManager != null)
+            {
+                _specialMissionManager.NotifyPlayerDelivery(
+                    destinationIndustry,
+                    commodity,
+                    deliveredTons,
+                    sourceIndustryId,
+                    sourceDistrictName,
+                    completedDelivery,
+                    isCleanDelivery);
+            }
+
             if (_tabletStateStore != null)
             {
                 _tabletStateStore.MarkNetworkDirty();
@@ -3796,6 +3863,23 @@ namespace LSOL
             }
         }
 
+        private string AcquireDistrictLicenseFromOffice(string districtName)
+        {
+            var balanceBefore = _profit;
+            float cost;
+            string result;
+            _territoryManager.TryAcquireDistrictLicense(districtName, ref _profit, out cost, out result);
+            RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.PermitOrLicence, string.Format("District charter for {0}", string.IsNullOrWhiteSpace(districtName) ? "district" : districtName));
+            _blipLifecycleManager.Refresh();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
+            RebuildOfficeMenuItems();
+            return result;
+        }
+
         private string SecureSupportSiteFromOffice(Industry industry)
         {
             var balanceBefore = _profit;
@@ -3804,6 +3888,11 @@ namespace LSOL
             _territoryManager.TryAcquireDepot(industry, ref _profit, out cost, out result);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Secured support site at {0}", industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
             RebuildOfficeMenuItems();
             return result;
         }
@@ -3816,6 +3905,11 @@ namespace LSOL
             _territoryManager.TryAssignCrew(industry, ref _profit, out cost, out result);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Assigned support crew at {0}", industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
             RebuildOfficeMenuItems();
             return result;
         }
@@ -3828,6 +3922,28 @@ namespace LSOL
             _territoryManager.TryHireDepotStaff(industry, staffRole, ref _profit, out cost, out result);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Hired {0} staff at {1}", staffRole, industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
+            RebuildOfficeMenuItems();
+            return result;
+        }
+
+        private string SetDepotSpecializationFromOffice(Industry industry, DepotSpecialization specialization)
+        {
+            var balanceBefore = _profit;
+            float cost;
+            string result;
+            _territoryManager.TrySetDepotSpecialization(industry, specialization, ref _profit, out cost, out result);
+            RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Depot specialization at {0}", industry != null ? industry.Name : "support site"));
+            _blipLifecycleManager.Refresh();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
             RebuildOfficeMenuItems();
             return result;
         }

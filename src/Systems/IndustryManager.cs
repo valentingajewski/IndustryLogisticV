@@ -11,6 +11,26 @@ namespace LSOL.Systems
     {
         private const float NearestIndustryCellSize = 160f;
         private const float NonSinkDeliveryPayoutMultiplier = 0.35f;
+        private const float MinimumWarehouseStorageCondition = 0.55f;
+        private const float WarehouseLossStatusThreshold = 1500f;
+
+        private static readonly HashSet<string> SpoilageSensitiveCommodities = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "ProcessedFood",
+            "Meat",
+            "Medicine",
+            "Alcohol",
+        };
+
+        private static readonly HashSet<string> SecuritySensitiveCommodities = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "Electronic",
+            "TV",
+            "Computer",
+            "Omega",
+            "Vehicles",
+            "MechanicalParts",
+        };
 
         private readonly List<Industry> _industries;
         private readonly Dictionary<long, List<Industry>> _industriesBySpatialCell;
@@ -18,6 +38,11 @@ namespace LSOL.Systems
         private readonly Dictionary<string, IndustryConfig> _defaultIndustryConfigs;
         private readonly Dictionary<string, float> _sinkDrainRatePerMinuteByIndustryId;
         private readonly float _industryOmegaCapacityMultiplier;
+        private GlobalMarketManager _globalMarket;
+        private TerritoryManager _territoryManager;
+        private CompanyFinanceTracker _financeTracker;
+        private Func<int> _getCurrentInGameMinute;
+        private Action<string> _notifyStoragePressure;
         private EconomyDifficultyPreset _economyPreset;
         private bool _industryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
@@ -83,6 +108,19 @@ namespace LSOL.Systems
         public void SetLicensingDifficultyEnabled(bool enabled)
         {
             _licensingDifficultyEnabled = enabled;
+        }
+
+        public void ConfigureMarketPressure(GlobalMarketManager globalMarket)
+        {
+            _globalMarket = globalMarket;
+        }
+
+        public void ConfigureStoragePressure(TerritoryManager territoryManager, CompanyFinanceTracker financeTracker, Func<int> getCurrentInGameMinute, Action<string> notifyStoragePressure)
+        {
+            _territoryManager = territoryManager;
+            _financeTracker = financeTracker;
+            _getCurrentInGameMinute = getCurrentInGameMinute;
+            _notifyStoragePressure = notifyStoragePressure;
         }
 
         public void SetEconomyDifficultyPreset(EconomyDifficultyPreset preset)
@@ -228,6 +266,7 @@ namespace LSOL.Systems
                     defaultConfig.EmptyingRate,
                     defaultConfig.IndustryOwnerCut,
                     defaultConfig.DeliveryPayoutMultiplier);
+                industry.ApplyStoragePressureState(1f, -1, 0f, 0f);
 
                 SeedIndustryStartingState(industry, defaultConfig);
             }
@@ -235,6 +274,10 @@ namespace LSOL.Systems
 
         public void Update(float deltaMinutes, float omegaMultiplier)
         {
+            var currentDayIndex = _getCurrentInGameMinute != null
+                ? GetDayIndex(_getCurrentInGameMinute())
+                : -1;
+
             for (int i = 0; i < _industries.Count; i++)
             {
                 var industry = _industries[i];
@@ -244,6 +287,11 @@ namespace LSOL.Systems
                 if (_sinkDrainRatePerMinuteByIndustryId.TryGetValue(industry.Id, out drainRatePerMinute))
                 {
                     DrainSinkStock(industry, deltaMinutes, drainRatePerMinute);
+                }
+
+                if (currentDayIndex >= 0)
+                {
+                    ProcessWarehouseStoragePressure(industry, currentDayIndex);
                 }
             }
         }
@@ -1069,7 +1117,7 @@ namespace LSOL.Systems
             return effectiveOmegaCapacityTons;
         }
 
-        private static void DrainSinkStock(Industry industry, float deltaMinutes, float drainRatePerMinute)
+        private void DrainSinkStock(Industry industry, float deltaMinutes, float drainRatePerMinute)
         {
             if (industry == null || deltaMinutes <= 0f || drainRatePerMinute <= 0f)
             {
@@ -1092,12 +1140,220 @@ namespace LSOL.Systems
                 return;
             }
 
-            var perCommodityConsumption = consumed / acceptedInputs.Count;
+            var totalWeight = 0f;
+            var commodityWeights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             for (int i = 0; i < acceptedInputs.Count; i++)
             {
                 var commodity = acceptedInputs[i];
+                var weight = _globalMarket != null
+                    ? _globalMarket.GetSinkDemandMultiplier(industry.DistrictName, commodity)
+                    : 1f;
+                weight = Math.Max(0.1f, weight);
+                commodityWeights[commodity] = weight;
+                totalWeight += weight;
+            }
+
+            if (totalWeight <= 0.001f)
+            {
+                totalWeight = acceptedInputs.Count;
+            }
+
+            for (int i = 0; i < acceptedInputs.Count; i++)
+            {
+                var commodity = acceptedInputs[i];
+                float weight;
+                if (!commodityWeights.TryGetValue(commodity, out weight))
+                {
+                    weight = 1f;
+                }
+
+                var perCommodityConsumption = consumed * (weight / totalWeight);
                 industry.BufferStorage[commodity] = Math.Max(0f, industry.GetStock(commodity) - perCommodityConsumption);
             }
+        }
+
+        private void ProcessWarehouseStoragePressure(Industry industry, int currentDayIndex)
+        {
+            if (industry == null || !industry.IsWarehouse || !IsIndustryOwnedForGameplay(industry))
+            {
+                return;
+            }
+
+            if (industry.LastStoragePressureDayIndex < 0)
+            {
+                industry.ApplyStoragePressureState(industry.StorageCondition, currentDayIndex, industry.LifetimeStorageLossTons, industry.LifetimeStorageLossValue);
+                return;
+            }
+
+            var elapsedDays = currentDayIndex - industry.LastStoragePressureDayIndex;
+            if (elapsedDays <= 0)
+            {
+                return;
+            }
+
+            var districtState = GetDistrictState(industry.DistrictName);
+            var storageCondition = ClampWarehouseStorageCondition(industry.StorageCondition);
+            float totalLostTons = 0f;
+            float totalLostValue = 0f;
+
+            for (int day = 0; day < elapsedDays; day++)
+            {
+                float totalStock = 0f;
+                foreach (var pair in industry.BufferStorage)
+                {
+                    totalStock += Math.Max(0f, pair.Value);
+                }
+
+                var totalCapacity = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
+                var fillRatio = Math.Max(0f, Math.Min(1f, totalStock / totalCapacity));
+                var trackedCommodities = industry.BufferStorage.Keys
+                    .Select(CommodityCatalog.Normalize)
+                    .Where(commodity => IsTrackedStorageCommodity(commodity) && industry.GetStock(commodity) > 0.01f)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var stabilityScore = GetWarehouseStabilityScore(industry, districtState);
+                var storagePressure = Math.Max(0f, fillRatio - 0.30f);
+                var degradation = trackedCommodities.Count > 0
+                    ? (0.015f + (storagePressure * 0.045f) + (districtState != null && districtState.LicenseStatus == DistrictLicenseStatus.Suspended ? 0.02f : 0f))
+                        * Math.Max(0.35f, 1f - stabilityScore)
+                    : 0f;
+                var recovery = trackedCommodities.Count == 0 || fillRatio < 0.12f
+                    ? 0.02f + Math.Min(0.04f, stabilityScore * 0.05f)
+                    : 0f;
+                storageCondition = ClampWarehouseStorageCondition(storageCondition - degradation + recovery);
+
+                for (int commodityIndex = 0; commodityIndex < trackedCommodities.Count; commodityIndex++)
+                {
+                    var commodity = trackedCommodities[commodityIndex];
+                    var currentTons = Math.Max(0f, industry.GetStock(commodity));
+                    if (currentTons <= 0.01f)
+                    {
+                        continue;
+                    }
+
+                    var lossRatio = ComputeWarehouseLossRatio(commodity, storagePressure, storageCondition, stabilityScore);
+                    var lostTons = Math.Min(currentTons, currentTons * lossRatio);
+                    if (lostTons <= 0.001f)
+                    {
+                        continue;
+                    }
+
+                    industry.BufferStorage[commodity] = Math.Max(0f, currentTons - lostTons);
+                    totalLostTons += lostTons;
+                    totalLostValue += lostTons * (_globalMarket != null ? _globalMarket.GetUnitPrice(commodity) : 0f);
+                }
+            }
+
+            industry.RecordStoragePressure(currentDayIndex, storageCondition, totalLostTons, totalLostValue);
+
+            if (totalLostValue > 0.01f && _financeTracker != null)
+            {
+                var currentMinute = _getCurrentInGameMinute != null
+                    ? Math.Max(0, _getCurrentInGameMinute())
+                    : currentDayIndex * 24 * 60;
+                _financeTracker.RecordExpense(
+                    CompanyFinanceCategory.InventoryLoss,
+                    totalLostValue,
+                    currentMinute,
+                    string.Format("Warehouse spoilage and shrinkage at {0}", industry.Name));
+            }
+
+            if (totalLostValue >= WarehouseLossStatusThreshold && _notifyStoragePressure != null)
+            {
+                _notifyStoragePressure(string.Format("{0} lost {1} to warehouse spoilage and shrinkage.", industry.Name, ModFormatting.FormatMoney(totalLostValue)));
+            }
+        }
+
+        private TerritoryDistrictState GetDistrictState(string districtName)
+        {
+            return _territoryManager != null && _territoryManager.DistrictStates != null
+                ? _territoryManager.DistrictStates.FirstOrDefault(state => state != null && string.Equals(state.DistrictName, districtName, StringComparison.OrdinalIgnoreCase))
+                : null;
+        }
+
+        private static bool IsTrackedStorageCommodity(string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            return !string.IsNullOrWhiteSpace(commodity)
+                && (SpoilageSensitiveCommodities.Contains(commodity) || SecuritySensitiveCommodities.Contains(commodity));
+        }
+
+        private static float ComputeWarehouseLossRatio(string commodity, float storagePressure, float storageCondition, float stabilityScore)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (string.IsNullOrWhiteSpace(commodity))
+            {
+                return 0f;
+            }
+
+            var conditionPenalty = 1f + ((1f - storageCondition) * 1.8f);
+            if (SpoilageSensitiveCommodities.Contains(commodity))
+            {
+                return (0.0008f + (storagePressure * 0.0035f))
+                    * conditionPenalty
+                    * Math.Max(0.35f, 1f - (stabilityScore * 0.60f));
+            }
+
+            if (SecuritySensitiveCommodities.Contains(commodity))
+            {
+                return (0.00035f + (storagePressure * 0.0018f))
+                    * conditionPenalty
+                    * Math.Max(0.40f, 1f - stabilityScore);
+            }
+
+            return 0f;
+        }
+
+        private static float GetWarehouseStabilityScore(Industry industry, TerritoryDistrictState districtState)
+        {
+            var score = 0f;
+            if (industry != null)
+            {
+                score += Math.Min(0.18f, Math.Max(0, industry.OutputStorageModuleLevel) * 0.06f);
+                score += Math.Min(0.10f, Math.Max(0, industry.InputStorageModuleLevel) * 0.03f);
+            }
+
+            if (districtState != null)
+            {
+                if (districtState.LicenseStatus == DistrictLicenseStatus.Active)
+                {
+                    score += 0.10f;
+                }
+                else if (districtState.LicenseStatus == DistrictLicenseStatus.Probation)
+                {
+                    score += 0.05f;
+                }
+                else if (districtState.LicenseStatus == DistrictLicenseStatus.Suspended)
+                {
+                    score -= 0.05f;
+                }
+
+                score += Math.Min(0.12f, Math.Max(0f, districtState.InfluenceRatio) * 0.12f);
+                score += Math.Min(0.10f, Math.Max(0, districtState.ControlledDepots) * 0.03f);
+                score += Math.Min(0.08f, Math.Max(0, districtState.RouteRights) * 0.015f);
+            }
+
+            return Math.Max(0f, Math.Min(0.60f, score));
+        }
+
+        private static float ClampWarehouseStorageCondition(float storageCondition)
+        {
+            if (storageCondition <= 0f)
+            {
+                return 1f;
+            }
+
+            return Math.Max(MinimumWarehouseStorageCondition, Math.Min(1f, storageCondition));
+        }
+
+        private static int GetDayIndex(int currentInGameMinute)
+        {
+            if (currentInGameMinute <= 0)
+            {
+                return 0;
+            }
+
+            return currentInGameMinute / (24 * 60);
         }
 
     }

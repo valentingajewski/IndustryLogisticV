@@ -10,4 +10,5 @@
   <Object id="8" model="v_ret_fh_shelf_01" hash="2994868227" name="Shelf" size="Medium" function="Decorative" limit="5" price="250" />
   <Object id="9" model="prop_barrier_work01a" hash="1072616162" name="Barrier 01" size="Small" function="Decorative" limit="10" price="250" />
   <Object id="10" model="prop_barrier_work02a" hash="2310399891" name="Barrier 02" size="Small" function="Decorative" limit="10" price="250" />
+  <Object id="11" model="prop_portacabin01" hash="3196461136" name="Landmark HQ Annex" size="Big" function="Headquarters" limit="1" price="2250000" />
 </OfficeObjects>

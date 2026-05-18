@@ -336,6 +336,31 @@ namespace LSOL.Systems
             };
         }
 
+        public IReadOnlyList<NpcDistrictCompetitionSummary> GetDistrictCompetitionSummaries()
+        {
+            var summaries = new Dictionary<string, NpcDistrictCompetitionSummary>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < _worldJobs.Count; i++)
+            {
+                var job = _worldJobs[i];
+                if (job == null
+                    || !job.IsRivalJob
+                    || (job.Phase != NpcWorldJobPhase.Listed && job.Phase != NpcWorldJobPhase.Traveling))
+                {
+                    continue;
+                }
+
+                var origin = FindIndustryById(job.OriginIndustryId);
+                var destination = FindIndustryById(job.DestinationIndustryId);
+                AccumulateDistrictCompetition(summaries, origin != null ? origin.DistrictName : string.Empty, job, 0.5f);
+                AccumulateDistrictCompetition(summaries, destination != null ? destination.DistrictName : string.Empty, job, 1f);
+            }
+
+            return summaries.Values
+                .OrderByDescending(summary => summary.PressureScore)
+                .ThenBy(summary => summary.DistrictName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
         public IReadOnlyList<string> GetWorldDispatchCommodityOptions()
         {
             var items = new List<string> { string.Empty };
@@ -5752,6 +5777,36 @@ namespace LSOL.Systems
                 IsRivalJob = job.IsRivalJob,
                 HasVisibleConvoy = job.HasVisibleConvoy,
             };
+        }
+
+        private static void AccumulateDistrictCompetition(
+            IDictionary<string, NpcDistrictCompetitionSummary> summaries,
+            string districtName,
+            NpcWorldLogisticsJob job,
+            float weight)
+        {
+            if (summaries == null || job == null || string.IsNullOrWhiteSpace(districtName) || weight <= 0.001f)
+            {
+                return;
+            }
+
+            NpcDistrictCompetitionSummary summary;
+            if (!summaries.TryGetValue(districtName, out summary) || summary == null)
+            {
+                summary = new NpcDistrictCompetitionSummary
+                {
+                    DistrictName = districtName.Trim(),
+                };
+                summaries[summary.DistrictName] = summary;
+            }
+
+            var weightedTons = Math.Max(0f, job.Tons) * weight;
+            summary.ActiveJobCount += 1;
+            summary.VisibleConvoyCount += job.HasVisibleConvoy ? 1 : 0;
+            summary.CompetitiveTons += weightedTons;
+            summary.PressureScore += (0.08f * weight)
+                + Math.Min(0.18f, weightedTons * 0.01f)
+                + (job.HasVisibleConvoy ? 0.05f * weight : 0f);
         }
 
         private string BuildWorldDispatchHeadline()

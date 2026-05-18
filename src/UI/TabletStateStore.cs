@@ -40,6 +40,30 @@ namespace LSOL.UI
         public int ControlledSites { get; set; }
 
         public int ControlledDepots { get; set; }
+
+        public float WeeklyOperationsCost { get; set; }
+
+        public DistrictLicenseStatus LicenseStatus { get; set; }
+
+        public float LicenseActivityTons { get; set; }
+
+        public float LicenseTargetTons { get; set; }
+
+        public int CorridorRiskCount { get; set; }
+
+        public int ServiceRiskCount { get; set; }
+
+        public float CompetitivePressurePercent { get; set; }
+
+        public float CompetitiveOpportunityPercent { get; set; }
+
+        public int ActiveCompetitionJobs { get; set; }
+
+        public int VisibleCompetitionCount { get; set; }
+
+        public int CompetitiveWinCount { get; set; }
+
+        public string CompetitionStatus { get; set; }
     }
 
     internal sealed class TabletNpcRoutePerformance
@@ -297,6 +321,10 @@ namespace LSOL.UI
             CompanyFinanceCategory.ApartmentRent,
             CompanyFinanceCategory.VehicleRent,
             CompanyFinanceCategory.NpcWages,
+            CompanyFinanceCategory.TerritoryOperations,
+            CompanyFinanceCategory.CorporateOverhead,
+            CompanyFinanceCategory.FleetMaintenance,
+            CompanyFinanceCategory.InventoryLoss,
             CompanyFinanceCategory.FuelPurchase,
             CompanyFinanceCategory.RepairCost,
             CompanyFinanceCategory.ServiceCall,
@@ -325,6 +353,8 @@ namespace LSOL.UI
         private readonly Func<int> _getActiveCorridorCount;
         private readonly Func<int> _getSecuredSupportSiteCount;
         private readonly Func<IEnumerable<TerritoryDistrictState>> _getDistrictStates;
+        private readonly Func<TerritoryOperationsSummary> _getTerritoryOperationsSummary;
+        private readonly Func<int, int> _getRemainingTerritoryOperationsChargeMinutes;
         private readonly IndustryStatisticsSnapshotCache _statisticsSnapshotCache;
         private readonly List<string> _cachedLoadOptions;
         private readonly Dictionary<string, string> _cachedLoadOptionSubtitles;
@@ -376,7 +406,9 @@ namespace LSOL.UI
             Func<int> getControlledDistrictCount,
             Func<int> getActiveCorridorCount,
             Func<int> getSecuredSupportSiteCount,
-            Func<IEnumerable<TerritoryDistrictState>> getDistrictStates)
+            Func<IEnumerable<TerritoryDistrictState>> getDistrictStates,
+            Func<TerritoryOperationsSummary> getTerritoryOperationsSummary,
+            Func<int, int> getRemainingTerritoryOperationsChargeMinutes)
         {
             _industryManager = industryManager ?? throw new ArgumentNullException(nameof(industryManager));
             _fleetManager = fleetManager ?? throw new ArgumentNullException(nameof(fleetManager));
@@ -398,6 +430,8 @@ namespace LSOL.UI
             _getActiveCorridorCount = getActiveCorridorCount;
             _getSecuredSupportSiteCount = getSecuredSupportSiteCount;
             _getDistrictStates = getDistrictStates;
+            _getTerritoryOperationsSummary = getTerritoryOperationsSummary;
+            _getRemainingTerritoryOperationsChargeMinutes = getRemainingTerritoryOperationsChargeMinutes;
             _statisticsSnapshotCache = new IndustryStatisticsSnapshotCache();
             _cachedLoadOptions = new List<string>();
             _cachedLoadOptionSubtitles = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -773,6 +807,13 @@ namespace LSOL.UI
             return GetHistorySnapshot(_commodityPriceHistoryByCommodity, CommodityCatalog.Normalize(commodity), timeframe);
         }
 
+        public string GetCommodityShockSummary(string commodity)
+        {
+            return _globalMarket != null
+                ? _globalMarket.GetCommodityShockSummary(commodity)
+                : string.Empty;
+        }
+
         public IReadOnlyList<float> GetSiteUtilizationHistory(Industry industry)
         {
             return GetSiteUtilizationHistory(industry, _selectedGraphTimeframe);
@@ -803,18 +844,46 @@ namespace LSOL.UI
                 return Array.Empty<TabletDistrictComparison>();
             }
 
+            var operationsByDistrict = _getTerritoryOperationsSummary != null
+                ? (_getTerritoryOperationsSummary() ?? new TerritoryOperationsSummary()).Districts
+                    .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.DistrictName))
+                    .ToDictionary(entry => entry.DistrictName, entry => entry, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, TerritoryDistrictOperationsEntry>(StringComparer.OrdinalIgnoreCase);
+
             return districts
                 .Where(district => district != null && !string.IsNullOrWhiteSpace(district.DistrictName))
                 .OrderByDescending(district => district.InfluenceRatio)
                 .ThenByDescending(district => district.ReputationScore)
                 .Select(district => new TabletDistrictComparison
                 {
+                    WeeklyOperationsCost = operationsByDistrict.ContainsKey(district.DistrictName)
+                        ? Math.Max(0f, operationsByDistrict[district.DistrictName].TotalWeeklyCost)
+                        : 0f,
+                    LicenseStatus = district.LicenseStatus,
+                    LicenseActivityTons = operationsByDistrict.ContainsKey(district.DistrictName)
+                        ? Math.Max(0f, operationsByDistrict[district.DistrictName].LicenseActivityTons)
+                        : Math.Max(0f, district.CurrentWeekActivityTons),
+                    LicenseTargetTons = operationsByDistrict.ContainsKey(district.DistrictName)
+                        ? Math.Max(0f, operationsByDistrict[district.DistrictName].LicenseTargetTons)
+                        : Math.Max(0f, district.RequiredWeeklyActivityTons),
+                    CorridorRiskCount = operationsByDistrict.ContainsKey(district.DistrictName)
+                        ? Math.Max(0, operationsByDistrict[district.DistrictName].CorridorRiskCount)
+                        : 0,
+                    ServiceRiskCount = operationsByDistrict.ContainsKey(district.DistrictName)
+                        ? Math.Max(0, operationsByDistrict[district.DistrictName].ServiceRiskCount)
+                        : 0,
                     DistrictName = district.DistrictName,
                     InfluencePercent = Math.Max(0f, district.InfluenceRatio * 100f),
                     ReputationScore = Math.Max(0f, district.ReputationScore),
                     ReputationLabel = district.ReputationLabel ?? string.Empty,
                     ControlledSites = district.ControlledSites,
                     ControlledDepots = district.ControlledDepots,
+                    CompetitivePressurePercent = Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),
+                    CompetitiveOpportunityPercent = Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)),
+                    ActiveCompetitionJobs = Math.Max(0, district.ActiveCompetitionJobs),
+                    VisibleCompetitionCount = Math.Max(0, district.VisibleCompetitionCount),
+                    CompetitiveWinCount = Math.Max(0, district.CompetitiveWinCount),
+                    CompetitionStatus = district.CompetitionStatus ?? string.Empty,
                 })
                 .ToArray();
         }
@@ -942,7 +1011,8 @@ namespace LSOL.UI
                             continue;
                         }
 
-                        var value = tons * _globalMarket.GetUnitPrice(commodity);
+                        var storageMultiplier = industry.IsWarehouse ? Math.Max(0.55f, Math.Min(1f, industry.StorageCondition)) : 1f;
+                        var value = tons * _globalMarket.GetUnitPrice(commodity) * storageMultiplier;
                         locationValue += value;
                         totalTons += tons;
                         AddCommodityValue(commodityValues, commodity, value);
@@ -1269,16 +1339,17 @@ namespace LSOL.UI
             var cargoCommodity = cargoState != null && !cargoState.IsEmpty
                 ? CommodityCatalog.Normalize(cargoState.Commodity)
                 : string.Empty;
+            var districtName = nearestIndustry != null ? nearestIndustry.DistrictName : string.Empty;
 
             if (!string.IsNullOrWhiteSpace(cargoCommodity))
             {
-                reasons[cargoCommodity] = "Active cargo";
+                reasons[cargoCommodity] = ResolveMarketHighlightReason(cargoCommodity, districtName, "Active cargo");
             }
 
             if (nearestIndustry != null)
             {
-                AddMarketHighlights(reasons, nearestIndustry.Outputs, "Nearby output");
-                AddMarketHighlights(reasons, nearestIndustry.Inputs, "Nearby demand");
+                AddMarketHighlights(reasons, nearestIndustry.Outputs, districtName, "Nearby output");
+                AddMarketHighlights(reasons, nearestIndustry.Inputs, districtName, "Nearby demand");
             }
 
             if (reasons.Count < 3)
@@ -1288,7 +1359,7 @@ namespace LSOL.UI
                     .SelectMany(industry => industry.Outputs)
                     .Take(24)
                     .ToList();
-                AddMarketHighlights(reasons, networkOutputs, "Network output");
+                AddMarketHighlights(reasons, networkOutputs, string.Empty, "Network output");
             }
 
             return reasons
@@ -1316,7 +1387,7 @@ namespace LSOL.UI
                 .ToArray();
         }
 
-        private static void AddMarketHighlights(IDictionary<string, string> reasons, IEnumerable<string> commodities, string reason)
+        private void AddMarketHighlights(IDictionary<string, string> reasons, IEnumerable<string> commodities, string districtName, string fallbackReason)
         {
             if (reasons == null || commodities == null)
             {
@@ -1331,12 +1402,20 @@ namespace LSOL.UI
                     continue;
                 }
 
-                reasons[normalized] = reason;
+                reasons[normalized] = ResolveMarketHighlightReason(normalized, districtName, fallbackReason);
                 if (reasons.Count >= 6)
                 {
                     return;
                 }
             }
+        }
+
+        private string ResolveMarketHighlightReason(string commodity, string districtName, string fallbackReason)
+        {
+            string shockReason;
+            return _globalMarket != null && _globalMarket.TryGetShockHighlightReason(commodity, districtName, out shockReason)
+                ? shockReason
+                : fallbackReason;
         }
 
         private static string BuildOverviewDetail(ExternalLocationKind locationKind, Industry industry, float storage, float fillRatio, string productionWarning)
@@ -1348,7 +1427,7 @@ namespace LSOL.UI
 
             if (industry.SiteRole == SiteRole.Warehouse)
             {
-                return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);
+                return string.Format("Storage {0:0.0}t | {1:0}% full | Condition {2:0}%", storage, fillRatio * 100f, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)));
             }
 
             if (locationKind == ExternalLocationKind.Industry)
@@ -1525,6 +1604,45 @@ namespace LSOL.UI
                         DueInMinutes = nextDayDueInMinutes,
                     });
                 }
+
+                var corporateOverhead = _propertyManager.GetCorporateOverheadPreview(currentMinute);
+                if (corporateOverhead != null && corporateOverhead.WeeklyAmount > 0.01f)
+                {
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.CorporateOverhead,
+                        Label = "Corporate overhead",
+                        Detail = string.Format(
+                            "Scale {0} | Sites {1} | Fleet {2} | NPC {3} | Districts {4} | Support {5} | Corridors {6}",
+                            corporateOverhead.ScaleScore,
+                            corporateOverhead.OwnedSiteCount,
+                            corporateOverhead.OwnedFleetCount,
+                            corporateOverhead.ActiveNpcCount,
+                            corporateOverhead.LicensedDistrictCount,
+                            corporateOverhead.SecuredSupportSiteCount,
+                            corporateOverhead.ActiveCorridorCount),
+                        Amount = corporateOverhead.AmountDue,
+                        DueInMinutes = corporateOverhead.DueInMinutes,
+                    });
+                }
+
+                var fleetMaintenance = _propertyManager.GetFleetMaintenancePreview(currentMinute);
+                if (fleetMaintenance != null && fleetMaintenance.WeeklyAmount > 0.01f)
+                {
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.FleetMaintenance,
+                        Label = "Fleet maintenance",
+                        Detail = string.Format(
+                            "Owned rigs {0} | Bay coverage {1} | Overdue inspections {2} | Avg condition {3:0}%",
+                            fleetMaintenance.VehicleCount,
+                            fleetMaintenance.CoveredVehicleCount,
+                            fleetMaintenance.OverdueInspectionCount,
+                            fleetMaintenance.AverageConditionPercent),
+                        Amount = fleetMaintenance.AmountDue,
+                        DueInMinutes = fleetMaintenance.DueInMinutes,
+                    });
+                }
             }
 
             if (_npcLogisticsManager != null && _npcLogisticsManager.Contracts != null)
@@ -1563,6 +1681,41 @@ namespace LSOL.UI
                     Amount = Math.Max(0f, Math.Min(activeLoan.WeeklyInstallment, activeLoan.RemainingBalance)),
                     DueInMinutes = dueInMinutes,
                 });
+            }
+
+            if (_getTerritoryOperationsSummary != null)
+            {
+                var summary = _getTerritoryOperationsSummary() ?? new TerritoryOperationsSummary();
+                var dueInMinutes = _getRemainingTerritoryOperationsChargeMinutes != null
+                    ? _getRemainingTerritoryOperationsChargeMinutes(currentMinute)
+                    : InGameMinutesPerWeek;
+
+                if (summary.Districts != null)
+                {
+                    foreach (var district in summary.Districts.Where(entry => entry != null && entry.AdministrationCost > 0.01f))
+                    {
+                        bills.Add(new TabletUpcomingBillEntry
+                        {
+                            Category = CompanyFinanceCategory.TerritoryOperations,
+                            Label = string.Format("{0} charter", district.DistrictName),
+                            Detail = BuildTerritoryCharterBillDetail(district),
+                            Amount = district.AdministrationCost,
+                            DueInMinutes = dueInMinutes,
+                        });
+                    }
+                }
+
+                if (summary.InfrastructureCost > 0.01f)
+                {
+                    bills.Add(new TabletUpcomingBillEntry
+                    {
+                        Category = CompanyFinanceCategory.TerritoryOperations,
+                        Label = "Territory footprint",
+                        Detail = BuildTerritoryOperationsBillDetail(summary),
+                        Amount = summary.InfrastructureCost,
+                        DueInMinutes = dueInMinutes,
+                    });
+                }
             }
 
             return bills
@@ -1669,7 +1822,38 @@ namespace LSOL.UI
                 locationLabel = industry.IsWarehouse ? "Warehouse" : "Industry";
             }
 
-            return string.Format("{0} | {1:0.0}t on hand", locationLabel, totalTons);
+            return industry.IsWarehouse
+                ? string.Format("{0} | {1:0.0}t on hand | Condition {2:0}%", locationLabel, totalTons, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)))
+                : string.Format("{0} | {1:0.0}t on hand", locationLabel, totalTons);
+        }
+
+        private static string BuildTerritoryOperationsBillDetail(TerritoryOperationsSummary summary)
+        {
+            summary = summary ?? new TerritoryOperationsSummary();
+            return string.Format(
+                "Weekly corridor, depot, and franchise upkeep | {0} corridor{1} | {2} support site{3} | {4} premium franchise{5} | Risk {6} corridor / {7} contract",
+                summary.ActiveCorridorCount,
+                summary.ActiveCorridorCount == 1 ? string.Empty : "s",
+                summary.SupportSiteCount,
+                summary.SupportSiteCount == 1 ? string.Empty : "s",
+                summary.PremiumFranchiseCount,
+                summary.PremiumFranchiseCount == 1 ? string.Empty : "s",
+                summary.AtRiskCorridorCount,
+                summary.AtRiskServiceSiteCount);
+        }
+
+        private static string BuildTerritoryCharterBillDetail(TerritoryDistrictOperationsEntry entry)
+        {
+            if (entry == null)
+            {
+                return "Weekly district charter fee.";
+            }
+
+            return string.Format(
+                "Weekly operating charter | Status {0} | Activity {1:0}/{2:0} t",
+                entry.LicenseStatus,
+                entry.LicenseActivityTons,
+                entry.LicenseTargetTons);
         }
 
         private static string GetBudgetCategoryLabel(CompanyFinanceCategory category)
@@ -1694,6 +1878,14 @@ namespace LSOL.UI
                     return "Vehicle rent";
                 case CompanyFinanceCategory.NpcWages:
                     return "NPC wages";
+                case CompanyFinanceCategory.TerritoryOperations:
+                    return "Territory operations";
+                case CompanyFinanceCategory.CorporateOverhead:
+                    return "Corporate overhead";
+                case CompanyFinanceCategory.FleetMaintenance:
+                    return "Fleet maintenance";
+                case CompanyFinanceCategory.InventoryLoss:
+                    return "Inventory losses";
                 case CompanyFinanceCategory.FuelPurchase:
                     return "Fuel purchases";
                 case CompanyFinanceCategory.RepairCost:

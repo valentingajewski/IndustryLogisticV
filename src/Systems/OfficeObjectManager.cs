@@ -117,6 +117,7 @@ namespace LSOL.Systems
         private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Action<string> _showStatus;
+        private readonly Action _onOfficeObjectPlaced;
         private readonly Dictionary<string, Prop> _spawnedProps;
         private PlacementSession _placement;
         private HaulDeliverySession _activeHaulDelivery;
@@ -137,7 +138,8 @@ namespace LSOL.Systems
             CompanyFinanceTracker financeTracker,
             Func<int> getCurrentInGameMinute,
             Func<Vector3, Vector3> getGroundPosition,
-            Action<string> showStatus)
+            Action<string> showStatus,
+            Action onOfficeObjectPlaced = null)
         {
             _propertyManager = propertyManager ?? throw new ArgumentNullException(nameof(propertyManager));
             _fleetManager = fleetManager ?? throw new ArgumentNullException(nameof(fleetManager));
@@ -150,6 +152,7 @@ namespace LSOL.Systems
             _getCurrentInGameMinute = getCurrentInGameMinute;
             _getGroundPosition = getGroundPosition;
             _showStatus = showStatus;
+            _onOfficeObjectPlaced = onOfficeObjectPlaced;
             _spawnedProps = new Dictionary<string, Prop>(StringComparer.OrdinalIgnoreCase);
             _previewDefinitionId = 0;
             _spawnedOfficeId = string.Empty;
@@ -397,6 +400,8 @@ namespace LSOL.Systems
             {
                 trailer.Repair();
             }
+
+            _propertyManager.RecordMaintenanceBayService(vehicleEntry, _getCurrentInGameMinute != null ? _getCurrentInGameMinute() : 0);
 
             message = trailer != null && trailer.Exists()
                 ? "Maintenance Bay repaired the truck and trailer."
@@ -709,6 +714,7 @@ namespace LSOL.Systems
             _placement = null;
             ClearPreviewProp();
             SyncPlacedObjects(player);
+            _onOfficeObjectPlaced?.Invoke();
         }
 
         private void CancelPlacement(string message = null)

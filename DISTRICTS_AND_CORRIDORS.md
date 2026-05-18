@@ -8,7 +8,10 @@ If you open the company hub and see district influence, reputation labels, or co
 
 - Every industry belongs to a district.
 - Your work inside a district builds influence and reputation there.
+- Established expansion districts can be chartered, which adds weekly licence obligations but improves local returns and vehicle access.
 - Cross-district deliveries also build corridor rights between districts.
+- Active corridors now need weekly traffic to stay healthy instead of remaining permanently maxed forever.
+- Service sinks now care about weekly contract coverage, and support depots can be specialized for dispatch, maintenance, security, or support.
 - Stronger districts improve your company network and unlock more advanced logistics behavior.
 - NPC logistics now also requires the district used by the route to be at least `Established`.
 
@@ -95,6 +98,18 @@ To begin hiring NPC routes involving a district, that district must be at least 
 
 That means `Emerging` is not enough. If a district is still `Unknown` or `Emerging`, build it up with more deliveries, more active sites, and more corridor progress.
 
+## Operating Charters, Contracts, and Upkeep
+
+Late-game district play is no longer just passive throughput growth.
+
+- Non-home districts become charter candidates once they reach `Established`.
+- Buying an operating charter adds a recurring weekly licence fee.
+- Active charters lower the influence threshold for local spawn rights and improve delivery terms in that district.
+- Chartered districts must keep moving enough weekly tonnage or they fall to `Probation` and then `Suspended`.
+- Service corridors now decay if you stop feeding them. The Company Map shows when a corridor is `Stable`, on `Watch`, or `At risk`.
+- Stores, gas stations, and construction sinks now evaluate weekly service coverage. Missing those targets weakens the effective franchise bonus until the route is restored.
+- Secured depots can be specialized. Dispatch leans into district revenue and corridor upkeep, Maintenance reduces route wear pressure, Security hardens loss exposure and corridor retention, and Support amplifies district support bonuses.
+
 ## Corridors: What They Represent
 
 A corridor is the link between two different districts.
@@ -161,7 +176,7 @@ Support sites such as depots and yards can be:
 
 Once secured, you can assign a crew and later expand staff with loaders, mechanics, guards, and managers.
 
-That support network adds district strength and improves district support bonuses.
+That support network adds district strength and improves district support bonuses. In the late game, specialization turns those depots into distinct strategic roles instead of generic throughput boosters.
 
 Operational sites also matter. A site that is purchased or permitted but never actually activated contributes less than one that is actively being used.
 
@@ -173,8 +188,9 @@ If you want to push a district from weak to useful, this order works well:
 2. Run the first real supply or dispatch so the important sites become operational.
 3. Make repeated deliveries in that district to build influence and reputation.
 4. Secure a depot or yard if one is available, then assign crew.
-5. Start linking that district to others with cross-district deliveries to unlock corridor rights.
-6. Keep pushing until the district reaches `Established` if you want to use NPC logistics there.
+5. Buy the district charter once it reaches `Established`, then keep enough weekly traffic moving to stay compliant.
+6. Start linking that district to others with cross-district deliveries to unlock corridor rights and keep them maintained.
+7. Specialize the best depot in that district around the pressure you actually have: dispatch, maintenance, security, or support.
 
 ## Common Questions
 
