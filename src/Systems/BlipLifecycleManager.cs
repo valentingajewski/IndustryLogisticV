@@ -457,9 +457,19 @@ namespace LSOL.Systems
             blip.Color = color;
             blip.Name = name;
             blip.Scale = scale;
+            ApplyStandardNearbyVisibility(blip);
+            return blip;
+        }
+
+        internal static void ApplyStandardNearbyVisibility(Blip blip)
+        {
+            if (blip == null || !blip.Exists())
+            {
+                return;
+            }
+
             blip.IsShortRange = true;
             blip.IsHiddenOnLegend = false;
-            return blip;
         }
 
         private static BlipSprite ResolveIndustryBlipSprite(Industry industry, bool isPetrolStation)

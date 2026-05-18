@@ -4061,8 +4061,7 @@ namespace LSOL.Systems
             blip.Color = BlipColor.Blue;
             blip.Name = string.Format("NPC Route: {0}", BuildContractLabel(contract));
             blip.Scale = 0.85f;
-            blip.IsShortRange = IsAmbientWorldVisualRoute(contract);
-            blip.IsHiddenOnLegend = false;
+            BlipLifecycleManager.ApplyStandardNearbyVisibility(blip);
             return blip;
         }
 
@@ -4088,13 +4087,8 @@ namespace LSOL.Systems
             if (contract.RouteBlip != null && contract.RouteBlip.Exists())
             {
                 contract.RouteBlip.Position = driverVehicle.Position;
-                contract.RouteBlip.IsShortRange = IsAmbientWorldVisualRoute(contract);
+                BlipLifecycleManager.ApplyStandardNearbyVisibility(contract.RouteBlip);
             }
-        }
-
-        private bool IsAmbientWorldVisualRoute(NpcLogisticsContract contract)
-        {
-            return contract != null && contract.Id < 0;
         }
 
         private bool HasOperationalEntities(NpcLogisticsContract contract)
