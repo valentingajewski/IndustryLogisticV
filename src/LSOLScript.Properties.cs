@@ -32,6 +32,7 @@ namespace LSOL
         private LemonMenu _commercialGarageActionMenu;
         private LemonMenu _officeObjectsMenu;
         private LemonMenu _officeObjectPurchaseMenu;
+        private LemonMenu _officeFuelManagementMenu;
         private LemonMenu _apartmentMenu;
         private LemonMenu _apartmentInteriorMenu;
         private LemonMenu _personalGarageMenu;
@@ -81,6 +82,12 @@ namespace LSOL
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
+            _officeFuelManagementMenu = new LemonMenu("Fuel Management")
+            {
+                Subtitle = "Refuel vehicles or manage diesel deliveries",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
             _apartmentMenu = new LemonMenu("Apartment")
             {
                 Subtitle = "Manage residence access and personal storage",
@@ -116,6 +123,7 @@ namespace LSOL
                 || (_commercialGarageActionMenu != null && _commercialGarageActionMenu.IsOpen)
                 || (_officeObjectsMenu != null && _officeObjectsMenu.IsOpen)
                 || (_officeObjectPurchaseMenu != null && _officeObjectPurchaseMenu.IsOpen)
+                || (_officeFuelManagementMenu != null && _officeFuelManagementMenu.IsOpen)
                 || (_apartmentMenu != null && _apartmentMenu.IsOpen)
                 || (_apartmentInteriorMenu != null && _apartmentInteriorMenu.IsOpen)
                 || (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
@@ -142,6 +150,11 @@ namespace LSOL
             if (_officeObjectPurchaseMenu != null)
             {
                 _officeObjectPurchaseMenu.Draw();
+            }
+
+            if (_officeFuelManagementMenu != null)
+            {
+                _officeFuelManagementMenu.Draw();
             }
 
             if (_apartmentMenu != null)
@@ -185,6 +198,11 @@ namespace LSOL
             if (_officeObjectPurchaseMenu != null)
             {
                 _officeObjectPurchaseMenu.Close();
+            }
+
+            if (_officeFuelManagementMenu != null)
+            {
+                _officeFuelManagementMenu.Close();
             }
 
             if (_apartmentMenu != null)
@@ -273,6 +291,18 @@ namespace LSOL
                 }
 
                 _officeObjectsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_officeFuelManagementMenu != null && _officeFuelManagementMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToOfficeMenuFromFuelManagement();
+                    return true;
+                }
+
+                _officeFuelManagementMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -732,21 +762,9 @@ namespace LSOL
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Refuel Vehicle",
-                    DetailFactory = BuildOfficeVehicleRefuelDetail,
-                    OnActivate = RefuelVehicleFromOfficeTank,
-                });
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Unload Fuel Cargo",
-                    DetailFactory = BuildOfficeFuelUnloadDetail,
-                    OnActivate = UnloadFuelCargoIntoOfficeTank,
-                });
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Request Diesel Delivery",
-                    DetailFactory = BuildOfficeFuelDeliveryDetail,
-                    OnActivate = RequestOfficeFuelDelivery,
+                    CaptionFactory = () => "Fuel Management",
+                    DetailFactory = BuildOfficeFuelManagementSummary,
+                    OnActivate = OpenOfficeFuelManagementMenu,
                 });
                 items.Add(new OfficeMenuItem
                 {
@@ -803,6 +821,11 @@ namespace LSOL
             var pending = objects.Count - placed;
             var catalogCount = _propertyManager.OfficeObjectCatalog.Count;
             return string.Format("Catalog {0} | Placed {1} | Pending placement {2}", catalogCount, placed, pending);
+        }
+
+        private string BuildOfficeFuelManagementSummary()
+        {
+            return "Refuel vehicles, unload fuel cargo, or request refinery diesel delivery.";
         }
 
         private string BuildOfficeVehicleRefuelDetail()
@@ -898,6 +921,53 @@ namespace LSOL
             _officeMenu.Close();
             RebuildOfficeObjectMenuItems();
             _officeObjectsMenu.Open();
+        }
+
+        private void OpenOfficeFuelManagementMenu()
+        {
+            if (_menuOffice == null)
+            {
+                return;
+            }
+
+            _officeMenu.Close();
+            RebuildOfficeFuelManagementMenuItems();
+            _officeFuelManagementMenu.Open();
+        }
+
+        private void RebuildOfficeFuelManagementMenuItems()
+        {
+            var items = new List<OfficeMenuItem>
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Refuel Vehicle",
+                    DetailFactory = BuildOfficeVehicleRefuelDetail,
+                    OnActivate = RefuelVehicleFromOfficeTank,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Unload Fuel Cargo",
+                    DetailFactory = BuildOfficeFuelUnloadDetail,
+                    OnActivate = UnloadFuelCargoIntoOfficeTank,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Request Diesel Delivery",
+                    DetailFactory = BuildOfficeFuelDeliveryDetail,
+                    OnActivate = RequestOfficeFuelDelivery,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    DetailFactory = () => "Return to the office menu.",
+                    OnActivate = ReturnToOfficeMenuFromFuelManagement,
+                },
+            };
+
+            _officeFuelManagementMenu.Title = _menuOffice != null ? string.Format("{0} Fuel", _menuOffice.DisplayName) : "Fuel Management";
+            _officeFuelManagementMenu.Subtitle = "Refuel company vehicles, unload cargo, or request diesel delivery";
+            _officeFuelManagementMenu.SetItems(items);
         }
 
         private void RebuildOfficeObjectMenuItems()
@@ -1218,6 +1288,13 @@ namespace LSOL
             _officeObjectPurchaseMenu.Close();
             _officeObjectsMenu.Close();
             _pendingOfficeObjectPurchaseDefinition = null;
+            RebuildOfficeMenuItems();
+            _officeMenu.Open();
+        }
+
+        private void ReturnToOfficeMenuFromFuelManagement()
+        {
+            _officeFuelManagementMenu.Close();
             RebuildOfficeMenuItems();
             _officeMenu.Open();
         }

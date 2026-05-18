@@ -27,7 +27,7 @@ namespace LSOL.Systems
         private const int ServiceTimeoutMs = 900000;
         private const int ServiceDriveStyle = 786603;
         private const string DefaultDriverModel = "s_m_m_trucker_01";
-        private const string OfficeObjectHaulTruckModelName = "phantom3";
+        private const string OfficeObjectHaulTruckModelName = "hauler";
         private const string OfficeObjectHaulTrailerModelName = "trflat";
         private const float OfficeObjectHaulCargoRotationZ = 90f;
         private static readonly Vector3 OfficeObjectHaulTrailerSpawnPosition = new Vector3(937.16f, -3155.35f, 5.90f);
@@ -662,7 +662,7 @@ namespace LSOL.Systems
                 Trailer = trailer,
                 Cargo = cargo,
                 Phase = HaulDeliveryPhase.ReachTruck,
-                RouteBlip = CreateHaulDeliveryBlip(OfficeObjectHaulTruckSpawnPosition, definition, office),
+                RouteBlip = CreateHaulDeliveryBlip(OfficeObjectHaulTruckSpawnPosition, definition, office, HaulDeliveryPhase.ReachTruck),
             };
 
             ClearPreviewProp();
@@ -814,7 +814,7 @@ namespace LSOL.Systems
                     if (IsPlayerUsingVehicle(player, delivery.Truck))
                     {
                         delivery.Phase = HaulDeliveryPhase.AttachTrailer;
-                        _showStatus?.Invoke(string.Format("Attach the trailer carrying {0} at the port.", definition.DisplayName));
+                        RefreshHaulDeliveryBlip(delivery, office, definition);
                     }
 
                     break;
@@ -823,12 +823,13 @@ namespace LSOL.Systems
                     if (IsTruckAttachedToTrailer(delivery.Truck, delivery.Trailer))
                     {
                         delivery.Phase = HaulDeliveryPhase.DeliverToOffice;
+                        RefreshHaulDeliveryBlip(delivery, office, definition);
                         _showStatus?.Invoke(string.Format("Trailer attached. Deliver {0} to {1}.", definition.DisplayName, office.DisplayName));
                     }
                     else
                     {
                         Screen.ShowHelpTextThisFrame(string.Format(
-                            "Attach the trailer at {0:0.00}, {1:0.00}, {2:0.00} to transport {3}.",
+                            "Attach the trailer to transport {3}.",
                             OfficeObjectHaulTrailerSpawnPosition.X,
                             OfficeObjectHaulTrailerSpawnPosition.Y,
                             OfficeObjectHaulTrailerSpawnPosition.Z,
@@ -843,6 +844,7 @@ namespace LSOL.Systems
                     if (trailerInOffice && !trailerAttached)
                     {
                         delivery.Phase = HaulDeliveryPhase.UnloadAtOffice;
+                        RefreshHaulDeliveryBlip(delivery, office, definition);
                         _showStatus?.Invoke(string.Format("{0} arrived at the office. Walk to the cargo to unload it.", definition.DisplayName));
                         break;
                     }
@@ -850,6 +852,7 @@ namespace LSOL.Systems
                     if (!trailerAttached)
                     {
                         delivery.Phase = HaulDeliveryPhase.AttachTrailer;
+                        RefreshHaulDeliveryBlip(delivery, office, definition);
                         _showStatus?.Invoke("Trailer detached before reaching the office. Hook it up again.");
                         break;
                     }
@@ -863,6 +866,7 @@ namespace LSOL.Systems
                     if (!IsWithinOfficePlacementBounds(delivery.Trailer.Position, office))
                     {
                         delivery.Phase = HaulDeliveryPhase.DeliverToOffice;
+                        RefreshHaulDeliveryBlip(delivery, office, definition);
                         _showStatus?.Invoke(string.Format("Bring the trailer carrying {0} back into the office yard.", definition.DisplayName));
                         break;
                     }
@@ -1024,7 +1028,7 @@ namespace LSOL.Systems
             return office != null && entry != null && definition != null;
         }
 
-        private Blip CreateHaulDeliveryBlip(Vector3 position, OfficeObjectDefinition definition, OfficeDefinition office)
+        private Blip CreateHaulDeliveryBlip(Vector3 position, OfficeObjectDefinition definition, OfficeDefinition office, HaulDeliveryPhase phase)
         {
             var blip = World.CreateBlip(position);
             if (blip == null || !blip.Exists())
@@ -1032,7 +1036,7 @@ namespace LSOL.Systems
                 return null;
             }
 
-            blip.Sprite = BlipSprite.Truck;
+            blip.Sprite = ResolveHaulDeliveryBlipSprite(phase);
             blip.Color = BlipColor.Yellow;
             blip.Name = string.Format("Office Delivery: {0} -> {1}", definition != null ? definition.DisplayName : "module", office != null ? office.DisplayName : "office");
             blip.Scale = 0.85f;
@@ -1065,11 +1069,24 @@ namespace LSOL.Systems
 
             if (delivery.RouteBlip == null || !delivery.RouteBlip.Exists())
             {
-                delivery.RouteBlip = CreateHaulDeliveryBlip(targetPosition, definition, office);
+                delivery.RouteBlip = CreateHaulDeliveryBlip(targetPosition, definition, office, delivery.Phase);
                 return;
             }
 
             delivery.RouteBlip.Position = targetPosition;
+            delivery.RouteBlip.Sprite = ResolveHaulDeliveryBlipSprite(delivery.Phase);
+        }
+
+        private static BlipSprite ResolveHaulDeliveryBlipSprite(HaulDeliveryPhase phase)
+        {
+            switch (phase)
+            {
+                case HaulDeliveryPhase.AttachTrailer:
+                case HaulDeliveryPhase.UnloadAtOffice:
+                    return BlipSprite.Trailer;
+                default:
+                    return BlipSprite.Truck;
+            }
         }
 
         private void CancelHaulDelivery(string reason = null)
