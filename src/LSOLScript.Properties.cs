@@ -1171,18 +1171,38 @@ namespace LSOL
             string placementMessage;
             if (!_officeObjectManager.TryStartPlacement(_menuOffice, entry, out placementMessage))
             {
-                ShowStatus(!string.IsNullOrWhiteSpace(prefixMessage)
-                    ? string.Format("{0} {1}", prefixMessage, placementMessage)
-                    : placementMessage);
+                ShowOfficeObjectPlacementStatus(prefixMessage, placementMessage);
                 ReturnToOfficeObjectsMenu();
                 return;
             }
 
             _officeObjectPurchaseMenu.Close();
             _officeObjectsMenu.Close();
-            ShowStatus(!string.IsNullOrWhiteSpace(prefixMessage)
-                ? string.Format("{0} {1}", prefixMessage, placementMessage)
-                : placementMessage);
+            ShowOfficeObjectPlacementStatus(prefixMessage, placementMessage);
+        }
+
+        private void ShowOfficeObjectPlacementStatus(string prefixMessage, string placementMessage)
+        {
+            var statusMessage = CombineStatusMessages(prefixMessage, placementMessage);
+            if (!string.IsNullOrWhiteSpace(statusMessage))
+            {
+                ShowStatus(statusMessage);
+            }
+        }
+
+        private static string CombineStatusMessages(string firstMessage, string secondMessage)
+        {
+            if (string.IsNullOrWhiteSpace(firstMessage))
+            {
+                return secondMessage ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(secondMessage))
+            {
+                return firstMessage;
+            }
+
+            return string.Format("{0} {1}", firstMessage, secondMessage);
         }
 
         private void ReturnToOfficeObjectsMenu()

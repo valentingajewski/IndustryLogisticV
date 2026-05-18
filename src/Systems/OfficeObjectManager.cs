@@ -666,10 +666,6 @@ namespace LSOL.Systems
             };
 
             ClearPreviewProp();
-            message = string.Format(
-                "Port delivery ready for {0}. Go to the port truck, attach the trailer, then haul it to {1}.",
-                definition.DisplayName,
-                office.DisplayName);
             return true;
         }
 
@@ -813,10 +809,7 @@ namespace LSOL.Systems
             {
                 case HaulDeliveryPhase.ReachTruck:
                     Screen.ShowHelpTextThisFrame(string.Format(
-                        "Go to the port truck at {0:0.00}, {1:0.00}, {2:0.00} and take it to haul {3}.",
-                        OfficeObjectHaulTruckSpawnPosition.X,
-                        OfficeObjectHaulTruckSpawnPosition.Y,
-                        OfficeObjectHaulTruckSpawnPosition.Z,
+                        "Go to the port terminal to retreive your {0}",
                         definition.DisplayName));
                     if (IsPlayerUsingVehicle(player, delivery.Truck))
                     {
