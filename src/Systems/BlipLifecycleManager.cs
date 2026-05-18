@@ -116,6 +116,7 @@ namespace LSOL.Systems
                 officeBlip.Color = BlipColor.Green;
                 officeBlip.Name = "Logistics Office";
                 officeBlip.Scale = 1.0f;
+                ApplyAlwaysVisibleVisibility(officeBlip);
             }
             else
             {
@@ -136,6 +137,14 @@ namespace LSOL.Systems
                     blip.Color = isActive ? BlipColor.Green : BlipColor.White;
                     blip.Name = ResolveOfficeBlipName(office, isActive);
                     blip.Scale = isActive ? 1.0f : 0.9f;
+                    if (isActive)
+                    {
+                        ApplyAlwaysVisibleVisibility(blip);
+                    }
+                    else
+                    {
+                        ApplyStandardNearbyVisibility(blip);
+                    }
                 }
             }
 
@@ -281,6 +290,7 @@ namespace LSOL.Systems
                 var fallbackBlip = CreateStaticBlip(_getGroundPosition(ResolveOfficeMarkerSeed()), BlipSprite.Office, BlipColor.Green, "Logistics Office", 1.0f);
                 if (fallbackBlip != null && fallbackBlip.Exists())
                 {
+                    ApplyAlwaysVisibleVisibility(fallbackBlip);
                     _officeBlips.Add(fallbackBlip);
                 }
 
@@ -301,6 +311,11 @@ namespace LSOL.Systems
                     isActive ? 1.0f : 0.9f);
                 if (blip != null && blip.Exists())
                 {
+                    if (isActive)
+                    {
+                        ApplyAlwaysVisibleVisibility(blip);
+                    }
+
                     _officeBlips.Add(blip);
                 }
             }
@@ -469,6 +484,17 @@ namespace LSOL.Systems
             }
 
             blip.IsShortRange = true;
+            blip.IsHiddenOnLegend = false;
+        }
+
+        internal static void ApplyAlwaysVisibleVisibility(Blip blip)
+        {
+            if (blip == null || !blip.Exists())
+            {
+                return;
+            }
+
+            blip.IsShortRange = false;
             blip.IsHiddenOnLegend = false;
         }
 
