@@ -165,6 +165,9 @@ namespace LSOL.UI
                 return;
             }
 
+            const float tabletRowSpacing = 48f;
+            const float tabletQuantityOffset = 22f;
+
             var resolution = panel.Resolution;
             var entries = snapshot == null ? null : snapshot.Entries;
             var stockpile = snapshot == null ? 0f : snapshot.Stockpile;
@@ -173,10 +176,10 @@ namespace LSOL.UI
             var utilizationRatio = snapshot == null ? 0f : snapshot.UtilizationRatio;
             var clampedScrollIndex = ClampScrollIndex(snapshot, scrollIndex);
             var visibleCount = entries == null ? 0 : Math.Min(VisibleRows, entries.Count - clampedScrollIndex);
-            var statsWidth = Math.Min(Math.Max(420f, panel.Width - 220f), 620f);
-            var statsHeight = Math.Min(Math.Max(232f, 170f + (visibleCount * 36f)), Math.Max(232f, panel.Height - 18f));
+            var statsWidth = Math.Min(Math.Max(620f, panel.Width - 0f), 820f);
+            var statsHeight = Math.Min(Math.Max(432f, 170f + (visibleCount * tabletRowSpacing)), Math.Max(232f, panel.Height - 18f));
             var statsX = panel.X + Math.Max(0f, (panel.Width - statsWidth) * 0.5f);
-            var statsY = panel.Y + Math.Max(8f, (panel.Height - statsHeight) * 0.5f);
+            var statsY = panel.Y + Math.Max(8f, (panel.Height - statsHeight) * 0.10f);
             var contentX = statsX + 18f;
             var contentY = statsY + 16f;
             var barWidth = Math.Min(290f, Math.Max(130f, statsWidth - 286f));
@@ -286,7 +289,7 @@ namespace LSOL.UI
             for (int i = 0; i < visibleCount; i++)
             {
                 var entry = entries[clampedScrollIndex + i];
-                var rowY = listTopY + (i * 35f);
+                var rowY = listTopY + (i * tabletRowSpacing);
                 var titleColor = entry.IsInput
                     ? AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentTeal, 226)
                     : AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGold, 226);
@@ -309,7 +312,7 @@ namespace LSOL.UI
                     resolution,
                     ModFormatting.FormatRatio(entry.Stock, entry.Capacity, " t"),
                     contentX,
-                    rowY + 14f,
+                    rowY + tabletQuantityOffset,
                     0.235f,
                     AccessibilityTheme.Service.Palette.Get(ModColorRole.TextSecondary, 214),
                     GTA.UI.Font.ChaletLondon,
@@ -319,7 +322,7 @@ namespace LSOL.UI
                 DrawPixelLoadingBar(
                     resolution,
                     barX,
-                    rowY + 13f,
+                    rowY + tabletQuantityOffset,
                     barWidth,
                     10f,
                     entry.Ratio,
