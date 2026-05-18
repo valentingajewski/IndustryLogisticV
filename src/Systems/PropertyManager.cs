@@ -18,6 +18,50 @@ namespace LSOL.Systems
         public int TruckHandle { get; set; }
     }
 
+    public sealed class CorporateOverheadChargePreview
+    {
+        public float WeeklyAmount { get; set; }
+
+        public float AmountDue { get; set; }
+
+        public int DueInMinutes { get; set; }
+
+        public int WeeksDue { get; set; }
+
+        public int ScaleScore { get; set; }
+
+        public int OwnedSiteCount { get; set; }
+
+        public int OwnedFleetCount { get; set; }
+
+        public int ActiveNpcCount { get; set; }
+
+        public int LicensedDistrictCount { get; set; }
+
+        public int SecuredSupportSiteCount { get; set; }
+
+        public int ActiveCorridorCount { get; set; }
+    }
+
+    public sealed class FleetMaintenanceChargePreview
+    {
+        public float WeeklyAmount { get; set; }
+
+        public float AmountDue { get; set; }
+
+        public int DueInMinutes { get; set; }
+
+        public int VehicleCount { get; set; }
+
+        public int CoveredVehicleCount { get; set; }
+
+        public int OverdueInspectionCount { get; set; }
+
+        public int AtRiskVehicleCount { get; set; }
+
+        public float AverageConditionPercent { get; set; }
+    }
+
     public sealed class PropertyManager
     {
         private const int MinutesPerWeek = 7 * 24 * 60;
@@ -25,6 +69,25 @@ namespace LSOL.Systems
         private const float ApartmentSaleRefundRatio = 0.5f;
         private const float CommercialVehicleSaleRefundRatio = 0.5f;
         private const int CommercialRentalRefundDays = 2;
+        private const float CorporateOverheadBaseCharge = 250f;
+        private const float CorporateOverheadScaleCharge = 45f;
+        private const float CorporateOverheadPerOwnedSite = 210f;
+        private const float CorporateOverheadPerOwnedFleetVehicle = 135f;
+        private const float CorporateOverheadPerNpcCrew = 175f;
+        private const float CorporateOverheadPerLicensedDistrict = 260f;
+        private const float CorporateOverheadPerSupportSite = 180f;
+        private const float CorporateOverheadPerCorridor = 65f;
+        private const float FleetMaintenanceMinimumWeeklyCharge = 110f;
+        private const float FleetMaintenancePurchaseRate = 0.0014f;
+        private const float FleetMaintenanceCapacityRate = 10f;
+        private const float FleetMaintenanceCoverageDiscount = 0.72f;
+        private const float FleetMaintenanceInspectionSurcharge = 65f;
+        private const float FleetMaintenanceCoverageRecovery = 0.10f;
+        private const float FleetMaintenanceWearPerWeek = 0.045f;
+        private const float FleetMaintenanceDeployedWearBonus = 0.02f;
+        private const float FleetMaintenanceOverdueWearBonus = 0.05f;
+        private const int FleetInspectionIntervalWeeks = 2;
+        private const float MinimumMaintenanceCondition = 0.35f;
 
         private readonly List<OfficeDefinition> _officeDefinitions;
         private readonly Dictionary<string, OfficeDefinition> _officeDefinitionsById;
@@ -41,6 +104,11 @@ namespace LSOL.Systems
         private bool _officeGarageLimitEnforced;
         private CompanyFinanceTracker _financeTracker;
         private Func<int> _getCurrentInGameMinute;
+        private Func<int> _getOwnedSiteCount;
+        private Func<int> _getActiveNpcCount;
+        private Func<int> _getLicensedDistrictCount;
+        private Func<int> _getSecuredSupportSiteCount;
+        private Func<int> _getActiveCorridorCount;
 
         public PropertyManager(ModConfig config)
         {
@@ -79,6 +147,20 @@ namespace LSOL.Systems
         {
             _financeTracker = financeTracker;
             _getCurrentInGameMinute = getCurrentInGameMinute;
+        }
+
+        public void ConfigureEconomicPressure(
+            Func<int> getOwnedSiteCount,
+            Func<int> getActiveNpcCount,
+            Func<int> getLicensedDistrictCount,
+            Func<int> getSecuredSupportSiteCount,
+            Func<int> getActiveCorridorCount)
+        {
+            _getOwnedSiteCount = getOwnedSiteCount;
+            _getActiveNpcCount = getActiveNpcCount;
+            _getLicensedDistrictCount = getLicensedDistrictCount;
+            _getSecuredSupportSiteCount = getSecuredSupportSiteCount;
+            _getActiveCorridorCount = getActiveCorridorCount;
         }
 
         public IReadOnlyList<OfficeDefinition> Offices
@@ -234,6 +316,11 @@ namespace LSOL.Systems
                     SourceIndustryId = legacy.SourceIndustryId,
                     SourceDistrictName = legacy.SourceDistrictName,
                     CurrentFuelLiters = legacy.CurrentFuelLiters,
+                    MaintenanceCondition = legacy.MaintenanceCondition,
+                    LastMaintenanceWeekIndex = legacy.LastMaintenanceWeekIndex,
+                    LastInspectionWeekIndex = legacy.LastInspectionWeekIndex,
+                    InspectionOverdueWeeks = legacy.InspectionOverdueWeeks,
+                    LifetimeMaintenanceCost = legacy.LifetimeMaintenanceCost,
                 });
             }
 
@@ -304,7 +391,34 @@ namespace LSOL.Systems
                 ProcessCommercialVehicleDailyCharge(_state.CommercialVehicles[i], currentDayIndex, ref balance, messages);
             }
 
+            ProcessCorporateOverheadCharge(currentWeekIndex, ref balance, messages);
+            ProcessFleetMaintenanceCharges(currentWeekIndex, ref balance, messages);
+
             return messages;
+        }
+
+        public CorporateOverheadChargePreview GetCorporateOverheadPreview(int currentInGameMinute)
+        {
+            return BuildCorporateOverheadPreview(GetWeekIndex(currentInGameMinute), currentInGameMinute);
+        }
+
+        public FleetMaintenanceChargePreview GetFleetMaintenancePreview(int currentInGameMinute)
+        {
+            return BuildFleetMaintenancePreview(GetWeekIndex(currentInGameMinute), currentInGameMinute);
+        }
+
+        public void RecordMaintenanceBayService(OwnedCommercialVehiclePersistenceEntry vehicle, int currentInGameMinute)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            var currentWeekIndex = GetWeekIndex(currentInGameMinute);
+            vehicle.MaintenanceCondition = 1f;
+            vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
+            vehicle.LastInspectionWeekIndex = currentWeekIndex;
+            vehicle.InspectionOverdueWeeks = 0;
         }
 
         public bool CanUseCommercialSystems(out string reason)
@@ -849,6 +963,11 @@ namespace LSOL.Systems
                 SourceIndustryId = string.Empty,
                 SourceDistrictName = string.Empty,
                 CurrentFuelLiters = 0f,
+                MaintenanceCondition = 1f,
+                LastMaintenanceWeekIndex = GetWeekIndex(GetTrackedCurrentInGameMinute()),
+                LastInspectionWeekIndex = GetWeekIndex(GetTrackedCurrentInGameMinute()),
+                InspectionOverdueWeeks = 0,
+                LifetimeMaintenanceCost = 0f,
             };
 
             _state.CommercialVehicles.Add(vehicle);
@@ -972,6 +1091,7 @@ namespace LSOL.Systems
             }
 
             var refund = Math.Max(0f, vehicle.PurchasePrice * CommercialVehicleSaleRefundRatio);
+            refund = CalculateCommercialVehicleSaleRefund(vehicle);
             balance += refund;
             RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Sold commercial vehicle {0}", vehicle.DisplayName));
             _state.CommercialVehicles.Remove(vehicle);
@@ -1300,6 +1420,14 @@ namespace LSOL.Systems
                 .Any(definition => definition != null && definition.Function == function);
         }
 
+        public bool HasAnyOfficeObjectFunction(OfficeObjectFunction function, bool placedOnly = true)
+        {
+            return _state.OfficeObjects
+                .Where(entry => entry != null && (!placedOnly || entry.IsPlaced))
+                .Select(entry => GetOfficeObjectDefinition(entry.DefinitionId))
+                .Any(definition => definition != null && definition.Function == function);
+        }
+
         public float GetOfficeObjectFunctionCapacity(string officeId, OfficeObjectFunction function)
         {
             return GetOfficeObjects(officeId, false)
@@ -1353,6 +1481,21 @@ namespace LSOL.Systems
             {
                 message = "Office object definition unavailable.";
                 return false;
+            }
+
+            if (definition.Function == OfficeObjectFunction.Headquarters)
+            {
+                if (!officeState.IsOwned)
+                {
+                    message = "Landmark HQ modules can only be installed in an owned office.";
+                    return false;
+                }
+
+                if (HasAnyOfficeObjectFunction(OfficeObjectFunction.Headquarters, false))
+                {
+                    message = "The company already has a Landmark HQ project in progress.";
+                    return false;
+                }
             }
 
             if (definition.PerOfficeLimit > 0 && GetOfficeObjectCount(officeId, definitionId) >= definition.PerOfficeLimit)
@@ -1617,6 +1760,12 @@ namespace LSOL.Systems
                 cargoState.TotalLostTons = Math.Max(0f, entry.TotalLostTons);
                 cargoState.SourceIndustryId = entry.SourceIndustryId;
                 cargoState.SourceDistrictName = entry.SourceDistrictName;
+            }
+
+            ApplyCommercialVehicleMaintenanceState(truck, entry.MaintenanceCondition);
+            if (cargoVehicle != null && cargoVehicle.Exists() && cargoVehicle.Handle != truck.Handle)
+            {
+                ApplyCommercialVehicleMaintenanceState(cargoVehicle, entry.MaintenanceCondition);
             }
 
             _commercialRuntime[entry.AssetId] = new CommercialVehicleRuntimeState
@@ -1990,6 +2139,11 @@ namespace LSOL.Systems
         {
             var currentWeekIndex = GetWeekIndex(currentInGameMinute);
             var currentDayIndex = GetDayIndex(currentInGameMinute);
+            if (_state.LastCorporateOverheadWeekIndex < 0)
+            {
+                _state.LastCorporateOverheadWeekIndex = currentWeekIndex;
+            }
+
             for (int i = 0; i < _state.Offices.Count; i++)
             {
                 if (_state.Offices[i] != null && _state.Offices[i].LastChargedWeekIndex < 0)
@@ -2018,6 +2172,136 @@ namespace LSOL.Systems
                 {
                     vehicle.LastChargedDayIndex = currentDayIndex;
                 }
+
+                if (vehicle != null && !vehicle.IsRental)
+                {
+                    vehicle.MaintenanceCondition = NormalizeMaintenanceCondition(vehicle.MaintenanceCondition);
+                    if (vehicle.LastMaintenanceWeekIndex < 0)
+                    {
+                        vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
+                    }
+
+                    if (vehicle.LastInspectionWeekIndex < 0)
+                    {
+                        vehicle.LastInspectionWeekIndex = currentWeekIndex;
+                    }
+                }
+            }
+        }
+
+        private void ProcessCorporateOverheadCharge(int currentWeekIndex, ref float balance, ICollection<string> messages)
+        {
+            var preview = BuildCorporateOverheadPreview(currentWeekIndex, GetTrackedCurrentInGameMinute());
+            if (preview == null || preview.WeeksDue <= 0 || preview.AmountDue <= 0.01f)
+            {
+                return;
+            }
+
+            balance -= preview.AmountDue;
+            _state.LastCorporateOverheadWeekIndex = currentWeekIndex;
+            RecordFinanceExpense(
+                CompanyFinanceCategory.CorporateOverhead,
+                preview.AmountDue,
+                preview.WeeksDue > 1
+                    ? string.Format("Corporate overhead for {0} weeks", preview.WeeksDue)
+                    : "Corporate overhead");
+
+            if (messages != null)
+            {
+                messages.Add(string.Format(
+                    "Corporate overhead billed {0}: {1} site{2}, {3} fleet vehicle{4}, {5} route crew{6}, {7} charter district{8}.",
+                    ModFormatting.FormatMoney(preview.AmountDue),
+                    preview.OwnedSiteCount,
+                    preview.OwnedSiteCount == 1 ? string.Empty : "s",
+                    preview.OwnedFleetCount,
+                    preview.OwnedFleetCount == 1 ? string.Empty : "s",
+                    preview.ActiveNpcCount,
+                    preview.ActiveNpcCount == 1 ? string.Empty : "s",
+                    preview.LicensedDistrictCount,
+                    preview.LicensedDistrictCount == 1 ? string.Empty : "s"));
+            }
+        }
+
+        private void ProcessFleetMaintenanceCharges(int currentWeekIndex, ref float balance, ICollection<string> messages)
+        {
+            var ownedVehicles = _state.CommercialVehicles
+                .Where(vehicle => vehicle != null && !vehicle.IsRental)
+                .ToList();
+            if (ownedVehicles.Count == 0)
+            {
+                return;
+            }
+
+            float totalCharge = 0f;
+            var servicedVehicleCount = 0;
+            var overdueInspectionCount = 0;
+            var atRiskVehicleCount = 0;
+
+            for (int i = 0; i < ownedVehicles.Count; i++)
+            {
+                var vehicle = ownedVehicles[i];
+                var elapsedWeeks = vehicle.LastMaintenanceWeekIndex < 0
+                    ? 0
+                    : Math.Max(0, currentWeekIndex - vehicle.LastMaintenanceWeekIndex);
+                if (elapsedWeeks <= 0)
+                {
+                    continue;
+                }
+
+                var hasCoverage = HasVehicleMaintenanceCoverage(vehicle);
+                var overdueWeeks = GetInspectionOverdueWeeks(vehicle, currentWeekIndex);
+                var weeklyCharge = CalculateWeeklyMaintenanceCharge(vehicle, hasCoverage, overdueWeeks);
+                var charge = weeklyCharge * elapsedWeeks;
+                totalCharge += charge;
+                vehicle.LifetimeMaintenanceCost += charge;
+                vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
+
+                if (hasCoverage)
+                {
+                    servicedVehicleCount += 1;
+                    vehicle.LastInspectionWeekIndex = currentWeekIndex;
+                    vehicle.InspectionOverdueWeeks = 0;
+                    vehicle.MaintenanceCondition = Math.Min(1f, NormalizeMaintenanceCondition(vehicle.MaintenanceCondition) + (FleetMaintenanceCoverageRecovery * elapsedWeeks));
+                }
+                else
+                {
+                    if (overdueWeeks > 0)
+                    {
+                        overdueInspectionCount += 1;
+                    }
+
+                    vehicle.InspectionOverdueWeeks = overdueWeeks;
+                    var wear = (FleetMaintenanceWearPerWeek
+                        + (vehicle.IsDeployed ? FleetMaintenanceDeployedWearBonus : 0f)
+                        + (overdueWeeks > 0 ? FleetMaintenanceOverdueWearBonus : 0f)) * elapsedWeeks;
+                    vehicle.MaintenanceCondition = Math.Max(
+                        MinimumMaintenanceCondition,
+                        NormalizeMaintenanceCondition(vehicle.MaintenanceCondition) - wear);
+                }
+
+                if (vehicle.MaintenanceCondition < 0.75f || vehicle.InspectionOverdueWeeks > 0)
+                {
+                    atRiskVehicleCount += 1;
+                }
+            }
+
+            if (totalCharge <= 0.01f)
+            {
+                return;
+            }
+
+            balance -= totalCharge;
+            RecordFinanceExpense(CompanyFinanceCategory.FleetMaintenance, totalCharge, "Fleet maintenance and inspection cycle");
+
+            if (messages != null)
+            {
+                messages.Add(string.Format(
+                    "Fleet maintenance billed {0}: {1}/{2} rigs serviced by Maintenance Bays, {3} inspection backlog, {4} at risk.",
+                    ModFormatting.FormatMoney(totalCharge),
+                    servicedVehicleCount,
+                    ownedVehicles.Count,
+                    overdueInspectionCount,
+                    atRiskVehicleCount));
             }
         }
 
@@ -2048,6 +2332,222 @@ namespace LSOL.Systems
                     elapsedDays,
                     elapsedDays == 1 ? string.Empty : "s"));
             }
+        }
+
+        private CorporateOverheadChargePreview BuildCorporateOverheadPreview(int currentWeekIndex, int currentInGameMinute)
+        {
+            var ownedSiteCount = Math.Max(0, _getOwnedSiteCount != null ? _getOwnedSiteCount() : 0);
+            var ownedFleetCount = CountOwnedCommercialVehicles();
+            var activeNpcCount = Math.Max(0, _getActiveNpcCount != null ? _getActiveNpcCount() : 0);
+            var licensedDistrictCount = Math.Max(0, _getLicensedDistrictCount != null ? _getLicensedDistrictCount() : 0);
+            var securedSupportSiteCount = Math.Max(0, _getSecuredSupportSiteCount != null ? _getSecuredSupportSiteCount() : 0);
+            var activeCorridorCount = Math.Max(0, _getActiveCorridorCount != null ? _getActiveCorridorCount() : 0);
+
+            var siteScale = Math.Max(0, ownedSiteCount - 2);
+            var fleetScale = Math.Max(0, ownedFleetCount - 2);
+            var npcScale = Math.Max(0, activeNpcCount - 1);
+            var districtScale = Math.Max(0, licensedDistrictCount - 1);
+            var supportScale = Math.Max(0, securedSupportSiteCount);
+            var corridorScale = Math.Max(0, activeCorridorCount - 1);
+            var scaleScore = siteScale + fleetScale + npcScale + districtScale + supportScale + corridorScale;
+            if (scaleScore <= 0)
+            {
+                return new CorporateOverheadChargePreview
+                {
+                    DueInMinutes = Math.Max(0, ((currentWeekIndex + 1) * MinutesPerWeek) - currentInGameMinute),
+                    WeeksDue = 0,
+                };
+            }
+
+            var weeklyAmount = CorporateOverheadBaseCharge
+                + (siteScale * CorporateOverheadPerOwnedSite)
+                + (fleetScale * CorporateOverheadPerOwnedFleetVehicle)
+                + (npcScale * CorporateOverheadPerNpcCrew)
+                + (districtScale * CorporateOverheadPerLicensedDistrict)
+                + (supportScale * CorporateOverheadPerSupportSite)
+                + (corridorScale * CorporateOverheadPerCorridor)
+                + (scaleScore * CorporateOverheadScaleCharge);
+            var weeksDue = _state.LastCorporateOverheadWeekIndex < 0
+                ? 0
+                : Math.Max(0, currentWeekIndex - _state.LastCorporateOverheadWeekIndex);
+            var dueInMinutes = weeksDue > 0
+                ? 0
+                : Math.Max(0, ((currentWeekIndex + 1) * MinutesPerWeek) - currentInGameMinute);
+
+            return new CorporateOverheadChargePreview
+            {
+                WeeklyAmount = weeklyAmount,
+                AmountDue = weeklyAmount * (weeksDue > 0 ? weeksDue : 1),
+                DueInMinutes = dueInMinutes,
+                WeeksDue = weeksDue,
+                ScaleScore = scaleScore,
+                OwnedSiteCount = ownedSiteCount,
+                OwnedFleetCount = ownedFleetCount,
+                ActiveNpcCount = activeNpcCount,
+                LicensedDistrictCount = licensedDistrictCount,
+                SecuredSupportSiteCount = securedSupportSiteCount,
+                ActiveCorridorCount = activeCorridorCount,
+            };
+        }
+
+        private FleetMaintenanceChargePreview BuildFleetMaintenancePreview(int currentWeekIndex, int currentInGameMinute)
+        {
+            var ownedVehicles = _state.CommercialVehicles
+                .Where(vehicle => vehicle != null && !vehicle.IsRental)
+                .ToList();
+            if (ownedVehicles.Count == 0)
+            {
+                return new FleetMaintenanceChargePreview
+                {
+                    DueInMinutes = Math.Max(0, ((currentWeekIndex + 1) * MinutesPerWeek) - currentInGameMinute),
+                };
+            }
+
+            float weeklyAmount = 0f;
+            float amountDueNow = 0f;
+            var coveredVehicleCount = 0;
+            var overdueInspectionCount = 0;
+            var atRiskVehicleCount = 0;
+            float totalConditionPercent = 0f;
+
+            for (int i = 0; i < ownedVehicles.Count; i++)
+            {
+                var vehicle = ownedVehicles[i];
+                var normalizedCondition = NormalizeMaintenanceCondition(vehicle.MaintenanceCondition);
+                var hasCoverage = HasVehicleMaintenanceCoverage(vehicle);
+                var overdueWeeks = GetInspectionOverdueWeeks(vehicle, currentWeekIndex);
+                var charge = CalculateWeeklyMaintenanceCharge(vehicle, hasCoverage, overdueWeeks);
+                var elapsedWeeks = vehicle.LastMaintenanceWeekIndex < 0
+                    ? 0
+                    : Math.Max(0, currentWeekIndex - vehicle.LastMaintenanceWeekIndex);
+
+                weeklyAmount += charge;
+                if (elapsedWeeks > 0)
+                {
+                    amountDueNow += charge * elapsedWeeks;
+                }
+
+                if (hasCoverage)
+                {
+                    coveredVehicleCount += 1;
+                }
+
+                if (overdueWeeks > 0)
+                {
+                    overdueInspectionCount += 1;
+                }
+
+                if (normalizedCondition < 0.75f || overdueWeeks > 0)
+                {
+                    atRiskVehicleCount += 1;
+                }
+
+                totalConditionPercent += normalizedCondition * 100f;
+            }
+
+            return new FleetMaintenanceChargePreview
+            {
+                WeeklyAmount = weeklyAmount,
+                AmountDue = amountDueNow > 0.01f ? amountDueNow : weeklyAmount,
+                DueInMinutes = amountDueNow > 0.01f ? 0 : Math.Max(0, ((currentWeekIndex + 1) * MinutesPerWeek) - currentInGameMinute),
+                VehicleCount = ownedVehicles.Count,
+                CoveredVehicleCount = coveredVehicleCount,
+                OverdueInspectionCount = overdueInspectionCount,
+                AtRiskVehicleCount = atRiskVehicleCount,
+                AverageConditionPercent = ownedVehicles.Count > 0 ? totalConditionPercent / ownedVehicles.Count : 0f,
+            };
+        }
+
+        private int CountOwnedCommercialVehicles()
+        {
+            return _state.CommercialVehicles.Count(vehicle => vehicle != null && !vehicle.IsRental);
+        }
+
+        private bool HasVehicleMaintenanceCoverage(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            return vehicle != null
+                && !vehicle.IsRental
+                && vehicle.InActiveGarage
+                && !vehicle.IsDeployed
+                && !string.IsNullOrWhiteSpace(vehicle.AssignedOfficeId)
+                && HasOfficeObjectFunction(vehicle.AssignedOfficeId, OfficeObjectFunction.Repair);
+        }
+
+        private static int GetInspectionOverdueWeeks(OwnedCommercialVehiclePersistenceEntry vehicle, int currentWeekIndex)
+        {
+            if (vehicle == null)
+            {
+                return 0;
+            }
+
+            var lastInspectionWeekIndex = vehicle.LastInspectionWeekIndex < 0 ? currentWeekIndex : vehicle.LastInspectionWeekIndex;
+            return Math.Max(0, currentWeekIndex - lastInspectionWeekIndex - (FleetInspectionIntervalWeeks - 1));
+        }
+
+        private static float CalculateWeeklyMaintenanceCharge(OwnedCommercialVehiclePersistenceEntry vehicle, bool hasCoverage, int overdueInspectionWeeks)
+        {
+            if (vehicle == null)
+            {
+                return 0f;
+            }
+
+            var baseCharge = Math.Max(
+                FleetMaintenanceMinimumWeeklyCharge,
+                (Math.Max(0f, vehicle.PurchasePrice) * FleetMaintenancePurchaseRate) + (Math.Max(0f, vehicle.CapacityTons) * FleetMaintenanceCapacityRate));
+            if (hasCoverage)
+            {
+                baseCharge *= FleetMaintenanceCoverageDiscount;
+            }
+
+            if (overdueInspectionWeeks > 0)
+            {
+                baseCharge += FleetMaintenanceInspectionSurcharge * overdueInspectionWeeks;
+            }
+
+            return Math.Max(0f, baseCharge);
+        }
+
+        private static float NormalizeMaintenanceCondition(float value)
+        {
+            if (value <= 0f)
+            {
+                return 1f;
+            }
+
+            return Math.Max(MinimumMaintenanceCondition, Math.Min(1f, value));
+        }
+
+        private int GetTrackedCurrentInGameMinute()
+        {
+            return _getCurrentInGameMinute != null
+                ? Math.Max(0, _getCurrentInGameMinute())
+                : 0;
+        }
+
+        private static void ApplyCommercialVehicleMaintenanceState(Vehicle vehicle, float maintenanceCondition)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return;
+            }
+
+            var normalizedCondition = NormalizeMaintenanceCondition(maintenanceCondition);
+            var targetEngineHealth = 450f + (normalizedCondition * 550f);
+            var targetBodyHealth = 500f + (normalizedCondition * 500f);
+            vehicle.EngineHealth = Math.Min(vehicle.EngineHealth, targetEngineHealth);
+            vehicle.BodyHealth = Math.Min(vehicle.BodyHealth, targetBodyHealth);
+        }
+
+        private static float CalculateCommercialVehicleSaleRefund(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null || vehicle.PurchasePrice <= 0.01f)
+            {
+                return 0f;
+            }
+
+            var maintenanceRatio = 0.75f + (NormalizeMaintenanceCondition(vehicle.MaintenanceCondition) * 0.25f);
+            var depreciationPenalty = Math.Min(0.20f, Math.Max(0f, vehicle.LifetimeMaintenanceCost) / Math.Max(1f, vehicle.PurchasePrice) * 0.18f);
+            return Math.Max(0f, vehicle.PurchasePrice * CommercialVehicleSaleRefundRatio * maintenanceRatio * (1f - depreciationPenalty));
         }
 
         private OfficeOwnershipPersistenceEntry GetOrCreateOfficeState(string officeId)

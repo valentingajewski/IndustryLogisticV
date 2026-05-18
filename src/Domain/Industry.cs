@@ -179,6 +179,10 @@ namespace LSOL.Domain
         public int InputStorageModuleLevel { get; private set; }
         public int OutputStorageModuleLevel { get; private set; }
         public int OmegaStorageModuleLevel { get; private set; }
+        public float StorageCondition { get; private set; } = 1f;
+        public int LastStoragePressureDayIndex { get; private set; } = -1;
+        public float LifetimeStorageLossTons { get; private set; }
+        public float LifetimeStorageLossValue { get; private set; }
 
         public int UpgradeLevel
         {
@@ -947,11 +951,37 @@ namespace LSOL.Domain
             CurrentOutputPerHourTons = 0f;
         }
 
+        public void ApplyStoragePressureState(float storageCondition, int lastStoragePressureDayIndex, float lifetimeStorageLossTons, float lifetimeStorageLossValue)
+        {
+            StorageCondition = NormalizeStorageCondition(storageCondition);
+            LastStoragePressureDayIndex = Math.Max(-1, lastStoragePressureDayIndex);
+            LifetimeStorageLossTons = Math.Max(0f, lifetimeStorageLossTons);
+            LifetimeStorageLossValue = Math.Max(0f, lifetimeStorageLossValue);
+        }
+
+        public void RecordStoragePressure(int currentDayIndex, float storageCondition, float lostTons, float lostValue)
+        {
+            StorageCondition = NormalizeStorageCondition(storageCondition);
+            LastStoragePressureDayIndex = Math.Max(-1, currentDayIndex);
+            LifetimeStorageLossTons += Math.Max(0f, lostTons);
+            LifetimeStorageLossValue += Math.Max(0f, lostValue);
+        }
+
         private float NormalizeProductionRate(float productionRate)
         {
             return IsWarehouse
                 ? Math.Max(0f, productionRate)
                 : Math.Max(1f, productionRate);
+        }
+
+        private static float NormalizeStorageCondition(float storageCondition)
+        {
+            if (storageCondition <= 0f)
+            {
+                return 1f;
+            }
+
+            return Math.Max(0.55f, Math.Min(1f, storageCondition));
         }
 
         private float ResolveOptionalInputBoostMultiplier()

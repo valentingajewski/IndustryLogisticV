@@ -84,7 +84,7 @@ namespace LSOL.UI
                     iconLabel: "STO"),
                 TabletUiHelpers.CreateActionItem(
                     "District Influence",
-                    "Compare district influence and current reputation.",
+                    "Compare district influence, charter status, competition pressure, and recurring territory burden.",
                     () => context.Push(TabletAppIds.Analytics, "districts"),
                     iconLabel: "DST"),
                 TabletUiHelpers.CreateActionItem(
@@ -313,11 +313,7 @@ namespace LSOL.UI
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     selectedSummary.Name,
-                    string.Format(
-                        "{0} | {1} full | {2}",
-                        ModFormatting.FormatRatio(selectedSummary.StorageTons, selectedSummary.TotalCapacityTons, "t"),
-                        ModFormatting.FormatPercent(selectedSummary.FillRatio * 100f),
-                        selectedSummary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry")));
+                    BuildStorageStatusDetail(selectedSummary)));
             }
             else
             {
@@ -348,7 +344,7 @@ namespace LSOL.UI
                     TabletChartRenderer.DrawHistoryPanel(
                         panel,
                         string.Format("{0} Storage Fill", summary.Name),
-                        string.Format("Current {0} | {1} | Window {2}", ModFormatting.FormatPercent(summary.FillRatio * 100f), summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
+                        BuildStorageTrendSubtitle(context, summary),
                         context.StateStore.GetSiteStorageHistory(summary.Industry, context.StateStore.SelectedGraphTimeframe),
                         GetStorageAccent(214),
                         value => ModFormatting.FormatPercent(value));
@@ -368,7 +364,22 @@ namespace LSOL.UI
                 var district = districts[i];
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     district.DistrictName,
-                    string.Format("{0} influence | {1} | {2} depots", ModFormatting.FormatPercent(district.InfluencePercent), district.ReputationLabel, district.ControlledDepots)));
+                    string.Format(
+                        "{0} influence | {1} | Charter {2}{3}{4}{5} | Comp {6} / Opp {7}",
+                        ModFormatting.FormatPercent(district.InfluencePercent),
+                        district.ReputationLabel,
+                        district.LicenseStatus,
+                        district.LicenseTargetTons > 0.01f
+                            ? string.Format(" {0:0}/{1:0} t", district.LicenseActivityTons, district.LicenseTargetTons)
+                            : string.Empty,
+                        district.WeeklyOperationsCost > 0.01f
+                            ? string.Format(" | Ops {0}/wk", ModFormatting.FormatMoney(district.WeeklyOperationsCost))
+                            : " | Ops clear",
+                        district.CorridorRiskCount > 0 || district.ServiceRiskCount > 0
+                            ? string.Format(" | Risk C{0}/S{1}", district.CorridorRiskCount, district.ServiceRiskCount)
+                            : string.Empty,
+                        ModFormatting.FormatPercent(district.CompetitivePressurePercent),
+                        ModFormatting.FormatPercent(district.CompetitiveOpportunityPercent))));
             }
 
             if (items.Count == 0)
@@ -381,7 +392,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "District Influence",
-                Subtitle = "Compare influence across tracked districts",
+                Subtitle = "Compare influence across tracked districts and the cost of holding them",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.90f,
                 MaxVisibleItems = 6,
@@ -410,7 +421,21 @@ namespace LSOL.UI
                     TabletChartRenderer.DrawComparisonBarsPanel(
                         panel,
                         "District Influence Comparison",
-                        string.Format("{0} | {1} rep | {2} controlled sites", selectedDistrict.DistrictName, selectedDistrict.ReputationLabel, selectedDistrict.ControlledSites),
+                        string.Format(
+                            "{0} | {1} rep | Charter {2} | {3} controlled sites | {4}{5} | Comp {6} / Opp {7} | Wins {8}",
+                            selectedDistrict.DistrictName,
+                            selectedDistrict.ReputationLabel,
+                            selectedDistrict.LicenseStatus,
+                            selectedDistrict.ControlledSites,
+                            selectedDistrict.WeeklyOperationsCost > 0.01f
+                                ? string.Format("Ops {0}/wk", ModFormatting.FormatMoney(selectedDistrict.WeeklyOperationsCost))
+                                : "Ops clear",
+                            selectedDistrict.CorridorRiskCount > 0 || selectedDistrict.ServiceRiskCount > 0
+                                ? string.Format(" | Risk C{0}/S{1}", selectedDistrict.CorridorRiskCount, selectedDistrict.ServiceRiskCount)
+                                : string.Empty,
+                            ModFormatting.FormatPercent(selectedDistrict.CompetitivePressurePercent),
+                            ModFormatting.FormatPercent(selectedDistrict.CompetitiveOpportunityPercent),
+                            selectedDistrict.CompetitiveWinCount),
                         entries,
                         selectedIndex);
                 },
@@ -553,11 +578,14 @@ namespace LSOL.UI
             TabletChartRenderer.DrawHistoryPanel(
                 panel,
                 string.Format("{0} Price Trend", selectedPrice.Commodity),
-                string.Format(
-                    "{0} cargo | Window {1} | Current {2}",
-                    selectedPrice.CargoType.ToDisplayName(),
-                    context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                    ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice)),
+                BuildCommodityTrendSubtitle(
+                    context,
+                    selectedPrice.Commodity,
+                    string.Format(
+                        "{0} cargo | Window {1} | Current {2}",
+                        selectedPrice.CargoType.ToDisplayName(),
+                        context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
+                        ModFormatting.FormatPricePerTon(selectedPrice.UnitPrice))),
                 context.StateStore.GetCommodityPriceHistory(selectedPrice.Commodity, context.StateStore.SelectedGraphTimeframe),
                 GetCommodityAccent(214),
                 value => ModFormatting.FormatPricePerTon(value));
@@ -599,13 +627,60 @@ namespace LSOL.UI
             TabletChartRenderer.DrawHistoryPanel(
                 panel,
                 string.Format("{0} Trend", commodity),
-                string.Format(
-                    "Window {0} | Current {1} | Press Enter to browse resources",
-                    context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
-                    currentPrice != null ? ModFormatting.FormatPricePerTon(currentPrice.UnitPrice) : "price board"),
+                BuildCommodityTrendSubtitle(
+                    context,
+                    commodity,
+                    string.Format(
+                        "Window {0} | Current {1} | Press Enter to browse resources",
+                        context.StateStore.SelectedGraphTimeframe.ToDisplayLabel(),
+                        currentPrice != null ? ModFormatting.FormatPricePerTon(currentPrice.UnitPrice) : "price board")),
                 context.StateStore.GetCommodityPriceHistory(commodity, context.StateStore.SelectedGraphTimeframe),
                 GetCommodityAccent(214),
                 value => ModFormatting.FormatPricePerTon(value));
+        }
+
+        private static string BuildCommodityTrendSubtitle(TabletShellContext context, string commodity, string baseSubtitle)
+        {
+            var shockSummary = context != null && context.StateStore != null
+                ? context.StateStore.GetCommodityShockSummary(commodity)
+                : string.Empty;
+            return string.IsNullOrWhiteSpace(shockSummary)
+                ? baseSubtitle
+                : string.Format("{0} | {1}", baseSubtitle, shockSummary);
+        }
+
+        private static string BuildStorageStatusDetail(TabletLocationSummary summary)
+        {
+            if (summary == null || summary.Industry == null)
+            {
+                return "No storage data.";
+            }
+
+            var baseDetail = string.Format(
+                "{0} | {1} full | {2}",
+                ModFormatting.FormatRatio(summary.StorageTons, summary.TotalCapacityTons, "t"),
+                ModFormatting.FormatPercent(summary.FillRatio * 100f),
+                summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry");
+            return summary.Industry.SiteRole == SiteRole.Warehouse
+                ? string.Format("{0} | Condition {1:0}%", baseDetail, Math.Max(0f, Math.Min(100f, summary.Industry.StorageCondition * 100f)))
+                : baseDetail;
+        }
+
+        private static string BuildStorageTrendSubtitle(TabletShellContext context, TabletLocationSummary summary)
+        {
+            if (summary == null || summary.Industry == null)
+            {
+                return string.Format("Window {0}", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel());
+            }
+
+            var baseSubtitle = string.Format(
+                "Current {0} | {1} | Window {2}",
+                ModFormatting.FormatPercent(summary.FillRatio * 100f),
+                summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry",
+                context.StateStore.SelectedGraphTimeframe.ToDisplayLabel());
+            return summary.Industry.SiteRole == SiteRole.Warehouse
+                ? string.Format("{0} | Condition {1:0}%", baseSubtitle, Math.Max(0f, Math.Min(100f, summary.Industry.StorageCondition * 100f)))
+                : baseSubtitle;
         }
 
         private static void DrawUtilizationPreview(SimpleMenuTabletPanelContext panel, TabletShellContext context, TabletStateSnapshot snapshot)

@@ -20,41 +20,58 @@ namespace LSOL.Systems
         private const float VehicleMarkerHeight = 1.6f;
         private const float ObjectiveInteractDistance = 8f;
 
+        private readonly IndustryManager _industryManager;
         private readonly TerritoryManager _territoryManager;
         private readonly FleetManager _fleetManager;
+        private readonly GlobalMarketManager _globalMarket;
+        private readonly Func<IReadOnlyList<OwnedCommercialVehiclePersistenceEntry>> _getCommercialVehicles;
         private readonly Action<float> _awardProfit;
         private readonly Action<string, int> _showStatus;
         private readonly Action _markUiDirty;
         private readonly Func<int> _getCurrentInGameMinute;
         private readonly Action _onMissionCompleted;
         private readonly Dictionary<string, SpecialMissionDefinition> _definitionsById;
+        private readonly Dictionary<string, SpecialMissionDefinition> _generatedDefinitionsById;
         private readonly Dictionary<string, int> _completionCounts;
         private readonly Dictionary<string, int> _lastCompletedInGameMinuteByMissionId;
         private readonly HashSet<string> _announcedAvailableMissionIds;
+        private readonly List<GeneratedDistrictCrisis> _activeDistrictCrises;
         private ActiveSpecialMissionRuntime _activeMission;
         private int _lastAvailabilityScanInGameMinute;
+        private int _generatedBoardWeekIndex;
+        private int _generatedBoardDayIndex;
 
         public SpecialMissionManager(
             string configPath,
+            IndustryManager industryManager,
             TerritoryManager territoryManager,
             FleetManager fleetManager,
+            GlobalMarketManager globalMarket,
+            Func<IReadOnlyList<OwnedCommercialVehiclePersistenceEntry>> getCommercialVehicles,
             Action<float> awardProfit,
             Action<string, int> showStatus,
             Action markUiDirty,
             Func<int> getCurrentInGameMinute,
             Action onMissionCompleted = null)
         {
+            _industryManager = industryManager;
             _territoryManager = territoryManager;
             _fleetManager = fleetManager;
+            _globalMarket = globalMarket;
+            _getCommercialVehicles = getCommercialVehicles;
             _awardProfit = awardProfit;
             _showStatus = showStatus;
             _markUiDirty = markUiDirty;
             _getCurrentInGameMinute = getCurrentInGameMinute;
             _onMissionCompleted = onMissionCompleted;
+            _generatedDefinitionsById = new Dictionary<string, SpecialMissionDefinition>(StringComparer.OrdinalIgnoreCase);
             _completionCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _lastCompletedInGameMinuteByMissionId = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _announcedAvailableMissionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _activeDistrictCrises = new List<GeneratedDistrictCrisis>();
             _lastAvailabilityScanInGameMinute = -1;
+            _generatedBoardWeekIndex = -1;
+            _generatedBoardDayIndex = -1;
 
             Catalog = SpecialMissionCatalog.Load(configPath);
             _definitionsById = Catalog.Definitions
@@ -67,7 +84,13 @@ namespace LSOL.Systems
 
         public IEnumerable<SpecialMissionDefinition> Definitions
         {
-            get { return _definitionsById.Values.OrderBy(definition => definition.Category).ThenBy(definition => definition.Name); }
+            get
+            {
+                EnsureGeneratedBoardUpToDate();
+                return GetAllDefinitions()
+                    .OrderBy(definition => definition != null ? definition.Category : string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .ThenBy(definition => definition != null ? definition.Name : string.Empty, StringComparer.OrdinalIgnoreCase);
+            }
         }
 
         public bool HasActiveMission
@@ -97,7 +120,13 @@ namespace LSOL.Systems
 
         public bool HasDefinitions
         {
-            get { return _definitionsById.Count > 0; }
+            get
+            {
+                EnsureGeneratedBoardUpToDate();
+                return _definitionsById.Count > 0
+                    || _generatedDefinitionsById.Count > 0
+                    || (_activeMission != null && _activeMission.Definition != null);
+            }
         }
 
         public IReadOnlyDictionary<string, int> CompletionCounts
@@ -112,8 +141,22 @@ namespace LSOL.Systems
                 return null;
             }
 
+            EnsureGeneratedBoardUpToDate();
+            if (_activeMission != null
+                && _activeMission.Definition != null
+                && string.Equals(_activeMission.Definition.Id, missionId.Trim(), StringComparison.OrdinalIgnoreCase))
+            {
+                return _activeMission.Definition;
+            }
+
             SpecialMissionDefinition definition;
-            return _definitionsById.TryGetValue(missionId.Trim(), out definition)
+            var key = missionId.Trim();
+            if (_definitionsById.TryGetValue(key, out definition))
+            {
+                return definition;
+            }
+
+            return _generatedDefinitionsById.TryGetValue(key, out definition)
                 ? definition
                 : null;
         }
@@ -164,6 +207,7 @@ namespace LSOL.Systems
 
         public bool CanAcceptMission(string missionId, out string detail)
         {
+            EnsureGeneratedBoardUpToDate();
             var definition = GetDefinition(missionId);
             if (definition == null)
             {
@@ -181,6 +225,12 @@ namespace LSOL.Systems
             if (availabilityDelayRemainingMinutes > 0)
             {
                 detail = BuildAvailabilityDelayDetail(definition, availabilityDelayRemainingMinutes);
+                return false;
+            }
+
+            if (IsMissionAvailabilityExpired(definition))
+            {
+                detail = BuildAvailabilityExpiredDetail(definition);
                 return false;
             }
 
@@ -206,19 +256,34 @@ namespace LSOL.Systems
 
         public IReadOnlyList<SpecialMissionListing> GetMissionListings()
         {
+            EnsureGeneratedBoardUpToDate();
             var listings = new List<SpecialMissionListing>();
-            foreach (var definition in Definitions)
+            var orderedDefinitions = GetAllDefinitions()
+                .OrderBy(definition => definition != null ? definition.Category : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(definition => definition != null ? definition.Name : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            foreach (var definition in orderedDefinitions)
             {
                 var unlocked = IsMissionUnlocked(definition, out var availabilityDetail);
                 var availabilityDelayRemainingMinutes = GetAvailabilityDelayRemainingMinutes(definition);
+                var availabilityWindowRemainingMinutes = GetAvailabilityWindowRemainingMinutes(definition);
                 if (availabilityDelayRemainingMinutes > 0)
                 {
                     unlocked = false;
                     availabilityDetail = BuildAvailabilityDelayDetail(definition, availabilityDelayRemainingMinutes);
                 }
+                else if (IsMissionAvailabilityExpired(definition))
+                {
+                    unlocked = false;
+                    availabilityDetail = BuildAvailabilityExpiredDetail(definition);
+                }
                 else if (unlocked && !MeetsMissionSpecificAvailabilityRequirements(definition, out availabilityDetail))
                 {
                     unlocked = false;
+                }
+                else if (unlocked && definition.HasAvailabilityWindow)
+                {
+                    availabilityDetail = AppendDetail(availabilityDetail, BuildAvailabilityWindowDetail(definition, availabilityWindowRemainingMinutes));
                 }
 
                 var completionCount = GetCompletionCount(definition.Id);
@@ -249,6 +314,17 @@ namespace LSOL.Systems
                     Description = definition.Description,
                     Reward = definition.Reward,
                     Repeatable = definition.Repeatable,
+                    IsGenerated = definition.IsGenerated,
+                    IsTender = definition.IsTender,
+                    ContractFamily = definition.ContractFamily,
+                    Commodity = definition.Commodity,
+                    TargetTons = definition.TargetTons,
+                    SourceIndustryId = definition.SourceIndustryId,
+                    DestinationIndustryId = definition.DestinationIndustryId,
+                    AvailableUntilInGameMinute = definition.AvailableUntilInGameMinute,
+                    CrisisType = definition.CrisisType,
+                    CrisisDistrictName = definition.CrisisDistrictName,
+                    EligibilitySummary = definition.EligibilitySummary,
                     IsUnlocked = unlocked,
                     IsActive = isActive,
                     CanAccept = canAccept,
@@ -365,6 +441,7 @@ namespace LSOL.Systems
 
         public void Update(Ped player, int gameTime)
         {
+            EnsureGeneratedBoardUpToDate();
             RefreshMissionAvailabilityAnnouncements();
             if (_activeMission == null)
             {
@@ -379,9 +456,35 @@ namespace LSOL.Systems
             return _activeMission != null && _activeMission.HandleInteract(player);
         }
 
+        public void NotifyPlayerDelivery(
+            Industry destinationIndustry,
+            string commodity,
+            float deliveredTons,
+            string sourceIndustryId,
+            string sourceDistrictName,
+            bool completedDelivery,
+            bool isCleanDelivery)
+        {
+            EnsureGeneratedBoardUpToDate();
+            if (_activeMission == null)
+            {
+                return;
+            }
+
+            _activeMission.OnCargoDelivered(
+                destinationIndustry,
+                commodity,
+                deliveredTons,
+                sourceIndustryId,
+                sourceDistrictName,
+                completedDelivery,
+                isCleanDelivery);
+        }
+
         public void ResetState(bool clearProgress = true)
         {
             CleanupActiveMission();
+            ClearGeneratedBoard();
             _lastAvailabilityScanInGameMinute = -1;
             if (clearProgress)
             {
@@ -632,6 +735,11 @@ namespace LSOL.Systems
                 return false;
             }
 
+            if (definition.IsGenerated)
+            {
+                return MeetsGeneratedMissionAvailabilityRequirements(definition, out detail);
+            }
+
             return true;
         }
 
@@ -645,7 +753,7 @@ namespace LSOL.Systems
 
             _lastAvailabilityScanInGameMinute = currentInGameMinute;
             var newlyAvailable = new List<string>();
-            foreach (var definition in Definitions)
+            foreach (var definition in GetAllDefinitions())
             {
                 if (definition == null || string.IsNullOrWhiteSpace(definition.Id))
                 {
@@ -718,6 +826,989 @@ namespace LSOL.Systems
             return _getCurrentInGameMinute != null
                 ? Math.Max(0, _getCurrentInGameMinute())
                 : 0;
+        }
+
+        private IEnumerable<SpecialMissionDefinition> GetAllDefinitions()
+        {
+            var yieldedMissionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var definition in _definitionsById.Values)
+            {
+                if (definition == null || string.IsNullOrWhiteSpace(definition.Id) || !yieldedMissionIds.Add(definition.Id))
+                {
+                    continue;
+                }
+
+                yield return definition;
+            }
+
+            foreach (var definition in _generatedDefinitionsById.Values)
+            {
+                if (definition == null || string.IsNullOrWhiteSpace(definition.Id) || !yieldedMissionIds.Add(definition.Id))
+                {
+                    continue;
+                }
+
+                yield return definition;
+            }
+
+            if (_activeMission != null
+                && _activeMission.Definition != null
+                && !string.IsNullOrWhiteSpace(_activeMission.Definition.Id)
+                && yieldedMissionIds.Add(_activeMission.Definition.Id))
+            {
+                yield return _activeMission.Definition;
+            }
+        }
+
+        private void EnsureGeneratedBoardUpToDate()
+        {
+            var currentInGameMinute = GetCurrentInGameMinute();
+            var currentWeekIndex = GetWeekIndex(currentInGameMinute);
+            var currentDayIndex = GetDayIndex(currentInGameMinute);
+            if (_generatedBoardWeekIndex == currentWeekIndex && _generatedBoardDayIndex == currentDayIndex)
+            {
+                return;
+            }
+
+            RegenerateGeneratedBoard(currentInGameMinute, currentWeekIndex, currentDayIndex);
+        }
+
+        private void RegenerateGeneratedBoard(int currentInGameMinute, int currentWeekIndex, int currentDayIndex)
+        {
+            ClearGeneratedBoard();
+            _generatedBoardWeekIndex = currentWeekIndex;
+            _generatedBoardDayIndex = currentDayIndex;
+
+            var routeCandidates = BuildGeneratedRouteCandidates();
+            if (routeCandidates.Count <= 0)
+            {
+                PruneMissionAnnouncements();
+                return;
+            }
+
+            _activeDistrictCrises.AddRange(BuildActiveDistrictCrises(routeCandidates, currentWeekIndex));
+            for (int i = 0; i < _activeDistrictCrises.Count; i++)
+            {
+                ApplyCrisisMarketEffect(_activeDistrictCrises[i]);
+            }
+
+            var usedRouteKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            AddGeneratedCrisisContracts(routeCandidates, currentInGameMinute, currentWeekIndex, usedRouteKeys);
+            AddGeneratedTenderContracts(routeCandidates, currentInGameMinute, currentWeekIndex, usedRouteKeys);
+            AddGeneratedPriorityRuns(routeCandidates, currentInGameMinute, currentDayIndex, usedRouteKeys);
+            PruneMissionAnnouncements();
+        }
+
+        private void ClearGeneratedBoard()
+        {
+            for (int i = 0; i < _activeDistrictCrises.Count; i++)
+            {
+                RemoveCrisisMarketEffect(_activeDistrictCrises[i]);
+            }
+
+            _activeDistrictCrises.Clear();
+            _generatedDefinitionsById.Clear();
+            _generatedBoardWeekIndex = -1;
+            _generatedBoardDayIndex = -1;
+        }
+
+        private List<GeneratedRouteCandidate> BuildGeneratedRouteCandidates()
+        {
+            var routes = new List<GeneratedRouteCandidate>();
+            if (_industryManager == null || _industryManager.Industries == null)
+            {
+                return routes;
+            }
+
+            var sources = _industryManager.Industries
+                .Where(industry => industry != null
+                    && !string.IsNullOrWhiteSpace(industry.Id)
+                    && industry.Outputs != null
+                    && industry.Outputs.Count > 0
+                    && _industryManager.IsIndustryOwnedForGameplay(industry))
+                .OrderBy(industry => industry.DistrictName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(industry => industry.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(industry => industry.Id ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var destinations = _industryManager.Industries
+                .Where(industry => industry != null
+                    && !string.IsNullOrWhiteSpace(industry.Id)
+                    && _industryManager.HasContractorPermitForGameplay(industry))
+                .OrderBy(industry => industry.DistrictName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(industry => industry.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(industry => industry.Id ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            for (int sourceIndex = 0; sourceIndex < sources.Count; sourceIndex++)
+            {
+                var source = sources[sourceIndex];
+                var outputs = source.GetSortedOutputs();
+                for (int outputIndex = 0; outputIndex < outputs.Count; outputIndex++)
+                {
+                    var commodity = outputs[outputIndex];
+                    var sourceStock = source.GetStock(commodity);
+                    if (sourceStock < 4f)
+                    {
+                        continue;
+                    }
+
+                    var cargoType = CommodityCatalog.GetCargoTypeForCommodity(commodity);
+                    for (int destinationIndex = 0; destinationIndex < destinations.Count; destinationIndex++)
+                    {
+                        var destination = destinations[destinationIndex];
+                        if (string.Equals(source.Id, destination.Id, StringComparison.OrdinalIgnoreCase)
+                            || !destination.AcceptsCommodity(commodity)
+                            || !destination.HasInputFreeSpace(commodity)
+                            || !HasRouteAccess(source.DistrictName, destination.DistrictName))
+                        {
+                            continue;
+                        }
+
+                        var availableTons = Math.Min(sourceStock, destination.GetMaxTransferTonsForCommodity(commodity));
+                        if (availableTons < 4f)
+                        {
+                            continue;
+                        }
+
+                        var distance = source.Position.DistanceTo(destination.Position);
+                        var marketMultiplier = _globalMarket != null ? _globalMarket.GetPriceMultiplier(commodity) : 1f;
+                        var unitPrice = _globalMarket != null ? _globalMarket.GetUnitPrice(commodity) : 400f;
+                        var sinkBias = destination.IsStore || destination.IsGasStation || destination.IsConstructionSink
+                            ? 1.2f
+                            : (destination.IsWarehouse ? 0.55f : 0.85f);
+                        var routeScore = (distance / 450f)
+                            + (unitPrice / 900f)
+                            + sinkBias
+                            + GetDistrictPresenceScore(destination.DistrictName)
+                            + (marketMultiplier - 1f);
+                        routes.Add(new GeneratedRouteCandidate
+                        {
+                            Key = BuildRouteKey(source, destination, commodity),
+                            SourceIndustry = source,
+                            DestinationIndustry = destination,
+                            Commodity = commodity,
+                            CargoType = cargoType,
+                            Distance = distance,
+                            AvailableTons = availableTons,
+                            MarketMultiplier = marketMultiplier,
+                            UnitPrice = unitPrice,
+                            Score = routeScore,
+                        });
+                    }
+                }
+            }
+
+            return routes;
+        }
+
+        private List<GeneratedDistrictCrisis> BuildActiveDistrictCrises(IReadOnlyList<GeneratedRouteCandidate> routes, int currentWeekIndex)
+        {
+            var crises = new List<GeneratedDistrictCrisis>();
+            if (routes == null || routes.Count <= 0)
+            {
+                return crises;
+            }
+
+            var districtNames = routes
+                .Where(route => route != null && route.DestinationIndustry != null && !string.IsNullOrWhiteSpace(route.DestinationIndustry.DistrictName))
+                .Select(route => route.DestinationIndustry.DistrictName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(GetDistrictCrisisScore)
+                .ThenBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (districtNames.Count <= 0)
+            {
+                return crises;
+            }
+
+            var crisisCount = Math.Min(2, districtNames.Count);
+            var startIndex = districtNames.Count > 0
+                ? Math.Abs(currentWeekIndex) % districtNames.Count
+                : 0;
+            var weekEndMinute = (currentWeekIndex + 1) * InGameMinutesPerWeek;
+            for (int slot = 0; slot < crisisCount; slot++)
+            {
+                var districtName = districtNames[(startIndex + slot) % districtNames.Count];
+                var crisisType = ResolveDistrictCrisisType(districtName, currentWeekIndex, slot);
+                var preferredCommodity = ResolveCrisisCommodity(routes, districtName, crisisType);
+                if (string.IsNullOrWhiteSpace(preferredCommodity))
+                {
+                    continue;
+                }
+
+                crises.Add(new GeneratedDistrictCrisis
+                {
+                    Id = string.Format("generated_crisis_w{0}_{1}_{2}", currentWeekIndex, slot, SanitizeIdPart(districtName)),
+                    DistrictName = districtName,
+                    Type = crisisType,
+                    PreferredCommodity = preferredCommodity,
+                    EndsAtInGameMinute = weekEndMinute,
+                    MarketPressureBonus = ResolveCrisisMarketPressureBonus(crisisType),
+                });
+            }
+
+            return crises;
+        }
+
+        private void AddGeneratedCrisisContracts(
+            IReadOnlyList<GeneratedRouteCandidate> routes,
+            int currentInGameMinute,
+            int currentWeekIndex,
+            ISet<string> usedRouteKeys)
+        {
+            for (int crisisIndex = 0; crisisIndex < _activeDistrictCrises.Count; crisisIndex++)
+            {
+                var crisis = _activeDistrictCrises[crisisIndex];
+                var route = routes
+                    .Where(candidate => candidate != null
+                        && !usedRouteKeys.Contains(candidate.Key)
+                        && string.Equals(candidate.DestinationIndustry.DistrictName, crisis.DistrictName, StringComparison.OrdinalIgnoreCase)
+                        && string.Equals(candidate.Commodity, crisis.PreferredCommodity, StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(candidate => candidate.Score + candidate.MarketMultiplier)
+                    .ThenByDescending(candidate => candidate.DestinationIndustry.IsStore || candidate.DestinationIndustry.IsGasStation || candidate.DestinationIndustry.IsConstructionSink)
+                    .ThenBy(candidate => candidate.DestinationIndustry.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (route == null)
+                {
+                    continue;
+                }
+
+                var minimumCapacityTons = ResolveContractMinimumCapacity(route, GeneratedContractFamily.CrisisRelief);
+                var targetTons = ResolveContractTargetTons(route, minimumCapacityTons);
+                if (targetTons <= 0.001f)
+                {
+                    continue;
+                }
+
+                var expiresAt = Math.Min(crisis.EndsAtInGameMinute, currentInGameMinute + (2 * InGameMinutesPerDay));
+                var eligibilitySummary = string.Format(
+                    "Requires operational presence in {0} and a {1}t {2} rig.",
+                    route.DestinationIndustry.DistrictName,
+                    ModFormatting.FormatTons(minimumCapacityTons),
+                    route.CargoType);
+                var definition = BuildGeneratedCargoDefinition(
+                    BuildGeneratedMissionId("crisis", currentWeekIndex, crisisIndex, route),
+                    GeneratedContractFamily.CrisisRelief,
+                    route,
+                    targetTons,
+                    minimumCapacityTons,
+                    currentInGameMinute,
+                    expiresAt,
+                    BuildGeneratedMissionName(GeneratedContractFamily.CrisisRelief, route, crisis),
+                    string.Format(
+                        "District crisis in {0}: move {1} {2} from {3} to {4} before the board closes.",
+                        crisis.DistrictName,
+                        ModFormatting.FormatTons(targetTons),
+                        route.Commodity,
+                        route.SourceIndustry.Name,
+                        route.DestinationIndustry.Name),
+                    string.Format(
+                        "{0} demand spike | {1} route bonus | Closes in {2}",
+                        BuildDistrictCrisisHeadline(crisis),
+                        route.DestinationIndustry.DistrictName,
+                        FormatMissionDuration(Math.Max(0, expiresAt - currentInGameMinute))),
+                    CalculateGeneratedReward(GeneratedContractFamily.CrisisRelief, route, targetTons),
+                    eligibilitySummary,
+                    crisis);
+                AddGeneratedDefinition(definition, usedRouteKeys, route.Key);
+            }
+        }
+
+        private void AddGeneratedTenderContracts(
+            IReadOnlyList<GeneratedRouteCandidate> routes,
+            int currentInGameMinute,
+            int currentWeekIndex,
+            ISet<string> usedRouteKeys)
+        {
+            var weekEndMinute = (currentWeekIndex + 1) * InGameMinutesPerWeek;
+            var tenderRoutes = routes
+                .Where(candidate => candidate != null
+                    && !usedRouteKeys.Contains(candidate.Key)
+                    && GetDistrictTenderStanding(candidate.DestinationIndustry.DistrictName) >= 1.15f)
+                .OrderByDescending(candidate => GetTenderRouteScore(candidate))
+                .ThenBy(candidate => candidate.DestinationIndustry.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToList();
+            for (int tenderIndex = 0; tenderIndex < tenderRoutes.Count; tenderIndex++)
+            {
+                var route = tenderRoutes[tenderIndex];
+                var minimumCapacityTons = ResolveContractMinimumCapacity(route, GeneratedContractFamily.WeeklyTender);
+                var targetTons = ResolveContractTargetTons(route, minimumCapacityTons);
+                if (targetTons <= 0.001f)
+                {
+                    continue;
+                }
+
+                var eligibilitySummary = string.Format(
+                    "Requires premium standing in {0} and a {1}t {2} rig.",
+                    route.DestinationIndustry.DistrictName,
+                    ModFormatting.FormatTons(minimumCapacityTons),
+                    route.CargoType);
+                var definition = BuildGeneratedCargoDefinition(
+                    BuildGeneratedMissionId("tender", currentWeekIndex, tenderIndex, route),
+                    GeneratedContractFamily.WeeklyTender,
+                    route,
+                    targetTons,
+                    minimumCapacityTons,
+                    currentInGameMinute,
+                    weekEndMinute,
+                    BuildGeneratedMissionName(GeneratedContractFamily.WeeklyTender, route, null),
+                    string.Format(
+                        "Weekly tender: reserve {0} {1} from {2} for a scheduled slot at {3}.",
+                        ModFormatting.FormatTons(targetTons),
+                        route.Commodity,
+                        route.SourceIndustry.Name,
+                        route.DestinationIndustry.Name),
+                    string.Format(
+                        "Scheduled district tender | {0} to {1} | Closes this week in {2}",
+                        route.SourceIndustry.DistrictName,
+                        route.DestinationIndustry.DistrictName,
+                        FormatMissionDuration(Math.Max(0, weekEndMinute - currentInGameMinute))),
+                    CalculateGeneratedReward(GeneratedContractFamily.WeeklyTender, route, targetTons),
+                    eligibilitySummary,
+                    null);
+                AddGeneratedDefinition(definition, usedRouteKeys, route.Key);
+            }
+        }
+
+        private void AddGeneratedPriorityRuns(
+            IReadOnlyList<GeneratedRouteCandidate> routes,
+            int currentInGameMinute,
+            int currentDayIndex,
+            ISet<string> usedRouteKeys)
+        {
+            var linehaulRoutes = routes
+                .Where(candidate => candidate != null
+                    && !usedRouteKeys.Contains(candidate.Key)
+                    && !string.Equals(candidate.SourceIndustry.DistrictName, candidate.DestinationIndustry.DistrictName, StringComparison.OrdinalIgnoreCase)
+                    && candidate.Distance >= 1200f)
+                .OrderByDescending(candidate => GetPriorityRouteScore(candidate))
+                .ThenBy(candidate => candidate.DestinationIndustry.Name ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .Take(2)
+                .ToList();
+            for (int runIndex = 0; runIndex < linehaulRoutes.Count; runIndex++)
+            {
+                var route = linehaulRoutes[runIndex];
+                var minimumCapacityTons = ResolveContractMinimumCapacity(route, GeneratedContractFamily.PriorityLinehaul);
+                var targetTons = ResolveContractTargetTons(route, minimumCapacityTons);
+                if (targetTons <= 0.001f)
+                {
+                    continue;
+                }
+
+                var expiresAt = currentInGameMinute + InGameMinutesPerDay;
+                var eligibilitySummary = string.Format(
+                    "Requires corridor coverage and a {0}t {1} rig for a priority haul.",
+                    ModFormatting.FormatTons(minimumCapacityTons),
+                    route.CargoType);
+                var definition = BuildGeneratedCargoDefinition(
+                    BuildGeneratedMissionId("priority", currentDayIndex, runIndex, route),
+                    GeneratedContractFamily.PriorityLinehaul,
+                    route,
+                    targetTons,
+                    minimumCapacityTons,
+                    currentInGameMinute,
+                    expiresAt,
+                    BuildGeneratedMissionName(GeneratedContractFamily.PriorityLinehaul, route, null),
+                    string.Format(
+                        "Priority line-haul: move {0} {1} from {2} to {3} on a live corridor window.",
+                        ModFormatting.FormatTons(targetTons),
+                        route.Commodity,
+                        route.SourceIndustry.Name,
+                        route.DestinationIndustry.Name),
+                    string.Format(
+                        "Cross-district priority run | {0:0} m lane | Closes in {1}",
+                        route.Distance,
+                        FormatMissionDuration(Math.Max(0, expiresAt - currentInGameMinute))),
+                    CalculateGeneratedReward(GeneratedContractFamily.PriorityLinehaul, route, targetTons),
+                    eligibilitySummary,
+                    null);
+                AddGeneratedDefinition(definition, usedRouteKeys, route.Key);
+            }
+        }
+
+        private void AddGeneratedDefinition(SpecialMissionDefinition definition, ISet<string> usedRouteKeys, string routeKey)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.Id))
+            {
+                return;
+            }
+
+            _generatedDefinitionsById[definition.Id] = definition;
+            if (!string.IsNullOrWhiteSpace(routeKey))
+            {
+                usedRouteKeys.Add(routeKey);
+            }
+        }
+
+        private SpecialMissionDefinition BuildGeneratedCargoDefinition(
+            string missionId,
+            GeneratedContractFamily family,
+            GeneratedRouteCandidate route,
+            float targetTons,
+            float minimumCapacityTons,
+            int postedAtInGameMinute,
+            int availableUntilInGameMinute,
+            string name,
+            string summary,
+            string description,
+            float reward,
+            string eligibilitySummary,
+            GeneratedDistrictCrisis crisis)
+        {
+            return new SpecialMissionDefinition
+            {
+                Id = missionId,
+                Type = SpecialMissionType.DynamicCargoDelivery,
+                Category = family == GeneratedContractFamily.WeeklyTender
+                    ? "Weekly Tender"
+                    : (family == GeneratedContractFamily.CrisisRelief ? "District Crisis" : "Priority Run"),
+                Name = name,
+                Summary = summary,
+                Description = description,
+                Reward = reward,
+                Repeatable = false,
+                IsGenerated = true,
+                ContractFamily = family,
+                IsTender = family == GeneratedContractFamily.WeeklyTender,
+                PostedAtInGameMinute = postedAtInGameMinute,
+                AvailableUntilInGameMinute = availableUntilInGameMinute,
+                SourceIndustryId = route != null && route.SourceIndustry != null ? route.SourceIndustry.Id : string.Empty,
+                DestinationIndustryId = route != null && route.DestinationIndustry != null ? route.DestinationIndustry.Id : string.Empty,
+                Commodity = route != null ? route.Commodity : string.Empty,
+                TargetTons = targetTons,
+                RequiredCargoType = route != null ? route.CargoType : VehicleCargoType.Aggregates,
+                MinimumVehicleCapacityTons = minimumCapacityTons,
+                CrisisEventId = crisis != null ? crisis.Id : string.Empty,
+                CrisisType = crisis != null ? crisis.Type : DistrictCrisisType.None,
+                CrisisDistrictName = crisis != null ? crisis.DistrictName : string.Empty,
+                EligibilitySummary = eligibilitySummary,
+            };
+        }
+
+        private bool MeetsGeneratedMissionAvailabilityRequirements(SpecialMissionDefinition definition, out string detail)
+        {
+            detail = string.Empty;
+            if (definition == null)
+            {
+                detail = "Mission definition unavailable.";
+                return false;
+            }
+
+            var source = FindIndustryById(definition.SourceIndustryId);
+            var destination = FindIndustryById(definition.DestinationIndustryId);
+            if (source == null || destination == null)
+            {
+                detail = "Contract route no longer resolves to a valid source or destination.";
+                return false;
+            }
+
+            if (!_industryManager.IsIndustryOwnedForGameplay(source))
+            {
+                detail = string.Format("Requires production access to {0} before accepting this route.", source.Name);
+                return false;
+            }
+
+            if (!_industryManager.HasContractorPermitForGameplay(destination))
+            {
+                detail = string.Format("Requires the contractor permit for {0}.", destination.Name);
+                return false;
+            }
+
+            if (!HasRouteAccess(source.DistrictName, destination.DistrictName))
+            {
+                detail = string.Format("Requires an active corridor between {0} and {1}.", source.DistrictName, destination.DistrictName);
+                return false;
+            }
+
+            if (definition.ContractFamily == GeneratedContractFamily.CrisisRelief && !HasDistrictOperationalPresence(destination.DistrictName))
+            {
+                detail = string.Format("Requires operational presence in {0} before you can answer this district crisis.", destination.DistrictName);
+                return false;
+            }
+
+            if (definition.ContractFamily == GeneratedContractFamily.WeeklyTender && GetDistrictTenderStanding(destination.DistrictName) < 1.15f)
+            {
+                detail = string.Format("Requires stronger district standing in {0} to bid on this weekly tender.", destination.DistrictName);
+                return false;
+            }
+
+            if (!HasOwnedFleetCapability(definition.RequiredCargoType, definition.MinimumVehicleCapacityTons, definition.Commodity))
+            {
+                detail = string.Format(
+                    "Requires a company rig that can carry {0} with at least {1} capacity.",
+                    definition.RequiredCargoType,
+                    ModFormatting.FormatTons(definition.MinimumVehicleCapacityTons));
+                return false;
+            }
+
+            detail = string.IsNullOrWhiteSpace(definition.EligibilitySummary)
+                ? "Available now."
+                : definition.EligibilitySummary;
+            return true;
+        }
+
+        private bool HasOwnedFleetCapability(VehicleCargoType cargoType, float minimumCapacityTons, string commodity)
+        {
+            if (_getCommercialVehicles == null)
+            {
+                return false;
+            }
+
+            var vehicles = _getCommercialVehicles();
+            if (vehicles == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < vehicles.Count; i++)
+            {
+                var vehicle = vehicles[i];
+                if (vehicle == null || vehicle.CapacityTons + 0.05f < minimumCapacityTons)
+                {
+                    continue;
+                }
+
+                if (vehicle.CargoType != cargoType)
+                {
+                    continue;
+                }
+
+                var definition = ResolveCommercialVehicleDefinition(vehicle);
+                if (_fleetManager != null && definition != null && !_fleetManager.CanDefinitionCarryCommodity(definition, commodity))
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private VehicleDefinition ResolveCommercialVehicleDefinition(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null || _fleetManager == null)
+            {
+                return null;
+            }
+
+            if (vehicle.HasSeparateCargoVehicle && !string.IsNullOrWhiteSpace(vehicle.CargoModelName))
+            {
+                var cargoDefinition = _fleetManager.FindDefinitionByModelName(vehicle.CargoModelName);
+                if (cargoDefinition != null)
+                {
+                    return cargoDefinition;
+                }
+            }
+
+            return !string.IsNullOrWhiteSpace(vehicle.PoweredModelName)
+                ? _fleetManager.FindDefinitionByModelName(vehicle.PoweredModelName)
+                : null;
+        }
+
+        private Industry FindIndustryById(string industryId)
+        {
+            if (_industryManager == null || string.IsNullOrWhiteSpace(industryId))
+            {
+                return null;
+            }
+
+            return _industryManager.Industries.FirstOrDefault(industry => industry != null && string.Equals(industry.Id, industryId.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        private bool HasDistrictOperationalPresence(string districtName)
+        {
+            var state = _territoryManager != null ? _territoryManager.GetDistrictState(districtName) : null;
+            if (state == null)
+            {
+                return false;
+            }
+
+            return state.LicenseStatus == DistrictLicenseStatus.Active
+                || state.ControlledSites > 0
+                || state.ControlledDepots > 0
+                || state.FranchiseSites > 0
+                || state.InfluenceRatio >= 0.35f
+                || state.RouteRights > 0;
+        }
+
+        private float GetDistrictTenderStanding(string districtName)
+        {
+            var state = _territoryManager != null ? _territoryManager.GetDistrictState(districtName) : null;
+            if (state == null)
+            {
+                return 0f;
+            }
+
+            return GetDistrictPresenceScore(districtName)
+                + (state.LicenseStatus == DistrictLicenseStatus.Active ? 0.45f : 0f)
+                + (state.ReputationScore / 100f);
+        }
+
+        private float GetDistrictPresenceScore(string districtName)
+        {
+            var state = _territoryManager != null ? _territoryManager.GetDistrictState(districtName) : null;
+            if (state == null)
+            {
+                return 0f;
+            }
+
+            return state.InfluenceRatio
+                + (state.ControlledSites * 0.1f)
+                + (state.ControlledDepots * 0.2f)
+                + (state.RouteRights * 0.08f)
+                + (state.LicenseStatus == DistrictLicenseStatus.Active ? 0.35f : 0f);
+        }
+
+        private float GetDistrictCrisisScore(string districtName)
+        {
+            var state = _territoryManager != null ? _territoryManager.GetDistrictState(districtName) : null;
+            if (state == null)
+            {
+                return 0f;
+            }
+
+            return state.SiteCount
+                + state.OperationalSites
+                + (state.ReputationScore * 0.1f)
+                + (state.LicenseStatus == DistrictLicenseStatus.Active ? 4f : 0f)
+                + (state.ControlledSites * 1.5f);
+        }
+
+        private bool HasRouteAccess(string sourceDistrictName, string destinationDistrictName)
+        {
+            if (string.Equals(sourceDistrictName, destinationDistrictName, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return _territoryManager == null || _territoryManager.HasActiveCorridorBetween(sourceDistrictName, destinationDistrictName);
+        }
+
+        private static string BuildRouteKey(Industry source, Industry destination, string commodity)
+        {
+            return string.Format(
+                "{0}|{1}|{2}",
+                source != null ? source.Id : string.Empty,
+                destination != null ? destination.Id : string.Empty,
+                commodity ?? string.Empty);
+        }
+
+        private static string BuildGeneratedMissionId(string prefix, int periodIndex, int slotIndex, GeneratedRouteCandidate route)
+        {
+            return string.Format(
+                "generated_{0}_{1}_{2}_{3}_{4}_{5}",
+                prefix,
+                periodIndex,
+                slotIndex,
+                SanitizeIdPart(route != null && route.SourceIndustry != null ? route.SourceIndustry.Id : string.Empty),
+                SanitizeIdPart(route != null && route.DestinationIndustry != null ? route.DestinationIndustry.Id : string.Empty),
+                SanitizeIdPart(route != null ? route.Commodity : string.Empty));
+        }
+
+        private static string SanitizeIdPart(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "none";
+            }
+
+            var chars = value.Trim().ToCharArray();
+            for (int i = 0; i < chars.Length; i++)
+            {
+                if (!char.IsLetterOrDigit(chars[i]))
+                {
+                    chars[i] = '_';
+                }
+            }
+
+            return new string(chars);
+        }
+
+        private static DistrictCrisisType ResolveDistrictCrisisType(string districtName, int currentWeekIndex, int slot)
+        {
+            var crisisTypes = new[]
+            {
+                DistrictCrisisType.FuelShortage,
+                DistrictCrisisType.ConstructionSurge,
+                DistrictCrisisType.SupplyDisruption,
+                DistrictCrisisType.EmergencyRestock,
+            };
+            var index = Math.Abs(ComputeStableHash(districtName) + currentWeekIndex + slot) % crisisTypes.Length;
+            return crisisTypes[index];
+        }
+
+        private string ResolveCrisisCommodity(IReadOnlyList<GeneratedRouteCandidate> routes, string districtName, DistrictCrisisType crisisType)
+        {
+            var preferredCommodities = GetPreferredCrisisCommodities(crisisType);
+            for (int commodityIndex = 0; commodityIndex < preferredCommodities.Length; commodityIndex++)
+            {
+                var commodity = preferredCommodities[commodityIndex];
+                var hasRoute = routes.Any(route => route != null
+                    && string.Equals(route.DestinationIndustry.DistrictName, districtName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(route.Commodity, commodity, StringComparison.OrdinalIgnoreCase));
+                if (hasRoute)
+                {
+                    return commodity;
+                }
+            }
+
+            var fallback = routes.FirstOrDefault(route => route != null && string.Equals(route.DestinationIndustry.DistrictName, districtName, StringComparison.OrdinalIgnoreCase));
+            return fallback != null ? fallback.Commodity : string.Empty;
+        }
+
+        private static string[] GetPreferredCrisisCommodities(DistrictCrisisType crisisType)
+        {
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return new[] { "Fuel", "Oil", "Chemicals" };
+                case DistrictCrisisType.ConstructionSurge:
+                    return new[] { "Concrete", "Steel", "Bricks", "Beam", "Lumber" };
+                case DistrictCrisisType.SupplyDisruption:
+                    return new[] { "MechanicalParts", "Electronic", "Chemicals", "ProcessedFood" };
+                case DistrictCrisisType.EmergencyRestock:
+                    return new[] { "ProcessedFood", "Medicine", "Fuel", "Meat", "Water" };
+                default:
+                    return new[] { "Fuel", "ProcessedFood", "Concrete" };
+            }
+        }
+
+        private static float ResolveCrisisMarketPressureBonus(DistrictCrisisType crisisType)
+        {
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return 0.35f;
+                case DistrictCrisisType.ConstructionSurge:
+                    return 0.22f;
+                case DistrictCrisisType.SupplyDisruption:
+                    return 0.18f;
+                case DistrictCrisisType.EmergencyRestock:
+                    return 0.28f;
+                default:
+                    return 0.15f;
+            }
+        }
+
+        private void ApplyCrisisMarketEffect(GeneratedDistrictCrisis crisis)
+        {
+            if (_globalMarket == null || crisis == null || string.IsNullOrWhiteSpace(crisis.Id) || string.IsNullOrWhiteSpace(crisis.PreferredCommodity))
+            {
+                return;
+            }
+
+            _globalMarket.SetTemporaryDemandShock(crisis.Id, crisis.PreferredCommodity, crisis.MarketPressureBonus);
+        }
+
+        private void RemoveCrisisMarketEffect(GeneratedDistrictCrisis crisis)
+        {
+            if (_globalMarket == null || crisis == null || string.IsNullOrWhiteSpace(crisis.Id))
+            {
+                return;
+            }
+
+            _globalMarket.ClearTemporaryDemandShock(crisis.Id);
+        }
+
+        private static string BuildDistrictCrisisHeadline(GeneratedDistrictCrisis crisis)
+        {
+            if (crisis == null)
+            {
+                return "District demand spike";
+            }
+
+            switch (crisis.Type)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return string.Format("{0} fuel shortage", crisis.DistrictName);
+                case DistrictCrisisType.ConstructionSurge:
+                    return string.Format("{0} construction surge", crisis.DistrictName);
+                case DistrictCrisisType.SupplyDisruption:
+                    return string.Format("{0} supply disruption", crisis.DistrictName);
+                case DistrictCrisisType.EmergencyRestock:
+                    return string.Format("{0} emergency restock", crisis.DistrictName);
+                default:
+                    return string.Format("{0} demand spike", crisis.DistrictName);
+            }
+        }
+
+        private static string BuildGeneratedMissionName(GeneratedContractFamily family, GeneratedRouteCandidate route, GeneratedDistrictCrisis crisis)
+        {
+            if (route == null)
+            {
+                return "Generated Contract";
+            }
+
+            switch (family)
+            {
+                case GeneratedContractFamily.CrisisRelief:
+                    return string.Format("Crisis Relief: {0} to {1}", route.Commodity, route.DestinationIndustry.Name);
+                case GeneratedContractFamily.WeeklyTender:
+                    return string.Format("Weekly Tender: {0} slot", route.DestinationIndustry.DistrictName);
+                case GeneratedContractFamily.PriorityLinehaul:
+                    return string.Format("Priority Run: {0} line-haul", route.Commodity);
+                default:
+                    return string.Format("Contract: {0}", route.Commodity);
+            }
+        }
+
+        private static float ResolveContractMinimumCapacity(GeneratedRouteCandidate route, GeneratedContractFamily family)
+        {
+            if (route == null)
+            {
+                return 0f;
+            }
+
+            var baseline = family == GeneratedContractFamily.CrisisRelief
+                ? 8f
+                : (family == GeneratedContractFamily.WeeklyTender ? 10f : 12f);
+            if (route.CargoType == VehicleCargoType.Liquid || route.CargoType == VehicleCargoType.Vehicles)
+            {
+                baseline += 2f;
+            }
+
+            return Math.Min(Math.Max(4f, baseline), Math.Max(4f, route.AvailableTons));
+        }
+
+        private static float ResolveContractTargetTons(GeneratedRouteCandidate route, float minimumCapacityTons)
+        {
+            if (route == null)
+            {
+                return 0f;
+            }
+
+            var target = Math.Min(route.AvailableTons, Math.Max(4f, minimumCapacityTons));
+            return (float)Math.Round(target, 1);
+        }
+
+        private float CalculateGeneratedReward(GeneratedContractFamily family, GeneratedRouteCandidate route, float targetTons)
+        {
+            if (route == null)
+            {
+                return 0f;
+            }
+
+            var cargoValue = Math.Max(400f, route.UnitPrice) * Math.Max(1f, targetTons);
+            float reward;
+            switch (family)
+            {
+                case GeneratedContractFamily.CrisisRelief:
+                    reward = 1200f + (cargoValue * 0.16f) + (route.Distance * 0.18f);
+                    break;
+                case GeneratedContractFamily.WeeklyTender:
+                    reward = 1800f + (cargoValue * 0.21f) + (GetDistrictTenderStanding(route.DestinationIndustry.DistrictName) * 450f);
+                    break;
+                case GeneratedContractFamily.PriorityLinehaul:
+                    reward = 1500f + (cargoValue * 0.18f) + (route.Distance * 0.24f);
+                    break;
+                default:
+                    reward = cargoValue * 0.15f;
+                    break;
+            }
+
+            return (float)(Math.Round(reward / 50f) * 50f);
+        }
+
+        private float GetTenderRouteScore(GeneratedRouteCandidate route)
+        {
+            return route == null
+                ? 0f
+                : route.Score + GetDistrictTenderStanding(route.DestinationIndustry.DistrictName) + (route.UnitPrice / 1200f);
+        }
+
+        private float GetPriorityRouteScore(GeneratedRouteCandidate route)
+        {
+            return route == null
+                ? 0f
+                : route.Score + (route.Distance / 320f) + (route.AvailableTons / 3f);
+        }
+
+        private void PruneMissionAnnouncements()
+        {
+            var validMissionIds = new HashSet<string>(GetAllDefinitions().Where(definition => definition != null && !string.IsNullOrWhiteSpace(definition.Id)).Select(definition => definition.Id), StringComparer.OrdinalIgnoreCase);
+            _announcedAvailableMissionIds.RemoveWhere(missionId => !validMissionIds.Contains(missionId));
+        }
+
+        private int GetAvailabilityWindowRemainingMinutes(SpecialMissionDefinition definition)
+        {
+            return definition == null || !definition.HasAvailabilityWindow
+                ? 0
+                : Math.Max(0, definition.AvailableUntilInGameMinute - GetCurrentInGameMinute());
+        }
+
+        private bool IsMissionAvailabilityExpired(SpecialMissionDefinition definition)
+        {
+            return definition != null
+                && definition.HasAvailabilityWindow
+                && GetCurrentInGameMinute() > definition.AvailableUntilInGameMinute;
+        }
+
+        private static string BuildAvailabilityWindowDetail(SpecialMissionDefinition definition, int remainingMinutes)
+        {
+            if (definition == null || !definition.HasAvailabilityWindow)
+            {
+                return string.Empty;
+            }
+
+            return string.Format("Board closes in {0}.", FormatMissionDuration(remainingMinutes));
+        }
+
+        private static string BuildAvailabilityExpiredDetail(SpecialMissionDefinition definition)
+        {
+            if (definition == null)
+            {
+                return "Contract board window closed.";
+            }
+
+            return definition.IsTender
+                ? "Tender window closed for this board cycle."
+                : "Contract board window closed.";
+        }
+
+        private static string AppendDetail(string left, string right)
+        {
+            if (string.IsNullOrWhiteSpace(left))
+            {
+                return right ?? string.Empty;
+            }
+
+            if (string.IsNullOrWhiteSpace(right))
+            {
+                return left;
+            }
+
+            return string.Format("{0} | {1}", left, right);
+        }
+
+        private static int GetWeekIndex(int currentInGameMinute)
+        {
+            return currentInGameMinute <= 0 ? 0 : currentInGameMinute / InGameMinutesPerWeek;
+        }
+
+        private static int GetDayIndex(int currentInGameMinute)
+        {
+            return currentInGameMinute <= 0 ? 0 : currentInGameMinute / InGameMinutesPerDay;
+        }
+
+        private static int ComputeStableHash(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return 0;
+            }
+
+            unchecked
+            {
+                var hash = 17;
+                for (int i = 0; i < value.Length; i++)
+                {
+                    hash = (hash * 31) + char.ToUpperInvariant(value[i]);
+                }
+
+                return hash;
+            }
         }
 
         private static DateTime ConvertInGameMinuteToDateTime(int totalMinutes)
@@ -811,6 +1902,12 @@ namespace LSOL.Systems
 
             switch (definition.Type)
             {
+                case SpecialMissionType.DynamicCargoDelivery:
+                    var cargoRuntime = new DynamicCargoDeliveryRuntime(this, definition, snapshot);
+                    error = cargoRuntime.InitializationError;
+                    return string.IsNullOrWhiteSpace(error)
+                        ? (ActiveSpecialMissionRuntime)cargoRuntime
+                        : null;
                 case SpecialMissionType.TrailerDelivery:
                     var trailerRuntime = new TrailerDeliveryRuntime(this, definition, snapshot);
                     error = trailerRuntime.InitializationError;
@@ -902,6 +1999,30 @@ namespace LSOL.Systems
             ShowStatus(string.Format("Mission failed: {0}. {1}", missionName, detail ?? string.Empty).Trim(), 5000);
         }
 
+        private sealed class GeneratedRouteCandidate
+        {
+            public string Key { get; set; }
+            public Industry SourceIndustry { get; set; }
+            public Industry DestinationIndustry { get; set; }
+            public string Commodity { get; set; }
+            public VehicleCargoType CargoType { get; set; }
+            public float Distance { get; set; }
+            public float AvailableTons { get; set; }
+            public float MarketMultiplier { get; set; }
+            public float UnitPrice { get; set; }
+            public float Score { get; set; }
+        }
+
+        private sealed class GeneratedDistrictCrisis
+        {
+            public string Id { get; set; }
+            public string DistrictName { get; set; }
+            public DistrictCrisisType Type { get; set; }
+            public string PreferredCommodity { get; set; }
+            public int EndsAtInGameMinute { get; set; }
+            public float MarketPressureBonus { get; set; }
+        }
+
         private abstract class ActiveSpecialMissionRuntime
         {
             protected ActiveSpecialMissionRuntime(SpecialMissionManager owner, SpecialMissionDefinition definition)
@@ -931,9 +2052,247 @@ namespace LSOL.Systems
 
             public abstract bool HandleInteract(Ped player);
 
+            public virtual void OnCargoDelivered(
+                Industry destinationIndustry,
+                string commodity,
+                float deliveredTons,
+                string sourceIndustryId,
+                string sourceDistrictName,
+                bool completedDelivery,
+                bool isCleanDelivery)
+            {
+            }
+
             public abstract ActiveSpecialMissionPersistenceSnapshot CreateSnapshot();
 
             public abstract void Cleanup();
+        }
+
+        private sealed class DynamicCargoDeliveryRuntime : ActiveSpecialMissionRuntime
+        {
+            private readonly Industry _sourceIndustry;
+            private readonly Industry _destinationIndustry;
+            private DynamicCargoDeliveryStage _stage;
+            private float _deliveredTons;
+
+            public DynamicCargoDeliveryRuntime(
+                SpecialMissionManager owner,
+                SpecialMissionDefinition definition,
+                ActiveSpecialMissionPersistenceSnapshot snapshot)
+                : base(owner, definition)
+            {
+                _sourceIndustry = owner.FindIndustryById(definition != null ? definition.SourceIndustryId : string.Empty);
+                _destinationIndustry = owner.FindIndustryById(definition != null ? definition.DestinationIndustryId : string.Empty);
+                _stage = DynamicCargoDeliveryStage.SecureCargo;
+                _deliveredTons = snapshot != null ? Math.Max(0f, snapshot.DynamicDeliveredTons) : 0f;
+
+                if (_sourceIndustry == null || _destinationIndustry == null)
+                {
+                    InitializationError = "Generated contract route no longer points to a valid source and destination.";
+                    return;
+                }
+
+                if (snapshot != null)
+                {
+                    _stage = ParseStage(snapshot.StageIndex);
+                }
+
+                UpdateObjectiveText();
+            }
+
+            public override int CurrentStageIndex
+            {
+                get { return (int)_stage; }
+            }
+
+            public override void OnActivated(bool restoredFromSave)
+            {
+                UpdateWaypoint();
+                Owner.MarkUiDirty();
+            }
+
+            public override void Update(Ped player, int gameTime)
+            {
+                if (Definition == null)
+                {
+                    Owner.HandleMissionFailed(this, "Contract definition unavailable.");
+                    return;
+                }
+
+                if (Definition.HasAvailabilityWindow && Owner.GetCurrentInGameMinute() > Definition.AvailableUntilInGameMinute)
+                {
+                    Owner.HandleMissionFailed(this, "The contract window expired before delivery was closed out.");
+                    return;
+                }
+
+                DrawObjectiveMarker();
+                if (_stage == DynamicCargoDeliveryStage.SecureCargo)
+                {
+                    if (HasLoadedMatchingCargo(player))
+                    {
+                        _stage = DynamicCargoDeliveryStage.DeliverCargo;
+                        UpdateWaypoint();
+                        Owner.ShowStatus(string.Format("Cargo secured for {0}. Deliver to {1}.", Definition.Name, _destinationIndustry.Name), 4000);
+                    }
+                }
+
+                UpdateObjectiveText();
+            }
+
+            public override bool HandleInteract(Ped player)
+            {
+                return false;
+            }
+
+            public override void OnCargoDelivered(
+                Industry destinationIndustry,
+                string commodity,
+                float deliveredTons,
+                string sourceIndustryId,
+                string sourceDistrictName,
+                bool completedDelivery,
+                bool isCleanDelivery)
+            {
+                if (_stage != DynamicCargoDeliveryStage.DeliverCargo
+                    || destinationIndustry == null
+                    || deliveredTons <= 0.001f
+                    || !string.Equals(destinationIndustry.Id, Definition.DestinationIndustryId, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(commodity, Definition.Commodity, StringComparison.OrdinalIgnoreCase)
+                    || !string.Equals(sourceIndustryId, Definition.SourceIndustryId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+
+                _deliveredTons = Math.Min(Definition.TargetTons, _deliveredTons + deliveredTons);
+                if (_deliveredTons + 0.05f >= Definition.TargetTons)
+                {
+                    Owner.HandleMissionCompleted(this, string.Format(
+                        "Delivered {0} {1} to {2}.",
+                        ModFormatting.FormatTons(Definition.TargetTons),
+                        Definition.Commodity,
+                        _destinationIndustry.Name));
+                    return;
+                }
+
+                UpdateObjectiveText();
+                Owner.MarkUiDirty();
+            }
+
+            public override ActiveSpecialMissionPersistenceSnapshot CreateSnapshot()
+            {
+                return new ActiveSpecialMissionPersistenceSnapshot
+                {
+                    MissionId = Definition != null ? Definition.Id : string.Empty,
+                    StageIndex = (int)_stage,
+                    DynamicDeliveredTons = _deliveredTons,
+                };
+            }
+
+            public override void Cleanup()
+            {
+            }
+
+            private bool HasLoadedMatchingCargo(Ped player)
+            {
+                if (player == null || !player.Exists() || Owner._fleetManager == null)
+                {
+                    return false;
+                }
+
+                Vehicle driverVehicle;
+                var cargoVehicle = Owner._fleetManager.ResolveCargoVehicle(player, out driverVehicle);
+                if (cargoVehicle == null || !cargoVehicle.Exists())
+                {
+                    return false;
+                }
+
+                var cargoState = Owner._fleetManager.GetOrCreateCargoState(cargoVehicle);
+                return cargoState != null
+                    && !cargoState.IsEmpty
+                    && string.Equals(cargoState.Commodity, Definition.Commodity, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(cargoState.SourceIndustryId, Definition.SourceIndustryId, StringComparison.OrdinalIgnoreCase)
+                    && cargoState.WeightTons + 0.05f >= Definition.TargetTons;
+            }
+
+            private void UpdateObjectiveText()
+            {
+                var remainingMinutes = Definition != null && Definition.HasAvailabilityWindow
+                    ? Math.Max(0, Definition.AvailableUntilInGameMinute - Owner.GetCurrentInGameMinute())
+                    : 0;
+                if (_stage == DynamicCargoDeliveryStage.SecureCargo)
+                {
+                    CurrentObjective = string.Format("Load {0} {1}", ModFormatting.FormatTons(Definition.TargetTons), Definition.Commodity);
+                    CurrentDetail = string.Format(
+                        "Collect at {0} | Route {1} -> {2}{3}",
+                        _sourceIndustry.Name,
+                        _sourceIndustry.DistrictName,
+                        _destinationIndustry.DistrictName,
+                        Definition.HasAvailabilityWindow ? string.Format(" | Due in {0}", FormatMissionDuration(remainingMinutes)) : string.Empty);
+                }
+                else
+                {
+                    var remainingTons = Math.Max(0f, Definition.TargetTons - _deliveredTons);
+                    CurrentObjective = string.Format("Deliver {0} {1}", ModFormatting.FormatTons(remainingTons), Definition.Commodity);
+                    CurrentDetail = string.Format(
+                        "Deliver to {0} | {1}{2}",
+                        _destinationIndustry.Name,
+                        remainingTons > 0.001f ? string.Format("Remaining {0}", ModFormatting.FormatTons(remainingTons)) : "Final unload pending",
+                        Definition.HasAvailabilityWindow ? string.Format(" | Due in {0}", FormatMissionDuration(remainingMinutes)) : string.Empty);
+                }
+            }
+
+            private void UpdateWaypoint()
+            {
+                Owner.SetWaypoint((_stage == DynamicCargoDeliveryStage.SecureCargo ? _sourceIndustry : _destinationIndustry).Position);
+            }
+
+            private void DrawObjectiveMarker()
+            {
+                var industry = _stage == DynamicCargoDeliveryStage.SecureCargo
+                    ? _sourceIndustry
+                    : _destinationIndustry;
+                if (industry == null)
+                {
+                    return;
+                }
+
+                World.DrawMarker(
+                    MarkerType.Cylinder,
+                    industry.Position,
+                    Vector3.Zero,
+                    Vector3.Zero,
+                    new Vector3(4.8f, 4.8f, 2f),
+                    _stage == DynamicCargoDeliveryStage.SecureCargo
+                        ? Color.FromArgb(220, 82, 156, 108)
+                        : Color.FromArgb(220, 196, 140, 82),
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    false);
+            }
+
+            private static DynamicCargoDeliveryStage ParseStage(int rawStage)
+            {
+                if (rawStage < (int)DynamicCargoDeliveryStage.SecureCargo)
+                {
+                    return DynamicCargoDeliveryStage.SecureCargo;
+                }
+
+                if (rawStage > (int)DynamicCargoDeliveryStage.DeliverCargo)
+                {
+                    return DynamicCargoDeliveryStage.DeliverCargo;
+                }
+
+                return (DynamicCargoDeliveryStage)rawStage;
+            }
+
+            private enum DynamicCargoDeliveryStage
+            {
+                SecureCargo = 0,
+                DeliverCargo = 1,
+            }
         }
 
         private sealed class TrailerDeliveryRuntime : ActiveSpecialMissionRuntime
@@ -2414,6 +3773,28 @@ namespace LSOL.Systems
 
         public bool Repeatable { get; set; }
 
+        public bool IsGenerated { get; set; }
+
+        public bool IsTender { get; set; }
+
+        public GeneratedContractFamily ContractFamily { get; set; }
+
+        public string Commodity { get; set; }
+
+        public float TargetTons { get; set; }
+
+        public string SourceIndustryId { get; set; }
+
+        public string DestinationIndustryId { get; set; }
+
+        public int AvailableUntilInGameMinute { get; set; }
+
+        public DistrictCrisisType CrisisType { get; set; }
+
+        public string CrisisDistrictName { get; set; }
+
+        public string EligibilitySummary { get; set; }
+
         public bool IsUnlocked { get; set; }
 
         public bool IsActive { get; set; }
@@ -2476,5 +3857,7 @@ namespace LSOL.Systems
         public bool HandlerContainerPickedUp { get; set; }
 
         public bool HandlerContainerLoaded { get; set; }
+
+        public float DynamicDeliveredTons { get; set; }
     }
 }

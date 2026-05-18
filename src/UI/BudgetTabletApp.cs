@@ -180,7 +180,7 @@ namespace LSOL.UI
                     iconLabel: "INC"),
                 TabletUiHelpers.CreateActionItem(
                     "Upcoming Bills",
-                    string.Format("Known dues {0}\nRent, payroll, rentals, and loans", ModFormatting.FormatMoney(overview.UpcomingBills)),
+                    string.Format("Known dues {0}\nRent, payroll, fleet, debt, and territorial upkeep", ModFormatting.FormatMoney(overview.UpcomingBills)),
                     () => context.Push(TabletAppIds.Budget, "bills"),
                     iconLabel: "BIL"),
                 TabletUiHelpers.CreateActionItem(
@@ -309,7 +309,7 @@ namespace LSOL.UI
             var items = new List<MenuItem>();
             if (bills.Count == 0)
             {
-                items.Add(TabletUiHelpers.CreateInfoItem("No bills queued", "No rent, payroll, rental, or loan charges are currently scheduled."));
+                items.Add(TabletUiHelpers.CreateInfoItem("No bills queued", "No rent, payroll, fleet, debt, charter, or territorial upkeep charges are currently scheduled."));
             }
             else
             {
@@ -327,7 +327,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Upcoming Bills",
-                Subtitle = "Known rent, payroll, rental, and loan obligations",
+                Subtitle = "Known scheduled obligations across rent, payroll, fleet, debt, charters, and territorial upkeep",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
@@ -360,7 +360,7 @@ namespace LSOL.UI
                     string.Format("Worst point {0} | {1}", ModFormatting.FormatMoney(forecast.LowestProjectedBalance), forecast.TurnsNegative ? "Forecast turns negative" : "Forecast stays above zero")),
                 TabletUiHelpers.CreateInfoItem(
                     "Assumption",
-                    "Forecast replays the last 7 in-game days of income against currently known bills only."),
+                    "Forecast replays the last 7 in-game days of income against currently known scheduled obligations only."),
                 TabletUiHelpers.CreateNavigationItem("Back", "Return to Budget.", () => context.GoBack(), "BACK"),
             };
 

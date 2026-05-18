@@ -208,7 +208,7 @@ namespace LSOL.Systems
             bool omegaOnly,
             Action beforeStart,
             Action<float> addProfit,
-            Action<string, float, bool, bool> recordDeliveryProgress = null)
+            Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
         {
             if (!EnsureIndustryTransportPermit(industry))
             {
@@ -261,10 +261,12 @@ namespace LSOL.Systems
                         var baseRevenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
                         var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
                         var revenue = baseRevenue * conditionRatio;
+                        var sourceIndustryId = cargoState.SourceIndustryId;
+                        var sourceDistrictName = cargoState.SourceDistrictName;
                         if (_territoryManager != null)
                         {
                             revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
-                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, cargoState.SourceIndustryId, cargoState.SourceDistrictName);
+                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                         }
 
                         addProfit(revenue);
@@ -272,8 +274,11 @@ namespace LSOL.Systems
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                         var completedDelivery = cargoState.WeightTons <= 0.001f;
                         recordDeliveryProgress?.Invoke(
+                            industry,
                             commodity,
                             accepted,
+                            sourceIndustryId,
+                            sourceDistrictName,
                             completedDelivery,
                             completedDelivery && conditionRatio >= 0.999f);
 
@@ -431,7 +436,7 @@ namespace LSOL.Systems
             VehicleCargoState cargoState,
             Action beforeStart,
             Action<float> addProfit,
-            Action<string, float, bool, bool> recordDeliveryProgress = null)
+            Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
         {
             if (!EnsureIndustryTransportPermit(industry))
             {
@@ -465,10 +470,12 @@ namespace LSOL.Systems
                         }
 
                         var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                        var sourceIndustryId = cargoState.SourceIndustryId;
+                        var sourceDistrictName = cargoState.SourceDistrictName;
                         if (_territoryManager != null)
                         {
                             revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
-                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, cargoState.SourceIndustryId, cargoState.SourceDistrictName);
+                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                         }
 
                         addProfit(revenue);
@@ -476,8 +483,11 @@ namespace LSOL.Systems
                         cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                         var completedDelivery = cargoState.WeightTons <= 0.001f;
                         recordDeliveryProgress?.Invoke(
+                            industry,
                             commodity,
                             accepted,
+                            sourceIndustryId,
+                            sourceDistrictName,
                             completedDelivery,
                             completedDelivery && conditionRatio >= 0.999f);
 

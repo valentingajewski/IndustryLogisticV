@@ -21,6 +21,8 @@ namespace LSOL.Systems
 
         public int LastSuccessfulApartmentSleepMinute { get; set; } = -1;
 
+        public int LastCorporateOverheadWeekIndex { get; set; } = -1;
+
         public List<OfficeOwnershipPersistenceEntry> Offices { get; }
 
         public List<OfficeObjectPersistenceEntry> OfficeObjects { get; }
@@ -141,6 +143,16 @@ namespace LSOL.Systems
         public string SourceDistrictName { get; set; }
 
         public float CurrentFuelLiters { get; set; }
+
+        public float MaintenanceCondition { get; set; } = 1f;
+
+        public int LastMaintenanceWeekIndex { get; set; } = -1;
+
+        public int LastInspectionWeekIndex { get; set; } = -1;
+
+        public int InspectionOverdueWeeks { get; set; }
+
+        public float LifetimeMaintenanceCost { get; set; }
     }
 
     public sealed class OwnedPersonalVehiclePersistenceEntry

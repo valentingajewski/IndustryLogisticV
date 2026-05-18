@@ -29,6 +29,12 @@ namespace LSOL.UI
             var statuses = _tracker != null
                 ? _tracker.GetStatuses()
                 : Array.Empty<PlayerSuccessStatus>();
+            var doctrines = _tracker != null
+                ? _tracker.GetDoctrineStatuses()
+                : Array.Empty<CompanyDoctrineStatus>();
+            var endgame = _tracker != null
+                ? _tracker.GetEndgameSummary()
+                : new CompanyEndgameSummary();
             var unlockedCount = _tracker != null ? _tracker.UnlockedCount : 0;
             var totalCount = _tracker != null ? _tracker.TotalCount : 0;
             var items = new List<MenuItem>();
@@ -37,6 +43,28 @@ namespace LSOL.UI
                 "Progress",
                 string.Format("{0}/{1} unlocked", unlockedCount, totalCount),
                 totalCount > 0 ? (float?)unlockedCount / totalCount : null));
+
+            items.Add(TabletUiHelpers.CreateInfoItem(
+                endgame.Headline ?? "Endgame posture forming",
+                endgame.Detail ?? "Doctrine, HQ, and district prestige will appear here as the company matures.",
+                endgame.PrestigeScore > 0.001f ? (float?)(endgame.PrestigeScore / 100f) : 0f));
+
+            for (int i = 0; i < doctrines.Count; i++)
+            {
+                var doctrine = doctrines[i];
+                if (doctrine == null)
+                {
+                    continue;
+                }
+
+                var capturedDoctrine = doctrine;
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    capturedDoctrine.IsActive
+                        ? string.Format("{0} [ACTIVE]", capturedDoctrine.Name ?? string.Empty)
+                        : capturedDoctrine.Name ?? string.Empty,
+                    BuildDoctrineDetail(capturedDoctrine),
+                    capturedDoctrine.ProgressRatio));
+            }
 
             for (int i = 0; i < statuses.Count; i++)
             {
@@ -63,7 +91,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Successes",
-                Subtitle = string.Format("{0}/{1} unlocked", unlockedCount, totalCount),
+                Subtitle = string.Format("{0}/{1} unlocked | Prestige {2:0}", unlockedCount, totalCount, endgame.PrestigeScore),
                 HeaderRightText = string.Format("{0}/{1}", unlockedCount, totalCount),
                 FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.94f,
@@ -93,6 +121,30 @@ namespace LSOL.UI
             }
 
             return string.Format("{0}\nProgress: {1}", status.Description ?? string.Empty, status.ProgressText);
+        }
+
+        private static string BuildDoctrineDetail(CompanyDoctrineStatus status)
+        {
+            if (status == null)
+            {
+                return string.Empty;
+            }
+
+            if (status.Tier <= 0)
+            {
+                return string.Format(
+                    "{0}\nProgress: {1}",
+                    status.FocusSummary ?? string.Empty,
+                    status.ProgressText ?? string.Empty);
+            }
+
+            return string.Format(
+                "{0}\nTier {1} | {2}\nTradeoff: {3}\nProgress: {4}",
+                status.FocusSummary ?? string.Empty,
+                CompanyDoctrineSystem.BuildTierLabel(status.EffectiveTier > 0 ? status.EffectiveTier : status.Tier),
+                status.BonusSummary ?? string.Empty,
+                status.TradeoffSummary ?? string.Empty,
+                status.ProgressText ?? string.Empty);
         }
     }
 }

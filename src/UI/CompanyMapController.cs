@@ -18,9 +18,11 @@ namespace LSOL.UI
         private readonly IndustryManager _industryManager;
         private readonly Action _closeAllMenus;
         private readonly Func<float> _getCurrentProfit;
+        private readonly Func<string, string> _acquireDistrictLicense;
         private readonly Func<Industry, string> _secureSupportSite;
         private readonly Func<Industry, string> _assignSupportCrew;
         private readonly Func<Industry, DepotStaffRole, string> _hireSupportStaff;
+        private readonly Func<Industry, DepotSpecialization, string> _setDepotSpecialization;
         private readonly Action<string> _showStatus;
         private readonly SimpleMenu _rootMenu;
         private readonly SimpleMenu _districtMenu;
@@ -40,9 +42,11 @@ namespace LSOL.UI
             IndustryManager industryManager,
             Action closeAllMenus,
             Func<float> getCurrentProfit,
+            Func<string, string> acquireDistrictLicense,
             Func<Industry, string> secureSupportSite,
             Func<Industry, string> assignSupportCrew,
             Func<Industry, DepotStaffRole, string> hireSupportStaff,
+            Func<Industry, DepotSpecialization, string> setDepotSpecialization,
             Action<string> showStatus)
         {
             _controls = controls;
@@ -50,9 +54,11 @@ namespace LSOL.UI
             _industryManager = industryManager;
             _closeAllMenus = closeAllMenus;
             _getCurrentProfit = getCurrentProfit;
+            _acquireDistrictLicense = acquireDistrictLicense;
             _secureSupportSite = secureSupportSite;
             _assignSupportCrew = assignSupportCrew;
             _hireSupportStaff = hireSupportStaff;
+            _setDepotSpecialization = setDepotSpecialization;
             _showStatus = showStatus;
 
             _rootMenu = BuildMenu("Company Map", "District control, support sites, and corridor rights", 0.82f, 6);
@@ -328,6 +334,7 @@ namespace LSOL.UI
                     return siteState != null && siteState.ControlLevel != TerritoryControlLevel.None;
                 })
                 : 0;
+            var operationsSummary = _territoryManager != null ? _territoryManager.GetOperationsSummary() : new TerritoryOperationsSummary();
 
             _rootMenu.SetItems(new[]
             {
@@ -340,10 +347,12 @@ namespace LSOL.UI
                 {
                     CaptionFactory = () => "Footprint",
                     DetailFactory = () => string.Format(
-                        "{0} districts anchored | {1} corridors active | {2} support sites secured",
+                        "{0} districts anchored | {1} charters live | {2} corridors active | {3} support sites secured | Ops {4}/wk",
                         _territoryManager != null ? _territoryManager.GetControlledDistrictCount() : 0,
+                        operationsSummary != null ? operationsSummary.ActiveLicensedDistrictCount : 0,
                         _territoryManager != null ? _territoryManager.GetActiveCorridorCount() : 0,
-                        supportSiteCount),
+                        supportSiteCount,
+                        ModFormatting.FormatMoney(operationsSummary != null ? operationsSummary.WeeklyCost : 0f)),
                 },
                 new MenuItem
                 {
@@ -381,6 +390,7 @@ namespace LSOL.UI
                     .ThenBy(x => x.DistrictName)
                     .ToList()
                 : new List<TerritoryDistrictState>();
+            var operationsByDistrict = BuildOperationsByDistrict();
 
             if (districts.Count == 0)
             {
@@ -395,15 +405,19 @@ namespace LSOL.UI
             {
                 var district = districts[i];
                 var reputationLabel = GetReputationLabel(district);
+                TerritoryDistrictOperationsEntry districtOperations;
+                operationsByDistrict.TryGetValue(district.DistrictName, out districtOperations);
                 items.Add(new MenuItem
                 {
                     CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(reputationLabel)),
                     DetailFactory = () => string.Format(
-                        "Influence {0} | Depots {1} | Operational {2} | Corridors {3}",
+                        "Influence {0} | Charter {1} | Depots {2} | Corridors {3}{4} | Ops {5}/wk",
                         ModFormatting.FormatPercent(district.InfluenceRatio * 100f),
+                        GetDistrictLicenseLabel(district),
                         district.ControlledDepots,
-                        district.OperationalSites,
-                        district.RouteRights),
+                        district.RouteRights,
+                        BuildDistrictRiskSuffix(districtOperations),
+                        ModFormatting.FormatMoney(GetDistrictOperationsCost(operationsByDistrict, district.DistrictName))),
                     OnActivate = () => OpenDistrictDetailMenu(district.DistrictName, OpenDistrictMenu),
                 });
             }
@@ -422,6 +436,9 @@ namespace LSOL.UI
         {
             var items = new List<MenuItem>();
             var district = _territoryManager != null ? _territoryManager.GetDistrictState(_selectedDistrictName) : null;
+            var operationsByDistrict = BuildOperationsByDistrict();
+            TerritoryDistrictOperationsEntry districtOperations;
+            operationsByDistrict.TryGetValue(_selectedDistrictName ?? string.Empty, out districtOperations);
             if (district == null)
             {
                 items.Add(new MenuItem
@@ -457,6 +474,12 @@ namespace LSOL.UI
             });
             items.Add(new MenuItem
             {
+                CaptionFactory = () => BuildDistrictLicenseCaption(district),
+                DetailFactory = () => BuildDistrictLicenseDetail(district, districtOperations),
+                OnActivate = () => ExecuteDistrictLicenseAction(district.DistrictName),
+            });
+            items.Add(new MenuItem
+            {
                 CaptionFactory = () => "Network Coverage",
                 DetailFactory = () => string.Format(
                     "Sites {0} | Controlled {1} | Operational {2} | Depots {3}",
@@ -469,10 +492,28 @@ namespace LSOL.UI
             {
                 CaptionFactory = () => "Service & Support",
                 DetailFactory = () => string.Format(
-                    "Franchises {0} | Corridor rights {1} | Support bonus {2}",
+                    "Franchises {0} | Corridor rights {1} | Support bonus {2}{3}",
                     district.FranchiseSites,
                     district.RouteRights,
-                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f)),
+                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f),
+                    BuildDistrictRiskSuffix(districtOperations)),
+            });
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => string.Format(
+                    "Competitive Climate: {0} / {1}",
+                    ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f))),
+                    ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)))),
+                DetailFactory = () => string.Format(
+                    "{0} | Visible traffic {1} | Competition wins {2}",
+                    district.CompetitionStatus ?? string.Empty,
+                    Math.Max(0, district.VisibleCompetitionCount),
+                    Math.Max(0, district.CompetitiveWinCount)),
+            });
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => string.Format("Territory Operations: {0}/wk", ModFormatting.FormatMoney(districtOperations != null ? districtOperations.TotalWeeklyCost : 0f)),
+                DetailFactory = () => BuildDistrictOperationsDetail(districtOperations),
             });
 
             var localIndustries = _industryManager != null && _industryManager.Industries != null
@@ -793,17 +834,29 @@ namespace LSOL.UI
             var npcStatus = _territoryManager != null && _territoryManager.IsDistrictEstablishedForNpc(district.DistrictName)
                 ? "NPC Ready"
                 : "NPC Locked";
+            var operationsByDistrict = BuildOperationsByDistrict();
+            TerritoryDistrictOperationsEntry districtOperations;
+            operationsByDistrict.TryGetValue(district.DistrictName, out districtOperations);
+            var operationsCost = GetDistrictOperationsCost(operationsByDistrict, district.DistrictName);
             var summary = string.Format(
-                "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nDepots {5} | Franchises {6}\nCorridor rights {7} | Support bonus {8}\n{9}",
+                "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nCharter {5} | Activity {6:0}/{7:0} t\nDepots {8} | Franchises {9}\nCorridor rights {10} | Support bonus {11}{12}\nCompetition {13:0}% | Opportunity {14:0}% | Wins {15}\nTerritory ops {16} / week\n{17}",
                 ModFormatting.FormatNumber(district.InfluenceScore),
                 ModFormatting.FormatNumber(district.ReputationScore),
                 district.SiteCount,
                 district.ControlledSites,
                 district.OperationalSites,
+                GetDistrictLicenseLabel(district),
+                district.CurrentWeekActivityTons,
+                district.RequiredWeeklyActivityTons,
                 district.ControlledDepots,
                 district.FranchiseSites,
                 district.RouteRights,
                 ModFormatting.FormatSignedPercent(supportBonus),
+                BuildDistrictRiskSuffix(districtOperations),
+                Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),
+                Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)),
+                Math.Max(0, district.CompetitiveWinCount),
+                ModFormatting.FormatMoney(operationsCost),
                 npcStatus);
             DrawTextBlock(
                 resolution,
@@ -879,7 +932,16 @@ namespace LSOL.UI
                     Color.FromArgb(208, 184, 198, 212),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Right);
-                rowY += 24f;
+                DrawTextLine(
+                    resolution,
+                    corridor.UpkeepStatus ?? string.Empty,
+                    x + 38f,
+                    rowY + 14f,
+                    0.18f,
+                    Color.FromArgb(188, 176, 191, 206),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left);
+                rowY += 34f;
             }
         }
 
@@ -930,7 +992,7 @@ namespace LSOL.UI
 
             DrawTextBlock(
                 resolution,
-                "Selected district keeps its connected corridors bright. Dim lines are outside the current focus.",
+                "Selected district keeps its connected corridors bright. Use district detail for charters, contract risk, and depot specialization.",
                 x + width - 18f,
                 y + 18f,
                 0.20f,
@@ -1101,6 +1163,73 @@ namespace LSOL.UI
             return string.Equals(corridor.DistrictA, districtName, StringComparison.OrdinalIgnoreCase)
                 ? corridor.DistrictB
                 : corridor.DistrictA;
+        }
+
+        private Dictionary<string, TerritoryDistrictOperationsEntry> BuildOperationsByDistrict()
+        {
+            return _territoryManager != null
+                ? (_territoryManager.GetOperationsSummary() ?? new TerritoryOperationsSummary()).Districts
+                    .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.DistrictName))
+                    .ToDictionary(entry => entry.DistrictName, entry => entry, StringComparer.OrdinalIgnoreCase)
+                : new Dictionary<string, TerritoryDistrictOperationsEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static float GetDistrictOperationsCost(IDictionary<string, TerritoryDistrictOperationsEntry> operationsByDistrict, string districtName)
+        {
+            if (operationsByDistrict == null || string.IsNullOrWhiteSpace(districtName))
+            {
+                return 0f;
+            }
+
+            TerritoryDistrictOperationsEntry entry;
+            return operationsByDistrict.TryGetValue(districtName, out entry) && entry != null
+                ? Math.Max(0f, entry.TotalWeeklyCost)
+                : 0f;
+        }
+
+        private static string BuildDistrictOperationsDetail(TerritoryDistrictOperationsEntry entry)
+        {
+            if (entry == null || entry.TotalWeeklyCost <= 0.01f)
+            {
+                return "No recurring territory obligations are attached to this district yet.";
+            }
+
+            var drivers = new List<string>();
+            if (entry.AdministrationCost > 0.01f)
+            {
+                drivers.Add(string.Format("charter {0}", ModFormatting.FormatMoney(entry.AdministrationCost)));
+            }
+
+            var supportCost = entry.SupportSiteCost + entry.StaffCost;
+            if (supportCost > 0.01f)
+            {
+                drivers.Add(string.Format("support {0}", ModFormatting.FormatMoney(supportCost)));
+            }
+
+            if (entry.CorridorCost > 0.01f)
+            {
+                drivers.Add(string.Format("corridors {0}", ModFormatting.FormatMoney(entry.CorridorCost)));
+            }
+
+            if (entry.FranchiseCost > 0.01f)
+            {
+                drivers.Add(string.Format("franchises {0}", ModFormatting.FormatMoney(entry.FranchiseCost)));
+            }
+
+            if (entry.LicenseStatus != DistrictLicenseStatus.None)
+            {
+                drivers.Add(string.Format("{0} {1:0}/{2:0} t", entry.LicenseStatus, entry.LicenseActivityTons, entry.LicenseTargetTons));
+            }
+
+            if (entry.CorridorRiskCount > 0 || entry.ServiceRiskCount > 0)
+            {
+                drivers.Add(string.Format("risk C{0}/S{1}", entry.CorridorRiskCount, entry.ServiceRiskCount));
+            }
+
+            return string.Format(
+                "Weekly burden {0} | {1}",
+                ModFormatting.FormatMoney(entry.TotalWeeklyCost),
+                drivers.Count > 0 ? string.Join(" | ", drivers.ToArray()) : "No active drivers");
         }
 
         private static string FormatCorridorLevel(CorridorRightLevel level)
@@ -1282,6 +1411,14 @@ namespace LSOL.UI
                     : string.Format("Cost {0}. Required before local fleet deployment.", ModFormatting.FormatMoney(_territoryManager.GetCrewAssignmentCostPreview(industry))),
                 OnActivate = siteState.CrewAssigned ? (Action)null : (() => ExecuteSupportAction(_assignSupportCrew, industry)),
             });
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => string.Format("Specialization: < {0} >", FormatDepotSpecialization(_territoryManager.GetDepotSpecialization(industry))),
+                DetailFactory = () => _territoryManager.GetDepotSpecializationEffectSummary(industry),
+                OnLeft = () => ChangeDepotSpecialization(industry, -1),
+                OnRight = () => ChangeDepotSpecialization(industry, 1),
+                OnActivate = () => ChangeDepotSpecialization(industry, 1),
+            });
 
             AddSupportStaffItem(items, industry, DepotStaffRole.Loader, "Loaders");
             AddSupportStaffItem(items, industry, DepotStaffRole.Mechanic, "Mechanics");
@@ -1292,8 +1429,9 @@ namespace LSOL.UI
             {
                 CaptionFactory = () => "District Bonus",
                 DetailFactory = () => string.Format(
-                    "Current district support bonus {0} to route reliability and delivery posture.",
-                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(industry.DistrictName) : 0f) * 100f)),
+                    "Current district support bonus {0}. {1}",
+                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(industry.DistrictName) : 0f) * 100f),
+                    _territoryManager != null ? _territoryManager.GetDepotSpecializationEffectSummary(industry) : string.Empty),
             });
             items.Add(new MenuItem
             {
@@ -1354,6 +1492,64 @@ namespace LSOL.UI
             }
 
             var message = _hireSupportStaff(industry, staffRole);
+            if (!string.IsNullOrWhiteSpace(message) && _showStatus != null)
+            {
+                _showStatus(message);
+            }
+
+            RebuildDepotDetailMenuItems();
+            RebuildDepotMenuItems();
+            RebuildRootMenuItems();
+        }
+
+        private void ExecuteDistrictLicenseAction(string districtName)
+        {
+            if (_acquireDistrictLicense == null || string.IsNullOrWhiteSpace(districtName))
+            {
+                return;
+            }
+
+            var message = _acquireDistrictLicense(districtName);
+            if (!string.IsNullOrWhiteSpace(message) && _showStatus != null)
+            {
+                _showStatus(message);
+            }
+
+            RebuildDistrictDetailMenuItems();
+            RebuildDistrictMenuItems();
+            RebuildRootMenuItems();
+        }
+
+        private void ChangeDepotSpecialization(Industry industry, int delta)
+        {
+            if (_setDepotSpecialization == null || industry == null || _territoryManager == null)
+            {
+                return;
+            }
+
+            var options = new[]
+            {
+                DepotSpecialization.None,
+                DepotSpecialization.Dispatch,
+                DepotSpecialization.Maintenance,
+                DepotSpecialization.Security,
+                DepotSpecialization.Support,
+            };
+            var current = _territoryManager.GetDepotSpecialization(industry);
+            var currentIndex = Array.IndexOf(options, current);
+            if (currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = (currentIndex + direction) % options.Length;
+            if (nextIndex < 0)
+            {
+                nextIndex += options.Length;
+            }
+
+            var message = _setDepotSpecialization(industry, options[nextIndex]);
             if (!string.IsNullOrWhiteSpace(message) && _showStatus != null)
             {
                 _showStatus(message);
@@ -1428,7 +1624,7 @@ namespace LSOL.UI
                 + (siteState.TotalDeliveredTons * 0.05f)
                 + (siteState.TotalLoadedTons * 0.03f)
                 + ((int)siteState.ControlLevel * 8f)
-                + ((int)siteState.FranchiseLevel * 6f);
+                + ((int)siteState.EffectiveFranchiseLevel * 6f);
         }
 
         private string GetDistrictSiteCaption(Industry industry)
@@ -1443,7 +1639,9 @@ namespace LSOL.UI
                 ? string.Empty
                 : (siteState.IsOperational
                     ? "LIVE"
-                    : (siteState.FranchiseLevel != TerritoryFranchiseLevel.None ? "FRANCHISE" : "SETUP"));
+                    : (siteState.ServicePenaltySteps > 0
+                        ? "AT RISK"
+                        : (siteState.EffectiveFranchiseLevel != TerritoryFranchiseLevel.None ? "CONTRACT" : "SETUP")));
             return string.IsNullOrWhiteSpace(tag)
                 ? industry.Name
                 : string.Format("{0} [{1}]", industry.Name, tag);
@@ -1463,9 +1661,23 @@ namespace LSOL.UI
             }
 
             var detail = _territoryManager.GetActivationSummary(industry);
-            if (siteState.FranchiseLevel != TerritoryFranchiseLevel.None)
+            if (siteState.EffectiveFranchiseLevel != TerritoryFranchiseLevel.None)
+            {
+                detail += string.Format(" | Contract {0}", siteState.EffectiveFranchiseLevel);
+            }
+            else if (siteState.FranchiseLevel != TerritoryFranchiseLevel.None)
             {
                 detail += string.Format(" | Franchise {0}", siteState.FranchiseLevel);
+            }
+
+            if (!string.IsNullOrWhiteSpace(siteState.ServiceContractStatus))
+            {
+                detail += string.Format(" | {0}", siteState.ServiceContractStatus);
+            }
+
+            if (siteState.RequiredWeeklyServiceTons > 0.01f)
+            {
+                detail += string.Format(" | {0:0}/{1:0} t", siteState.CurrentWeekServiceTons, siteState.RequiredWeeklyServiceTons);
             }
 
             if (siteState.HasSpawnRights)
@@ -1504,13 +1716,99 @@ namespace LSOL.UI
             }
 
             return string.Format(
-                "{0} | {1} | Staff {2}/{3}/{4}/{5}",
+                "{0} | {1} | {2} | Staff {3}/{4}/{5}/{6}",
                 industry.DistrictName,
                 _territoryManager.GetActivationSummary(industry),
+                FormatDepotSpecialization(siteState.DepotSpecialization),
                 siteState.LoaderCount,
                 siteState.MechanicCount,
                 siteState.GuardCount,
                 siteState.ManagerCount);
+        }
+
+        private static string GetDistrictLicenseLabel(TerritoryDistrictState district)
+        {
+            if (district == null)
+            {
+                return "Unknown";
+            }
+
+            switch (district.LicenseStatus)
+            {
+                case DistrictLicenseStatus.Active:
+                    return "Active";
+                case DistrictLicenseStatus.Probation:
+                    return "Probation";
+                case DistrictLicenseStatus.Suspended:
+                    return "Suspended";
+                default:
+                    return "Unlicensed";
+            }
+        }
+
+        private string BuildDistrictLicenseCaption(TerritoryDistrictState district)
+        {
+            return string.Format("Operating Charter: {0}", GetDistrictLicenseLabel(district));
+        }
+
+        private string BuildDistrictLicenseDetail(TerritoryDistrictState district, TerritoryDistrictOperationsEntry entry)
+        {
+            if (district == null || _territoryManager == null)
+            {
+                return string.Empty;
+            }
+
+            var restoreCost = _territoryManager.GetDistrictLicenseEnrollmentCost(district.DistrictName);
+            if (district.LicenseStatus == DistrictLicenseStatus.Suspended)
+            {
+                restoreCost *= 0.7f;
+            }
+
+            if (district.LicenseStatus == DistrictLicenseStatus.Active || district.LicenseStatus == DistrictLicenseStatus.Probation)
+            {
+                return string.Format(
+                    "Weekly fee {0} | Activity {1:0}/{2:0} t | Better delivery returns and earlier spawn rights.",
+                    ModFormatting.FormatMoney(district.WeeklyLicenseCost),
+                    district.CurrentWeekActivityTons,
+                    district.RequiredWeeklyActivityTons);
+            }
+
+            if (_territoryManager.IsDistrictLicensable(district.DistrictName) || district.LicenseStatus == DistrictLicenseStatus.Suspended)
+            {
+                return string.Format(
+                    "Activate for {0}. Requires weekly activity {1:0} t to stay in compliance.",
+                    ModFormatting.FormatMoney(restoreCost),
+                    Math.Max(district.RequiredWeeklyActivityTons, entry != null ? entry.LicenseTargetTons : 0f));
+            }
+
+            return "Reach Established reputation before chartering this district. Starter-headquarters districts stay under home-market coverage.";
+        }
+
+        private static string BuildDistrictRiskSuffix(TerritoryDistrictOperationsEntry entry)
+        {
+            if (entry == null || (entry.CorridorRiskCount <= 0 && entry.ServiceRiskCount <= 0))
+            {
+                return string.Empty;
+            }
+
+            return string.Format(" | Risk C{0}/S{1}", entry.CorridorRiskCount, entry.ServiceRiskCount);
+        }
+
+        private static string FormatDepotSpecialization(DepotSpecialization specialization)
+        {
+            switch (specialization)
+            {
+                case DepotSpecialization.Dispatch:
+                    return "Dispatch";
+                case DepotSpecialization.Maintenance:
+                    return "Maintenance";
+                case DepotSpecialization.Security:
+                    return "Security";
+                case DepotSpecialization.Support:
+                    return "Support";
+                default:
+                    return "General";
+            }
         }
 
         private static string GetSupportControlCaption(TerritorySiteState siteState)

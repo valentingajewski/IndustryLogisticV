@@ -1,5 +1,7 @@
 Runtime mission packs now live in `scripts/LSOL_Config/missions`.
 
+These XML mission packs supplement LSOL's built-in rotating contract board. District crises, weekly tenders, and generated priority runs do not require XML files.
+
 Author one `.xml` file per mission in that folder and LSOL will load it automatically on startup.
 
 Current supported mission type:

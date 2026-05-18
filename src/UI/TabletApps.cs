@@ -617,14 +617,21 @@ namespace LSOL.UI
                 ? _specialMissionManager.GetMissionListings()
                 : Array.Empty<SpecialMissionListing>();
             var availableMissionCount = missionListings.Count(listing => listing != null && listing.CanAccept);
+            var generatedMissionCount = missionListings.Count(listing => listing != null && listing.IsGenerated);
+            var crisisMissionCount = missionListings.Count(listing => listing != null && listing.CrisisType != DistrictCrisisType.None);
+            var tenderMissionCount = missionListings.Count(listing => listing != null && listing.IsTender);
             var activeMission = missionListings.FirstOrDefault(listing => listing != null && listing.IsActive);
             var missionDetail = activeMission != null
                 ? string.Format("{0}\n{1}", activeMission.Name, activeMission.Objective)
                 : missionListings.Count > 0
                     ? (availableMissionCount > 0
-                        ? string.Format("{0} contracts ready\n{1} community missions loaded", availableMissionCount, missionListings.Count)
-                        : string.Format("{0} community missions loaded\nGrow district influence to unlock more contracts.", missionListings.Count))
-                    : "No mission packs loaded.\nAdd XML mission packs to scripts/LSOL_Config/missions.";
+                        ? (generatedMissionCount > 0
+                            ? string.Format("{0} contracts ready\n{1} crisis | {2} tender | {3} board", availableMissionCount, crisisMissionCount, tenderMissionCount, generatedMissionCount)
+                            : string.Format("{0} contracts ready\n{1} community missions loaded", availableMissionCount, missionListings.Count))
+                        : (generatedMissionCount > 0
+                            ? string.Format("{0} board entries live\nGrow district presence, permits, or fleet capacity to unlock more.", missionListings.Count)
+                            : string.Format("{0} community missions loaded\nGrow district influence to unlock more contracts.", missionListings.Count)))
+                    : "No mission packs or board contracts ready yet.\nGrow district presence or add XML mission packs.";
             var siteAction = snapshot.HasNearestIndustry
                 ? (snapshot.CanInteractWithNearestIndustry
                     ? (Action)(() => context.Push(TabletAppIds.Industry, "main", snapshot.NearestIndustry))
@@ -914,8 +921,8 @@ namespace LSOL.UI
             if (_missionManager == null || !_missionManager.HasDefinitions)
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    "No mission packs loaded",
-                    "Create or copy mission XML files into scripts/LSOL_Config/missions to publish community contracts."));
+                    "No contracts available",
+                    "Grow district presence and fleet capability for rotating tenders, or add XML mission packs to publish hand-authored contracts."));
             }
             else
             {
@@ -934,6 +941,16 @@ namespace LSOL.UI
                 }
 
                 var listings = _missionManager.GetMissionListings();
+                var crisisCount = listings.Count(listing => listing != null && listing.CrisisType != DistrictCrisisType.None);
+                var tenderCount = listings.Count(listing => listing != null && listing.IsTender);
+                var priorityCount = listings.Count(listing => listing != null && listing.ContractFamily == GeneratedContractFamily.PriorityLinehaul);
+                if (crisisCount > 0 || tenderCount > 0 || priorityCount > 0)
+                {
+                    items.Add(TabletUiHelpers.CreateBannerItem(
+                        "Board Rotation",
+                        string.Format("{0} district crisis | {1} weekly tender | {2} priority run board entries live.", crisisCount, tenderCount, priorityCount)));
+                }
+
                 for (int i = 0; i < listings.Count; i++)
                 {
                     var listing = listings[i];
@@ -965,7 +982,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Special Missions",
-                Subtitle = "Community contract board",
+                Subtitle = "Contract and mission board",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
@@ -1003,12 +1020,20 @@ namespace LSOL.UI
                     string.IsNullOrWhiteSpace(definition.Description)
                         ? "No extended mission description configured for this contract."
                         : definition.Description),
-                TabletUiHelpers.CreateInfoItem(
-                    "Completion",
-                    definition.Repeatable
-                        ? BuildMissionCompletionDetail(listing)
-                        : (listing.CompletionCount > 0 ? "One-off contract already completed on this save." : "One-off contract not completed yet.")),
             };
+
+            if (definition.IsGenerated)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Contract",
+                    BuildGeneratedMissionContractDetail(definition)));
+            }
+
+            items.Add(TabletUiHelpers.CreateInfoItem(
+                "Completion",
+                definition.Repeatable
+                    ? BuildMissionCompletionDetail(listing)
+                    : (listing.CompletionCount > 0 ? "One-off contract already completed on this save." : "One-off contract not completed yet.")));
 
             if (listing.IsActive)
             {
@@ -1034,8 +1059,11 @@ namespace LSOL.UI
             else if (listing.CanAccept)
             {
                 items.Add(TabletUiHelpers.CreateActionItem(
-                    "Accept Mission",
-                    string.Format("Stage the mission vehicles and begin {0}.", definition.Name),
+                    listing.IsTender ? "Accept Tender" : (definition.IsGenerated ? "Accept Contract" : "Accept Mission"),
+                    string.Format(
+                        "{0} {1}.",
+                        listing.IsTender ? "Reserve this weekly slot and begin" : (definition.IsGenerated ? "Accept this board contract and begin" : "Stage the mission vehicles and begin"),
+                        definition.Name),
                     () =>
                     {
                         _missionManager.TryAcceptMission(definition.Id);
@@ -1058,7 +1086,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = definition.Name,
-                Subtitle = "Special mission detail",
+                Subtitle = definition.IsGenerated ? "Contract detail" : "Special mission detail",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
@@ -1088,32 +1116,34 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
+            var displayName = BuildMissionBoardLabel(listing);
+
             if (listing.IsActive)
             {
-                return string.Format("{0} ~y~[LIVE]~s~", listing.Name);
+                return string.Format("{0} ~y~[LIVE]~s~", displayName);
             }
 
             if (!listing.IsUnlocked)
             {
-                return string.Format("{0} ~r~[LOCKED]~s~", listing.Name);
+                return string.Format("{0} ~r~[LOCKED]~s~", displayName);
             }
 
             if (listing.CompletionCount > 0 && !listing.Repeatable)
             {
-                return string.Format("{0} ~g~[DONE]~s~", listing.Name);
+                return string.Format("{0} ~g~[DONE]~s~", displayName);
             }
 
             if (listing.RepeatCooldownRemainingMinutes > 0)
             {
-                return string.Format("{0} ~r~[COOLDOWN]~s~", listing.Name);
+                return string.Format("{0} ~r~[COOLDOWN]~s~", displayName);
             }
 
             if (listing.CompletionCount > 0 && listing.Repeatable)
             {
-                return string.Format("{0} ~g~[x{1}]~s~", listing.Name, listing.CompletionCount);
+                return string.Format("{0} ~g~[x{1}]~s~", displayName, listing.CompletionCount);
             }
 
-            return listing.Name;
+            return displayName;
         }
 
         private static string BuildMissionListDetail(SpecialMissionListing listing)
@@ -1134,11 +1164,77 @@ namespace LSOL.UI
             var availability = string.IsNullOrWhiteSpace(listing.AvailabilityDetail)
                 ? string.Empty
                 : string.Format(" | {0}", listing.AvailabilityDetail);
+
+            if (listing.IsGenerated)
+            {
+                return string.Format(
+                    "{0} | Reward {1} | {2}{3}",
+                    BuildGeneratedMissionLead(listing),
+                    ModFormatting.FormatMoney(listing.Reward),
+                    string.IsNullOrWhiteSpace(summary) ? "No briefing provided." : summary,
+                    availability);
+            }
+
             return string.Format(
                 "Reward {0} | {1}{2}",
                 ModFormatting.FormatMoney(listing.Reward),
                 string.IsNullOrWhiteSpace(summary) ? "No briefing provided." : summary,
                 availability);
+        }
+
+        private static string BuildMissionBoardLabel(SpecialMissionListing listing)
+        {
+            if (listing == null || !listing.IsGenerated)
+            {
+                return listing != null ? listing.Name : string.Empty;
+            }
+
+            var prefix = listing.IsTender
+                ? "Tender | "
+                : (listing.ContractFamily == GeneratedContractFamily.CrisisRelief
+                    ? "Crisis | "
+                    : (listing.ContractFamily == GeneratedContractFamily.PriorityLinehaul ? "Run | " : string.Empty));
+            return prefix + listing.Name;
+        }
+
+        private static string BuildGeneratedMissionLead(SpecialMissionListing listing)
+        {
+            if (listing == null)
+            {
+                return string.Empty;
+            }
+
+            if (listing.TargetTons > 0.001f && !string.IsNullOrWhiteSpace(listing.Commodity))
+            {
+                return string.Format("{0} | {1} {2}", listing.Category, ModFormatting.FormatTons(listing.TargetTons), listing.Commodity);
+            }
+
+            return listing.Category ?? "Board contract";
+        }
+
+        private static string BuildGeneratedMissionContractDetail(SpecialMissionDefinition definition)
+        {
+            if (definition == null)
+            {
+                return "Generated board contract.";
+            }
+
+            var lines = new List<string>
+            {
+                string.Format("{0} | {1} {2}", definition.Category, ModFormatting.FormatTons(definition.TargetTons), definition.Commodity),
+            };
+
+            if (definition.CrisisType != DistrictCrisisType.None)
+            {
+                lines.Add(string.Format("District event: {0} in {1}", definition.CrisisType, definition.CrisisDistrictName));
+            }
+
+            if (!string.IsNullOrWhiteSpace(definition.EligibilitySummary))
+            {
+                lines.Add(definition.EligibilitySummary);
+            }
+
+            return string.Join("\n", lines.ToArray());
         }
 
         private static string BuildMissionCompletionDetail(SpecialMissionListing listing)

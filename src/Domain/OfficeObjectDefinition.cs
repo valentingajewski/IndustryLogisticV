@@ -13,6 +13,7 @@ namespace LSOL.Domain
         Refuel = 1,
         Repair = 2,
         Npc = 3,
+        Headquarters = 4,
     }
 
     public sealed class OfficeObjectDefinition

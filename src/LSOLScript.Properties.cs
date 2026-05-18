@@ -310,6 +310,72 @@ namespace LSOL
             }
         }
 
+        private void ProcessTerritoryWeeklyCharges()
+        {
+            if (_territoryManager == null)
+            {
+                return;
+            }
+
+            var charge = _territoryManager.ProcessWeeklyOperationsCharges(GetCurrentInGameWeekMinute());
+            if (charge == null || charge.TotalAmount <= 0.01f)
+            {
+                return;
+            }
+
+            DeductProfit(
+                CompanyFinanceCategory.TerritoryOperations,
+                charge.TotalAmount,
+                charge.ChargeCount > 1
+                    ? string.Format("Territory operations for {0} weeks", charge.ChargeCount)
+                    : "Weekly territory operations");
+
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
+            var summary = charge.Summary ?? new TerritoryOperationsSummary();
+            ShowStatus(
+                string.Format(
+                    "Territory operations billed {0}: {1} district{2}, {3} corridor{4}, {5} support site{6}, {7} premium franchise{8}.",
+                    ModFormatting.FormatMoney(charge.TotalAmount),
+                    summary.ChargedDistrictCount,
+                    summary.ChargedDistrictCount == 1 ? string.Empty : "s",
+                    summary.ActiveCorridorCount,
+                    summary.ActiveCorridorCount == 1 ? string.Empty : "s",
+                    summary.SupportSiteCount,
+                    summary.SupportSiteCount == 1 ? string.Empty : "s",
+                    summary.PremiumFranchiseCount,
+                    summary.PremiumFranchiseCount == 1 ? string.Empty : "s"),
+                5000);
+        }
+
+        private void ProcessTerritoryWeeklyMaintenance()
+        {
+            if (_territoryManager == null)
+            {
+                return;
+            }
+
+            var result = _territoryManager.ProcessWeeklyMaintenance(GetCurrentInGameWeekMinute());
+            if (result == null || result.ProcessedWeekCount <= 0)
+            {
+                return;
+            }
+
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
+            RebuildOfficeMenuItems();
+            if (result.Messages.Count > 0)
+            {
+                ShowStatus(result.Messages[result.Messages.Count - 1], 5000);
+            }
+        }
+
         private void DrawPropertyMarkers(Ped player, bool canShowPrompts, ref bool promptShown)
         {
             var playerPos = player.Position;
@@ -910,7 +976,9 @@ namespace LSOL
                 .ToList();
             var placed = objects.Count(entry => entry.IsPlaced);
             var pending = objects.Count - placed;
-            var limitLabel = definition.PerOfficeLimit > 0 ? string.Format("Limit {0}", definition.PerOfficeLimit) : "No office limit";
+            var limitLabel = definition.Function == OfficeObjectFunction.Headquarters
+                ? "Company limit 1"
+                : (definition.PerOfficeLimit > 0 ? string.Format("Limit {0}", definition.PerOfficeLimit) : "No office limit");
             var functionLabel = definition.IsFunctional
                 ? string.Format("{0} | Port haul required", BuildOfficeObjectFunctionLabel(definition))
                 : "Decorative placement";
@@ -938,6 +1006,8 @@ namespace LSOL
                     return "Repairs office trucks and trailers";
                 case OfficeObjectFunction.Npc:
                     return string.Format("Supports {0:0} hired NPCs", Math.Max(0f, definition.Capacity));
+                case OfficeObjectFunction.Headquarters:
+                    return "Landmark HQ | Boosts the active doctrine once placed";
                 default:
                     return definition.Function.ToString();
             }
@@ -1042,6 +1112,22 @@ namespace LSOL
             {
                 blockedReason = string.Format("{0} limit reached at this office.", definition.DisplayName);
                 return false;
+            }
+
+            if (definition.Function == OfficeObjectFunction.Headquarters)
+            {
+                var officeState = _propertyManager.GetOfficeState(_menuOffice.OfficeId);
+                if (officeState == null || !officeState.IsOwned)
+                {
+                    blockedReason = "Landmark HQ modules require an owned office.";
+                    return false;
+                }
+
+                if (_propertyManager.HasAnyOfficeObjectFunction(OfficeObjectFunction.Headquarters, false))
+                {
+                    blockedReason = "The company already has a Landmark HQ project in progress.";
+                    return false;
+                }
             }
 
             if (_profit + 0.001f < definition.Price)
@@ -1179,7 +1265,11 @@ namespace LSOL
         private void RepairVehicleAtOffice()
         {
             string message;
-            _officeObjectManager.TryRepairPlayerVehicleAtOffice(Game.Player.Character, out message);
+            if (_officeObjectManager.TryRepairPlayerVehicleAtOffice(Game.Player.Character, out message) && _tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
             ShowStatus(message);
         }
 

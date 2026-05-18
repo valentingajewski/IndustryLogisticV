@@ -53,6 +53,12 @@ namespace LSOL.Systems
 
         public int TotalEmergencyServiceUsages { get; set; }
 
+        public float HighestPrestigeScore { get; set; }
+
+        public string HighestDoctrineId { get; set; }
+
+        public int HighestDoctrineTier { get; set; }
+
         public List<PlayerCommodityStatisticSnapshot> CommodityTotals { get; }
 
         public List<string> UnlockedSuccessIds { get; }
@@ -74,6 +80,9 @@ namespace LSOL.Systems
                     || CumulativeNpcDeliveryIncome > 0.001f
                     || TotalSpecialMissionsCompleted > 0
                     || TotalEmergencyServiceUsages > 0
+                    || HighestPrestigeScore > 0.001f
+                    || !string.IsNullOrWhiteSpace(HighestDoctrineId)
+                    || HighestDoctrineTier > 0
                     || CommodityTotals.Count > 0
                     || UnlockedSuccessIds.Count > 0;
             }
@@ -300,6 +309,16 @@ namespace LSOL.Systems
                 .ToArray();
         }
 
+        public IReadOnlyList<CompanyDoctrineStatus> GetDoctrineStatuses()
+        {
+            return BuildDoctrineStatuses();
+        }
+
+        public CompanyEndgameSummary GetEndgameSummary()
+        {
+            return BuildEndgameSummary();
+        }
+
         public void UpdateCompanyBalance(float currentBalance, bool notifyUnlocks = true)
         {
             currentBalance = Math.Max(0f, currentBalance);
@@ -463,6 +482,8 @@ namespace LSOL.Systems
 
         private void EvaluateUnlocks(bool notifyUnlocks)
         {
+            SyncEndgameProgressFromCurrentState();
+
             for (int i = 0; i < Definitions.Count; i++)
             {
                 var definition = Definitions[i];
@@ -592,6 +613,36 @@ namespace LSOL.Systems
                 .Count();
         }
 
+        private int GetActiveCorridorCount()
+        {
+            return _territoryManager != null
+                ? _territoryManager.GetActiveCorridorCount()
+                : 0;
+        }
+
+        private int GetLicensedDistrictCount()
+        {
+            return GetDistrictStates().Count(state => state != null
+                && (state.LicenseStatus == DistrictLicenseStatus.Active || state.LicenseStatus == DistrictLicenseStatus.Probation));
+        }
+
+        private int GetSecuredSupportSiteCount()
+        {
+            if (_territoryManager == null)
+            {
+                return 0;
+            }
+
+            return _territoryManager.GetDepotIndustries().Count(industry =>
+            {
+                var siteState = _territoryManager.GetSiteState(industry);
+                return industry != null
+                    && siteState != null
+                    && siteState.CrewAssigned
+                    && (industry.IsStarterHeadquarters || siteState.ControlLevel != TerritoryControlLevel.None);
+            });
+        }
+
         private GarageFillState GetBestOwnedGarageFillState()
         {
             var best = new GarageFillState();
@@ -664,9 +715,37 @@ namespace LSOL.Systems
             return GetAllSites().Count(site => site.IsWarehouse && site.IsOwned);
         }
 
+        private int GetOwnedStoreCount()
+        {
+            return GetAllSites().Count(site => site.IsStore && site.IsOwned);
+        }
+
         private int GetOwnedGasStationCount()
         {
             return GetAllSites().Count(site => site.IsGasStation && site.IsOwned);
+        }
+
+        private int GetTotalFranchiseSiteCount()
+        {
+            return GetDistrictStates().Sum(state => state != null ? Math.Max(0, state.FranchiseSites) : 0);
+        }
+
+        private int GetCompetitiveWinCount()
+        {
+            return GetDistrictStates().Sum(state => state != null ? Math.Max(0, state.CompetitiveWinCount) : 0);
+        }
+
+        private int GetLowPressureDominantDistrictCount()
+        {
+            return GetDistrictStates().Count(state => state != null
+                && string.Equals(state.ReputationLabel, "Dominant", StringComparison.OrdinalIgnoreCase)
+                && state.CompetitivePressure <= 0.35f);
+        }
+
+        private bool HasLandmarkHeadquarters()
+        {
+            return _propertyManager != null
+                && _propertyManager.HasAnyOfficeObjectFunction(OfficeObjectFunction.Headquarters);
         }
 
         private bool OwnsPortTerminal()
@@ -773,6 +852,20 @@ namespace LSOL.Systems
             return count;
         }
 
+        private int GetDoctrineTier(CompanyDoctrine doctrine)
+        {
+            return BuildDoctrineStatuses()
+                .Where(status => status != null && status.Doctrine == doctrine)
+                .Select(status => Math.Max(0, status.Tier))
+                .DefaultIfEmpty(0)
+                .Max();
+        }
+
+        private float GetCurrentPrestigeScore()
+        {
+            return BuildEndgameSummary().PrestigeScore;
+        }
+
         private int GetMegalomaniacProgressCount()
         {
             var count = 0;
@@ -848,6 +941,244 @@ namespace LSOL.Systems
                 : Enumerable.Empty<TerritoryDistrictState>();
         }
 
+        private IReadOnlyList<CompanyDoctrineStatus> BuildDoctrineStatuses()
+        {
+            var statuses = new[]
+            {
+                BuildTerritorialDoctrineStatus(),
+                BuildIndustrialDoctrineStatus(),
+                BuildServiceDoctrineStatus(),
+            };
+
+            var activeDoctrine = DetermineActiveDoctrine(statuses);
+            var hasLandmarkHeadquarters = HasLandmarkHeadquarters();
+            for (int i = 0; i < statuses.Length; i++)
+            {
+                var status = statuses[i];
+                if (status == null)
+                {
+                    continue;
+                }
+
+                status.IsActive = status.Tier > 0 && status.Doctrine == activeDoctrine;
+                status.EffectiveTier = CompanyDoctrineSystem.GetEffectiveTier(status.Tier, hasLandmarkHeadquarters, status.IsActive);
+                status.BonusSummary = CompanyDoctrineSystem.BuildBonusSummary(status.Doctrine, status.EffectiveTier);
+                status.TradeoffSummary = CompanyDoctrineSystem.BuildTradeoffSummary(status.Doctrine, status.EffectiveTier);
+            }
+
+            return statuses;
+        }
+
+        private CompanyEndgameSummary BuildEndgameSummary()
+        {
+            var doctrines = BuildDoctrineStatuses().ToArray();
+            var activeDoctrine = doctrines.FirstOrDefault(status => status != null && status.IsActive);
+            var hasLandmarkHeadquarters = HasLandmarkHeadquarters();
+            var dominantDistricts = GetDominantDistrictCount();
+            var competitiveWins = GetCompetitiveWinCount();
+            var prestige = 0f;
+
+            if (activeDoctrine != null)
+            {
+                prestige += activeDoctrine.EffectiveTier * 12f;
+            }
+
+            prestige += hasLandmarkHeadquarters ? 24f : 0f;
+            prestige += Math.Min(24f, dominantDistricts * 6f);
+            prestige += Math.Min(14f, GetOwnedActualIndustryCount() * 1.2f);
+            prestige += Math.Min(12f, competitiveWins * 1.5f);
+            prestige += Math.Min(14f, _snapshot.TotalSpecialMissionsCompleted * 1.2f);
+            prestige = Math.Max(0f, Math.Min(100f, prestige));
+
+            var activeDoctrineName = activeDoctrine != null
+                ? activeDoctrine.Name ?? CompanyDoctrineSystem.GetName(activeDoctrine.Doctrine)
+                : CompanyDoctrineSystem.GetName(CompanyDoctrine.Balanced);
+            var headline = activeDoctrine != null
+                ? string.Format("{0} {1}", activeDoctrineName, CompanyDoctrineSystem.BuildTierLabel(activeDoctrine.EffectiveTier))
+                : (hasLandmarkHeadquarters ? "Landmark HQ Online" : "Endgame posture forming");
+            var detail = string.Format(
+                "Prestige {0:0}/100 | HQ {1} | {2} dominant districts{3}",
+                prestige,
+                hasLandmarkHeadquarters ? "Online" : "Offline",
+                dominantDistricts,
+                competitiveWins > 0 ? string.Format(" | {0} competition wins", competitiveWins) : string.Empty);
+
+            return new CompanyEndgameSummary
+            {
+                ActiveDoctrine = activeDoctrine != null ? activeDoctrine.Doctrine : CompanyDoctrine.Balanced,
+                ActiveDoctrineName = activeDoctrineName,
+                ActiveDoctrineTier = activeDoctrine != null ? activeDoctrine.Tier : 0,
+                ActiveDoctrineEffectiveTier = activeDoctrine != null ? activeDoctrine.EffectiveTier : 0,
+                HasLandmarkHeadquarters = hasLandmarkHeadquarters,
+                PrestigeScore = prestige,
+                HighestPrestigeScore = Math.Max(_snapshot.HighestPrestigeScore, prestige),
+                DominantDistrictCount = dominantDistricts,
+                CompetitiveWinCount = competitiveWins,
+                Headline = headline,
+                Detail = detail,
+            };
+        }
+
+        private void SyncEndgameProgressFromCurrentState()
+        {
+            var endgame = BuildEndgameSummary();
+            if (endgame == null)
+            {
+                return;
+            }
+
+            _snapshot.HighestPrestigeScore = Math.Max(_snapshot.HighestPrestigeScore, Math.Max(0f, endgame.PrestigeScore));
+            if (endgame.ActiveDoctrineTier < _snapshot.HighestDoctrineTier)
+            {
+                return;
+            }
+
+            if (endgame.ActiveDoctrineTier == _snapshot.HighestDoctrineTier
+                && !string.IsNullOrWhiteSpace(_snapshot.HighestDoctrineId))
+            {
+                return;
+            }
+
+            _snapshot.HighestDoctrineTier = Math.Max(0, endgame.ActiveDoctrineTier);
+            _snapshot.HighestDoctrineId = endgame.ActiveDoctrine == CompanyDoctrine.Balanced
+                ? string.Empty
+                : endgame.ActiveDoctrine.ToString();
+        }
+
+        private CompanyDoctrineStatus BuildTerritorialDoctrineStatus()
+        {
+            var districtTarget = Math.Max(1, Math.Min(3, Math.Max(1, GetTotalDistrictCount())));
+            var corridorTarget = Math.Max(2, Math.Min(4, Math.Max(2, GetTotalDistrictCount())));
+            var supportTarget = 3;
+            var charterTarget = districtTarget;
+            var dominantDistricts = GetDominantDistrictCount();
+            var activeCorridors = GetActiveCorridorCount();
+            var securedSupportSites = GetSecuredSupportSiteCount();
+            var licensedDistricts = GetLicensedDistrictCount();
+            var progressRatio = Clamp01(
+                (BuildRatio(dominantDistricts, districtTarget) * 0.35f)
+                + (BuildRatio(activeCorridors, corridorTarget) * 0.25f)
+                + (BuildRatio(securedSupportSites, supportTarget) * 0.20f)
+                + (BuildRatio(licensedDistricts, charterTarget) * 0.20f));
+
+            return BuildDoctrineStatus(
+                CompanyDoctrine.Territorial,
+                progressRatio,
+                string.Format(
+                    "{0}/{1} dominant | {2}/{3} corridors | {4}/{5} depots | {6}/{7} charters",
+                    dominantDistricts,
+                    districtTarget,
+                    activeCorridors,
+                    corridorTarget,
+                    securedSupportSites,
+                    supportTarget,
+                    licensedDistricts,
+                    charterTarget));
+        }
+
+        private CompanyDoctrineStatus BuildIndustrialDoctrineStatus()
+        {
+            var industryTarget = 8;
+            var warehouseTarget = 3;
+            var commodityTarget = 6;
+            var ownedIndustries = GetOwnedActualIndustryCount();
+            var ownedWarehouses = GetOwnedWarehouseCount();
+            var deliveredCommodities = GetDistinctDeliveredCommodityCount();
+            var hasSupplyChain = HasOwnedProducerConsumerMatch();
+            var progressRatio = Clamp01(
+                (BuildRatio(ownedIndustries, industryTarget) * 0.30f)
+                + (BuildRatio(ownedWarehouses, warehouseTarget) * 0.20f)
+                + ((hasSupplyChain ? 1f : 0f) * 0.30f)
+                + (BuildRatio(deliveredCommodities, commodityTarget) * 0.20f));
+
+            return BuildDoctrineStatus(
+                CompanyDoctrine.Industrial,
+                progressRatio,
+                string.Format(
+                    "{0}/{1} industries | {2}/{3} warehouses | Chain {4} | {5}/{6} commodities",
+                    ownedIndustries,
+                    industryTarget,
+                    ownedWarehouses,
+                    warehouseTarget,
+                    hasSupplyChain ? "Online" : "Offline",
+                    deliveredCommodities,
+                    commodityTarget));
+        }
+
+        private CompanyDoctrineStatus BuildServiceDoctrineStatus()
+        {
+            var serviceSiteTarget = 4;
+            var franchiseTarget = 4;
+            var routeTarget = 4;
+            var missionTarget = 6;
+            var serviceSites = GetOwnedGasStationCount() + GetOwnedStoreCount();
+            var franchiseSites = GetTotalFranchiseSiteCount();
+            var activeRoutes = GetCurrentNpcRouteCount();
+            var missions = _snapshot.TotalSpecialMissionsCompleted;
+            var progressRatio = Clamp01(
+                (BuildRatio(serviceSites, serviceSiteTarget) * 0.30f)
+                + (BuildRatio(franchiseSites, franchiseTarget) * 0.20f)
+                + (BuildRatio(activeRoutes, routeTarget) * 0.25f)
+                + (BuildRatio(missions, missionTarget) * 0.25f));
+
+            return BuildDoctrineStatus(
+                CompanyDoctrine.Service,
+                progressRatio,
+                string.Format(
+                    "{0}/{1} service sites | {2}/{3} franchises | {4}/{5} routes | {6}/{7} missions",
+                    serviceSites,
+                    serviceSiteTarget,
+                    franchiseSites,
+                    franchiseTarget,
+                    activeRoutes,
+                    routeTarget,
+                    missions,
+                    missionTarget));
+        }
+
+        private static CompanyDoctrine DetermineActiveDoctrine(IEnumerable<CompanyDoctrineStatus> statuses)
+        {
+            var active = (statuses ?? Enumerable.Empty<CompanyDoctrineStatus>())
+                .Where(status => status != null && status.Tier > 0)
+                .OrderByDescending(status => status.Tier)
+                .ThenByDescending(status => status.ProgressRatio)
+                .ThenByDescending(status => GetDoctrinePriority(status.Doctrine))
+                .FirstOrDefault();
+            return active != null ? active.Doctrine : CompanyDoctrine.Balanced;
+        }
+
+        private static int GetDoctrinePriority(CompanyDoctrine doctrine)
+        {
+            switch (doctrine)
+            {
+                case CompanyDoctrine.Industrial:
+                    return 3;
+                case CompanyDoctrine.Territorial:
+                    return 2;
+                case CompanyDoctrine.Service:
+                    return 1;
+                default:
+                    return 0;
+            }
+        }
+
+        private static CompanyDoctrineStatus BuildDoctrineStatus(CompanyDoctrine doctrine, float progressRatio, string progressText)
+        {
+            return new CompanyDoctrineStatus
+            {
+                Doctrine = doctrine,
+                Name = CompanyDoctrineSystem.GetName(doctrine),
+                FocusSummary = CompanyDoctrineSystem.GetFocusSummary(doctrine),
+                Tier = CompanyDoctrineSystem.ResolveTier(progressRatio),
+                EffectiveTier = 0,
+                ProgressRatio = Clamp01(progressRatio),
+                ProgressText = progressText ?? string.Empty,
+                BonusSummary = string.Empty,
+                TradeoffSummary = string.Empty,
+                IsActive = false,
+            };
+        }
+
         private static PlayerStatisticsPersistenceSnapshot CloneSnapshot(PlayerStatisticsPersistenceSnapshot snapshot)
         {
             var clone = new PlayerStatisticsPersistenceSnapshot
@@ -865,6 +1196,9 @@ namespace LSOL.Systems
                 CumulativeNpcDeliveryIncome = snapshot != null ? Math.Max(0f, snapshot.CumulativeNpcDeliveryIncome) : 0f,
                 TotalSpecialMissionsCompleted = snapshot != null ? Math.Max(0, snapshot.TotalSpecialMissionsCompleted) : 0,
                 TotalEmergencyServiceUsages = snapshot != null ? Math.Max(0, snapshot.TotalEmergencyServiceUsages) : 0,
+                HighestPrestigeScore = snapshot != null ? Math.Max(0f, snapshot.HighestPrestigeScore) : 0f,
+                HighestDoctrineId = snapshot != null ? snapshot.HighestDoctrineId ?? string.Empty : string.Empty,
+                HighestDoctrineTier = snapshot != null ? Math.Max(0, snapshot.HighestDoctrineTier) : 0,
             };
 
             return clone;

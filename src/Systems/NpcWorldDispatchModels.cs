@@ -106,6 +106,19 @@ namespace LSOL.Systems
         public bool HasVisibleConvoy { get; set; }
     }
 
+    public sealed class NpcDistrictCompetitionSummary
+    {
+        public string DistrictName { get; set; }
+
+        public int ActiveJobCount { get; set; }
+
+        public int VisibleConvoyCount { get; set; }
+
+        public float CompetitiveTons { get; set; }
+
+        public float PressureScore { get; set; }
+    }
+
     public sealed class NpcWorldDispatchDiagnosticEntry
     {
         public int? ClockMinute { get; set; }

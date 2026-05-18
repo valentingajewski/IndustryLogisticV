@@ -28,6 +28,10 @@ namespace LSOL.Systems
         OtherExpense = 13,
         LoanDisbursement = 14,
         LoanRepayment = 15,
+        TerritoryOperations = 16,
+        CorporateOverhead = 17,
+        FleetMaintenance = 18,
+        InventoryLoss = 19,
     }
 
     public sealed class CompanyFinanceTransaction

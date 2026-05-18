@@ -37,7 +37,7 @@ The usual LSOL progression looks like this:
 5. Earn money.
 6. Expand into better offices, more vehicles, owned industries, apartments, NPC drivers, and special missions.
 
-The mod becomes deeper as you go. Early on it feels like trucking and delivery management. Later it becomes a wider company simulator with ownership, automation, analytics, and mission content.
+The mod becomes deeper as you go. Early on it feels like trucking and delivery management. Later it becomes a wider company simulator with ownership, automation, analytics, mission content, and territory operations costs tied to the footprint you maintain.
 
 ## Features Overview
 
@@ -132,20 +132,50 @@ You can view:
 - company overview information,
 - site and district summaries,
 - analytics and trends,
+- recurring territory obligations, district charters, corridor upkeep risk, and support-site specialization in the Budget, Analytics, and Company Map views,
 - available mission content,
 - current company state.
 
 ### Special Missions
 
-LSOL supports special community mission packs loaded from `LSOL_Config/missions`.
+LSOL now runs a rotating mission board with district crisis contracts, weekly tenders, and priority line-haul jobs, alongside special community mission packs loaded from `LSOL_Config/missions`.
 
 These missions can add custom jobs such as:
 
+- district crisis relief contracts,
+- weekly tender slots tied to district standing,
+- priority long-haul board runs,
 - trailer deliveries,
 - container handling jobs,
 - heavy machinery transport-style tasks.
 
 Mission progress also saves with the rest of your company.
+
+### Late-Game Economic Pressure
+
+As your company gets larger, LSOL now pushes back with additional management pressure instead of only scaling raw throughput.
+
+This phase adds:
+
+- rotating market shocks that temporarily lift prices and district demand for selected commodity groups,
+- corporate overhead that scales with owned sites, fleet size, hired NPC crews, district licences, support sites, and corridor footprint,
+- owned-fleet maintenance and inspection cycles with Maintenance Bays reducing wear and backlog,
+- resale depreciation on commercial vehicles based on maintenance history and condition,
+- warehouse storage condition that can reduce inventory value and slowly create spoilage or shrinkage on sensitive cargo,
+- new budget and analytics visibility for overhead, maintenance, inventory losses, market shocks, and warehouse condition.
+
+### Prestige, Doctrine, and Endgame Identity
+
+Once your company is established, LSOL now adds a prestige layer so late-game play is about identity and resilience, not only bigger counters.
+
+This phase adds:
+
+- three strategic company doctrines that emerge from how you build the company: `Regional Backbone`, `Integrated Chain`, and `Client Priority`,
+- doctrine bonuses and tradeoffs tied into district support, delivery returns, service targets, corridor upkeep, and route-loss exposure,
+- a unique `Landmark HQ Annex` office object that acts as a company-wide capstone once placed at an owned office,
+- district competition pressure driven by ambient outside-carrier traffic, with opportunity windows and defense wins tracked over time,
+- new Successes tablet progress for doctrine posture, prestige score, HQ status, and endgame-oriented goals,
+- district competition visibility inside the Analytics tablet and Company Map detail views.
 
 ## Requirements
 
@@ -397,13 +427,14 @@ Creating a new named save resets the gameplay world and starts a fresh profile.
 
 ## Special Missions
 
-Mission packs are loaded only from `LSOL_Config/missions/*.xml` next to `LSOL.ini`.
+The mission board now combines built-in rotating contracts with optional mission packs loaded from `LSOL_Config/missions/*.xml` next to `LSOL.ini`.
 
-If no mission packs are installed, the company hub mission area will simply show no mission content.
+If no XML mission packs are installed, the mission board still surfaces generated district crisis jobs, weekly tenders, and priority runs once your company has enough territory presence and fleet capability.
 
 The included mission documentation in `LSOL_Config/missions/README.md` is mainly for mission authors, but as a player you only need to know this:
 
 - mission packs are `.xml` files,
+- the rotating board also generates contracts from your district footprint, corridors, and fleet,
 - they load automatically on startup,
 - they can unlock new jobs and rewards,
 - their progress is saved with your company.

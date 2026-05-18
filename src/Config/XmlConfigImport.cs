@@ -1132,6 +1132,12 @@ namespace LSOL.Config
                 return OfficeObjectFunction.Npc;
             }
 
+            if (normalized.Equals("Headquarters", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("HQ", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectFunction.Headquarters;
+            }
+
             return OfficeObjectFunction.Decorative;
         }
 
