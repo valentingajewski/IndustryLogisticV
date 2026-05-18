@@ -186,6 +186,65 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void SaveAndLoad_WithGlobalMarketSnapshot_RestoresCommodityMultipliersAndTimers()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("market.state.ini");
+
+            try
+            {
+                var basePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "Fuel", 700f },
+                    { "Steel", 900f },
+                };
+
+                var sourceMarket = new GlobalMarketManager(0, basePrices);
+                sourceMarket.Update(600000);
+                sourceMarket.RegisterDelivery("Fuel", 650000);
+                sourceMarket.Update(1200000);
+                sourceMarket.RegisterDelivery("Steel", 1300000);
+                sourceMarket.Update(1500000);
+
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    Profit = 1000f,
+                    StartingBalance = 1000f,
+                    Market = sourceMarket.CreatePersistenceSnapshot(1500000),
+                };
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "Version=18");
+                StringAssert.Contains(rawSave, "[Market:Commodity:Fuel]");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var restoredMarket = new GlobalMarketManager(10000, basePrices);
+                restoredMarket.ApplyPersistenceSnapshot(result.Metadata.Market, 10000);
+
+                Assert.IsNotNull(result.Metadata.Market);
+                Assert.AreEqual(735f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(900f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+
+                restoredMarket.Update(359999);
+                Assert.AreEqual(735f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(900f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+
+                restoredMarket.Update(360000);
+                Assert.AreEqual(770f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(900f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+
+                restoredMarket.Update(410000);
+                Assert.AreEqual(770f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(945f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
         public void LoadWithMetadata_WithTerritorySnapshot_AppliesSavedSiteAndCorridorState()
         {
             var filePath = TestWorkspace.CreateTempFilePath("territory.state.ini");

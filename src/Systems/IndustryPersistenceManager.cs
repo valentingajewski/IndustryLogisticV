@@ -199,6 +199,11 @@ namespace LSOL.Systems
                     persistenceVersion = 17;
                 }
 
+                    if (metadata != null && HasGlobalMarketData(metadata.Market))
+                    {
+                        persistenceVersion = 18;
+                    }
+
                 writer.WriteLine(
                     "Version={0}",
                     persistenceVersion);
@@ -277,6 +282,11 @@ namespace LSOL.Systems
                 if (metadata != null && metadata.Analytics != null)
                 {
                     WriteAnalyticsSnapshot(writer, metadata.Analytics);
+                }
+
+                if (metadata != null && HasGlobalMarketData(metadata.Market))
+                {
+                    WriteGlobalMarketSnapshot(writer, metadata.Market);
                 }
 
                 if (metadata != null && HasOwnedFleetData(metadata.OwnedFleet))
@@ -372,6 +382,7 @@ namespace LSOL.Systems
                 5);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             metadata.Analytics = ReadAnalyticsSnapshot(ini);
+            metadata.Market = ReadGlobalMarketSnapshot(ini);
             metadata.OwnedFleet = ReadOwnedFleetSnapshot(ini);
             metadata.NpcLogistics = ReadNpcLogisticsSnapshot(ini);
             metadata.SpecialMissions = ReadSpecialMissionSnapshot(ini);
@@ -380,9 +391,45 @@ namespace LSOL.Systems
             metadata.BankLoans = ReadBankLoanSnapshot(ini);
             metadata.PlayerStatistics = ReadPlayerStatisticsSnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
+                || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
                 || HasPlayerStatisticsData(metadata.PlayerStatistics);
             return metadata;
+        }
+
+        private static GlobalMarketPersistenceSnapshot ReadGlobalMarketSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new GlobalMarketPersistenceSnapshot();
+            var hasMarket = false;
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section)
+                    || !section.StartsWith("Market:Commodity:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var commodityKey = section.Substring("Market:Commodity:".Length).Trim();
+                if (string.IsNullOrWhiteSpace(commodityKey))
+                {
+                    continue;
+                }
+
+                snapshot.CommodityStates.Add(new GlobalMarketCommodityPersistenceEntry
+                {
+                    Commodity = CommodityCatalog.Normalize(commodityKey),
+                    PriceMultiplier = Math.Max(1f, ParseFloat(ini.GetString(section, "PriceMultiplier", "1"), 1f)),
+                    RemainingScarcityMs = Math.Max(0, ParseInt(ini.GetString(section, "RemainingScarcityMs", "0"), 0)),
+                });
+                hasMarket = true;
+            }
+
+            return hasMarket ? snapshot : null;
         }
 
         private static CompanyFinancePersistenceSnapshot ReadFinanceSnapshot(IniFile ini)
@@ -526,6 +573,24 @@ namespace LSOL.Systems
             WriteNamedSeriesPersistence(writer, "Analytics:Commodity:", analytics.CommodityPriceHistories, CommodityCatalog.Normalize);
             WriteNamedSeriesPersistence(writer, "Analytics:SiteUtilization:", analytics.SiteUtilizationHistories, key => key);
             WriteNamedSeriesPersistence(writer, "Analytics:SiteStorage:", analytics.SiteStorageHistories, key => key);
+        }
+
+        private static void WriteGlobalMarketSnapshot(StreamWriter writer, GlobalMarketPersistenceSnapshot market)
+        {
+            if (writer == null || market == null || !market.HasData)
+            {
+                return;
+            }
+
+            foreach (var entry in market.CommodityStates
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.Commodity))
+                .OrderBy(item => item.Commodity, StringComparer.OrdinalIgnoreCase))
+            {
+                writer.WriteLine("[Market:Commodity:{0}]", CommodityCatalog.Normalize(entry.Commodity));
+                writer.WriteLine("PriceMultiplier={0}", FormatFloat(Math.Max(1f, entry.PriceMultiplier)));
+                writer.WriteLine("RemainingScarcityMs={0}", Math.Max(0, entry.RemainingScarcityMs).ToString(CultureInfo.InvariantCulture));
+                writer.WriteLine();
+            }
         }
 
         private static void WriteFinanceSnapshot(StreamWriter writer, CompanyFinancePersistenceSnapshot finance)
@@ -2043,6 +2108,11 @@ namespace LSOL.Systems
             return snapshot != null && snapshot.HasData;
         }
 
+        private static bool HasGlobalMarketData(GlobalMarketPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
         private static CompanyFinanceFlow ParseCompanyFinanceFlow(string raw, CompanyFinanceFlow fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -2094,6 +2164,7 @@ namespace LSOL.Systems
         public int NpcRouteLimit { get; set; } = 5;
         public bool DifficultySettingsLocked { get; set; }
         public TabletAnalyticsPersistenceSnapshot Analytics { get; set; }
+        public GlobalMarketPersistenceSnapshot Market { get; set; }
         public OwnedFleetPersistenceSnapshot OwnedFleet { get; set; }
         public NpcLogisticsPersistenceSnapshot NpcLogistics { get; set; }
         public SpecialMissionPersistenceSnapshot SpecialMissions { get; set; }

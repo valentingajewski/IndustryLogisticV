@@ -72,17 +72,7 @@ namespace LSOL.Systems
             }
 
             _commodityStates = new Dictionary<string, CommodityMarketState>(StringComparer.OrdinalIgnoreCase);
-            _lastUpdatedGameTimeMs = startGameTimeMs;
-
-            foreach (var commodity in _basePrices.Keys)
-            {
-                EnsureCommodityState(commodity);
-            }
-
-            foreach (var commodity in Domain.CommodityCatalog.GetKnownCommodities())
-            {
-                EnsureCommodityState(commodity);
-            }
+            Reset(startGameTimeMs);
         }
 
         public float PriceMultiplier
@@ -121,6 +111,57 @@ namespace LSOL.Systems
             }
 
             _lastUpdatedGameTimeMs = gameTimeMs;
+        }
+
+        public void Reset(int currentGameTimeMs)
+        {
+            _commodityStates.Clear();
+            _lastUpdatedGameTimeMs = currentGameTimeMs;
+            InitializeKnownCommodityStates();
+        }
+
+        public GlobalMarketPersistenceSnapshot CreatePersistenceSnapshot(int currentGameTimeMs)
+        {
+            var snapshot = new GlobalMarketPersistenceSnapshot();
+            foreach (var pair in _commodityStates)
+            {
+                if (pair.Value == null || pair.Key.Equals(DefaultCommodityKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                snapshot.CommodityStates.Add(new GlobalMarketCommodityPersistenceEntry
+                {
+                    Commodity = pair.Key,
+                    PriceMultiplier = Math.Max(DefaultPriceMultiplier, pair.Value.PriceMultiplier),
+                    RemainingScarcityMs = Math.Max(0, pair.Value.NextScarcityIncreaseAtMs - currentGameTimeMs),
+                });
+            }
+
+            return snapshot;
+        }
+
+        public void ApplyPersistenceSnapshot(GlobalMarketPersistenceSnapshot snapshot, int currentGameTimeMs)
+        {
+            Reset(currentGameTimeMs);
+            if (snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            for (int i = 0; i < snapshot.CommodityStates.Count; i++)
+            {
+                var entry = snapshot.CommodityStates[i];
+                var commodity = Domain.CommodityCatalog.Normalize(entry != null ? entry.Commodity : string.Empty);
+                if (string.IsNullOrWhiteSpace(commodity))
+                {
+                    continue;
+                }
+
+                var state = EnsureCommodityState(commodity);
+                state.PriceMultiplier = Math.Max(DefaultPriceMultiplier, entry.PriceMultiplier);
+                state.NextScarcityIncreaseAtMs = currentGameTimeMs + Math.Max(0, entry.RemainingScarcityMs);
+            }
         }
 
         public void RegisterDelivery(int gameTimeMs)
@@ -175,6 +216,19 @@ namespace LSOL.Systems
             return state;
         }
 
+        private void InitializeKnownCommodityStates()
+        {
+            foreach (var commodity in _basePrices.Keys)
+            {
+                EnsureCommodityState(commodity);
+            }
+
+            foreach (var commodity in Domain.CommodityCatalog.GetKnownCommodities())
+            {
+                EnsureCommodityState(commodity);
+            }
+        }
+
         private static void ApplyDeliveryPressure(CommodityMarketState state, int gameTimeMs)
         {
             if (state == null)
@@ -214,5 +268,29 @@ namespace LSOL.Systems
 
             public int NextScarcityIncreaseAtMs { get; set; }
         }
+    }
+
+    public sealed class GlobalMarketPersistenceSnapshot
+    {
+        public GlobalMarketPersistenceSnapshot()
+        {
+            CommodityStates = new List<GlobalMarketCommodityPersistenceEntry>();
+        }
+
+        public List<GlobalMarketCommodityPersistenceEntry> CommodityStates { get; private set; }
+
+        public bool HasData
+        {
+            get { return CommodityStates.Count > 0; }
+        }
+    }
+
+    public sealed class GlobalMarketCommodityPersistenceEntry
+    {
+        public string Commodity { get; set; }
+
+        public float PriceMultiplier { get; set; }
+
+        public int RemainingScarcityMs { get; set; }
     }
 }

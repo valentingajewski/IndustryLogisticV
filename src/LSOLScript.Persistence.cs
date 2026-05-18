@@ -18,6 +18,7 @@ namespace LSOL
             _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
             _specialMissionManager.ResetState();
+            _globalMarket.Reset(Game.GameTime);
             _npcLogisticsManager.ClearAll();
             _propertyManager.ResetState();
             _fleetManager.DespawnOwnedFleet();
@@ -474,6 +475,7 @@ namespace LSOL
                 NpcRouteLimit = _npcRouteLimit,
                 DifficultySettingsLocked = _difficultySettingsLocked,
                 Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
+                Market = _globalMarket.CreatePersistenceSnapshot(Game.GameTime),
                 OwnedFleet = _fleetManager.CreateOwnedFleetSnapshot(_vehicleFuelSystem),
                 PropertyOwnership = _propertyManager.CreateSnapshot(_fleetManager, _vehicleFuelSystem),
                 NpcLogistics = _npcLogisticsManager.CreatePersistenceSnapshot(),
@@ -530,6 +532,7 @@ namespace LSOL
             ApplyPresentationSettings(false);
             _financeTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.Finance : null);
             _bankLoanManager.ApplyPersistenceSnapshot(metadata != null ? metadata.BankLoans : null, GetCurrentInGameWeekMinute());
+            _globalMarket.ApplyPersistenceSnapshot(metadata != null ? metadata.Market : null, Game.GameTime);
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
             _playerSuccessTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerStatistics : null, _profit);
             SyncPlayerSuccessBalance(false);
