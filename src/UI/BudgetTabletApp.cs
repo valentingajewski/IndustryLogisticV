@@ -215,8 +215,6 @@ namespace LSOL.UI
                 Layout = SimpleMenuTabletLayout.Dashboard,
                 DashboardSidebarCount = 0,
                 DashboardTileColumns = 3,
-                BottomPanelHeight = 156f,
-                BottomPanelRenderer = panel => DrawOverviewBars(panel, overview, "Budget Snapshot"),
                 Items = items,
             };
         }
@@ -256,8 +254,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.90f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawOverviewBars(panel, overview, "Cash Summary"),
                 Items = items,
             };
         }
@@ -276,8 +272,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.90f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawBreakdownBars(panel, "Weekly Expense Mix", entries, GetExpenseAccent(210)),
                 Items = items,
             };
         }
@@ -296,8 +290,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.90f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawBreakdownBars(panel, "Weekly Income Mix", entries, GetIncomeAccent(210)),
                 Items = items,
             };
         }
@@ -331,8 +323,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawBillsBars(panel, bills),
                 Items = items,
             };
         }
@@ -371,8 +361,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.90f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawForecastBars(panel, forecast),
                 Items = items,
             };
         }
@@ -412,8 +400,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawRouteMetrics(panel, routes),
                 Items = items,
             };
         }
@@ -463,8 +449,6 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
-                BottomPanelHeight = 144f,
-                BottomPanelRenderer = panel => DrawInventoryBars(panel, valuation),
                 Items = items,
             };
         }
