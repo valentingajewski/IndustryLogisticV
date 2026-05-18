@@ -36,6 +36,9 @@ namespace LSOL.UI
     public sealed class MenuItem
     {
         public Func<string> CaptionFactory { get; set; }
+        public Func<string> CaptionAccentFactory { get; set; }
+        public Func<string> CaptionSuffixFactory { get; set; }
+        public Func<Color?> CaptionAccentColorFactory { get; set; }
         public Func<string> DetailFactory { get; set; }
         public Func<string> IconLabelFactory { get; set; }
         public Func<float?> ProgressRatioFactory { get; set; }
@@ -282,12 +285,10 @@ namespace LSOL.UI
                     DrawRect(resolution.Width, resolution.Height, x + 2f, rowY + 2f, 5f, rowHeight - 4f, palette.Get(ModColorRole.Highlight, 240));
                 }
 
-                var captionFactory = item.CaptionFactory;
-                var caption = captionFactory != null ? captionFactory() : string.Empty;
                 var color = itemIndex == SelectedIndex ? palette.Get(ModColorRole.TextPrimary) : palette.Get(ModColorRole.TextSecondary, 235);
-                DrawTextBlock(
+                DrawMenuItemCaption(
                     resolution,
-                    caption,
+                    item,
                     x + 11f,
                     rowY + 6f,
                     0.30f,
@@ -481,14 +482,12 @@ namespace LSOL.UI
                         rowHeight - 6f,
                         selected ? palette.Get(ModColorRole.Highlight, 236) : palette.Get(ModColorRole.TextMuted, 188));
 
-                    var captionFactory = item.CaptionFactory;
-                    var caption = captionFactory != null ? captionFactory() : string.Empty;
                     var color = selected
                         ? palette.Get(ModColorRole.TextPrimary, 238)
                         : palette.Get(ModColorRole.TextSecondary, 220);
-                    DrawTextBlock(
+                    DrawMenuItemCaption(
                         resolution,
-                        caption,
+                        item,
                         cardX + 24f,
                         rowY + TabletCaptionOffsetY,
                         TabletCaptionScale,
@@ -1295,6 +1294,80 @@ namespace LSOL.UI
             }
         }
 
+        private static void DrawMenuItemCaption(Size resolution, MenuItem item, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float lineSpacing, float maxWidth = float.NaN)
+        {
+            var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
+            var accent = item != null && item.CaptionAccentFactory != null ? item.CaptionAccentFactory() : string.Empty;
+            var suffix = item != null && item.CaptionSuffixFactory != null ? item.CaptionSuffixFactory() : string.Empty;
+
+            if (string.IsNullOrWhiteSpace(accent)
+                || alignment != Alignment.Left
+                || (!float.IsNaN(maxWidth) && maxWidth > 0f)
+                || ContainsLineBreak(caption)
+                || ContainsLineBreak(accent)
+                || ContainsLineBreak(suffix))
+            {
+                DrawTextBlock(
+                    resolution,
+                    string.Concat(caption ?? string.Empty, accent ?? string.Empty, suffix ?? string.Empty),
+                    x,
+                    y,
+                    scale,
+                    color,
+                    font,
+                    alignment,
+                    lineSpacing,
+                    maxWidth);
+                return;
+            }
+
+            var accentColor = item != null && item.CaptionAccentColorFactory != null
+                ? item.CaptionAccentColorFactory()
+                : null;
+            var currentX = x;
+
+            if (!string.IsNullOrEmpty(caption))
+            {
+                DrawHudTextLine(
+                    resolution,
+                    caption,
+                    currentX,
+                    y,
+                    scale,
+                    color,
+                    font,
+                    alignment,
+                    maxWidth);
+                currentX += MeasureHudTextWidthPixels(resolution, caption, scale, font);
+            }
+
+            DrawHudTextLine(
+                resolution,
+                accent,
+                currentX,
+                y,
+                scale,
+                accentColor ?? color,
+                font,
+                alignment,
+                maxWidth);
+            currentX += MeasureHudTextWidthPixels(resolution, accent, scale, font);
+
+            if (!string.IsNullOrEmpty(suffix))
+            {
+                DrawHudTextLine(
+                    resolution,
+                    suffix,
+                    currentX,
+                    y,
+                    scale,
+                    color,
+                    font,
+                    alignment,
+                    maxWidth);
+            }
+        }
+
         private static void DrawHudTextLine(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float maxWidth = float.NaN)
         {
             var coords = ToScriptTextCoords(resolution, x, y);
@@ -1329,6 +1402,27 @@ namespace LSOL.UI
             Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
             Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text ?? string.Empty);
             Function.Call(Hash.END_TEXT_COMMAND_DISPLAY_TEXT, normalizedX, normalizedY, 0);
+        }
+
+        private static float MeasureHudTextWidthPixels(Size resolution, string text, float scale, GTA.UI.Font font)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0f;
+            }
+
+            Function.Call(Hash.SET_TEXT_FONT, (int)font);
+            Function.Call(Hash.SET_TEXT_SCALE, 0f, scale);
+            Function.Call(Hash.BEGIN_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, "STRING");
+            Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text);
+            var normalizedWidth = Function.Call<float>(Hash.END_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, true);
+            return Math.Max(0f, normalizedWidth * resolution.Width);
+        }
+
+        private static bool ContainsLineBreak(string text)
+        {
+            return !string.IsNullOrEmpty(text)
+                && (text.IndexOf('\n') >= 0 || text.IndexOf('\r') >= 0);
         }
 
         private static int GetLineCount(string text)

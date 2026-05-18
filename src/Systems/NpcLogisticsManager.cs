@@ -2064,7 +2064,7 @@ namespace LSOL.Systems
             }
 
             return industry.SortedInputs
-                .Concat(industry.SortedAcceptedInputs)
+                .Concat(industry.SortedOptionalInputs)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .Where(commodity => !string.IsNullOrWhiteSpace(commodity))
                 .Select(CommodityCatalog.Normalize)
@@ -2160,8 +2160,7 @@ namespace LSOL.Systems
             }
 
             if ((industry.Inputs == null || industry.Inputs.Count <= 0)
-                && (industry.OptionalInputs == null || industry.OptionalInputs.Count <= 0)
-                && (industry.BoostInputs == null || industry.BoostInputs.Count <= 0))
+                && (industry.OptionalInputs == null || industry.OptionalInputs.Count <= 0))
             {
                 blocker = "site accepts no ambient-dispatch commodities";
                 return false;

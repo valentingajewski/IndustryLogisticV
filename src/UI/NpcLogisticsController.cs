@@ -421,6 +421,9 @@ namespace LSOL.UI
                 new MenuItem
                 {
                     CaptionFactory = CurrentRouteEnabledCaption,
+                    CaptionAccentFactory = CurrentRouteEnabledStateText,
+                    CaptionSuffixFactory = CurrentRouteEnabledCaptionSuffix,
+                    CaptionAccentColorFactory = CurrentRouteEnabledStateColor,
                     DetailFactory = CurrentRouteEnabledDetail,
                     OnLeft = ToggleSelectedRouteEnabled,
                     OnRight = ToggleSelectedRouteEnabled,
@@ -957,8 +960,26 @@ namespace LSOL.UI
 
         private string CurrentRouteEnabledCaption()
         {
+            return "Route Enabled: < ";
+        }
+
+        private string CurrentRouteEnabledCaptionSuffix()
+        {
+            return " >";
+        }
+
+        private string CurrentRouteEnabledStateText()
+        {
             var route = GetSelectedDraftRouteConfig();
-            return string.Format("Route Enabled: < {0} >", route != null && route.IsEnabled ? "On" : "Off");
+            return route != null && route.IsEnabled ? "On" : "Off";
+        }
+
+        private Color? CurrentRouteEnabledStateColor()
+        {
+            var route = GetSelectedDraftRouteConfig();
+            return AccessibilityTheme.Service.Palette.Get(
+                route != null && route.IsEnabled ? ModColorRole.AccentGreen : ModColorRole.AccentRed,
+                238);
         }
 
         private string CurrentRouteEnabledDetail()
