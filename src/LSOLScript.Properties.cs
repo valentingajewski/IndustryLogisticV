@@ -394,16 +394,64 @@ namespace LSOL
                 return;
             }
 
+            if (result.ServiceSinkPassiveIncome > 0.01f)
+            {
+                AddProfit(
+                    CompanyFinanceCategory.IndustryIncome,
+                    result.ServiceSinkPassiveIncome,
+                    BuildServiceSinkPassiveIncomeFinanceDescription(result));
+            }
+
             if (_tabletStateStore != null)
             {
                 _tabletStateStore.MarkAllDirty();
             }
 
             RebuildOfficeMenuItems();
-            if (result.Messages.Count > 0)
+            var summaryMessage = result.Messages.Count > 0 ? result.Messages[result.Messages.Count - 1] : string.Empty;
+            var passiveIncomeMessage = BuildServiceSinkPassiveIncomeStatus(result);
+            if (!string.IsNullOrWhiteSpace(passiveIncomeMessage) && !string.IsNullOrWhiteSpace(summaryMessage))
             {
-                ShowStatus(result.Messages[result.Messages.Count - 1], 5000);
+                ShowStatus(passiveIncomeMessage + " " + summaryMessage, 5000);
             }
+            else if (!string.IsNullOrWhiteSpace(passiveIncomeMessage))
+            {
+                ShowStatus(passiveIncomeMessage, 5000);
+            }
+            else if (!string.IsNullOrWhiteSpace(summaryMessage))
+            {
+                ShowStatus(summaryMessage, 5000);
+            }
+        }
+
+        private static string BuildServiceSinkPassiveIncomeFinanceDescription(TerritoryWeeklyMaintenanceResult result)
+        {
+            if (result != null && result.ProcessedWeekCount > 1)
+            {
+                return string.Format("Passive income from supplied stores and gas stations ({0} weeks)", result.ProcessedWeekCount);
+            }
+
+            return "Passive income from supplied stores and gas stations";
+        }
+
+        private static string BuildServiceSinkPassiveIncomeStatus(TerritoryWeeklyMaintenanceResult result)
+        {
+            if (result == null || result.ServiceSinkPassiveIncome <= 0.01f)
+            {
+                return string.Empty;
+            }
+
+            if (result.ProcessedWeekCount > 1)
+            {
+                return string.Format(
+                    "Supplied stores and gas stations generated {0} in passive income over {1} weeks.",
+                    ModFormatting.FormatMoney(result.ServiceSinkPassiveIncome),
+                    result.ProcessedWeekCount);
+            }
+
+            return string.Format(
+                "Supplied stores and gas stations generated {0} in passive income.",
+                ModFormatting.FormatMoney(result.ServiceSinkPassiveIncome));
         }
 
         private void DrawPropertyMarkers(Ped player, bool canShowPrompts, ref bool promptShown)

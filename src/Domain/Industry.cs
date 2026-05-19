@@ -52,6 +52,7 @@ namespace LSOL.Domain
             OutputCapacityTons = Math.Max(1f, config.OutputCapacityTons);
             OmegaCapacityTons = Math.Max(1f, InputCapacityTons * Math.Max(0.01f, omegaCapacityMultiplier));
             EmptyingRate = Math.Max(0f, config.EmptyingRate);
+            WeeklyPassiveIncome = Math.Max(0f, config.WeeklyPassiveIncome);
             HasConfiguredEmptyingRate = config.HasConfiguredEmptyingRate;
             RefuelIsFree = config.RefuelIsFree;
             IndustryPrice = Math.Max(0f, config.IndustryPrice);
@@ -165,6 +166,7 @@ namespace LSOL.Domain
         public float OutputCapacityTons { get; private set; }
         public float OmegaCapacityTons { get; private set; }
         public float EmptyingRate { get; private set; }
+        public float WeeklyPassiveIncome { get; private set; }
         public bool HasConfiguredEmptyingRate { get; }
         public bool RefuelIsFree { get; }
         public float IndustryPrice { get; private set; }
@@ -887,7 +889,8 @@ namespace LSOL.Domain
             float? industryLicencePrice = null,
             float? emptyingRate = null,
             float? industryOwnerCut = null,
-            float? deliveryPayoutMultiplier = null)
+            float? deliveryPayoutMultiplier = null,
+            float? weeklyPassiveIncome = null)
         {
             foreach (var key in BufferStorage.Keys.ToList())
             {
@@ -941,6 +944,11 @@ namespace LSOL.Domain
             if (deliveryPayoutMultiplier.HasValue)
             {
                 DeliveryPayoutMultiplier = Math.Max(0f, deliveryPayoutMultiplier.Value <= 0f ? 1f : deliveryPayoutMultiplier.Value);
+            }
+
+            if (weeklyPassiveIncome.HasValue)
+            {
+                WeeklyPassiveIncome = Math.Max(0f, weeklyPassiveIncome.Value);
             }
 
             OmegaStorage = Math.Max(0f, omegaStorage);

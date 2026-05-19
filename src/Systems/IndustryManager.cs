@@ -181,7 +181,8 @@ namespace LSOL.Systems
                     effectiveConfig.IndustryLicencePrice,
                     effectiveConfig.EmptyingRate,
                     effectiveConfig.IndustryOwnerCut,
-                    effectiveConfig.DeliveryPayoutMultiplier);
+                    effectiveConfig.DeliveryPayoutMultiplier,
+                    effectiveConfig.WeeklyPassiveIncome);
             }
         }
 
@@ -265,7 +266,8 @@ namespace LSOL.Systems
                     defaultConfig.IndustryLicencePrice,
                     defaultConfig.EmptyingRate,
                     defaultConfig.IndustryOwnerCut,
-                    defaultConfig.DeliveryPayoutMultiplier);
+                    defaultConfig.DeliveryPayoutMultiplier,
+                    defaultConfig.WeeklyPassiveIncome);
                 industry.ApplyStoragePressureState(1f, -1, 0f, 0f);
 
                 SeedIndustryStartingState(industry, defaultConfig);
@@ -820,6 +822,7 @@ namespace LSOL.Systems
                 StartingTankRatio = source.StartingTankRatio,
                 Density = source.Density,
                 EmptyingRate = source.EmptyingRate,
+                WeeklyPassiveIncome = source.WeeklyPassiveIncome,
                 HasConfiguredEmptyingRate = source.HasConfiguredEmptyingRate,
                 RefuelIsFree = source.RefuelIsFree,
                 IndustryPrice = source.IndustryPrice,
@@ -870,6 +873,7 @@ namespace LSOL.Systems
                 effectiveConfig.IndustryPrice = Math.Max(0f, sitePreset.PurchasePrice);
                 effectiveConfig.IndustryLicencePrice = sitePreset.PermitRequired ? Math.Max(0f, sitePreset.LicencePrice) : 0f;
                 effectiveConfig.EmptyingRate = ApplySinkEmptyingRateForPreset(effectiveConfig, preset);
+                effectiveConfig.WeeklyPassiveIncome = ApplyWeeklyPassiveIncomeForPreset(effectiveConfig, preset);
                 effectiveConfig.IndustryOwnerCut = ApplyIndustryOwnerCutForPreset(effectiveConfig.IndustryOwnerCut, preset);
                 effectiveConfig.DeliveryPayoutMultiplier = Math.Max(0f, effectiveConfig.DeliveryPayoutMultiplier <= 0f ? 1f : effectiveConfig.DeliveryPayoutMultiplier);
                 var hasStarterOwnership = SiteMetadataParser.GrantsStarterOwnership(effectiveConfig.SiteRole);
@@ -1077,6 +1081,30 @@ namespace LSOL.Systems
             }
 
             return Math.Max(0f, config.EmptyingRate * multiplier);
+        }
+
+        private static float ApplyWeeklyPassiveIncomeForPreset(IndustryConfig config, EconomyDifficultyPreset preset)
+        {
+            if (config == null)
+            {
+                return 0f;
+            }
+
+            var multiplier = 1f;
+            if (config.Outputs.Count == 0)
+            {
+                switch (preset)
+                {
+                    case EconomyDifficultyPreset.Casual:
+                        multiplier = 0.90f;
+                        break;
+                    case EconomyDifficultyPreset.Hardcore:
+                        multiplier = 1.15f;
+                        break;
+                }
+            }
+
+            return Math.Max(0f, config.WeeklyPassiveIncome * multiplier);
         }
 
         private static float ApplyProductionModuleLevels(float productionRate, int moduleLevel)

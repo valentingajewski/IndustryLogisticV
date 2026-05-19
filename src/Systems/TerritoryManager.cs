@@ -2547,6 +2547,15 @@ namespace LSOL.Systems
             return siteState != null && siteState.ServicePenaltySteps > 0;
         }
 
+        private static bool ShouldAwardServiceSinkPassiveIncome(Industry industry)
+        {
+            return industry != null
+                && industry.IsOwned
+                && (industry.IsStore || industry.IsGasStation)
+                && industry.WeeklyPassiveIncome > 0.01f
+                && industry.GetInputStockTotal() > 0.05f;
+        }
+
         private bool IsCorridorAtRisk(TerritoryCorridorState corridorState)
         {
             return corridorState != null
@@ -2628,6 +2637,11 @@ namespace LSOL.Systems
                     siteState.ServiceSuccessStreak = 0;
                     siteState.ServiceTargetMetLastWeek = false;
                     continue;
+                }
+
+                if (ShouldAwardServiceSinkPassiveIncome(industry))
+                {
+                    result.ServiceSinkPassiveIncome += industry.WeeklyPassiveIncome;
                 }
 
                 var targetTons = siteState.RequiredWeeklyServiceTons > 0.01f
@@ -3377,6 +3391,7 @@ namespace LSOL.Systems
         public int MissedServiceContractCount { get; set; }
         public int HighCompetitionDistrictCount { get; set; }
         public int CompetitiveWinCount { get; set; }
+        public float ServiceSinkPassiveIncome { get; set; }
         public List<string> Messages { get; private set; }
     }
 

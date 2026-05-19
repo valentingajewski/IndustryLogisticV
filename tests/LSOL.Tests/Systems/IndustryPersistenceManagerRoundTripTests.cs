@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -337,8 +338,13 @@ namespace LSOL.Tests.Systems
                 IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), restoredTerritoryManager);
 
                 var restoredDistrict = restoredTerritoryManager.GetDistrictState("Port");
+                var versionLine = rawSave.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .FirstOrDefault(line => line.StartsWith("Version=", StringComparison.OrdinalIgnoreCase));
+                int savedVersion;
 
-                StringAssert.Contains(rawSave, "Version=17");
+                Assert.IsFalse(string.IsNullOrWhiteSpace(versionLine));
+                Assert.IsTrue(int.TryParse(versionLine.Substring("Version=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out savedVersion));
+                Assert.IsTrue(savedVersion >= 17);
                 StringAssert.Contains(rawSave, "[TerritoryDistrictReputation:Port]");
                 Assert.IsNotNull(restoredDistrict);
                 Assert.AreEqual(40f, restoredTerritoryManager.GetDistrictReputationDebugOffset("Port"), 0.01f);

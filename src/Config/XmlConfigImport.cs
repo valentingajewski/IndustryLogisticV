@@ -11,6 +11,8 @@ namespace LSOL.Config
 {
     internal static class XmlConfigImport
     {
+        private const float WeeklyPassiveIncomeThroughputMultiplier = 500f;
+
         public static CoreXmlConfig LoadCoreConfig(string configDirectory, ICollection<string> validationMessages)
         {
             var coreConfig = new CoreXmlConfig();
@@ -448,6 +450,15 @@ namespace LSOL.Config
                             location.HardcoreEconomy = preset;
                         }
                     }
+                }
+
+                if (!TryReadFloatAttribute(element, "weeklyPassiveIncome", out var weeklyPassiveIncome))
+                {
+                    location.WeeklyPassiveIncome = DeriveWeeklyPassiveIncome(location);
+                }
+                else
+                {
+                    location.WeeklyPassiveIncome = Math.Max(0f, weeklyPassiveIncome);
                 }
 
                 location.FactoryProductionRatio = Math.Max(
@@ -1473,6 +1484,87 @@ namespace LSOL.Config
             }
 
             return 2.25f;
+        }
+
+        private static float DeriveWeeklyPassiveIncome(ExternalLocationConfig location)
+        {
+            if (location == null)
+            {
+                return 0f;
+            }
+
+            if (location.Kind != ExternalLocationKind.Store && location.Kind != ExternalLocationKind.GasStation)
+            {
+                return 0f;
+            }
+
+            var inputCapacityTons = ResolveWeeklyPassiveIncomeInputCapacityTons(location);
+            var emptyingRate = Math.Max(0f, location.EmptyingRate);
+            if (inputCapacityTons <= 0.001f || emptyingRate <= 0.001f)
+            {
+                return 0f;
+            }
+
+            return inputCapacityTons * emptyingRate * WeeklyPassiveIncomeThroughputMultiplier;
+        }
+
+        private static float ResolveWeeklyPassiveIncomeInputCapacityTons(ExternalLocationConfig location)
+        {
+            var preset = location != null
+                ? (location.StandardEconomy ?? location.CasualEconomy ?? location.HardcoreEconomy)
+                : null;
+            if (preset != null && preset.InputCapacityTons > 0.001f)
+            {
+                return preset.InputCapacityTons;
+            }
+
+            var normalizedDensity = NormalizeDensity(location != null ? location.Density : string.Empty, string.Empty);
+            if (location != null && location.Kind == ExternalLocationKind.Store)
+            {
+                if (normalizedDensity.Equals("VeryLow", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 6f;
+                }
+
+                if (normalizedDensity.Equals("Low", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 12f;
+                }
+
+                if (normalizedDensity.Equals("High", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 40f;
+                }
+
+                return 24f;
+            }
+
+            if (location != null && location.Kind == ExternalLocationKind.GasStation)
+            {
+                if (normalizedDensity.Equals("None", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 0f;
+                }
+
+                if (normalizedDensity.Equals("VeryLow", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 20f;
+                }
+
+                if (normalizedDensity.Equals("Low", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 35f;
+                }
+
+                if (normalizedDensity.Equals("High", StringComparison.OrdinalIgnoreCase))
+                {
+                    return 90f;
+                }
+
+                return 60f;
+            }
+
+            return 0f;
         }
 
         private static float Clamp01(float value)

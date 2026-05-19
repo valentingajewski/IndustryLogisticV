@@ -210,6 +210,7 @@ namespace LSOL.Config
                 StartingTankRatio = location.StartingTankRatio,
                 Density = location.Density,
                 EmptyingRate = location.EmptyingRate,
+                WeeklyPassiveIncome = Math.Max(0f, location.WeeklyPassiveIncome),
                 HasConfiguredEmptyingRate = location.HasConfiguredEmptyingRate,
                 RefuelIsFree = location.RefuelIsFree,
                 IndustryPrice = purchasePrice,

@@ -43,6 +43,7 @@ namespace LSOL.Config
         public float StartingTankRatio { get; set; }
         public string Density { get; set; }
         public float EmptyingRate { get; set; }
+        public float WeeklyPassiveIncome { get; set; }
         public bool HasConfiguredEmptyingRate { get; set; }
         public bool RefuelIsFree { get; set; }
         public float IndustryPrice { get; set; }
