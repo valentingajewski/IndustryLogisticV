@@ -23,10 +23,13 @@ namespace LSOL
         private const int ApartmentSleepBlackoutDurationMs = 2000;
         private const float ApartmentExteriorMarkerScale = 1.3f;
         private const float ApartmentInteriorMarkerScale = 1.2f;
+        private const float ApartmentGarageMarkerScale = 1.3f;
         private const float DealershipInteractionDistance = 4.6f;
+        private const float PersonalDealershipVehiclePadHeading = 70f;
 
         private static readonly Vector3 CommercialDealershipMarker = new Vector3(-979.56f, -2232.48f, 8.86f);
-        private static readonly Vector3 PersonalDealershipMarker = new Vector3(38.68f, -1109.47f, 26.44f);
+        private static readonly Vector3 PersonalDealershipMarker = new Vector3(-38.68f, -1109.47f, 26.44f);
+        private static readonly Vector3 PersonalDealershipVehiclePadPosition = new Vector3(-42.77f, -1112.92f, 26.44f);
 
         private LemonMenu _commercialGarageMenu;
         private LemonMenu _commercialGarageActionMenu;
@@ -37,12 +40,14 @@ namespace LSOL
         private LemonMenu _apartmentInteriorMenu;
         private LemonMenu _personalGarageMenu;
         private LemonMenu _personalDealershipMenu;
+        private Vehicle _personalDealershipPreviewVehicle;
         private OfficeDefinition _menuOffice;
         private InteriorDefinition _menuApartment;
         private CommercialGarageMenuContext _commercialGarageMenuContext;
         private OwnedCommercialVehiclePersistenceEntry _selectedCommercialGarageVehicle;
         private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
         private List<OfficeObjectDefinition> _officeObjectPreviewSlots;
+        private string _personalDealershipPreviewModelName;
         private OfficeObjectDefinition _pendingOfficeObjectPurchaseDefinition;
         private ApartmentSleepTransitionPhase _apartmentSleepTransitionPhase;
         private int _apartmentSleepTransitionPhaseStartedAt;
@@ -224,6 +229,8 @@ namespace LSOL
             {
                 _personalDealershipMenu.Close();
             }
+
+            ClearPersonalDealershipPreviewVehicle();
         }
 
         private bool HandlePropertyMenuKey(WinForms.Keys key)
@@ -231,6 +238,11 @@ namespace LSOL
             if (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen)
             {
                 _personalDealershipMenu.HandleKey(key, _controls);
+                if (!_personalDealershipMenu.IsOpen)
+                {
+                    ClearPersonalDealershipPreviewVehicle();
+                }
+
                 return true;
             }
 
@@ -238,7 +250,7 @@ namespace LSOL
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
                 {
-                    ReturnToApartmentMenu();
+                    _personalGarageMenu.Close();
                     return true;
                 }
 
@@ -460,8 +472,11 @@ namespace LSOL
             var drawDistanceSq = IndustryMarkerDrawDistance * IndustryMarkerDrawDistance;
             var apartmentExteriorInteractionDistance = GetApartmentExteriorInteractionDistance();
             var apartmentInteriorInteractionDistance = GetApartmentInteriorInteractionDistance();
+            var apartmentGarageInteractionDistance = GetApartmentGarageInteractionDistance();
             var activeOffice = _propertyManager.ActiveOffice;
             var activeApartment = _propertyManager.ActiveApartment;
+            Vector3 activeApartmentGaragePosition;
+            var canUseActiveApartmentGarage = TryGetActiveApartmentGaragePosition(out activeApartmentGaragePosition);
 
             for (int i = 0; i < _propertyManager.Offices.Count; i++)
             {
@@ -489,6 +504,29 @@ namespace LSOL
                 if (canShowPrompts && !promptShown && playerPos.DistanceTo(office.MarkerPosition) <= OfficeInteractionDistance)
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to manage {1}.", KeyName(_controls.Interact), office.DisplayName)));
+                    promptShown = true;
+                }
+            }
+
+            if (canUseActiveApartmentGarage && playerPos.DistanceToSquared(activeApartmentGaragePosition) <= drawDistanceSq)
+            {
+                World.DrawMarker(
+                    MarkerType.Cylinder,
+                    activeApartmentGaragePosition,
+                    Vector3.Zero,
+                    Vector3.Zero,
+                    new Vector3(apartmentGarageInteractionDistance, apartmentGarageInteractionDistance, _config.MarkerHeight),
+                    Color.FromArgb(205, 98, 176, 220),
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    false);
+
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(activeApartmentGaragePosition) <= apartmentGarageInteractionDistance)
+                {
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to manage your personal garage.", KeyName(_controls.Interact))));
                     promptShown = true;
                 }
             }
@@ -588,6 +626,14 @@ namespace LSOL
                 return true;
             }
 
+            Vector3 activeApartmentGaragePosition;
+            if (TryGetActiveApartmentGaragePosition(out activeApartmentGaragePosition)
+                && player.Position.DistanceTo(activeApartmentGaragePosition) <= GetApartmentGarageInteractionDistance())
+            {
+                OpenPersonalGarageMenu();
+                return true;
+            }
+
             var office = GetOfficeInInteractionRange(player.Position);
             if (office != null)
             {
@@ -654,6 +700,35 @@ namespace LSOL
         private float GetApartmentInteriorInteractionDistance()
         {
             return _config.MarkerRadius * ApartmentInteriorMarkerScale;
+        }
+
+        private float GetApartmentGarageInteractionDistance()
+        {
+            return _config.MarkerRadius * ApartmentGarageMarkerScale;
+        }
+
+        private bool TryGetActiveApartmentGaragePosition(out Vector3 garagePosition)
+        {
+            garagePosition = Vector3.Zero;
+            if (_propertyManager == null)
+            {
+                return false;
+            }
+
+            string reason;
+            if (!_propertyManager.CanUseApartmentSystems(out reason))
+            {
+                return false;
+            }
+
+            var apartment = _propertyManager.ActiveApartment;
+            if (apartment == null || apartment.GaragePosition == Vector3.Zero)
+            {
+                return false;
+            }
+
+            garagePosition = apartment.GaragePosition;
+            return true;
         }
 
         private bool IsNearCommercialDealership(Vector3 position)
@@ -1358,6 +1433,93 @@ namespace LSOL
             return selectedIndex >= 0 && selectedIndex < _officeObjectPreviewSlots.Count
                 ? _officeObjectPreviewSlots[selectedIndex]
                 : null;
+        }
+
+        private DealershipVehicleDefinition GetSelectedPersonalDealershipPreviewDefinition()
+        {
+            if (_personalDealershipMenu == null || !_personalDealershipMenu.IsOpen || _propertyManager == null || _propertyManager.PersonalVehicleCatalog == null)
+            {
+                return null;
+            }
+
+            var selectedIndex = _personalDealershipMenu.SelectedIndex - 1;
+            return selectedIndex >= 0 && selectedIndex < _propertyManager.PersonalVehicleCatalog.Count
+                ? _propertyManager.PersonalVehicleCatalog[selectedIndex]
+                : null;
+        }
+
+        private void UpdatePersonalDealershipPreview()
+        {
+            var definition = GetSelectedPersonalDealershipPreviewDefinition();
+            if (definition == null)
+            {
+                ClearPersonalDealershipPreviewVehicle();
+                return;
+            }
+
+            EnsurePersonalDealershipPreviewVehicle(definition);
+        }
+
+        private void EnsurePersonalDealershipPreviewVehicle(DealershipVehicleDefinition definition)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.ModelName))
+            {
+                ClearPersonalDealershipPreviewVehicle();
+                return;
+            }
+
+            if (_personalDealershipPreviewVehicle != null
+                && _personalDealershipPreviewVehicle.Exists()
+                && string.Equals(_personalDealershipPreviewModelName, definition.ModelName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            ClearPersonalDealershipPreviewVehicle();
+
+            var model = new Model(definition.ModelName);
+            if (!model.Request(500))
+            {
+                model.MarkAsNoLongerNeeded();
+                return;
+            }
+
+            var vehicle = World.CreateVehicle(model, PersonalDealershipVehiclePadPosition, PersonalDealershipVehiclePadHeading);
+            model.MarkAsNoLongerNeeded();
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return;
+            }
+
+            vehicle.IsPersistent = false;
+            Function.Call(Hash.SET_ENTITY_COLLISION, vehicle.Handle, false, false);
+            Function.Call(Hash.SET_ENTITY_INVINCIBLE, vehicle.Handle, true);
+            Function.Call(Hash.FREEZE_ENTITY_POSITION, vehicle.Handle, true);
+            Function.Call(Hash.SET_VEHICLE_ENGINE_ON, vehicle.Handle, false, true, true);
+
+            _personalDealershipPreviewVehicle = vehicle;
+            _personalDealershipPreviewModelName = definition.ModelName;
+        }
+
+        private void ClearPersonalDealershipPreviewVehicle()
+        {
+            if (_personalDealershipPreviewVehicle != null)
+            {
+                try
+                {
+                    if (_personalDealershipPreviewVehicle.Exists())
+                    {
+                        _personalDealershipPreviewVehicle.Delete();
+                    }
+                }
+                catch
+                {
+                    // Preview cleanup should be best-effort only.
+                }
+            }
+
+            _personalDealershipPreviewVehicle = null;
+            _personalDealershipPreviewModelName = null;
         }
 
         private void RefreshOfficeObjectMenus(bool markCargoDirty)
@@ -2201,12 +2363,6 @@ namespace LSOL
                     DetailFactory = () => string.Format("Enter {0}.", apartment.InteriorIgName),
                     OnActivate = EnterSelectedApartment,
                 });
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Personal Garage",
-                    DetailFactory = BuildPersonalGarageSummary,
-                    OnActivate = OpenPersonalGarageMenu,
-                });
             }
 
             _apartmentMenu.SetItems(items);
@@ -2600,7 +2756,7 @@ namespace LSOL
                 return;
             }
 
-            _apartmentMenu.Close();
+            CloseAllMenus();
             RebuildPersonalGarageMenuItems();
             _personalGarageMenu.Open();
         }
@@ -2683,13 +2839,6 @@ namespace LSOL
             ShowStatus(message);
         }
 
-        private void ReturnToApartmentMenu()
-        {
-            _personalGarageMenu.Close();
-            RebuildApartmentMenuItems();
-            _apartmentMenu.Open();
-        }
-
         private void OpenPersonalDealershipMenu()
         {
             CloseAllMenus();
@@ -2735,14 +2884,37 @@ namespace LSOL
 
         private void PurchasePersonalVehicle(DealershipVehicleDefinition definition)
         {
-            string message;
-            if (_propertyManager.TryPurchasePersonalVehicle(definition, ref _profit, out _, out message))
+            string purchaseMessage;
+            OwnedPersonalVehiclePersistenceEntry purchasedVehicle;
+            if (!_propertyManager.TryPurchasePersonalVehicle(definition, ref _profit, out purchasedVehicle, out purchaseMessage))
             {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildPersonalDealershipMenuItems();
+                ShowStatus(purchaseMessage);
+                return;
             }
 
-            ShowStatus(message);
+            ClearPersonalDealershipPreviewVehicle();
+
+            string deployMessage = string.Empty;
+            var deployed = purchasedVehicle != null
+                && _propertyManager.TryDeployPersonalVehicle(
+                    purchasedVehicle.AssetId,
+                    PersonalDealershipVehiclePadPosition,
+                    PersonalDealershipVehiclePadHeading,
+                    out deployMessage);
+            if (purchasedVehicle == null)
+            {
+                deployMessage = "Purchased vehicle record not found for retrieval.";
+            }
+
+            _tabletStateStore.MarkBalanceDirty();
+            RebuildPersonalDealershipMenuItems();
+            if (deployed)
+            {
+                RefreshPersonalVehicleBlips();
+                _personalDealershipMenu.Close();
+            }
+
+            ShowStatus(CombineStatusMessages(purchaseMessage, deployMessage));
         }
 
         private void OpenCommercialDealershipMenu()

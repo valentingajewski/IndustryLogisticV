@@ -14,6 +14,7 @@ namespace LSOL.Systems
         private readonly Func<string> _getActiveOfficeId;
         private readonly Func<IReadOnlyList<InteriorDefinition>> _getApartmentDefinitions;
         private readonly Func<string> _getActiveApartmentId;
+        private readonly Func<bool> _canUseApartmentSystems;
         private readonly Func<IReadOnlyList<BankDefinition>> _getBankDefinitions;
         private readonly Func<Vector3> _getOfficeMarkerSeed;
         private readonly Vector3 _commercialDealershipMarker;
@@ -29,6 +30,7 @@ namespace LSOL.Systems
 
         private Blip _commercialDealershipBlip;
         private Blip _personalDealershipBlip;
+        private Blip _activeApartmentGarageBlip;
 
         public BlipLifecycleManager(
             IndustryManager industryManager,
@@ -36,6 +38,7 @@ namespace LSOL.Systems
             Func<string> getActiveOfficeId,
             Func<IReadOnlyList<InteriorDefinition>> getApartmentDefinitions,
             Func<string> getActiveApartmentId,
+            Func<bool> canUseApartmentSystems,
             Func<IReadOnlyList<BankDefinition>> getBankDefinitions,
             Func<Vector3> getOfficeMarkerSeed,
             Vector3 commercialDealershipMarker,
@@ -50,6 +53,7 @@ namespace LSOL.Systems
             _getActiveOfficeId = getActiveOfficeId;
             _getApartmentDefinitions = getApartmentDefinitions;
             _getActiveApartmentId = getActiveApartmentId;
+            _canUseApartmentSystems = canUseApartmentSystems;
             _getBankDefinitions = getBankDefinitions;
             _getOfficeMarkerSeed = getOfficeMarkerSeed;
             _commercialDealershipMarker = commercialDealershipMarker;
@@ -70,6 +74,7 @@ namespace LSOL.Systems
 
             CreateOfficeBlips();
             CreateApartmentBlips();
+            RefreshActiveApartmentGarageBlip(ResolveApartmentDefinitions(), ResolveActiveApartmentId());
             CreateBankBlips();
             CreateDealershipBlips();
 
@@ -174,6 +179,8 @@ namespace LSOL.Systems
                 blip.Scale = isActive ? 0.95f : 0.85f;
             }
 
+            RefreshActiveApartmentGarageBlip(apartments, activeApartmentId);
+
             var banks = ResolveBankDefinitions();
             if (_bankBlips.Count != banks.Count)
             {
@@ -265,6 +272,11 @@ namespace LSOL.Systems
                 _personalDealershipBlip.Delete();
             }
 
+            if (_activeApartmentGarageBlip != null && _activeApartmentGarageBlip.Exists())
+            {
+                _activeApartmentGarageBlip.Delete();
+            }
+
             for (int i = 0; i < _industryBlips.Count; i++)
             {
                 var blip = _industryBlips[i];
@@ -280,6 +292,7 @@ namespace LSOL.Systems
             _industryBlips.Clear();
             _commercialDealershipBlip = null;
             _personalDealershipBlip = null;
+            _activeApartmentGarageBlip = null;
         }
 
         private void CreateOfficeBlips()
@@ -341,6 +354,46 @@ namespace LSOL.Systems
                     _apartmentBlips.Add(blip);
                 }
             }
+        }
+
+        private void RefreshActiveApartmentGarageBlip(IReadOnlyList<InteriorDefinition> apartments, string activeApartmentId)
+        {
+            if (!CanShowActiveApartmentGarageBlip())
+            {
+                DeleteActiveApartmentGarageBlip();
+                return;
+            }
+
+            var activeApartment = apartments.FirstOrDefault(apartment => apartment != null
+                && !string.IsNullOrWhiteSpace(activeApartmentId)
+                && string.Equals(apartment.InteriorId, activeApartmentId, StringComparison.OrdinalIgnoreCase));
+            if (activeApartment == null || activeApartment.GaragePosition == Vector3.Zero)
+            {
+                DeleteActiveApartmentGarageBlip();
+                return;
+            }
+
+            if (_activeApartmentGarageBlip == null || !_activeApartmentGarageBlip.Exists())
+            {
+                _activeApartmentGarageBlip = CreateStaticBlip(
+                    _getGroundPosition(activeApartment.GaragePosition),
+                    BlipSprite.CriminalCarstealPolice,
+                    BlipColor.Blue,
+                    ResolveApartmentGarageBlipName(activeApartment),
+                    0.85f);
+                if (_activeApartmentGarageBlip == null || !_activeApartmentGarageBlip.Exists())
+                {
+                    _activeApartmentGarageBlip = null;
+                    return;
+                }
+            }
+
+            _activeApartmentGarageBlip.Position = _getGroundPosition(activeApartment.GaragePosition);
+            _activeApartmentGarageBlip.Sprite = BlipSprite.CriminalCarstealPolice;
+            _activeApartmentGarageBlip.Color = BlipColor.Blue;
+            _activeApartmentGarageBlip.Name = ResolveApartmentGarageBlipName(activeApartment);
+            _activeApartmentGarageBlip.Scale = 0.85f;
+            ApplyStandardNearbyVisibility(_activeApartmentGarageBlip);
         }
 
         private void CreateDealershipBlips()
@@ -450,6 +503,19 @@ namespace LSOL.Systems
                 : baseName;
         }
 
+        private static string ResolveApartmentGarageBlipName(InteriorDefinition apartment)
+        {
+            if (apartment == null)
+            {
+                return "Personal Garage";
+            }
+
+            var baseName = !string.IsNullOrWhiteSpace(apartment.InteriorIgName)
+                ? apartment.InteriorIgName
+                : apartment.DisplayName;
+            return baseName + " Garage";
+        }
+
         private static string ResolveBankBlipName(BankDefinition bank)
         {
             if (bank == null)
@@ -474,6 +540,23 @@ namespace LSOL.Systems
             blip.Scale = scale;
             ApplyStandardNearbyVisibility(blip);
             return blip;
+        }
+
+        private bool CanShowActiveApartmentGarageBlip()
+        {
+            return _canUseApartmentSystems == null || _canUseApartmentSystems();
+        }
+
+        private void DeleteActiveApartmentGarageBlip()
+        {
+            if (_activeApartmentGarageBlip == null || !_activeApartmentGarageBlip.Exists())
+            {
+                _activeApartmentGarageBlip = null;
+                return;
+            }
+
+            _activeApartmentGarageBlip.Delete();
+            _activeApartmentGarageBlip = null;
         }
 
         internal static void ApplyStandardNearbyVisibility(Blip blip)

@@ -243,6 +243,11 @@ namespace LSOL
                 () => _propertyManager != null ? _propertyManager.ActiveOfficeId : string.Empty,
                 () => _propertyManager != null ? _propertyManager.Interiors : new InteriorDefinition[0],
                 () => _propertyManager != null ? _propertyManager.ActiveApartmentId : string.Empty,
+                () =>
+                {
+                    string reason;
+                    return _propertyManager != null && _propertyManager.CanUseApartmentSystems(out reason);
+                },
                 () => _bankLoanManager != null ? _bankLoanManager.Banks : Array.Empty<BankDefinition>(),
                 ResolveOfficeBlipSeed,
                 CommercialDealershipMarker,
@@ -676,6 +681,7 @@ namespace LSOL
                 GetSelectedOfficeObjectPreviewDefinition(),
                 _officeObjectsMenu != null && _officeObjectsMenu.IsOpen,
                 gameTime);
+            UpdatePersonalDealershipPreview();
             SyncPlayerSuccessBalance(true, true);
 
             DrawMarkers(player);
