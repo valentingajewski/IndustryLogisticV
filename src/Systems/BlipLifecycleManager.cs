@@ -401,13 +401,13 @@ namespace LSOL.Systems
             _commercialDealershipBlip = CreateStaticBlip(
                 _getGroundPosition(_commercialDealershipMarker),
                 BlipSprite.Truck,
-                BlipColor.White,
+                BlipColor.PurpleDark,
                 "Commercial Dealership",
                 0.95f);
             _personalDealershipBlip = CreateStaticBlip(
                 _getGroundPosition(_personalDealershipMarker),
                 BlipSprite.PersonalVehicleCar,
-                BlipColor.White,
+                BlipColor.PurpleDark,
                 "Personal Vehicle Dealership",
                 0.95f);
         }

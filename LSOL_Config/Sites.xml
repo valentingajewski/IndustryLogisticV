@@ -446,7 +446,7 @@
   </Site>
   <Site catalogId="500" legacyKey="Store1" name="Davis Carson Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
     <Marker x="103" y="-1818" z="26.53" />
-    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Medicine,Furniture" />
+    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Medicine,Furniture,Meat,Paper" />
     <Economy>
       <Casual purchasePrice="117000" inputCapacityTons="52" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="156000" inputCapacityTons="40" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -455,7 +455,7 @@
   </Site>
   <Site catalogId="501" legacyKey="Store2" name="Burton Mall" role="StoreSink" district="Vinewood" startingTankRatio="0.3" density="Low" emptyingRate="0.07" weeklyPassiveIncome="420" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
     <Marker x="-250" y="-250" z="36.52" />
-    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Furniture" />
+    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Furniture,Meat,Paper" />
     <Economy>
       <Casual purchasePrice="41250" inputCapacityTons="15.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="55000" inputCapacityTons="12" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -464,7 +464,7 @@
   </Site>
   <Site catalogId="502" legacyKey="Store3" name="Sandy Shores Carson Store" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
     <Marker x="2673" y="3520" z="52.71" />
-    <Inputs primary="Alcohol,ProcessedFood" />
+    <Inputs primary="Alcohol,ProcessedFood,Meat" />
     <Economy>
       <Casual purchasePrice="26250" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="35000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -473,7 +473,7 @@
   </Site>
   <Site catalogId="503" legacyKey="Store4" name="Grapeseed Store" role="StoreSink" district="Grapeseed" startingTankRatio="0.3" density="Low" emptyingRate="0.07" weeklyPassiveIncome="420" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
     <Marker x="1718" y="4805" z="41.71" />
-    <Inputs primary="Alcohol,ProcessedFood" />
+    <Inputs primary="Alcohol,ProcessedFood,Meat" />
     <Economy>
       <Casual purchasePrice="41250" inputCapacityTons="15.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="55000" inputCapacityTons="12" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -482,7 +482,7 @@
   </Site>
   <Site catalogId="504" legacyKey="Store5" name="Paleto Store" role="StoreSink" district="PaletoBay" startingTankRatio="0.3" density="Medium" emptyingRate="0.12" weeklyPassiveIncome="1440" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
     <Marker x="-361" y="6065" z="31.5" />
-    <Inputs primary="Alcohol,ProcessedFood,Furniture" />
+    <Inputs primary="Alcohol,ProcessedFood,Furniture,Meat,Paper" />
     <Economy>
       <Casual purchasePrice="76500" inputCapacityTons="31.2" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="102000" inputCapacityTons="24" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -491,7 +491,7 @@
   </Site>
   <Site catalogId="505" legacyKey="Store6" name="Paleto Supermarket" role="StoreSink" district="PaletoBay" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Core" enabled="true" industryOwnerCut="0.25">
     <Marker x="-86.8" y="6488.84" z="31.49" />
-    <Inputs primary="TV,Alcohol,Clothes,ProcessedFood,Medicine" />
+    <Inputs primary="TV,Alcohol,Clothes,ProcessedFood,Medicine,Meat,Paper" />
     <Economy>
       <Casual purchasePrice="136500" inputCapacityTons="52" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="182000" inputCapacityTons="40" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
