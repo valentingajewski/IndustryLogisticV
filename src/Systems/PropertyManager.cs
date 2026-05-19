@@ -77,7 +77,6 @@ namespace LSOL.Systems
         private const int MinutesPerDay = 24 * 60;
         private const float ApartmentSaleRefundRatio = 0.5f;
         private const float CommercialVehicleSaleRefundRatio = 0.5f;
-        private const int CommercialRentalRefundDays = 2;
         private const float CorporateOverheadBaseCharge = 250f;
         private const float CorporateOverheadScaleCharge = 45f;
         private const float CorporateOverheadPerOwnedSite = 210f;
@@ -1013,27 +1012,6 @@ namespace LSOL.Systems
                 message = "Rental requires a positive dailyRent on the selected vehicle or truck.";
                 return false;
             }
-
-            var upfrontCost = dailyRent * (1f + CommercialRentalRefundDays);
-            if (balance < upfrontCost)
-            {
-                message = string.Format(
-                    "Need {0} to cover the first rental day plus a refundable deposit.",
-                    ModFormatting.FormatMoney(upfrontCost));
-                return false;
-            }
-
-            balance -= upfrontCost;
-            RecordFinanceExpense(
-                CompanyFinanceCategory.VehicleRent,
-                upfrontCost,
-                currentInGameMinute,
-                string.Format(
-                    "Rental upfront for {0}",
-                    BuildCommercialDisplayName(
-                        poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
-                        cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
-                        hasSeparateCargoVehicle)));
             vehicle = new OwnedCommercialVehiclePersistenceEntry
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
@@ -1068,11 +1046,11 @@ namespace LSOL.Systems
             NormalizeCommercialGarageAssignments();
             message = vehicle.InActiveGarage
                 ? string.Format(
-                    "Rented {0} for {1}/day. First day and deposit collected.",
+                    "Rented {0} for {1}/day. No upfront cost charged.",
                     vehicle.DisplayName,
                     ModFormatting.FormatMoney(dailyRent))
                 : string.Format(
-                    "Rented {0} for {1}/day. Office garage is full, so it was moved to reserve.",
+                    "Rented {0} for {1}/day. No upfront cost charged. Office garage is full, so it was moved to reserve.",
                     vehicle.DisplayName,
                     ModFormatting.FormatMoney(dailyRent));
             return true;
@@ -1132,14 +1110,9 @@ namespace LSOL.Systems
                 TryStoreCommercialVehicle(assetId, fleetManager, fuelSystem, out _);
             }
 
-            var refund = Math.Max(0f, vehicle.DailyRent * CommercialRentalRefundDays);
-            balance += refund;
-            RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Rental refund for {0}", vehicle.DisplayName));
             _state.CommercialVehicles.Remove(vehicle);
             NormalizeCommercialGarageAssignments();
-            message = refund > 0.001f
-                ? string.Format("Ended rental for {0}. Refunded {1}.", vehicle.DisplayName, ModFormatting.FormatMoney(refund))
-                : string.Format("Ended rental for {0}.", vehicle.DisplayName);
+            message = string.Format("Ended rental for {0}.", vehicle.DisplayName);
             return true;
         }
 

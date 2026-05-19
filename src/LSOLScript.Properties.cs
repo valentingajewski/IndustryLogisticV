@@ -2065,7 +2065,7 @@ namespace LSOL
                 {
                     CaptionFactory = () => vehicle.IsRental ? "End Rent" : "Sell Vehicle",
                     DetailFactory = () => vehicle.IsRental
-                        ? string.Format("Close the rental and refund {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.DailyRent * 2f)))
+                        ? "Close the rental and stop future daily rent charges."
                         : string.Format("Sell this vehicle back for {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.PurchasePrice * 0.5f))),
                     OnActivate = () =>
                     {
@@ -2960,7 +2960,7 @@ namespace LSOL
             }
 
             return string.Format(
-                "Rent charges {0}/day. First day plus a refundable 2-day deposit is collected upfront.",
+                "Rent charges {0}/day with no upfront cost. The first daily charge is billed after time advances into a later in-game day.",
                 ModFormatting.FormatMoney(dailyRent));
         }
 
@@ -3137,11 +3137,9 @@ namespace LSOL
                 return BuildCommercialDealershipRentUnavailableDetail();
             }
 
-            var upfrontCost = dailyRent * 3f;
             return string.Format(
-                "Rent for {0}/day. First day plus a refundable deposit totals {1} upfront.",
-                ModFormatting.FormatMoney(dailyRent),
-                ModFormatting.FormatMoney(upfrontCost));
+                "Rent for {0}/day with no upfront cost. Daily billing begins after the next in-game day passes.",
+                ModFormatting.FormatMoney(dailyRent));
         }
 
         private VehicleDefinition GetSelectedCommercialDealershipTruckDefinition(VehicleDefinition selectedVehicle)
