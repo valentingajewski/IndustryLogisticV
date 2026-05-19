@@ -918,11 +918,21 @@ namespace LSOL.UI
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var items = new List<MenuItem>();
 
+            var validationWarningCount = _missionManager != null && _missionManager.Catalog != null
+                ? _missionManager.Catalog.ValidationMessages.Count
+                : 0;
+            if (validationWarningCount > 0)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem(
+                    "Add-on Warnings",
+                    string.Format("{0} mission/add-on validation message(s) found. Review LSOL_Config/missions and the LSOL add-on package docs before publishing new contracts.", validationWarningCount)));
+            }
+
             if (_missionManager == null || !_missionManager.HasDefinitions)
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     "No contracts available",
-                    "Grow district presence and fleet capability for rotating tenders, or add XML mission packs to publish hand-authored contracts."));
+                    "Grow district presence and fleet capability for rotating tenders, or add XML mission packs under LSOL_Config/missions or LSOL_Addons/*/content/missions."));
             }
             else
             {
@@ -931,13 +941,6 @@ namespace LSOL.UI
                     items.Add(TabletUiHelpers.CreateBannerItem(
                         string.Format("ACTIVE | {0}", _missionManager.ActiveMissionName),
                         string.Format("{0} | {1}", _missionManager.ActiveObjective, _missionManager.ActiveObjectiveDetail)));
-                }
-
-                if (_missionManager.Catalog != null && _missionManager.Catalog.ValidationMessages.Count > 0)
-                {
-                    items.Add(TabletUiHelpers.CreateBannerItem(
-                        "Mission Pack Warnings",
-                        string.Format("{0} pack validation message(s) found. Review the missions folder docs before publishing new contracts.", _missionManager.Catalog.ValidationMessages.Count)));
                 }
 
                 var listings = _missionManager.GetMissionListings();

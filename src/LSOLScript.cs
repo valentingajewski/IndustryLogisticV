@@ -68,6 +68,7 @@ namespace LSOL
         private static extern short GetAsyncKeyState(int vKey);
 
         private readonly ModConfig _config;
+        private readonly LsolAddonCatalog _addonCatalog;
         private readonly string _configDirectory;
         private readonly string _defaultIndustryStatePath;
         private readonly string _savegamesDirectoryPath;
@@ -195,7 +196,8 @@ namespace LSOL
             _defaultIndustryStatePath = ResolveIndustryStatePath();
             _savegamesDirectoryPath = ResolveSavegamesDirectoryPath();
             _industryStatePath = _defaultIndustryStatePath;
-            _config = ModConfig.Load(_configDirectory);
+            _addonCatalog = LsolAddonCatalog.Load(_configDirectory);
+            _config = ModConfig.Load(_configDirectory, _addonCatalog);
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
@@ -227,7 +229,8 @@ namespace LSOL
                     }
                 },
                 GetCurrentInGameWeekMinute,
-                HandlePlayerSuccessMissionCompleted);
+                HandlePlayerSuccessMissionCompleted,
+                _addonCatalog);
             _industryOutputPropManager = new IndustryOutputPropManager(_industryManager.Industries);
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
@@ -3372,15 +3375,17 @@ namespace LSOL
                 return "Mission manager unavailable.";
             }
 
-            var missionCount = _specialMissionManager.Definitions.Count();
-            if (missionCount <= 0)
-            {
-                return "No mission board entries available. Grow district presence or add XML mission packs to scripts/LSOL_Config/missions.";
-            }
-
             var warningCount = _specialMissionManager.Catalog != null
                 ? _specialMissionManager.Catalog.ValidationMessages.Count
                 : 0;
+            var missionCount = _specialMissionManager.Definitions.Count();
+            if (missionCount <= 0)
+            {
+                return warningCount > 0
+                    ? string.Format("No mission board entries available. Grow district presence or add XML mission packs to scripts/LSOL_Config/missions or scripts/LSOL_Addons/*/content/missions. {0} validation warning(s).", warningCount)
+                    : "No mission board entries available. Grow district presence or add XML mission packs to scripts/LSOL_Config/missions or scripts/LSOL_Addons/*/content/missions.";
+            }
+
             if (_specialMissionManager.HasActiveMission)
             {
                 return warningCount > 0

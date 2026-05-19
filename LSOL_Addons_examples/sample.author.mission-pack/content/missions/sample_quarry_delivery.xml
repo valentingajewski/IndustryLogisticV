@@ -1,0 +1,10 @@
+<Mission id="sample.author.quarry_lowboy_demo" type="trailer_delivery" category="Packaged Contracts" name="Sample Quarry Lowboy Delivery" summary="Packaged add-on example: tow a staged lowboy from the docks to the Grand Senora quarry." description="This repository example demonstrates the LSOL add-on package format. Bring a road tractor to the staged lowboy at the port, tow it to the quarry drop zone, and clear the yard so crews can take over." reward="30000" repeatable="true" repeatCooldownInGameMonths="1" availabilityDelayInGameWeeks="1">
+  <Unlock districts="GrandSenora,Port" minInfluenceRatio="0.2" />
+  <Vehicles>
+    <Vehicle role="Trailer" model="armytrailer2" x="1274.28" y="-3185.45" z="5.41" heading="90" required="true" />
+  </Vehicles>
+  <Zones>
+    <Zone id="Destination" x="2707" y="2755.62" z="37.36" radius="24" />
+    <Zone id="CleanupArea" x="2686" y="2767" z="37.88" radius="180" />
+  </Zones>
+</Mission>

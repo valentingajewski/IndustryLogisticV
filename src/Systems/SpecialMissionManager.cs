@@ -52,7 +52,8 @@ namespace LSOL.Systems
             Action<string, int> showStatus,
             Action markUiDirty,
             Func<int> getCurrentInGameMinute,
-            Action onMissionCompleted = null)
+            Action onMissionCompleted = null,
+            LsolAddonCatalog addonCatalog = null)
         {
             _industryManager = industryManager;
             _territoryManager = territoryManager;
@@ -73,7 +74,7 @@ namespace LSOL.Systems
             _generatedBoardWeekIndex = -1;
             _generatedBoardDayIndex = -1;
 
-            Catalog = SpecialMissionCatalog.Load(configPath);
+            Catalog = SpecialMissionCatalog.Load(configPath, addonCatalog);
             _definitionsById = Catalog.Definitions
                 .Where(definition => definition != null && !string.IsNullOrWhiteSpace(definition.Id))
                 .GroupBy(definition => definition.Id, StringComparer.OrdinalIgnoreCase)

@@ -32,11 +32,11 @@ namespace LSOL.Config
         public Dictionary<string, DistrictConfig> DistrictConfigs { get; private set; }
         public List<string> ValidationMessages { get; private set; }
 
-        public static ModConfig Load(string configDirectory)
+        public static ModConfig Load(string configDirectory, LsolAddonCatalog addonCatalog = null)
         {
             var coreValidationMessages = new List<string>();
             var coreConfig = XmlConfigImport.LoadCoreConfig(configDirectory, coreValidationMessages);
-            var externalCatalog = ExternalConfigCatalog.Load(configDirectory);
+            var externalCatalog = ExternalConfigCatalog.Load(configDirectory, addonCatalog);
             CommodityCatalog.Configure(externalCatalog.ResourceGroups);
             externalCatalog.ValidationMessages.InsertRange(0, coreValidationMessages);
 

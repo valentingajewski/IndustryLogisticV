@@ -60,7 +60,7 @@ namespace LSOL.Config
             }
         }
 
-        public static ExternalConfigCatalog Load(string configDirectory)
+        public static ExternalConfigCatalog Load(string configDirectory, LsolAddonCatalog addonCatalog = null)
         {
             var catalog = new ExternalConfigCatalog();
             XmlConfigImport.TryPopulateResources(configDirectory, catalog);
@@ -74,6 +74,16 @@ namespace LSOL.Config
             XmlConfigImport.TryPopulateOfficeObjects(configDirectory, catalog);
             XmlConfigImport.TryPopulateInteriors(configDirectory, catalog);
             XmlConfigImport.TryPopulateDealershipVehicles(configDirectory, catalog);
+
+            if (addonCatalog != null)
+            {
+                catalog.ValidationMessages.AddRange(addonCatalog.ValidationMessages);
+                XmlConfigImport.TryPopulateAddonResources(addonCatalog, catalog);
+                CommodityCatalog.Configure(catalog.ResourceGroups);
+                XmlConfigImport.TryPopulateAddonSites(addonCatalog, catalog);
+                XmlConfigImport.TryPopulateAddonVehicles(addonCatalog, catalog);
+                XmlConfigImport.TryPopulateAddonOfficeObjects(addonCatalog, catalog);
+            }
 
             return catalog;
         }

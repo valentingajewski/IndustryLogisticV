@@ -1,0 +1,20 @@
+<Addon id="sample.author.mission-pack" version="1.0.0" category="mission-pack" lsolApiVersion="1">
+  <Metadata
+    name="Sample Mission Pack"
+    author="LSOL"
+    description="Minimal packaged mission example for the LSOL add-on ecosystem."
+    source="repository-example" />
+
+  <Compatibility minLSOLVersion="1.0.0" maxTestedLSOLVersion="1.0.0" />
+
+  <Dependencies />
+  <Conflicts />
+
+  <Capabilities>
+    <Capability name="content.missions" />
+  </Capabilities>
+
+  <Content>
+    <Directory type="missions" path="content/missions" />
+  </Content>
+</Addon>

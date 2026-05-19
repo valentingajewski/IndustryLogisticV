@@ -23,6 +23,7 @@ LSOL adds a full business-management loop on top of GTA V free roam:
 - NPC logistics drivers that can run routes for you.
 - Save files, named profiles, and persistent world/company progression.
 - Optional custom special missions loaded from `LSOL_Config/missions/*.xml`.
+- Manifest-based add-on packages loaded from `LSOL_Addons/*/addon.xml`, including packaged mission packs and additive content fragments for selected XML catalogs.
 
 In short: you are building a logistics company inside GTA V.
 
@@ -138,7 +139,7 @@ You can view:
 
 ### Special Missions
 
-LSOL now runs a rotating mission board with district crisis contracts, weekly tenders, and priority line-haul jobs, alongside special community mission packs loaded from `LSOL_Config/missions`.
+LSOL now runs a rotating mission board with district crisis contracts, weekly tenders, and priority line-haul jobs, alongside special community mission packs loaded from `LSOL_Config/missions` and packaged add-ons under `LSOL_Addons/*/content/missions`.
 
 These missions can add custom jobs such as:
 
@@ -200,7 +201,8 @@ If those dependencies are missing, LSOL will not load correctly.
 4. Copy `LSOL.dll` into your GTA V `scripts` folder.
 5. Put `LSOL.ini` next to the mod so the script can find it.
 6. Copy the full `LSOL_Config` folder next to `LSOL.ini`.
-7. If you distribute custom missions, place their `.xml` files under `LSOL_Config/missions`.
+7. If you distribute legacy custom missions, place their `.xml` files under `LSOL_Config/missions`.
+8. If you distribute packaged add-ons, place each package under `LSOL_Addons/<package-id>/` with its own `addon.xml` manifest.
 
 ### Supported `LSOL.ini` Locations
 
@@ -240,14 +242,56 @@ GTA V/
         README.md
         port_container_handler.xml
         quarry_heavy_machinery.xml
+    LSOL_Addons/
+      some.author.package/
+        addon.xml
+        content/
+          missions/
+            packaged_contract.xml
+          resources/
+            extra_resources.xml
+          sites/
+            extra_sites.xml
+          vehicles/
+            extra_vehicles.xml
+          office-objects/
+            extra_office_objects.xml
+        assets/
+        bin/
 ```
 
 Notes:
 
 - `LSOL_Config/Dealership.xml` is required for the personal vehicle dealership.
-- `LSOL_Config` is the sole runtime content root for player-editable data.
-- Mission packs are loaded only from `LSOL_Config/missions/*.xml`.
+- `LSOL_Config` remains the base runtime content root for player-editable LSOL data.
+- `LSOL_Addons` is the runtime add-on package root scanned next to `LSOL_Config`.
+- Mission packs are loaded from both `LSOL_Config/missions/*.xml` and `LSOL_Addons/*/content/missions/*.xml`.
+- Additive packaged content is currently supported for `resources`, `sites`, `vehicles`, and `office-objects`. Base LSOL content loads first, add-on fragments load second, and duplicate IDs are rejected instead of overridden.
+- Valid packaged add-ons require `addon.xml` with API/version compatibility metadata, capabilities, and content directory declarations.
+- Plugin metadata may be present in `addon.xml`, but LSOL does not load third-party DLLs in this version.
 - Root `configs/` and root `missions/` are legacy reference folders and are not loaded at runtime.
+
+## Add-on Packages
+
+LSOL now supports manifest-based add-on packages rooted in `scripts/LSOL_Addons`.
+
+Current packaged content support:
+
+- `content.missions`
+- `content.resources`
+- `content.sites`
+- `content.vehicles`
+- `content.officeObjects`
+
+Current package behavior:
+
+- Each package must contain `addon.xml` at its root.
+- Package discovery is deterministic and dependency-aware.
+- Invalid manifests fail soft: one broken add-on does not stop LSOL from loading the rest.
+- Missing dependencies, declared conflicts, duplicate add-on IDs, duplicate fragment IDs, and unsupported mission types are surfaced as validation warnings.
+- Future-facing manifest metadata for UI/module/plugin tiers is accepted, but non-file capabilities are not loaded yet.
+
+See `LSOL_Addons/README.md` for authoring details and `LSOL_Addons_examples/sample.author.mission-pack/` for a minimal packaged mission example.
 
 ## Controls
 

@@ -1,8 +1,12 @@
-Runtime mission packs now live in `scripts/LSOL_Config/missions`.
+Legacy runtime mission packs still load from `scripts/LSOL_Config/missions`.
+
+Packaged mission add-ons also load from `scripts/LSOL_Addons/<package-id>/content/missions` when the package contains a valid `addon.xml` manifest.
+
+The mission XML schema below is unchanged for both locations.
 
 These XML mission packs supplement LSOL's built-in rotating contract board. District crises, weekly tenders, and generated priority runs do not require XML files.
 
-Author one `.xml` file per mission in that folder and LSOL will load it automatically on startup.
+Author one `.xml` file per mission in either supported folder and LSOL will load it automatically on startup.
 
 Current supported mission type:
 
@@ -51,4 +55,4 @@ Notes for community authors:
 - Mission vehicles and props are cleaned up automatically when the mission is cancelled, failed, or completed.
 - Active missions and completion counts are saved with the normal LSOL save system.
 
-Use `port_container_handler.xml` and `quarry_heavy_machinery.xml` in `scripts/LSOL_Config/missions` as the reference implementations for the first mission packs.
+Use `port_container_handler.xml` and `quarry_heavy_machinery.xml` in `scripts/LSOL_Config/missions` as the legacy reference implementations, or copy the sample packaged add-on from `LSOL_Addons_examples/sample.author.mission-pack/` into `scripts/LSOL_Addons/`.

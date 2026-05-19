@@ -107,6 +107,38 @@ namespace LSOL.Config
                 return false;
             }
 
+            return PopulateResourcesDocument(document, catalog, "Resources.xml", false);
+        }
+
+        public static bool TryPopulateAddonResources(LsolAddonCatalog addonCatalog, ExternalConfigCatalog catalog)
+        {
+            return TryPopulateAddonDocuments(addonCatalog, catalog, LsolAddonCatalog.CapabilityResources, PopulateResourcesDocument);
+        }
+
+        public static bool TryPopulateAddonSites(LsolAddonCatalog addonCatalog, ExternalConfigCatalog catalog)
+        {
+            return TryPopulateAddonDocuments(addonCatalog, catalog, LsolAddonCatalog.CapabilitySites, PopulateSitesDocument);
+        }
+
+        public static bool TryPopulateAddonVehicles(LsolAddonCatalog addonCatalog, ExternalConfigCatalog catalog)
+        {
+            return TryPopulateAddonDocuments(addonCatalog, catalog, LsolAddonCatalog.CapabilityVehicles, PopulateVehiclesDocument);
+        }
+
+        public static bool TryPopulateAddonOfficeObjects(LsolAddonCatalog addonCatalog, ExternalConfigCatalog catalog)
+        {
+            return TryPopulateAddonDocuments(addonCatalog, catalog, LsolAddonCatalog.CapabilityOfficeObjects, PopulateOfficeObjectsDocument);
+        }
+
+        private static bool PopulateResourcesDocument(XDocument document, ExternalConfigCatalog catalog, string sourceName, bool rejectDuplicates)
+        {
+            if (document == null || document.Root == null || catalog == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+
             foreach (var element in document.Root.Elements("Group"))
             {
                 var groupName = ReadAttribute(element, "name");
@@ -131,9 +163,9 @@ namespace LSOL.Config
                             commodities.Add(commodity);
                         }
 
-                        if (!CommodityCatalog.IsKnownCommodity(commodity))
+                        if (!rejectDuplicates && !CommodityCatalog.IsKnownCommodity(commodity))
                         {
-                            catalog.ValidationMessages.Add(string.Format("Resources.xml '{0}' references unknown commodity '{1}'.", groupName, rawCommodity.Trim()));
+                            catalog.ValidationMessages.Add(string.Format("{0} '{1}' references unknown commodity '{2}'.", sourceName, groupName, rawCommodity.Trim()));
                         }
 
                         var basePrice = Math.Max(0f, ReadFloatAttribute(commodityElement, "basePrice", 0f));
@@ -155,8 +187,24 @@ namespace LSOL.Config
 
                 if (string.IsNullOrWhiteSpace(groupName) || cargoType == VehicleCargoType.Unknown || commodities.Count == 0)
                 {
-                    catalog.ValidationMessages.Add("Resources.xml contains a group with missing or invalid attributes.");
+                    catalog.ValidationMessages.Add(string.Format("{0} contains a group with missing or invalid attributes.", sourceName));
                     continue;
+                }
+
+                if (rejectDuplicates)
+                {
+                    if (catalog.ResourceGroups.Any(group => group != null && string.Equals(group.Name, groupName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        catalog.ValidationMessages.Add(string.Format("{0} resource group '{1}' duplicates an existing resource group and was skipped.", sourceName, groupName));
+                        continue;
+                    }
+
+                    var duplicateCommodity = commodities.FirstOrDefault(commodity => catalog.ResourcesByCommodity.ContainsKey(commodity));
+                    if (!string.IsNullOrWhiteSpace(duplicateCommodity))
+                    {
+                        catalog.ValidationMessages.Add(string.Format("{0} resource group '{1}' duplicates commodity '{2}' and was skipped.", sourceName, groupName, duplicateCommodity));
+                        continue;
+                    }
                 }
 
                 catalog.ResourceGroups.Add(new ResourceGroupConfig
@@ -183,9 +231,11 @@ namespace LSOL.Config
                         catalog.CommodityBasePrices[commodities[i]] = basePrice;
                     }
                 }
+
+                loadedAny = true;
             }
 
-            return catalog.ResourceGroups.Count > 0;
+            return loadedAny;
         }
 
         public static bool TryPopulateObjects(string configDirectory, ExternalConfigCatalog catalog)
@@ -298,12 +348,24 @@ namespace LSOL.Config
                 return false;
             }
 
+            return PopulateSitesDocument(document, catalog, "Sites.xml", false);
+        }
+
+        private static bool PopulateSitesDocument(XDocument document, ExternalConfigCatalog catalog, string sourceName, bool rejectDuplicates)
+        {
+            if (document == null || document.Root == null || catalog == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+
             foreach (var element in document.Root.Elements("Site"))
             {
                 var legacyKey = ReadAttribute(element, "legacyKey");
                 if (string.IsNullOrWhiteSpace(legacyKey))
                 {
-                    catalog.ValidationMessages.Add("Sites.xml contains a site with no legacyKey.");
+                    catalog.ValidationMessages.Add(string.Format("{0} contains a site with no legacyKey.", sourceName));
                     continue;
                 }
 
@@ -336,17 +398,18 @@ namespace LSOL.Config
                     DisplayObjectModelHash = ReadOptionalIntAttribute(element.Element("Display"), "objectModelHash"),
                     MaxSpawnedVehiclesLine = ReadOptionalIntAttribute(element.Element("Display"), "maxLine"),
                     MaxSpawnedVehiclesRow = ReadOptionalIntAttribute(element.Element("Display"), "maxRow"),
+                    SourceFileName = sourceName,
                 };
 
                 var inputsElement = element.Element("Inputs");
-                location.Inputs = ParseCommoditySet(ReadAttribute(inputsElement, "primary"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.OptionalInputs = ParseCommoditySet(ReadAttribute(inputsElement, "optional"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.BoostInputs = ParseCommoditySet(ReadAttribute(inputsElement, "boost"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.Outputs = ParseCommoditySet(ReadAttribute(inputsElement, "outputs"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.RecipeInputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeInputs"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.RecipeOutputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeOutputs"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.InputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "inputCapacityWeights"), catalog.ValidationMessages, "Sites.xml", legacyKey);
-                location.OutputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "outputCapacityWeights"), catalog.ValidationMessages, "Sites.xml", legacyKey);
+                location.Inputs = ParseCommoditySet(ReadAttribute(inputsElement, "primary"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.OptionalInputs = ParseCommoditySet(ReadAttribute(inputsElement, "optional"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.BoostInputs = ParseCommoditySet(ReadAttribute(inputsElement, "boost"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.Outputs = ParseCommoditySet(ReadAttribute(inputsElement, "outputs"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.RecipeInputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeInputs"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.RecipeOutputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeOutputs"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.InputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "inputCapacityWeights"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.OutputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "outputCapacityWeights"), catalog.ValidationMessages, sourceName, legacyKey);
                 location.Kind = ResolveLocationKind(location.SiteRole, location.Inputs, location.Outputs);
 
                 if (!TryReadFloatAttribute(element, "emptyingRate", out var emptyingRate))
@@ -398,18 +461,25 @@ namespace LSOL.Config
 
                 if (string.IsNullOrWhiteSpace(location.DistrictName) || !catalog.Districts.ContainsKey(location.DistrictName))
                 {
-                    catalog.ValidationMessages.Add(string.Format("Sites.xml site '{0}' references unknown district '{1}'.", location.LegacyKey, location.DistrictName));
+                    catalog.ValidationMessages.Add(string.Format("{0} site '{1}' references unknown district '{2}'.", sourceName, location.LegacyKey, location.DistrictName));
                 }
 
                 if (location.Position == Vector3.Zero)
                 {
-                    catalog.ValidationMessages.Add(string.Format("Sites.xml site '{0}' is missing marker coordinates.", location.LegacyKey));
+                    catalog.ValidationMessages.Add(string.Format("{0} site '{1}' is missing marker coordinates.", sourceName, location.LegacyKey));
+                }
+
+                if (rejectDuplicates && catalog.Locations.ContainsKey(location.Id))
+                {
+                    catalog.ValidationMessages.Add(string.Format("{0} site '{1}' duplicates an existing site id and was skipped.", sourceName, location.Id));
+                    continue;
                 }
 
                 catalog.Locations[location.Id] = location;
+                loadedAny = true;
             }
 
-            return catalog.Locations.Count > 0;
+            return loadedAny;
         }
 
         public static bool TryPopulateVehicles(string configDirectory, ExternalConfigCatalog catalog)
@@ -429,18 +499,31 @@ namespace LSOL.Config
                 return false;
             }
 
+            return PopulateVehiclesDocument(document, catalog, "Vehicles.xml", false);
+        }
+
+        private static bool PopulateVehiclesDocument(XDocument document, ExternalConfigCatalog catalog, string sourceName, bool rejectDuplicates)
+        {
+            if (document == null || document.Root == null || catalog == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+
             foreach (var element in document.Root.Elements("Vehicle"))
             {
                 var modelName = ReadAttribute(element, "model");
                 if (string.IsNullOrWhiteSpace(modelName))
                 {
-                    catalog.ValidationMessages.Add("Vehicles.xml contains a vehicle entry with no model.");
+                    catalog.ValidationMessages.Add(string.Format("{0} contains a vehicle entry with no model.", sourceName));
                     continue;
                 }
 
                 var displayName = ReadAttribute(element, "name", modelName);
                 var vehicleType = ReadAttribute(element, "type");
-                var acceptedCommodities = ParseCommoditySet(ReadAttribute(element, "acceptedResources"), catalog.ValidationMessages, "Vehicles.xml", modelName);
+                var vehicleId = ReadAttribute(element, "id");
+                var acceptedCommodities = ParseCommoditySet(ReadAttribute(element, "acceptedResources"), catalog.ValidationMessages, sourceName, modelName);
                 var acceptedCargoTypes = acceptedCommodities
                     .Select(CommodityCatalog.GetCargoTypeForCommodity)
                     .Where(cargoType => cargoType != VehicleCargoType.Unknown && cargoType != VehicleCargoType.Trailer)
@@ -456,9 +539,25 @@ namespace LSOL.Config
                     fuelCapacityLiters = ResolveDefaultFuelCapacityLiters(vehicleType, capacity, isTractor, isTrailer);
                 }
 
+                if (rejectDuplicates)
+                {
+                    if (!string.IsNullOrWhiteSpace(vehicleId)
+                        && catalog.VehicleDefinitions.Any(existing => existing != null && string.Equals(existing.Id, vehicleId, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        catalog.ValidationMessages.Add(string.Format("{0} vehicle id '{1}' duplicates an existing vehicle and was skipped.", sourceName, vehicleId));
+                        continue;
+                    }
+
+                    if (catalog.VehicleDefinitions.Any(existing => existing != null && string.Equals(existing.ModelName, modelName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        catalog.ValidationMessages.Add(string.Format("{0} vehicle model '{1}' duplicates an existing vehicle and was skipped.", sourceName, modelName));
+                        continue;
+                    }
+                }
+
                 catalog.VehicleDefinitions.Add(new VehicleDefinition
                 {
-                    Id = ReadAttribute(element, "id"),
+                    Id = vehicleId,
                     SectionName = vehicleType,
                     DisplayName = displayName,
                     ModelName = modelName,
@@ -472,9 +571,11 @@ namespace LSOL.Config
                     IsTrailer = isTrailer && !isTractor,
                     IsTractor = isTractor,
                 });
+
+                loadedAny = true;
             }
 
-            return catalog.VehicleDefinitions.Count > 0;
+            return loadedAny;
         }
 
         public static bool TryPopulateOffices(string configDirectory, ExternalConfigCatalog catalog)
@@ -603,6 +704,18 @@ namespace LSOL.Config
                 return false;
             }
 
+            return PopulateOfficeObjectsDocument(document, catalog, "OfficeObjects.xml", false);
+        }
+
+        private static bool PopulateOfficeObjectsDocument(XDocument document, ExternalConfigCatalog catalog, string sourceName, bool rejectDuplicates)
+        {
+            if (document == null || document.Root == null || catalog == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+
             foreach (var element in document.Root.Elements("Object"))
             {
                 var objectId = ReadIntAttribute(element, "id", 0);
@@ -620,7 +733,13 @@ namespace LSOL.Config
 
                 if (objectId <= 0 || string.IsNullOrWhiteSpace(displayName) || string.IsNullOrWhiteSpace(modelName) || !hasModelHash)
                 {
-                    catalog.ValidationMessages.Add("OfficeObjects.xml contains an object with missing id, name, model, or hash.");
+                    catalog.ValidationMessages.Add(string.Format("{0} contains an object with missing id, name, model, or hash.", sourceName));
+                    continue;
+                }
+
+                if (rejectDuplicates && catalog.OfficeObjectDefinitions.Any(existing => existing != null && existing.ObjectId == objectId))
+                {
+                    catalog.ValidationMessages.Add(string.Format("{0} office object id '{1}' duplicates an existing office object and was skipped.", sourceName, objectId));
                     continue;
                 }
 
@@ -637,9 +756,11 @@ namespace LSOL.Config
                     PerOfficeLimit = Math.Max(0, ReadIntAttribute(element, "limit", 0)),
                     Price = Math.Max(0f, ReadFloatAttribute(element, "price", 0f)),
                 });
+
+                loadedAny = true;
             }
 
-            return catalog.OfficeObjectDefinitions.Count > 0;
+            return loadedAny;
         }
 
         public static bool TryPopulateInteriors(string configDirectory, ExternalConfigCatalog catalog)
@@ -761,6 +882,51 @@ namespace LSOL.Config
             profile.HighEmptyingRate = Math.Max(0f, ReadFloatAttribute(element, "highEmptyingRate", profile.HighEmptyingRate));
         }
 
+        private static bool TryPopulateAddonDocuments(
+            LsolAddonCatalog addonCatalog,
+            ExternalConfigCatalog catalog,
+            string capability,
+            Func<XDocument, ExternalConfigCatalog, string, bool, bool> populateDocument)
+        {
+            if (addonCatalog == null || catalog == null || populateDocument == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+            foreach (var package in addonCatalog.GetPackagesForCapability(capability))
+            {
+                string contentDirectory;
+                if (package == null || !package.TryGetContentDirectory(capability, out contentDirectory) || !Directory.Exists(contentDirectory))
+                {
+                    continue;
+                }
+
+                var files = Directory.GetFiles(contentDirectory, "*.xml", SearchOption.TopDirectoryOnly)
+                    .OrderBy(path => Path.GetFileName(path), StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                for (int i = 0; i < files.Length; i++)
+                {
+                    var sourceName = string.Format("Add-on '{0}' file '{1}'", package.DisplayLabel, Path.GetFileName(files[i]));
+                    var document = LoadDocumentFromPath(files[i], catalog.ValidationMessages, sourceName);
+                    if (document == null)
+                    {
+                        continue;
+                    }
+
+                    if (document.Root == null)
+                    {
+                        catalog.ValidationMessages.Add(string.Format("{0} is empty.", sourceName));
+                        continue;
+                    }
+
+                    loadedAny = populateDocument(document, catalog, sourceName, true) || loadedAny;
+                }
+            }
+
+            return loadedAny;
+        }
+
         private static SiteEconomyPresetValues ReadPreset(XElement element)
         {
             if (element == null)
@@ -794,6 +960,24 @@ namespace LSOL.Config
             catch (Exception ex)
             {
                 validationMessages?.Add(string.Format("{0} could not be loaded: {1}", fileName, ex.Message));
+                return null;
+            }
+        }
+
+        private static XDocument LoadDocumentFromPath(string filePath, ICollection<string> validationMessages, string sourceName)
+        {
+            if (!File.Exists(filePath))
+            {
+                return null;
+            }
+
+            try
+            {
+                return XDocument.Load(filePath, LoadOptions.None);
+            }
+            catch (Exception ex)
+            {
+                validationMessages?.Add(string.Format("{0} could not be loaded: {1}", sourceName, ex.Message));
                 return null;
             }
         }

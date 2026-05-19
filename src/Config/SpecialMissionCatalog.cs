@@ -30,13 +30,35 @@ namespace LSOL.Config
                 : Path.Combine(configDirectory, "missions");
         }
 
-        public static SpecialMissionCatalog Load(string configDirectory)
+        public static SpecialMissionCatalog Load(string configDirectory, LsolAddonCatalog addonCatalog = null)
         {
             var catalog = new SpecialMissionCatalog();
-            var missionDirectory = ResolveMissionDirectory(configDirectory);
-            if (string.IsNullOrWhiteSpace(missionDirectory) || !Directory.Exists(missionDirectory))
+            var knownMissionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            LoadMissionDirectory(ResolveMissionDirectory(configDirectory), "LSOL_Config/missions", catalog, knownMissionIds);
+
+            if (addonCatalog != null)
             {
-                return catalog;
+                catalog.ValidationMessages.AddRange(addonCatalog.ValidationMessages);
+                foreach (var package in addonCatalog.GetPackagesForCapability(LsolAddonCatalog.CapabilityMissions))
+                {
+                    string contentDirectory;
+                    if (!package.TryGetContentDirectory(LsolAddonCatalog.CapabilityMissions, out contentDirectory))
+                    {
+                        continue;
+                    }
+
+                    LoadMissionDirectory(contentDirectory, string.Format("LSOL_Addons/{0}", package.DisplayLabel), catalog, knownMissionIds);
+                }
+            }
+
+            return catalog;
+        }
+
+        private static void LoadMissionDirectory(string missionDirectory, string sourceLabel, SpecialMissionCatalog catalog, ISet<string> knownMissionIds)
+        {
+            if (catalog == null || string.IsNullOrWhiteSpace(missionDirectory) || !Directory.Exists(missionDirectory))
+            {
+                return;
             }
 
             var files = Directory.GetFiles(missionDirectory, "*.xml", SearchOption.TopDirectoryOnly)
@@ -45,13 +67,11 @@ namespace LSOL.Config
 
             for (int i = 0; i < files.Length; i++)
             {
-                LoadDefinition(files[i], catalog);
+                LoadDefinition(files[i], sourceLabel, catalog, knownMissionIds);
             }
-
-            return catalog;
         }
 
-        private static void LoadDefinition(string filePath, SpecialMissionCatalog catalog)
+        private static void LoadDefinition(string filePath, string sourceLabel, SpecialMissionCatalog catalog, ISet<string> knownMissionIds)
         {
             if (catalog == null || string.IsNullOrWhiteSpace(filePath))
             {
@@ -100,6 +120,12 @@ namespace LSOL.Config
 
             if (!string.IsNullOrWhiteSpace(definition.Id))
             {
+                if (knownMissionIds != null && !knownMissionIds.Add(definition.Id))
+                {
+                    catalog.ValidationMessages.Add(string.Format("{0}: mission id '{1}' from {2} duplicates an existing mission and was skipped.", Path.GetFileName(filePath), definition.Id, sourceLabel));
+                    return;
+                }
+
                 catalog.Definitions.Add(definition);
             }
         }
