@@ -665,6 +665,8 @@ namespace LSOL.Systems
                 RouteBlip = CreateHaulDeliveryBlip(OfficeObjectHaulTruckSpawnPosition, definition, office, HaulDeliveryPhase.ReachTruck),
             };
 
+            UpdateHaulDeliveryWaypoint(_activeHaulDelivery, office);
+
             ClearPreviewProp();
             return true;
         }
@@ -1052,29 +1054,58 @@ namespace LSOL.Systems
                 return;
             }
 
-            Vector3 targetPosition;
-            switch (delivery.Phase)
-            {
-                case HaulDeliveryPhase.ReachTruck:
-                    targetPosition = delivery.Truck != null && delivery.Truck.Exists() ? delivery.Truck.Position : OfficeObjectHaulTruckSpawnPosition;
-                    break;
-                case HaulDeliveryPhase.AttachTrailer:
-                case HaulDeliveryPhase.UnloadAtOffice:
-                    targetPosition = delivery.Trailer != null && delivery.Trailer.Exists() ? delivery.Trailer.Position : OfficeObjectHaulTrailerSpawnPosition;
-                    break;
-                default:
-                    targetPosition = office != null ? office.SpawnPosition : (delivery.Trailer != null && delivery.Trailer.Exists() ? delivery.Trailer.Position : OfficeObjectHaulTrailerSpawnPosition);
-                    break;
-            }
+            var targetPosition = ResolveHaulDeliveryTargetPosition(delivery, office);
 
             if (delivery.RouteBlip == null || !delivery.RouteBlip.Exists())
             {
                 delivery.RouteBlip = CreateHaulDeliveryBlip(targetPosition, definition, office, delivery.Phase);
+            }
+            else
+            {
+                delivery.RouteBlip.Position = targetPosition;
+                delivery.RouteBlip.Sprite = ResolveHaulDeliveryBlipSprite(delivery.Phase);
+            }
+
+            UpdateHaulDeliveryWaypoint(delivery, office);
+        }
+
+        private void UpdateHaulDeliveryWaypoint(HaulDeliverySession delivery, OfficeDefinition office)
+        {
+            var targetPosition = ResolveHaulDeliveryTargetPosition(delivery, office);
+            if (targetPosition == Vector3.Zero)
+            {
+                ClearWaypoint();
                 return;
             }
 
-            delivery.RouteBlip.Position = targetPosition;
-            delivery.RouteBlip.Sprite = ResolveHaulDeliveryBlipSprite(delivery.Phase);
+            Function.Call(Hash.SET_NEW_WAYPOINT, targetPosition.X, targetPosition.Y);
+        }
+
+        private Vector3 ResolveHaulDeliveryTargetPosition(HaulDeliverySession delivery, OfficeDefinition office)
+        {
+            if (delivery == null)
+            {
+                return Vector3.Zero;
+            }
+
+            switch (delivery.Phase)
+            {
+                case HaulDeliveryPhase.ReachTruck:
+                    return delivery.Truck != null && delivery.Truck.Exists() ? delivery.Truck.Position : OfficeObjectHaulTruckSpawnPosition;
+                case HaulDeliveryPhase.AttachTrailer:
+                    return delivery.Trailer != null && delivery.Trailer.Exists() ? delivery.Trailer.Position : OfficeObjectHaulTrailerSpawnPosition;
+                case HaulDeliveryPhase.DeliverToOffice:
+                    return office != null ? office.SpawnPosition : Vector3.Zero;
+                case HaulDeliveryPhase.UnloadAtOffice:
+                    if (delivery.Trailer != null && delivery.Trailer.Exists() && IsWithinOfficePlacementBounds(delivery.Trailer.Position, office))
+                    {
+                        return delivery.Trailer.Position;
+                    }
+
+                    return office != null ? office.SpawnPosition : (delivery.Trailer != null && delivery.Trailer.Exists() ? delivery.Trailer.Position : Vector3.Zero);
+                default:
+                    return Vector3.Zero;
+            }
         }
 
         private static BlipSprite ResolveHaulDeliveryBlipSprite(HaulDeliveryPhase phase)
@@ -1106,6 +1137,7 @@ namespace LSOL.Systems
                 return;
             }
 
+            ClearWaypoint();
             DeleteBlip(_activeHaulDelivery.RouteBlip);
             if (_activeHaulDelivery.Cargo != null && _activeHaulDelivery.Cargo.Exists())
             {
@@ -1123,6 +1155,11 @@ namespace LSOL.Systems
             DeleteVehicle(_activeHaulDelivery.Trailer);
             DeleteVehicle(_activeHaulDelivery.Truck);
             _activeHaulDelivery = null;
+        }
+
+        private static void ClearWaypoint()
+        {
+            Function.Call(Hash.SET_WAYPOINT_OFF);
         }
 
         private bool TryCreateHaulCargoProp(OfficeObjectDefinition definition, Vehicle trailer, out Prop cargo)
