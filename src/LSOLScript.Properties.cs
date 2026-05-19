@@ -21,11 +21,15 @@ namespace LSOL
         private const int ApartmentSleepFadeDurationMs = 650;
         private const int ApartmentSleepFadeSafetyBufferMs = 250;
         private const int ApartmentSleepBlackoutDurationMs = 2000;
+        private const int PersonalDealershipCategoryListStartIndex = 1;
+        private const int PersonalDealershipVehicleListStartIndex = 1;
         private const float ApartmentExteriorMarkerScale = 1.3f;
         private const float ApartmentInteriorMarkerScale = 1.2f;
         private const float ApartmentGarageMarkerScale = 1.3f;
         private const float DealershipInteractionDistance = 4.6f;
         private const float PersonalDealershipVehiclePadHeading = 70f;
+        private const string PersonalDealershipAllCategory = "All";
+        private const string PersonalDealershipUncategorizedCategory = "Uncategorized";
 
         private static readonly Vector3 CommercialDealershipMarker = new Vector3(-979.56f, -2232.48f, 8.86f);
         private static readonly Vector3 PersonalDealershipMarker = new Vector3(-38.68f, -1109.47f, 26.44f);
@@ -47,11 +51,16 @@ namespace LSOL
         private OwnedCommercialVehiclePersistenceEntry _selectedCommercialGarageVehicle;
         private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
         private List<OfficeObjectDefinition> _officeObjectPreviewSlots;
+        private List<string> _personalDealershipCategories;
+        private List<DealershipVehicleDefinition> _personalDealershipVisibleVehicles;
+        private string _activePersonalDealershipCategory;
         private string _personalDealershipPreviewModelName;
+        private string _personalDealershipSelectedVehicleModelName;
         private OfficeObjectDefinition _pendingOfficeObjectPurchaseDefinition;
         private ApartmentSleepTransitionPhase _apartmentSleepTransitionPhase;
         private int _apartmentSleepTransitionPhaseStartedAt;
         private bool _apartmentSleepClockApplied;
+        private int _selectedPersonalDealershipCategoryIndex;
 
         private enum ApartmentSleepTransitionPhase
         {
@@ -120,6 +129,8 @@ namespace LSOL
             _commercialGarageMenuContext = CommercialGarageMenuContext.Office;
             _commercialDealershipAcquisitionMode = CommercialDealershipAcquisitionMode.Purchase;
             _officeObjectPreviewSlots = new List<OfficeObjectDefinition>();
+            _personalDealershipCategories = new List<string>();
+            _personalDealershipVisibleVehicles = new List<DealershipVehicleDefinition>();
         }
 
         private bool HasPropertyMenuOpen()
@@ -237,6 +248,14 @@ namespace LSOL
         {
             if (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen)
             {
+                var menuBackKey = _controls != null ? _controls.MenuBack : WinForms.Keys.Back;
+                if (!string.IsNullOrWhiteSpace(_activePersonalDealershipCategory)
+                    && (key == WinForms.Keys.Back || key == menuBackKey))
+                {
+                    ReturnToPersonalDealershipCategories();
+                    return true;
+                }
+
                 _personalDealershipMenu.HandleKey(key, _controls);
                 if (!_personalDealershipMenu.IsOpen)
                 {
@@ -1437,15 +1456,7 @@ namespace LSOL
 
         private DealershipVehicleDefinition GetSelectedPersonalDealershipPreviewDefinition()
         {
-            if (_personalDealershipMenu == null || !_personalDealershipMenu.IsOpen || _propertyManager == null || _propertyManager.PersonalVehicleCatalog == null)
-            {
-                return null;
-            }
-
-            var selectedIndex = _personalDealershipMenu.SelectedIndex - 1;
-            return selectedIndex >= 0 && selectedIndex < _propertyManager.PersonalVehicleCatalog.Count
-                ? _propertyManager.PersonalVehicleCatalog[selectedIndex]
-                : null;
+            return GetSelectedVisiblePersonalDealershipDefinition();
         }
 
         private void UpdatePersonalDealershipPreview()
@@ -1457,7 +1468,215 @@ namespace LSOL
                 return;
             }
 
+            _personalDealershipSelectedVehicleModelName = definition.ModelName;
             EnsurePersonalDealershipPreviewVehicle(definition);
+        }
+
+        private DealershipVehicleDefinition GetSelectedVisiblePersonalDealershipDefinition()
+        {
+            if (_personalDealershipMenu == null
+                || !_personalDealershipMenu.IsOpen
+                || string.IsNullOrWhiteSpace(_activePersonalDealershipCategory)
+                || _personalDealershipVisibleVehicles == null
+                || _personalDealershipVisibleVehicles.Count == 0)
+            {
+                return null;
+            }
+
+            var selectedIndex = _personalDealershipMenu.SelectedIndex - PersonalDealershipVehicleListStartIndex;
+            return selectedIndex >= 0 && selectedIndex < _personalDealershipVisibleVehicles.Count
+                ? _personalDealershipVisibleVehicles[selectedIndex]
+                : null;
+        }
+
+        private void RefreshPersonalDealershipCategoryState()
+        {
+            var selectedCategory = GetSelectedPersonalDealershipCategory();
+            _personalDealershipCategories = BuildPersonalDealershipCategories();
+            _selectedPersonalDealershipCategoryIndex = _personalDealershipCategories.FindIndex(category => string.Equals(category, selectedCategory, StringComparison.OrdinalIgnoreCase));
+            if (_selectedPersonalDealershipCategoryIndex < 0)
+            {
+                _selectedPersonalDealershipCategoryIndex = 0;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_activePersonalDealershipCategory)
+                && !_personalDealershipCategories.Any(category => string.Equals(category, _activePersonalDealershipCategory, StringComparison.OrdinalIgnoreCase)))
+            {
+                _activePersonalDealershipCategory = PersonalDealershipAllCategory;
+            }
+
+            if (string.IsNullOrWhiteSpace(_activePersonalDealershipCategory))
+            {
+                _personalDealershipVisibleVehicles = new List<DealershipVehicleDefinition>();
+                return;
+            }
+
+            var activeCategory = _activePersonalDealershipCategory;
+            var catalog = _propertyManager != null && _propertyManager.PersonalVehicleCatalog != null
+                ? _propertyManager.PersonalVehicleCatalog
+                : Enumerable.Empty<DealershipVehicleDefinition>();
+            _personalDealershipVisibleVehicles = string.Equals(activeCategory, PersonalDealershipAllCategory, StringComparison.OrdinalIgnoreCase)
+                ? catalog.ToList()
+                : catalog.Where(definition => string.Equals(GetNormalizedPersonalDealershipCategory(definition), activeCategory, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        private List<string> BuildPersonalDealershipCategories()
+        {
+            var categories = new List<string>
+            {
+                PersonalDealershipAllCategory,
+            };
+
+            if (_propertyManager == null || _propertyManager.PersonalVehicleCatalog == null)
+            {
+                return categories;
+            }
+
+            categories.AddRange(
+                _propertyManager.PersonalVehicleCatalog
+                    .Select(GetNormalizedPersonalDealershipCategory)
+                    .Where(category => !string.Equals(category, PersonalDealershipAllCategory, StringComparison.OrdinalIgnoreCase))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(category => category, StringComparer.OrdinalIgnoreCase));
+            return categories;
+        }
+
+        private string GetSelectedPersonalDealershipCategory()
+        {
+            if (_personalDealershipCategories == null || _personalDealershipCategories.Count == 0)
+            {
+                return PersonalDealershipAllCategory;
+            }
+
+            if (_selectedPersonalDealershipCategoryIndex < 0 || _selectedPersonalDealershipCategoryIndex >= _personalDealershipCategories.Count)
+            {
+                _selectedPersonalDealershipCategoryIndex = 0;
+            }
+
+            return _personalDealershipCategories[_selectedPersonalDealershipCategoryIndex];
+        }
+
+        private string GetNormalizedPersonalDealershipCategory(DealershipVehicleDefinition definition)
+        {
+            return NormalizePersonalDealershipCategory(definition != null ? definition.Category : string.Empty);
+        }
+
+        private static string NormalizePersonalDealershipCategory(string category)
+        {
+            return string.IsNullOrWhiteSpace(category)
+                ? PersonalDealershipUncategorizedCategory
+                : category.Trim();
+        }
+
+        private void EnterPersonalDealershipCategory(string category)
+        {
+            RefreshPersonalDealershipCategoryState();
+            if (_personalDealershipCategories == null || _personalDealershipCategories.Count == 0)
+            {
+                return;
+            }
+
+            var normalizedCategory = string.IsNullOrWhiteSpace(category)
+                ? PersonalDealershipAllCategory
+                : category.Trim();
+            var categoryIndex = _personalDealershipCategories.FindIndex(entry => string.Equals(entry, normalizedCategory, StringComparison.OrdinalIgnoreCase));
+            if (categoryIndex < 0)
+            {
+                categoryIndex = 0;
+            }
+
+            _selectedPersonalDealershipCategoryIndex = categoryIndex;
+            _activePersonalDealershipCategory = _personalDealershipCategories[_selectedPersonalDealershipCategoryIndex];
+            RebuildPersonalDealershipMenuItems();
+            SelectPersonalDealershipVehicleRow(_personalDealershipSelectedVehicleModelName);
+        }
+
+        private void ReturnToPersonalDealershipCategories()
+        {
+            _activePersonalDealershipCategory = null;
+            ClearPersonalDealershipPreviewVehicle();
+            RebuildPersonalDealershipMenuItems();
+            SelectPersonalDealershipCategoryRow();
+        }
+
+        private void SelectPersonalDealershipCategoryRow()
+        {
+            if (_personalDealershipMenu == null)
+            {
+                return;
+            }
+
+            _personalDealershipMenu.SelectedIndex = PersonalDealershipCategoryListStartIndex + _selectedPersonalDealershipCategoryIndex;
+        }
+
+        private void SelectPersonalDealershipVehicleRow(string preferredModelName)
+        {
+            if (_personalDealershipMenu == null)
+            {
+                return;
+            }
+
+            var targetIndex = PersonalDealershipVehicleListStartIndex;
+            if (_personalDealershipVisibleVehicles != null && _personalDealershipVisibleVehicles.Count > 0)
+            {
+                var preferredIndex = !string.IsNullOrWhiteSpace(preferredModelName)
+                    ? _personalDealershipVisibleVehicles.FindIndex(definition => string.Equals(definition.ModelName, preferredModelName, StringComparison.OrdinalIgnoreCase))
+                    : -1;
+                if (preferredIndex >= 0)
+                {
+                    targetIndex = PersonalDealershipVehicleListStartIndex + preferredIndex;
+                }
+            }
+
+            _personalDealershipMenu.SelectedIndex = targetIndex;
+        }
+
+        private void PurchaseSelectedPersonalDealershipVehicle()
+        {
+            var definition = GetSelectedVisiblePersonalDealershipDefinition();
+            if (definition == null)
+            {
+                ShowStatus("Select a personal vehicle to purchase.");
+                return;
+            }
+
+            PurchasePersonalVehicle(definition);
+        }
+
+        private string BuildPersonalDealershipCategoryButtonCaption(string category)
+        {
+            return string.Equals(category, PersonalDealershipAllCategory, StringComparison.OrdinalIgnoreCase)
+                ? "All Vehicles"
+                : category;
+        }
+
+        private string BuildPersonalDealershipCategoryButtonDetail(string category)
+        {
+            var vehicleCount = GetPersonalDealershipCategoryVehicleCount(category);
+            if (vehicleCount <= 0)
+            {
+                return string.Equals(category, PersonalDealershipAllCategory, StringComparison.OrdinalIgnoreCase)
+                    ? "No personal vehicles are currently listed in the dealership catalog."
+                    : string.Format("No vehicles are listed in the {0} category.", category);
+            }
+
+            return string.Format(
+                "Browse {0} vehicle{1} in {2}.",
+                vehicleCount,
+                vehicleCount == 1 ? string.Empty : "s",
+                string.Equals(category, PersonalDealershipAllCategory, StringComparison.OrdinalIgnoreCase) ? "the full catalog" : category);
+        }
+
+        private int GetPersonalDealershipCategoryVehicleCount(string category)
+        {
+            if (_propertyManager == null || _propertyManager.PersonalVehicleCatalog == null)
+            {
+                return 0;
+            }
+
+            return string.Equals(category, PersonalDealershipAllCategory, StringComparison.OrdinalIgnoreCase)
+                ? _propertyManager.PersonalVehicleCatalog.Count
+                : _propertyManager.PersonalVehicleCatalog.Count(definition => string.Equals(GetNormalizedPersonalDealershipCategory(definition), category, StringComparison.OrdinalIgnoreCase));
         }
 
         private void EnsurePersonalDealershipPreviewVehicle(DealershipVehicleDefinition definition)
@@ -2842,12 +3061,19 @@ namespace LSOL
         private void OpenPersonalDealershipMenu()
         {
             CloseAllMenus();
+            _selectedPersonalDealershipCategoryIndex = 0;
+            _activePersonalDealershipCategory = null;
+            _personalDealershipSelectedVehicleModelName = null;
+            ClearPersonalDealershipPreviewVehicle();
             RebuildPersonalDealershipMenuItems();
+            SelectPersonalDealershipCategoryRow();
             _personalDealershipMenu.Open();
         }
 
         private void RebuildPersonalDealershipMenuItems()
         {
+            RefreshPersonalDealershipCategoryState();
+
             var items = new List<OfficeMenuItem>
             {
                 new OfficeMenuItem
@@ -2859,24 +3085,46 @@ namespace LSOL
                 }
             };
 
-            for (int i = 0; i < _propertyManager.PersonalVehicleCatalog.Count; i++)
+            if (string.IsNullOrWhiteSpace(_activePersonalDealershipCategory))
             {
-                var definition = _propertyManager.PersonalVehicleCatalog[i];
-                items.Add(new OfficeMenuItem
+                foreach (var category in _personalDealershipCategories)
                 {
-                    CaptionFactory = () => string.Format("{0} - {1}", definition.DisplayName, ModFormatting.FormatMoney(definition.Price)),
-                    DetailFactory = () => string.IsNullOrWhiteSpace(definition.Category) ? "Personal vehicle" : definition.Category,
-                    OnActivate = () => PurchasePersonalVehicle(definition),
-                });
+                    var categoryName = category;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => BuildPersonalDealershipCategoryButtonCaption(categoryName),
+                        DetailFactory = () => BuildPersonalDealershipCategoryButtonDetail(categoryName),
+                        OnActivate = () => EnterPersonalDealershipCategory(categoryName),
+                    });
+                }
             }
-
-            if (_propertyManager.PersonalVehicleCatalog.Count == 0)
+            else
             {
-                items.Add(new OfficeMenuItem
+                if (_personalDealershipVisibleVehicles.Count == 0)
                 {
-                    CaptionFactory = () => "No dealership catalog loaded",
-                    DetailFactory = () => "dealership.xml is missing or invalid.",
-                });
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => _propertyManager.PersonalVehicleCatalog.Count == 0
+                            ? "No dealership catalog loaded"
+                            : string.Format("No vehicles in {0}", BuildPersonalDealershipCategoryButtonCaption(_activePersonalDealershipCategory)),
+                        DetailFactory = () => _propertyManager.PersonalVehicleCatalog.Count == 0
+                            ? "dealership.xml is missing or invalid."
+                            : "Press Backspace to return to categories and choose another section of the catalog.",
+                    });
+                }
+                else
+                {
+                    for (int i = 0; i < _personalDealershipVisibleVehicles.Count; i++)
+                    {
+                        var definition = _personalDealershipVisibleVehicles[i];
+                        items.Add(new OfficeMenuItem
+                        {
+                            CaptionFactory = () => string.Format("{0} - {1}", definition.DisplayName, ModFormatting.FormatMoney(definition.Price)),
+                            DetailFactory = () => GetNormalizedPersonalDealershipCategory(definition),
+                            OnActivate = PurchaseSelectedPersonalDealershipVehicle,
+                        });
+                    }
+                }
             }
 
             _personalDealershipMenu.SetItems(items);

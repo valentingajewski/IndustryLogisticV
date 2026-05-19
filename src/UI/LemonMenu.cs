@@ -105,6 +105,15 @@ namespace LSOL.UI
         public int SelectedIndex
         {
             get { return _menu.SelectedIndex; }
+            set
+            {
+                if (_menu.Items.Count == 0)
+                {
+                    return;
+                }
+
+                _menu.SelectedIndex = ClampIndex(value, _menu.Items.Count);
+            }
         }
 
         public void SetItems(IEnumerable<MenuItem> items)
