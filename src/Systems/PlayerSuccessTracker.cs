@@ -141,6 +141,7 @@ namespace LSOL.Systems
         private const int FounderRequirementCount = 5;
         private const int MegalomaniacRequirementCount = 4;
 
+        private const string SuccessIdRoadVeteran = "road_veteran";
         private const string SuccessIdEndlessFreight = "endless_freight";
         private const string SuccessIdSelfMade = "self_made";
         private const string SuccessIdWorldwideOperator = "worldwide_operator";
@@ -199,6 +200,17 @@ namespace LSOL.Systems
         public int UnlockedCount
         {
             get { return Definitions.Count(definition => _unlockedSuccessIds.Contains(definition.Id)); }
+        }
+
+        public bool HasRoadVeteranUnlocked
+        {
+            get { return HasUnlockedSuccess(SuccessIdRoadVeteran); }
+        }
+
+        public bool HasUnlockedSuccess(string successId)
+        {
+            var normalizedId = NormalizeSuccessId(successId);
+            return !string.IsNullOrWhiteSpace(normalizedId) && _unlockedSuccessIds.Contains(normalizedId);
         }
 
         public void ResetForNewSave(float currentBalance)

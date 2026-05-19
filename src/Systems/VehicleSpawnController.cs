@@ -13,9 +13,10 @@ namespace LSOL.Systems
         private readonly Vector3 _vehicleSpawnMarkerSeed;
         private readonly float _vehicleSpawnHeading;
         private readonly List<VehicleCargoType> _filterOrder;
-        private readonly List<VehicleDefinition> _tractorVehicles;
+        private readonly Func<VehicleDefinition, bool> _isVehicleAvailable;
 
         private List<VehicleDefinition> _filteredVehicles;
+        private List<VehicleDefinition> _tractorVehicles;
         private int _selectedVehicleIndex;
         private int _selectedTractorIndex;
 
@@ -24,11 +25,13 @@ namespace LSOL.Systems
             Vector3 vehicleSpawnMarkerSeed,
             float vehicleSpawnHeading,
             IEnumerable<VehicleCargoType> filterOrder,
-            VehicleCargoType defaultFilter)
+            VehicleCargoType defaultFilter,
+            Func<VehicleDefinition, bool> isVehicleAvailable = null)
         {
             _fleetManager = fleetManager;
             _vehicleSpawnMarkerSeed = vehicleSpawnMarkerSeed;
             _vehicleSpawnHeading = vehicleSpawnHeading;
+            _isVehicleAvailable = isVehicleAvailable;
             _filterOrder = filterOrder == null
                 ? new List<VehicleCargoType>()
                 : new List<VehicleCargoType>(filterOrder);
@@ -43,8 +46,8 @@ namespace LSOL.Systems
                     .ToList();
             }
 
-            _tractorVehicles = _fleetManager.GetTractorDefinitions();
             _filteredVehicles = new List<VehicleDefinition>();
+            _tractorVehicles = new List<VehicleDefinition>();
             if (_filterOrder.Count > 0 && !_filterOrder.Contains(defaultFilter))
             {
                 defaultFilter = _filterOrder[0];
@@ -141,7 +144,17 @@ namespace LSOL.Systems
                 ? SelectedVehicleDefinition.ModelName
                 : string.Empty;
             var keepNoVehicleSelection = _selectedVehicleIndex < 0;
-            _filteredVehicles = _fleetManager.GetSpawnableForCargoType(SelectedFilter).ToList();
+            var selectedTractorModelName = SelectedTractorDefinition != null
+                ? SelectedTractorDefinition.ModelName
+                : string.Empty;
+            var keepNoTractorSelection = _selectedTractorIndex < 0;
+
+            _filteredVehicles = _fleetManager.GetSpawnableForCargoType(SelectedFilter)
+                .Where(IsVehicleAvailable)
+                .ToList();
+            _tractorVehicles = _fleetManager.GetTractorDefinitions()
+                .Where(IsVehicleAvailable)
+                .ToList();
 
             if (_filteredVehicles.Count == 0 || keepNoVehicleSelection)
             {
@@ -153,13 +166,14 @@ namespace LSOL.Systems
                 _selectedVehicleIndex = preservedIndex >= 0 ? preservedIndex : 0;
             }
 
-            if (_tractorVehicles.Count == 0)
+            if (_tractorVehicles.Count == 0 || keepNoTractorSelection)
             {
                 _selectedTractorIndex = -1;
             }
-            else if (_selectedTractorIndex >= _tractorVehicles.Count)
+            else
             {
-                _selectedTractorIndex = 0;
+                var preservedTractorIndex = _tractorVehicles.FindIndex(definition => string.Equals(definition.ModelName, selectedTractorModelName, StringComparison.OrdinalIgnoreCase));
+                _selectedTractorIndex = preservedTractorIndex >= 0 ? preservedTractorIndex : 0;
             }
         }
 
@@ -240,6 +254,11 @@ namespace LSOL.Systems
             return string.IsNullOrWhiteSpace(definition.DisplayName)
                 ? definition.ModelName
                 : definition.DisplayName;
+        }
+
+        private bool IsVehicleAvailable(VehicleDefinition definition)
+        {
+            return definition != null && (_isVehicleAvailable == null || _isVehicleAvailable(definition));
         }
     }
 }

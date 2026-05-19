@@ -38,6 +38,9 @@ namespace LSOL
         private const int DefaultNpcRouteLimit = 5;
         private const int MinNpcRouteLimit = 0;
         private const int MaxNpcRouteLimit = 10;
+        private const string PhantomCommercialVehicleId = "20";
+        private const string PhantomCommercialModelName = "phantom3";
+        private const string PhantomRoadVeteranUnlockMessage = "Phantom unlocks after earning Road Veteran (100 deliveries).";
         private static readonly float[] DebugResourceAmountOptionsTons = { 1f, 5f, 10f, 25f, 50f, 100f, 250f, 500f, 1000f };
         private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
         private static readonly float[] DebugDistrictReputationAmountOptions = { 5f, 10f, 25f, 50f, 100f, 250f };
@@ -285,7 +288,8 @@ namespace LSOL
                 _vehicleSpawnMarkerSeed,
                 _config.VehicleSpawnHeading,
                 cargoFilterOrder,
-                defaultCargoFilter);
+                defaultCargoFilter,
+                definition => IsCommercialDealershipVehicleAvailableToPlayer(definition));
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
             _commercialVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
             _personalVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
@@ -4047,6 +4051,7 @@ namespace LSOL
                 _officeMenu.Close();
             }
 
+            _vehicleSpawnController.RefreshFilteredVehicles();
             RebuildVehicleCargoMenuItems();
             _vehicleCargoMenu.Open();
         }
@@ -4125,6 +4130,25 @@ namespace LSOL
             return _vehicleSpawnController.HasAnySelection
                 ? "Spawn the selected truck, trailer, or combined rig at the office lot."
                 : "Select a truck and/or trailer first.";
+        }
+
+        private bool IsCommercialDealershipVehicleAvailableToPlayer(VehicleDefinition definition)
+        {
+            return !IsCommercialDealershipPhantomLocked(definition);
+        }
+
+        private bool IsCommercialDealershipPhantomLocked(VehicleDefinition definition)
+        {
+            return _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
+                && IsPhantomCommercialVehicle(definition)
+                && (_playerSuccessTracker == null || !_playerSuccessTracker.HasRoadVeteranUnlocked);
+        }
+
+        private static bool IsPhantomCommercialVehicle(VehicleDefinition definition)
+        {
+            return definition != null
+                && (string.Equals(definition.ModelName, PhantomCommercialModelName, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(definition.Id, PhantomCommercialVehicleId, StringComparison.OrdinalIgnoreCase));
         }
 
         private string CurrentIndustryVehicleSpawnerDetail()
@@ -4553,18 +4577,30 @@ namespace LSOL
         {
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
             {
+                var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+                var selectedTractor = selectedVehicle != null && !selectedVehicle.IsTrailer
+                    ? null
+                    : _vehicleSpawnController.SelectedTractorDefinition;
+                if (IsCommercialDealershipPhantomLocked(selectedVehicle) || IsCommercialDealershipPhantomLocked(selectedTractor))
+                {
+                    _vehicleSpawnController.RefreshFilteredVehicles();
+                    RefreshVehicleSelectionMenus();
+                    ShowStatus(PhantomRoadVeteranUnlockMessage);
+                    return;
+                }
+
                 string purchaseMessage;
                 var acquired = IsCommercialDealershipRentMode
                     ? _propertyManager.TryRentCommercialVehicle(
-                        _vehicleSpawnController.SelectedVehicleDefinition,
-                        _vehicleSpawnController.SelectedTractorDefinition,
+                        selectedVehicle,
+                        selectedTractor,
                         ref _profit,
                         GetCurrentInGameWeekMinute(),
                         out _,
                         out purchaseMessage)
                     : _propertyManager.TryPurchaseCommercialVehicle(
-                        _vehicleSpawnController.SelectedVehicleDefinition,
-                        _vehicleSpawnController.SelectedTractorDefinition,
+                        selectedVehicle,
+                        selectedTractor,
                         ref _profit,
                         out _,
                         out purchaseMessage);
