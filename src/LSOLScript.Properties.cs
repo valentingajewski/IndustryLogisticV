@@ -2617,16 +2617,21 @@ namespace LSOL
             }
 
             string message;
+            bool success;
             if (_propertyManager.IsPersonalVehicleDeployed(vehicle.AssetId))
             {
-                _propertyManager.TryStorePersonalVehicle(vehicle.AssetId, out message);
+                success = _propertyManager.TryStorePersonalVehicle(vehicle.AssetId, out message);
             }
             else
             {
-                _propertyManager.TryDeployPersonalVehicle(vehicle.AssetId, apartment.GaragePosition, 0f, out message);
+                success = _propertyManager.TryDeployPersonalVehicle(vehicle.AssetId, apartment.GaragePosition, 0f, out message);
             }
 
             RebuildPersonalGarageMenuItems();
+            if (success)
+            {
+                RefreshPersonalVehicleBlips();
+            }
             ShowStatus(message);
         }
 

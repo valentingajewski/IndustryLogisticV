@@ -18,6 +18,15 @@ namespace LSOL.Systems
         public int TruckHandle { get; set; }
     }
 
+    public sealed class PersonalVehicleMapBlipInfo
+    {
+        public string AssetId { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public int VehicleHandle { get; set; }
+    }
+
     public sealed class CorporateOverheadChargePreview
     {
         public float WeeklyAmount { get; set; }
@@ -1614,6 +1623,42 @@ namespace LSOL.Systems
                     AssetId = entry.AssetId,
                     DisplayName = entry.DisplayName,
                     TruckHandle = truck.Handle,
+                });
+            }
+
+            return results;
+        }
+
+        public IReadOnlyList<PersonalVehicleMapBlipInfo> GetPersonalVehicleBlipInfos()
+        {
+            var results = new List<PersonalVehicleMapBlipInfo>();
+            for (int i = 0; i < _state.PersonalVehicles.Count; i++)
+            {
+                var entry = _state.PersonalVehicles[i];
+                if (entry == null || !entry.IsDeployed)
+                {
+                    continue;
+                }
+
+                PersonalVehicleRuntimeState runtime;
+                if (!_personalRuntime.TryGetValue(entry.AssetId, out runtime))
+                {
+                    continue;
+                }
+
+                var vehicle = Entity.FromHandle(runtime.VehicleHandle) as Vehicle;
+                if (vehicle == null || !vehicle.Exists())
+                {
+                    entry.IsDeployed = false;
+                    _personalRuntime.Remove(entry.AssetId);
+                    continue;
+                }
+
+                results.Add(new PersonalVehicleMapBlipInfo
+                {
+                    AssetId = entry.AssetId,
+                    DisplayName = entry.DisplayName,
+                    VehicleHandle = vehicle.Handle,
                 });
             }
 

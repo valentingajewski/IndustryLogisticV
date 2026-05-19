@@ -113,6 +113,7 @@ namespace LSOL
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
         private readonly Dictionary<string, Blip> _commercialVehicleBlips;
+        private readonly Dictionary<string, Blip> _personalVehicleBlips;
 
         private readonly Dictionary<WinForms.Keys, int> _keyCooldownUntil;
         private readonly HashSet<WinForms.Keys> _heldKeys;
@@ -282,6 +283,7 @@ namespace LSOL
                 defaultCargoFilter);
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
             _commercialVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
+            _personalVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
             _npcLogisticsManager = new NpcLogisticsManager(
                 _configDirectory,
                 _industryManager,
@@ -5457,17 +5459,20 @@ namespace LSOL
         {
             _blipLifecycleManager.Create();
             RefreshCommercialVehicleBlips();
+            RefreshPersonalVehicleBlips();
         }
 
         private void RefreshBlipPositions()
         {
             _blipLifecycleManager.Refresh();
             RefreshCommercialVehicleBlips();
+            RefreshPersonalVehicleBlips();
         }
 
         private void DestroyMapBlips()
         {
             DestroyCommercialVehicleBlips();
+            DestroyPersonalVehicleBlips();
             _blipLifecycleManager.Destroy();
         }
 
@@ -5551,6 +5556,88 @@ namespace LSOL
             }
 
             _commercialVehicleBlips.Clear();
+        }
+
+        private void RefreshPersonalVehicleBlips()
+        {
+            var visibleAssetIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var player = Game.Player.Character;
+            var playerVehicleHandle = player != null && player.Exists() && player.CurrentVehicle != null && player.CurrentVehicle.Exists()
+                ? player.CurrentVehicle.Handle
+                : 0;
+            var vehicleInfos = _propertyManager != null ? _propertyManager.GetPersonalVehicleBlipInfos() : null;
+            if (vehicleInfos != null)
+            {
+                for (int i = 0; i < vehicleInfos.Count; i++)
+                {
+                    var info = vehicleInfos[i];
+                    if (info == null || string.IsNullOrWhiteSpace(info.AssetId))
+                    {
+                        continue;
+                    }
+
+                    var vehicle = Entity.FromHandle(info.VehicleHandle) as Vehicle;
+                    if (vehicle == null || !vehicle.Exists())
+                    {
+                        continue;
+                    }
+
+                    if (playerVehicleHandle != 0 && vehicle.Handle == playerVehicleHandle)
+                    {
+                        continue;
+                    }
+
+                    visibleAssetIds.Add(info.AssetId);
+                    Blip blip;
+                    if (!_personalVehicleBlips.TryGetValue(info.AssetId, out blip) || blip == null || !blip.Exists())
+                    {
+                        blip = World.CreateBlip(vehicle.Position);
+                        if (blip == null || !blip.Exists())
+                        {
+                            continue;
+                        }
+
+                        blip.Sprite = BlipSprite.PersonalVehicleCar;
+                        blip.Color = BlipColor.Blue;
+                        blip.Scale = 0.85f;
+                        blip.IsShortRange = false;
+                        blip.IsHiddenOnLegend = false;
+                        _personalVehicleBlips[info.AssetId] = blip;
+                    }
+
+                    blip.Position = vehicle.Position;
+                    blip.Name = string.Format("Personal Vehicle: {0}", info.DisplayName ?? string.Empty);
+                }
+            }
+
+            var staleAssetIds = _personalVehicleBlips.Keys
+                .Where(assetId => !visibleAssetIds.Contains(assetId))
+                .ToList();
+            for (int i = 0; i < staleAssetIds.Count; i++)
+            {
+                Blip blip;
+                if (_personalVehicleBlips.TryGetValue(staleAssetIds[i], out blip) && blip != null && blip.Exists())
+                {
+                    blip.Delete();
+                }
+
+                _personalVehicleBlips.Remove(staleAssetIds[i]);
+            }
+        }
+
+        private void DestroyPersonalVehicleBlips()
+        {
+            var assetIds = _personalVehicleBlips.Keys.ToList();
+            for (int i = 0; i < assetIds.Count; i++)
+            {
+                Blip blip;
+                if (_personalVehicleBlips.TryGetValue(assetIds[i], out blip) && blip != null && blip.Exists())
+                {
+                    blip.Delete();
+                }
+            }
+
+            _personalVehicleBlips.Clear();
         }
 
         private Vector3 ResolveOfficeBlipSeed()
