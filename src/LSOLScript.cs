@@ -6112,6 +6112,7 @@ namespace LSOL
             CancelApartmentSleepTransition();
             _specialMissionManager.Shutdown();
             _npcLogisticsManager.ClearAll();
+            CancelActiveRefuelDispatchForShutdown();
             DestroyMapBlips();
             _cargoTransferController.ClearState();
             _industryOutputPropManager.DestroyAll();

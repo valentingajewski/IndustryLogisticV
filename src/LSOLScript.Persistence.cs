@@ -11,6 +11,14 @@ namespace LSOL
 {
     public sealed partial class LSOLScript
     {
+        private void CancelActiveRefuelDispatchForShutdown()
+        {
+            if (_industryRefuelService != null)
+            {
+                _industryRefuelService.CancelActiveDispatch();
+            }
+        }
+
         private void ResetSaveSessionState()
         {
             DisableCruiseControl(false);
@@ -25,7 +33,7 @@ namespace LSOL
             _fleetManager.ClearAllStates();
             _vehicleFuelSystem.ClearAllStates();
             _vehicleLoadPowerService.ClearAllStates();
-            _industryRefuelService.CancelActiveDispatch();
+            CancelActiveRefuelDispatchForShutdown();
             _officeObjectManager.Cleanup();
             _cargoTransferController.ClearState();
             _barrierInteractionHandler.ClearState();
