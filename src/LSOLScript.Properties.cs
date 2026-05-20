@@ -26,6 +26,7 @@ namespace LSOL
         private const float ApartmentExteriorMarkerScale = 1.3f;
         private const float ApartmentInteriorMarkerScale = 1.2f;
         private const float ApartmentGarageMarkerScale = 1.3f;
+        private const float MotelExteriorMarkerScale = 1.3f;
         private const float DealershipInteractionDistance = 4.6f;
         private const float PersonalDealershipVehiclePadHeading = 70f;
         private const string PersonalDealershipAllCategory = "All";
@@ -42,11 +43,13 @@ namespace LSOL
         private LemonMenu _officeFuelManagementMenu;
         private LemonMenu _apartmentMenu;
         private LemonMenu _apartmentInteriorMenu;
+        private LemonMenu _motelMenu;
         private LemonMenu _personalGarageMenu;
         private LemonMenu _personalDealershipMenu;
         private Vehicle _personalDealershipPreviewVehicle;
         private OfficeDefinition _menuOffice;
         private InteriorDefinition _menuApartment;
+        private MotelDefinition _menuMotel;
         private CommercialGarageMenuContext _commercialGarageMenuContext;
         private OwnedCommercialVehiclePersistenceEntry _selectedCommercialGarageVehicle;
         private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
@@ -114,6 +117,12 @@ namespace LSOL
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
+            _motelMenu = new LemonMenu("Motel")
+            {
+                Subtitle = "Pay for a room and rest for the night",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+            };
             _personalGarageMenu = new LemonMenu("Personal Garage")
             {
                 Subtitle = "Retrieve and store owned personal vehicles",
@@ -142,6 +151,7 @@ namespace LSOL
                 || (_officeFuelManagementMenu != null && _officeFuelManagementMenu.IsOpen)
                 || (_apartmentMenu != null && _apartmentMenu.IsOpen)
                 || (_apartmentInteriorMenu != null && _apartmentInteriorMenu.IsOpen)
+                || (_motelMenu != null && _motelMenu.IsOpen)
                 || (_personalGarageMenu != null && _personalGarageMenu.IsOpen)
                 || (_personalDealershipMenu != null && _personalDealershipMenu.IsOpen);
         }
@@ -181,6 +191,11 @@ namespace LSOL
             if (_apartmentInteriorMenu != null)
             {
                 _apartmentInteriorMenu.Draw();
+            }
+
+            if (_motelMenu != null)
+            {
+                _motelMenu.Draw();
             }
 
             if (_personalGarageMenu != null)
@@ -229,6 +244,11 @@ namespace LSOL
             if (_apartmentInteriorMenu != null)
             {
                 _apartmentInteriorMenu.Close();
+            }
+
+            if (_motelMenu != null)
+            {
+                _motelMenu.Close();
             }
 
             if (_personalGarageMenu != null)
@@ -346,6 +366,12 @@ namespace LSOL
             if (_apartmentInteriorMenu != null && _apartmentInteriorMenu.IsOpen)
             {
                 _apartmentInteriorMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_motelMenu != null && _motelMenu.IsOpen)
+            {
+                _motelMenu.HandleKey(key, _controls);
                 return true;
             }
 
@@ -492,6 +518,7 @@ namespace LSOL
             var apartmentExteriorInteractionDistance = GetApartmentExteriorInteractionDistance();
             var apartmentInteriorInteractionDistance = GetApartmentInteriorInteractionDistance();
             var apartmentGarageInteractionDistance = GetApartmentGarageInteractionDistance();
+            var motelExteriorInteractionDistance = GetMotelExteriorInteractionDistance();
             var activeOffice = _propertyManager.ActiveOffice;
             var activeApartment = _propertyManager.ActiveApartment;
             Vector3 activeApartmentGaragePosition;
@@ -576,6 +603,35 @@ namespace LSOL
                 if (canShowPrompts && !promptShown && playerPos.DistanceTo(apartment.ExteriorPosition) <= apartmentExteriorInteractionDistance)
                 {
                     Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to manage {1}.", KeyName(_controls.Interact), apartment.DisplayName)));
+                    promptShown = true;
+                }
+            }
+
+            for (int i = 0; i < _propertyManager.Motels.Count; i++)
+            {
+                var motel = _propertyManager.Motels[i];
+                if (motel == null || playerPos.DistanceToSquared(motel.ExteriorPosition) > drawDistanceSq)
+                {
+                    continue;
+                }
+
+                World.DrawMarker(
+                    MarkerType.Cylinder,
+                    motel.ExteriorPosition,
+                    Vector3.Zero,
+                    Vector3.Zero,
+                    new Vector3(motelExteriorInteractionDistance, motelExteriorInteractionDistance, _config.MarkerHeight),
+                    Color.FromArgb(205, 214, 164, 90),
+                    false,
+                    false,
+                    false,
+                    null,
+                    null,
+                    false);
+
+                if (canShowPrompts && !promptShown && playerPos.DistanceTo(motel.ExteriorPosition) <= motelExteriorInteractionDistance)
+                {
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to rest at {1}.", KeyName(_controls.Interact), motel.DisplayName)));
                     promptShown = true;
                 }
             }
@@ -667,6 +723,13 @@ namespace LSOL
                 return true;
             }
 
+            var motel = GetMotelInInteractionRange(player.Position);
+            if (motel != null)
+            {
+                OpenMotelMenuFor(motel);
+                return true;
+            }
+
             if (IsNearCommercialDealership(player.Position))
             {
                 OpenCommercialDealershipMenu();
@@ -714,6 +777,26 @@ namespace LSOL
         private float GetApartmentExteriorInteractionDistance()
         {
             return _config.MarkerRadius * ApartmentExteriorMarkerScale;
+        }
+
+        private MotelDefinition GetMotelInInteractionRange(Vector3 position)
+        {
+            var motelExteriorInteractionDistance = GetMotelExteriorInteractionDistance();
+            for (int i = 0; i < _propertyManager.Motels.Count; i++)
+            {
+                var motel = _propertyManager.Motels[i];
+                if (motel != null && position.DistanceTo(motel.ExteriorPosition) <= motelExteriorInteractionDistance)
+                {
+                    return motel;
+                }
+            }
+
+            return null;
+        }
+
+        private float GetMotelExteriorInteractionDistance()
+        {
+            return _config.MarkerRadius * MotelExteriorMarkerScale;
         }
 
         private float GetApartmentInteriorInteractionDistance()
@@ -2457,6 +2540,14 @@ namespace LSOL
             _apartmentInteriorMenu.Open();
         }
 
+        private void OpenMotelMenuFor(MotelDefinition motel)
+        {
+            _menuMotel = motel;
+            CloseAllMenus();
+            RebuildMotelMenuItems();
+            _motelMenu.Open();
+        }
+
         private void RebuildApartmentMenuItems()
         {
             var items = new List<OfficeMenuItem>();
@@ -2618,6 +2709,55 @@ namespace LSOL
             _apartmentInteriorMenu.SetItems(items);
         }
 
+        private void RebuildMotelMenuItems()
+        {
+            var items = new List<OfficeMenuItem>();
+            var motel = _menuMotel;
+
+            _motelMenu.Title = motel != null ? motel.DisplayName : "Motel";
+            _motelMenu.Subtitle = motel != null
+                ? string.Format("{0} | Rest {1}", motel.MotelType ?? "Motel", ModFormatting.FormatMoney(motel.RestPrice))
+                : "Pay for a room and rest for the night";
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
+                DetailFactory = () => motel == null
+                    ? string.Empty
+                    : string.Format(
+                        "{0} | {1}",
+                        string.IsNullOrWhiteSpace(motel.MotelIgName) ? motel.DisplayName : motel.MotelIgName,
+                        string.IsNullOrWhiteSpace(motel.MotelType) ? "Motel" : motel.MotelType),
+            });
+
+            if (motel == null)
+            {
+                _motelMenu.SetItems(items);
+                return;
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => motel.DisplayName,
+                DetailFactory = () => string.IsNullOrWhiteSpace(motel.MotelIgName)
+                    ? string.Format("Type: {0}", string.IsNullOrWhiteSpace(motel.MotelType) ? "Motel" : motel.MotelType)
+                    : string.Format("{0} | {1}", motel.MotelIgName, string.IsNullOrWhiteSpace(motel.MotelType) ? "Motel" : motel.MotelType),
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Nightly Room Price: {0}", ModFormatting.FormatMoney(motel.RestPrice)),
+                DetailFactory = () => "Configured price to buy one room for the night.",
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Buy Room For Night ({0} Hours)", ApartmentSleepHours),
+                DetailFactory = BuildMotelRestMenuDetail,
+                OnActivate = RestAtSelectedMotel,
+            });
+
+            _motelMenu.SetItems(items);
+        }
+
         private void PurchaseSelectedApartment()
         {
             if (_menuApartment == null)
@@ -2763,11 +2903,6 @@ namespace LSOL
 
         private void SleepInActiveApartment()
         {
-            if (IsApartmentSleepTransitionActive)
-            {
-                return;
-            }
-
             var apartment = _propertyManager.ActiveApartment;
             var player = Game.Player.Character;
             if (apartment == null || player == null || !player.Exists())
@@ -2782,10 +2917,14 @@ namespace LSOL
                 return;
             }
 
-            var remainingCooldownMinutes = GetApartmentSleepCooldownRemainingMinutes(GetCurrentInGameWeekMinute());
-            if (remainingCooldownMinutes > 0)
+            string restMessage;
+            if (!TryValidateSharedRest(player, out restMessage))
             {
-                ShowStatus(string.Format("You can sleep again in {0}.", FormatApartmentSleepCooldown(remainingCooldownMinutes)));
+                if (!string.IsNullOrWhiteSpace(restMessage))
+                {
+                    ShowStatus(restMessage);
+                }
+
                 return;
             }
 
@@ -2794,13 +2933,80 @@ namespace LSOL
 
         private string BuildApartmentSleepMenuDetail()
         {
+            return BuildSharedRestMenuDetail(string.Format("Advance the city clock by {0} hours and stay inside.", ApartmentSleepHours));
+        }
+
+        private string BuildMotelRestMenuDetail()
+        {
+            var motel = _menuMotel;
+            var price = motel != null ? motel.RestPrice : 0f;
+            return BuildSharedRestMenuDetail(string.Format("Pay {0} to buy a room for the night and rest for {1} hours.", ModFormatting.FormatMoney(price), ApartmentSleepHours));
+        }
+
+        private string BuildSharedRestMenuDetail(string availableMessage)
+        {
             var remainingCooldownMinutes = GetApartmentSleepCooldownRemainingMinutes(GetCurrentInGameWeekMinute());
             if (remainingCooldownMinutes > 0)
             {
                 return string.Format("Available again in {0}.", FormatApartmentSleepCooldown(remainingCooldownMinutes));
             }
 
-            return string.Format("Advance the city clock by {0} hours and stay inside.", ApartmentSleepHours);
+            return availableMessage;
+        }
+
+        private void RestAtSelectedMotel()
+        {
+            var motel = _menuMotel;
+            var player = Game.Player.Character;
+            if (motel == null || player == null || !player.Exists())
+            {
+                return;
+            }
+
+            if (_profit + 0.001f < motel.RestPrice)
+            {
+                ShowStatus(string.Format("You need {0} to rest at {1}.", ModFormatting.FormatMoney(motel.RestPrice), motel.DisplayName));
+                return;
+            }
+
+            string restMessage;
+            if (!TryValidateSharedRest(player, out restMessage))
+            {
+                if (!string.IsNullOrWhiteSpace(restMessage))
+                {
+                    ShowStatus(restMessage);
+                }
+
+                return;
+            }
+
+            _profit -= motel.RestPrice;
+            _tabletStateStore.MarkBalanceDirty();
+            StartApartmentSleepTransition(player, Game.GameTime);
+        }
+
+        private bool TryValidateSharedRest(Ped player, out string message)
+        {
+            message = string.Empty;
+            if (IsApartmentSleepTransitionActive)
+            {
+                return false;
+            }
+
+            if (player == null || !player.Exists())
+            {
+                message = "Player unavailable.";
+                return false;
+            }
+
+            var remainingCooldownMinutes = GetApartmentSleepCooldownRemainingMinutes(GetCurrentInGameWeekMinute());
+            if (remainingCooldownMinutes > 0)
+            {
+                message = string.Format("You can sleep again in {0}.", FormatApartmentSleepCooldown(remainingCooldownMinutes));
+                return false;
+            }
+
+            return true;
         }
 
         private int GetApartmentSleepCooldownRemainingMinutes(int currentInGameMinute)

@@ -103,6 +103,7 @@ namespace LSOL.Systems
         private readonly Dictionary<int, OfficeObjectDefinition> _officeObjectDefinitionsById;
         private readonly List<InteriorDefinition> _interiorDefinitions;
         private readonly Dictionary<string, InteriorDefinition> _interiorDefinitionsById;
+        private readonly List<MotelDefinition> _motelDefinitions;
         private readonly List<DealershipVehicleDefinition> _personalVehicleDefinitions;
         private readonly Dictionary<string, DealershipVehicleDefinition> _personalVehicleDefinitionsById;
         private readonly Dictionary<string, CommercialVehicleRuntimeState> _commercialRuntime;
@@ -139,6 +140,9 @@ namespace LSOL.Systems
             _interiorDefinitionsById = _interiorDefinitions
                 .Where(x => x != null && !string.IsNullOrWhiteSpace(x.InteriorId))
                 .ToDictionary(x => x.InteriorId, x => x, StringComparer.OrdinalIgnoreCase);
+            _motelDefinitions = config != null && config.MotelDefinitions != null
+                ? config.MotelDefinitions.OrderBy(x => x != null ? x.RestPrice : 0f).ThenBy(x => x != null ? x.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase).ToList()
+                : new List<MotelDefinition>();
             _personalVehicleDefinitions = config != null && config.PersonalVehicleDefinitions != null
                 ? config.PersonalVehicleDefinitions.OrderBy(x => x != null ? x.Price : 0f).ThenBy(x => x != null ? x.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase).ToList()
                 : new List<DealershipVehicleDefinition>();
@@ -179,6 +183,11 @@ namespace LSOL.Systems
         public IReadOnlyList<InteriorDefinition> Interiors
         {
             get { return _interiorDefinitions; }
+        }
+
+        public IReadOnlyList<MotelDefinition> Motels
+        {
+            get { return _motelDefinitions; }
         }
 
         public IReadOnlyList<OfficeObjectDefinition> OfficeObjectCatalog

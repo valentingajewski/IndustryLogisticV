@@ -1,0 +1,8 @@
+<Motels>
+  <Motel id="motel_001" name="Eastern Motel" igName="Motel" type="Budget" restPrice="65">
+    <ExteriorPosition x="317.43" y="2623.19" z="44.46" />
+  </Motel>
+  <Motel id="motel_002" name="Pink Cage" igName="Motel" type="Standard" restPrice="110">
+    <ExteriorPosition x="313.20" y="-225.35" z="54.22" />
+  </Motel>
+</Motels>

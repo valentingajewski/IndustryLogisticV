@@ -22,6 +22,7 @@ namespace LSOL.Config
             OfficeDefinitions = new List<OfficeDefinition>();
             OfficeObjectDefinitions = new List<OfficeObjectDefinition>();
             InteriorDefinitions = new List<InteriorDefinition>();
+            MotelDefinitions = new List<MotelDefinition>();
             PersonalVehicleDefinitions = new List<DealershipVehicleDefinition>();
             ValidationMessages = new List<string>();
         }
@@ -37,6 +38,7 @@ namespace LSOL.Config
         public List<OfficeDefinition> OfficeDefinitions { get; }
         public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; }
         public List<InteriorDefinition> InteriorDefinitions { get; }
+        public List<MotelDefinition> MotelDefinitions { get; }
         public List<DealershipVehicleDefinition> PersonalVehicleDefinitions { get; }
         public List<string> ValidationMessages { get; }
 
@@ -73,6 +75,7 @@ namespace LSOL.Config
             XmlConfigImport.TryPopulateOffices(configDirectory, catalog);
             XmlConfigImport.TryPopulateOfficeObjects(configDirectory, catalog);
             XmlConfigImport.TryPopulateInteriors(configDirectory, catalog);
+            XmlConfigImport.TryPopulateMotels(configDirectory, catalog);
             XmlConfigImport.TryPopulateDealershipVehicles(configDirectory, catalog);
 
             if (addonCatalog != null)

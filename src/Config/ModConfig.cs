@@ -24,6 +24,7 @@ namespace LSOL.Config
         public List<OfficeDefinition> OfficeDefinitions { get; private set; }
         public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; private set; }
         public List<InteriorDefinition> InteriorDefinitions { get; private set; }
+        public List<MotelDefinition> MotelDefinitions { get; private set; }
         public List<DealershipVehicleDefinition> PersonalVehicleDefinitions { get; private set; }
         public ExternalConfigCatalog ExternalCatalog { get; private set; }
         public List<VehicleCargoType> CargoTypes { get; private set; }
@@ -58,6 +59,7 @@ namespace LSOL.Config
                 OfficeDefinitions = new List<OfficeDefinition>(),
                 OfficeObjectDefinitions = new List<OfficeObjectDefinition>(),
                 InteriorDefinitions = new List<InteriorDefinition>(),
+                MotelDefinitions = new List<MotelDefinition>(),
                 PersonalVehicleDefinitions = new List<DealershipVehicleDefinition>(),
                 CargoTypes = new List<VehicleCargoType>(),
                 ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase),
@@ -96,6 +98,11 @@ namespace LSOL.Config
             if (externalCatalog.InteriorDefinitions.Count > 0)
             {
                 config.InteriorDefinitions.AddRange(CloneInteriorDefinitions(externalCatalog.InteriorDefinitions));
+            }
+
+            if (externalCatalog.MotelDefinitions.Count > 0)
+            {
+                config.MotelDefinitions.AddRange(CloneMotelDefinitions(externalCatalog.MotelDefinitions));
             }
 
             if (externalCatalog.PersonalVehicleDefinitions.Count > 0)
@@ -492,6 +499,24 @@ namespace LSOL.Config
                             InteriorWeeklyRent = x.InteriorWeeklyRent,
                             ExteriorPosition = x.ExteriorPosition,
                             GaragePosition = x.GaragePosition,
+                        })
+                        .ToList();
+            }
+
+            private static IEnumerable<MotelDefinition> CloneMotelDefinitions(IEnumerable<MotelDefinition> source)
+            {
+                return source == null
+                    ? new MotelDefinition[0]
+                    : source
+                        .Where(x => x != null)
+                        .Select(x => new MotelDefinition
+                        {
+                            MotelId = x.MotelId,
+                            MotelName = x.MotelName,
+                            MotelIgName = x.MotelIgName,
+                            MotelType = x.MotelType,
+                            RestPrice = x.RestPrice,
+                            ExteriorPosition = x.ExteriorPosition,
                         })
                         .ToList();
             }

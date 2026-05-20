@@ -250,6 +250,7 @@ namespace LSOL
                 () => _propertyManager != null ? _propertyManager.ActiveOfficeId : string.Empty,
                 () => _propertyManager != null ? _propertyManager.Interiors : new InteriorDefinition[0],
                 () => _propertyManager != null ? _propertyManager.ActiveApartmentId : string.Empty,
+                () => _propertyManager != null ? _propertyManager.Motels : new MotelDefinition[0],
                 () =>
                 {
                     string reason;

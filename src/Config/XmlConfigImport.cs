@@ -821,6 +821,65 @@ namespace LSOL.Config
             return catalog.InteriorDefinitions.Count > 0;
         }
 
+        public static bool TryPopulateMotels(string configDirectory, ExternalConfigCatalog catalog)
+        {
+            if (catalog == null)
+            {
+                return false;
+            }
+
+            var document = LoadDocument(
+                configDirectory,
+                "Motels.xml",
+                catalog.ValidationMessages,
+                "Motels.xml missing. Motel rest will be unavailable.");
+            if (document == null || document.Root == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+            foreach (var element in document.Root.Elements("Motel"))
+            {
+                var motelId = ReadAttribute(element, "id");
+                var motelName = ReadAttribute(element, "name", motelId);
+                var exteriorPosition = ReadOptionalVector3(element.Element("ExteriorPosition"));
+                var restPrice = ReadFloatAttribute(element, "restPrice", float.NaN);
+                var contextName = !string.IsNullOrWhiteSpace(motelName) ? motelName : motelId;
+
+                if (string.IsNullOrWhiteSpace(motelId) || string.IsNullOrWhiteSpace(motelName))
+                {
+                    catalog.ValidationMessages.Add("Motels.xml contains a motel with a missing id or name.");
+                    continue;
+                }
+
+                if (float.IsNaN(restPrice))
+                {
+                    catalog.ValidationMessages.Add(string.Format("Motels.xml motel '{0}' has an invalid restPrice and was skipped.", contextName));
+                    continue;
+                }
+
+                if (!exteriorPosition.HasValue)
+                {
+                    catalog.ValidationMessages.Add(string.Format("Motels.xml motel '{0}' has missing or invalid exterior coordinates and was skipped.", contextName));
+                    continue;
+                }
+
+                catalog.MotelDefinitions.Add(new MotelDefinition
+                {
+                    MotelId = motelId,
+                    MotelName = motelName,
+                    MotelIgName = ReadAttribute(element, "igName"),
+                    MotelType = ReadAttribute(element, "type"),
+                    RestPrice = Math.Max(0f, restPrice),
+                    ExteriorPosition = exteriorPosition.Value,
+                });
+                loadedAny = true;
+            }
+
+            return loadedAny;
+        }
+
         public static bool TryPopulateDealershipVehicles(string configDirectory, ExternalConfigCatalog catalog)
         {
             if (catalog == null)

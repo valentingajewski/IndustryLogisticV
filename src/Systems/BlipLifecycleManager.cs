@@ -14,6 +14,7 @@ namespace LSOL.Systems
         private readonly Func<string> _getActiveOfficeId;
         private readonly Func<IReadOnlyList<InteriorDefinition>> _getApartmentDefinitions;
         private readonly Func<string> _getActiveApartmentId;
+        private readonly Func<IReadOnlyList<MotelDefinition>> _getMotelDefinitions;
         private readonly Func<bool> _canUseApartmentSystems;
         private readonly Func<IReadOnlyList<BankDefinition>> _getBankDefinitions;
         private readonly Func<Vector3> _getOfficeMarkerSeed;
@@ -25,6 +26,7 @@ namespace LSOL.Systems
         private readonly TerritoryManager _territoryManager;
         private readonly List<Blip> _officeBlips;
         private readonly List<Blip> _apartmentBlips;
+        private readonly List<Blip> _motelBlips;
         private readonly List<Blip> _bankBlips;
         private readonly List<Blip> _industryBlips;
 
@@ -38,6 +40,7 @@ namespace LSOL.Systems
             Func<string> getActiveOfficeId,
             Func<IReadOnlyList<InteriorDefinition>> getApartmentDefinitions,
             Func<string> getActiveApartmentId,
+            Func<IReadOnlyList<MotelDefinition>> getMotelDefinitions,
             Func<bool> canUseApartmentSystems,
             Func<IReadOnlyList<BankDefinition>> getBankDefinitions,
             Func<Vector3> getOfficeMarkerSeed,
@@ -53,6 +56,7 @@ namespace LSOL.Systems
             _getActiveOfficeId = getActiveOfficeId;
             _getApartmentDefinitions = getApartmentDefinitions;
             _getActiveApartmentId = getActiveApartmentId;
+            _getMotelDefinitions = getMotelDefinitions;
             _canUseApartmentSystems = canUseApartmentSystems;
             _getBankDefinitions = getBankDefinitions;
             _getOfficeMarkerSeed = getOfficeMarkerSeed;
@@ -64,6 +68,7 @@ namespace LSOL.Systems
             _territoryManager = territoryManager;
             _officeBlips = new List<Blip>();
             _apartmentBlips = new List<Blip>();
+            _motelBlips = new List<Blip>();
             _bankBlips = new List<Blip>();
             _industryBlips = new List<Blip>();
         }
@@ -74,6 +79,7 @@ namespace LSOL.Systems
 
             CreateOfficeBlips();
             CreateApartmentBlips();
+            CreateMotelBlips();
             RefreshActiveApartmentGarageBlip(ResolveApartmentDefinitions(), ResolveActiveApartmentId());
             CreateBankBlips();
             CreateDealershipBlips();
@@ -181,6 +187,31 @@ namespace LSOL.Systems
 
             RefreshActiveApartmentGarageBlip(apartments, activeApartmentId);
 
+            var motels = ResolveMotelDefinitions();
+            if (_motelBlips.Count != motels.Count)
+            {
+                Create();
+                return;
+            }
+
+            for (int i = 0; i < motels.Count; i++)
+            {
+                var motel = motels[i];
+                var blip = _motelBlips[i];
+                if (blip == null || !blip.Exists())
+                {
+                    Create();
+                    return;
+                }
+
+                blip.Position = _getGroundPosition(motel.ExteriorPosition);
+                blip.Sprite = BlipSprite.Michael;
+                blip.Color = BlipColor.White;
+                blip.Name = ResolveMotelBlipName(motel);
+                blip.Scale = 0.85f;
+                ApplyStandardNearbyVisibility(blip);
+            }
+
             var banks = ResolveBankDefinitions();
             if (_bankBlips.Count != banks.Count)
             {
@@ -253,6 +284,15 @@ namespace LSOL.Systems
                 }
             }
 
+            for (int i = 0; i < _motelBlips.Count; i++)
+            {
+                var blip = _motelBlips[i];
+                if (blip != null && blip.Exists())
+                {
+                    blip.Delete();
+                }
+            }
+
             for (int i = 0; i < _bankBlips.Count; i++)
             {
                 var blip = _bankBlips[i];
@@ -288,6 +328,7 @@ namespace LSOL.Systems
 
             _officeBlips.Clear();
             _apartmentBlips.Clear();
+            _motelBlips.Clear();
             _bankBlips.Clear();
             _industryBlips.Clear();
             _commercialDealershipBlip = null;
@@ -352,6 +393,25 @@ namespace LSOL.Systems
                 if (blip != null && blip.Exists())
                 {
                     _apartmentBlips.Add(blip);
+                }
+            }
+        }
+
+        private void CreateMotelBlips()
+        {
+            var motels = ResolveMotelDefinitions();
+            for (int i = 0; i < motels.Count; i++)
+            {
+                var motel = motels[i];
+                var blip = CreateStaticBlip(
+                    _getGroundPosition(motel.ExteriorPosition),
+                    BlipSprite.Michael,
+                    BlipColor.White,
+                    ResolveMotelBlipName(motel),
+                    0.85f);
+                if (blip != null && blip.Exists())
+                {
+                    _motelBlips.Add(blip);
                 }
             }
         }
@@ -461,6 +521,14 @@ namespace LSOL.Systems
                 : string.Empty;
         }
 
+        private IReadOnlyList<MotelDefinition> ResolveMotelDefinitions()
+        {
+            var motels = _getMotelDefinitions != null ? _getMotelDefinitions() : null;
+            return motels != null
+                ? motels.Where(motel => motel != null).ToList()
+                : new MotelDefinition[0];
+        }
+
         private IReadOnlyList<BankDefinition> ResolveBankDefinitions()
         {
             var banks = _getBankDefinitions != null ? _getBankDefinitions() : null;
@@ -514,6 +582,16 @@ namespace LSOL.Systems
                 ? apartment.InteriorIgName
                 : apartment.DisplayName;
             return baseName + " Garage";
+        }
+
+        private static string ResolveMotelBlipName(MotelDefinition motel)
+        {
+            if (motel == null)
+            {
+                return "Motel";
+            }
+
+            return string.Format("Motel: {0}", motel.DisplayName);
         }
 
         private static string ResolveBankBlipName(BankDefinition bank)
