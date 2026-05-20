@@ -18,6 +18,7 @@ namespace LSOL.Config
             CommodityBasePrices = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             ObjectModels = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             VehicleDefinitions = new List<VehicleDefinition>();
+            VehicleObjectLayouts = new List<VehicleObjectLayoutDefinition>();
             BankDefinitions = new List<BankDefinition>();
             OfficeDefinitions = new List<OfficeDefinition>();
             OfficeObjectDefinitions = new List<OfficeObjectDefinition>();
@@ -34,6 +35,7 @@ namespace LSOL.Config
         public Dictionary<string, float> CommodityBasePrices { get; }
         public Dictionary<string, List<string>> ObjectModels { get; }
         public List<VehicleDefinition> VehicleDefinitions { get; }
+        public List<VehicleObjectLayoutDefinition> VehicleObjectLayouts { get; }
         public List<BankDefinition> BankDefinitions { get; }
         public List<OfficeDefinition> OfficeDefinitions { get; }
         public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; }
@@ -68,6 +70,7 @@ namespace LSOL.Config
             XmlConfigImport.TryPopulateResources(configDirectory, catalog);
             CommodityCatalog.Configure(catalog.ResourceGroups);
             XmlConfigImport.TryPopulateObjects(configDirectory, catalog);
+            XmlConfigImport.TryPopulateVehicleObjectLayouts(configDirectory, catalog);
             XmlConfigImport.TryPopulateDistricts(configDirectory, catalog);
             XmlConfigImport.TryPopulateSites(configDirectory, catalog);
             XmlConfigImport.TryPopulateVehicles(configDirectory, catalog);

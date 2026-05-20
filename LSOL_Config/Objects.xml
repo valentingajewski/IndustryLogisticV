@@ -3,6 +3,7 @@
   <Group key="LittleBox" models="prop_boxpile_07d" />
   <Group key="LittleMeatBox" models="v_ind_cf_meatbox" />
   <Group key="Box" models="prop_boxpile_05a" />
+  <Group key="Box2" models="prop_boxpile_06b" />
   <Group key="TV" models="ex_prop_crate_elec_sc" />
   <Group key="Alcohol" models="ex_prop_crate_tob_sc" />
   <Group key="Alloy" models="prop_pipes_01b" />
@@ -24,4 +25,5 @@
   <Group key="Dieseltank" models="prop_ind_deiseltank" />
   <Group key="Railtrack" models="prop_railstack04" />
   <Group key="Omega" models="prop_boxpile_06b" />
+  <Group key="Steel" models="prop_pipes_04a" />
 </Objects>

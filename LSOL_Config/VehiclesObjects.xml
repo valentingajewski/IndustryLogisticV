@@ -1,0 +1,37 @@
+<VehiclesObjects>
+  <Vehicle model="burrito3" name="Burrito" objectKey="TinyBox" centerX="0.00" centerY="-0.60" centerZ="0.35" maxLine="1" maxRow="1" />
+  <Vehicle model="rumpo" name="Rumpo" objectKey="TinyBox" centerX="0.00" centerY="-0.60" centerZ="0.35" maxLine="1" maxRow="1" />
+  <Vehicle model="rumpo2" name="Commercial Rumpo" objectKey="TinyBox" centerX="0.00" centerY="-0.60" centerZ="0.35" maxLine="1" maxRow="1" />
+  <Vehicle model="speedo" name="Speedo" objectKey="TinyBox" centerX="0.00" centerY="-0.58" centerZ="0.35" maxLine="1" maxRow="1" />
+  <Vehicle model="speedo4" name="Speedo" objectKey="TinyBox" centerX="0.00" centerY="-0.58" centerZ="0.35" maxLine="1" maxRow="1" />
+  <Vehicle model="speedo5" name="Speedo" objectKey="TinyBox" centerX="0.00" centerY="-0.58" centerZ="0.35" maxLine="1" maxRow="1" />
+  <Vehicle model="boxville2" name="Boxville" objectKey="LittleBox" centerX="0.00" centerY="-1.50" centerZ="0.55" maxLine="1" maxRow="1" />
+  <Vehicle model="boxville3" name="Boxville (Humane Lab)" objectKey="" centerX="0.00" centerY="-1.50" centerZ="0.55" maxLine="1" maxRow="1" />
+  <Vehicle model="boxville4" name="Boxvile (Post OP)" objectKey="LittleBox" centerX="0.00" centerY="-1.50" centerZ="0.55" maxLine="1" maxRow="1" />
+  <Vehicle model="benson" name="Benson" objectKey="Box2" centerX="0.00" centerY="-1.5" centerZ="0.85" maxLine="1" maxRow="3" />
+  <Vehicle model="benson2" name="Benson (Cluckin' Bell)" objectKey="Box2" centerX="0.00" centerY="-1.5" centerZ="0.85" maxLine="1" maxRow="3" />
+  <Vehicle model="biff" name="Biff" objectKey="Box2" centerX="0.00" centerY="-0.90" centerZ="1.05" maxLine="2" maxRow="2" enabled="false" />
+  <Vehicle model="hauler" name="Hauler" objectKey="" centerX="0.00" centerY="-0.20" centerZ="1.20" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="mule" name="Mule" objectKey="Box" centerX="0.00" centerY="-0.95" centerZ="0.75" maxLine="1" maxRow="2" />
+  <Vehicle model="mule2" name="Mule" objectKey="Box" centerX="0.00" centerY="-0.95" centerZ="0.75" maxLine="1" maxRow="2" />
+  <Vehicle model="mule3" name="Mule" objectKey="Box" centerX="0.00" centerY="-0.95" centerZ="0.75" maxLine="1" maxRow="2" />
+  <Vehicle model="mule4" name="Mule" objectKey="Box" centerX="0.00" centerY="-0.95" centerZ="0.75" maxLine="1" maxRow="2" />
+  <Vehicle model="mule5" name="Mule" objectKey="Box" centerX="0.00" centerY="-0.95" centerZ="0.75" maxLine="1" maxRow="2" />
+  <Vehicle model="packer" name="Packer" objectKey="" centerX="0.00" centerY="-0.20" centerZ="1.20" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="phantom3" name="Phantom" objectKey="" centerX="0.00" centerY="-0.20" centerZ="1.20" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="pounder" name="Pounder" objectKey="Box2" centerX="0.00" centerY="-3.40" centerZ="1.05" maxLine="1" maxRow="5" />
+  <Vehicle model="tanker" name="Ron Tanker" objectKey="" centerX="0.00" centerY="-1.40" centerZ="1.10" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="tanker2" name="Tanker" objectKey="" centerX="0.00" centerY="-1.40" centerZ="1.10" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="tr2" name="Car Trailer" objectKey="" centerX="0.00" centerY="-0.65" centerZ="0.95" maxLine="1" maxRow="1" enabled="false"/>
+  <Vehicle model="trailerlogs" name="Log Trailer" objectKey="" centerX="0.00" centerY="-1.10" centerZ="1.05" maxLine="2" maxRow="3" enabled="false" />
+  <Vehicle model="trailers" name="Trailer" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
+  <Vehicle model="trailers2" name="Refrigerated Trailer" objectKey="" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
+  <Vehicle model="trailers3" name="Trailer (with ad)" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
+  <Vehicle model="trailers4" name="Container Trailer" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
+  <Vehicle model="trflat" name="Open Trailer" objectKey="" centerX="0.00" centerY="-0.80" centerZ="1.30" maxLine="2" maxRow="3"/>
+  <Vehicle model="mixer" name="Mixer" objectKey="" centerX="0.00" centerY="-0.85" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="mixer2" name="Mixer" objectKey="" centerX="0.00" centerY="-0.85" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="rubble" name="Rubble" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="tiptruck" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="tiptruck2" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
+</VehiclesObjects>

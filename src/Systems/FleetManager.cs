@@ -16,9 +16,11 @@ namespace LSOL.Systems
         private const string MetalSolidPropModel = "prop_pipes_04a";
         private const string DefaultLittleBoxPropModel = "prop_boxpile_07d";
         private const string DefaultTinyBoxPropModel = "prop_rub_boxpile_02";
+        private const float VehicleObjectLayoutSlotPadding = 0.05f;
         private readonly List<VehicleDefinition> _definitions;
         private readonly Dictionary<int, VehicleDefinition> _definitionsByModelHash;
         private readonly Dictionary<string, VehicleDefinition> _definitionsByModelName;
+        private readonly Dictionary<string, VehicleObjectLayoutDefinition> _vehicleObjectLayoutsByModelName;
         private readonly Dictionary<string, List<string>> _objectModels;
         private readonly Dictionary<int, VehicleCargoState> _cargoStates;
         private readonly List<OwnedFleetRig> _ownedRigs;
@@ -30,6 +32,7 @@ namespace LSOL.Systems
             _definitions = config.VehicleDefinitions;
             _definitionsByModelHash = BuildDefinitionLookup(_definitions);
             _definitionsByModelName = BuildDefinitionModelNameLookup(_definitions);
+            _vehicleObjectLayoutsByModelName = BuildVehicleObjectLayoutLookup(config.VehicleObjectLayouts);
             _objectModels = config.ObjectModels;
             _cargoStates = new Dictionary<int, VehicleCargoState>();
             _ownedRigs = new List<OwnedFleetRig>();
@@ -538,6 +541,31 @@ namespace LSOL.Systems
             return lookup;
         }
 
+        private static Dictionary<string, VehicleObjectLayoutDefinition> BuildVehicleObjectLayoutLookup(IEnumerable<VehicleObjectLayoutDefinition> layouts)
+        {
+            var lookup = new Dictionary<string, VehicleObjectLayoutDefinition>(StringComparer.OrdinalIgnoreCase);
+            if (layouts == null)
+            {
+                return lookup;
+            }
+
+            foreach (var candidate in layouts)
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.ModelName))
+                {
+                    continue;
+                }
+
+                var modelName = candidate.ModelName.Trim();
+                if (!lookup.ContainsKey(modelName))
+                {
+                    lookup[modelName] = candidate;
+                }
+            }
+
+            return lookup;
+        }
+
         public bool SpawnSelectedVehicle(
             VehicleDefinition selected,
             VehicleDefinition selectedTractor,
@@ -762,8 +790,15 @@ namespace LSOL.Systems
             List<string> modelNames;
             int count;
             bool forceCenteredPlacement;
-            if (!TryResolveCargoPropLayout(cargoVehicle, cargoState, out modelNames, out count, out forceCenteredPlacement))
+            VehicleObjectLayoutDefinition configuredLayout;
+            if (!TryResolveCargoPropLayout(cargoVehicle, cargoState, out modelNames, out count, out forceCenteredPlacement, out configuredLayout))
             {
+                return;
+            }
+
+            if (configuredLayout != null && configuredLayout.IsEnabled && configuredLayout.HasUsableGrid)
+            {
+                ApplyConfiguredCargoVisuals(cargoVehicle, cargoState, configuredLayout, modelNames, count, forceCenteredPlacement);
                 return;
             }
 
@@ -911,11 +946,12 @@ namespace LSOL.Systems
             return Math.Max(1, Math.Min(maxCount, count));
         }
 
-        private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, out List<string> modelNames, out int count, out bool forceCenteredPlacement)
+        private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, out List<string> modelNames, out int count, out bool forceCenteredPlacement, out VehicleObjectLayoutDefinition configuredLayout)
         {
             modelNames = null;
             count = 0;
             forceCenteredPlacement = false;
+            configuredLayout = null;
 
             var cargoType = CommodityCatalog.ResolveCargoType(cargoState.CargoType, cargoState.Commodity);
             if (!CommodityCatalog.UsesAttachedPropVisual(cargoType))
@@ -924,7 +960,13 @@ namespace LSOL.Systems
             }
 
             var definition = FindDefinition(cargoVehicle.Model);
-            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType, definition);
+            configuredLayout = FindVehicleObjectLayout(definition);
+            if (configuredLayout != null && !configuredLayout.IsEnabled)
+            {
+                return false;
+            }
+
+            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType, definition, configuredLayout);
             if (modelNames == null || modelNames.Count == 0)
             {
                 return false;
@@ -932,12 +974,29 @@ namespace LSOL.Systems
 
             forceCenteredPlacement = CommodityCatalog.UsesCenteredPropVisual(cargoType);
             count = forceCenteredPlacement ? 1 : ResolveCratePropCount(cargoVehicle, cargoState);
+            if (configuredLayout != null && configuredLayout.HasUsableGrid)
+            {
+                var maxConfiguredCount = Math.Max(1, configuredLayout.MaxLine * configuredLayout.MaxRow);
+                count = Math.Min(count, maxConfiguredCount);
+            }
+
             return count > 0;
         }
 
-        private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType, VehicleDefinition definition)
+        private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType, VehicleDefinition definition, VehicleObjectLayoutDefinition configuredLayout)
         {
-            var vehicleSpecificModels = ResolveVehicleSpecificPropModels(definition);
+            if (configuredLayout != null && !string.IsNullOrWhiteSpace(configuredLayout.ObjectKey))
+            {
+                var configuredModels = ResolveNamedPropModels(configuredLayout.ObjectKey, null);
+                if (configuredModels != null)
+                {
+                    return configuredModels;
+                }
+            }
+
+            var vehicleSpecificModels = configuredLayout == null
+                ? ResolveVehicleSpecificPropModels(definition)
+                : null;
             if (vehicleSpecificModels != null)
             {
                 return vehicleSpecificModels;
@@ -997,7 +1056,254 @@ namespace LSOL.Systems
                 return modelNames;
             }
 
+            if (string.IsNullOrWhiteSpace(fallbackModelName))
+            {
+                return null;
+            }
+
             return new List<string> { fallbackModelName };
+        }
+
+        private VehicleObjectLayoutDefinition FindVehicleObjectLayout(VehicleDefinition definition)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.ModelName))
+            {
+                return null;
+            }
+
+            VehicleObjectLayoutDefinition layout;
+            return _vehicleObjectLayoutsByModelName.TryGetValue(definition.ModelName.Trim(), out layout)
+                ? layout
+                : null;
+        }
+
+        private void ApplyConfiguredCargoVisuals(
+            Vehicle cargoVehicle,
+            VehicleCargoState cargoState,
+            VehicleObjectLayoutDefinition configuredLayout,
+            List<string> modelNames,
+            int count,
+            bool forceCenteredPlacement)
+        {
+            if (cargoVehicle == null || !cargoVehicle.Exists() || cargoState == null || configuredLayout == null || !configuredLayout.HasUsableGrid || modelNames == null || modelNames.Count == 0 || count <= 0)
+            {
+                return;
+            }
+
+            float slotSpacingX;
+            float slotSpacingY;
+            if (!TryResolveConfiguredSlotSpacing(modelNames, out slotSpacingX, out slotSpacingY))
+            {
+                return;
+            }
+
+            var rowCounts = BuildConfiguredRowCounts(
+                forceCenteredPlacement ? 1 : count,
+                Math.Max(1, configuredLayout.MaxLine),
+                Math.Max(1, configuredLayout.MaxRow));
+            if (rowCounts.Length == 0)
+            {
+                return;
+            }
+
+            var rowOffsets = BuildCenteredRowOffsets(rowCounts, slotSpacingY);
+            var propIndex = 0;
+
+            for (int rowIndex = 0; rowIndex < rowCounts.Length && propIndex < count; rowIndex++)
+            {
+                var columnsInRow = rowCounts[rowIndex];
+                for (int columnIndex = 0; columnIndex < columnsInRow && propIndex < count; columnIndex++)
+                {
+                    var modelName = modelNames[propIndex % modelNames.Count];
+                    var model = new Model(modelName);
+                    if (!TryRequestModel(model, 500))
+                    {
+                        propIndex += 1;
+                        continue;
+                    }
+
+                    Vector3 crateModelMin;
+                    Vector3 crateModelMax;
+                    model.GetDimensions(out crateModelMin, out crateModelMax);
+
+                    var attachmentRotation = ResolveAttachedPropRotation(modelName);
+                    var modelCenter = new Vector3(
+                        (crateModelMin.X + crateModelMax.X) * 0.5f,
+                        (crateModelMin.Y + crateModelMax.Y) * 0.5f,
+                        (crateModelMin.Z + crateModelMax.Z) * 0.5f);
+
+                    var localCenter = new Vector3(
+                        configuredLayout.CenterOffset.X + ResolveCenteredAxisOffset(columnIndex, columnsInRow, slotSpacingX),
+                        configuredLayout.CenterOffset.Y + rowOffsets[rowIndex],
+                        configuredLayout.CenterOffset.Z);
+                    var attachOffset = new Vector3(
+                        localCenter.X - modelCenter.X,
+                        localCenter.Y - modelCenter.Y,
+                        localCenter.Z - modelCenter.Z);
+
+                    var spawnPosition = cargoVehicle.GetOffsetPosition(attachOffset);
+                    var prop = World.CreateProp(model, spawnPosition, true, false);
+                    model.MarkAsNoLongerNeeded();
+                    propIndex += 1;
+
+                    if (prop == null || !prop.Exists())
+                    {
+                        continue;
+                    }
+
+                    prop.AttachTo(cargoVehicle, attachOffset, attachmentRotation);
+                    cargoState.AttachedProps.Add(prop);
+                }
+            }
+        }
+
+        private bool TryResolveConfiguredSlotSpacing(IEnumerable<string> modelNames, out float slotSpacingX, out float slotSpacingY)
+        {
+            slotSpacingX = 0f;
+            slotSpacingY = 0f;
+
+            if (modelNames == null)
+            {
+                return false;
+            }
+
+            var resolvedAny = false;
+            var seenModelNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var modelName in modelNames)
+            {
+                if (string.IsNullOrWhiteSpace(modelName) || !seenModelNames.Add(modelName))
+                {
+                    continue;
+                }
+
+                var model = new Model(modelName);
+                if (!TryRequestModel(model, 500))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    Vector3 modelMin;
+                    Vector3 modelMax;
+                    model.GetDimensions(out modelMin, out modelMax);
+
+                    var footprintWidth = Math.Max(0.1f, modelMax.X - modelMin.X);
+                    var footprintLength = Math.Max(0.1f, modelMax.Y - modelMin.Y);
+                    if (UsesRotatedFootprint(ResolveAttachedPropRotation(modelName)))
+                    {
+                        var swapped = footprintWidth;
+                        footprintWidth = footprintLength;
+                        footprintLength = swapped;
+                    }
+
+                    slotSpacingX = Math.Max(slotSpacingX, footprintWidth + VehicleObjectLayoutSlotPadding);
+                    slotSpacingY = Math.Max(slotSpacingY, footprintLength + VehicleObjectLayoutSlotPadding);
+                    resolvedAny = true;
+                }
+                finally
+                {
+                    model.MarkAsNoLongerNeeded();
+                }
+            }
+
+            return resolvedAny;
+        }
+
+        private static int[] BuildConfiguredRowCounts(int count, int maxLine, int maxRow)
+        {
+            if (count <= 0)
+            {
+                return new int[0];
+            }
+
+            var safeMaxLine = Math.Max(1, maxLine);
+            var safeMaxRow = Math.Max(1, maxRow);
+            var rows = Math.Max(1, Math.Min(safeMaxRow, (int)Math.Ceiling((float)count / safeMaxLine)));
+            var rowCounts = new int[rows];
+            var baseCount = count / rows;
+            var remainder = count % rows;
+
+            for (int i = 0; i < rows; i++)
+            {
+                rowCounts[i] = baseCount;
+            }
+
+            if ((rows % 2) == 1)
+            {
+                var centerIndex = rows / 2;
+                for (int distance = 1; distance <= centerIndex && remainder >= 2; distance++)
+                {
+                    rowCounts[centerIndex - distance] += 1;
+                    rowCounts[centerIndex + distance] += 1;
+                    remainder -= 2;
+                }
+
+                if (remainder > 0)
+                {
+                    rowCounts[centerIndex] += 1;
+                }
+            }
+            else
+            {
+                var leftCenterIndex = (rows / 2) - 1;
+                var rightCenterIndex = rows / 2;
+                for (int distance = 0; leftCenterIndex - distance >= 0 && rightCenterIndex + distance < rows && remainder >= 2; distance++)
+                {
+                    rowCounts[leftCenterIndex - distance] += 1;
+                    rowCounts[rightCenterIndex + distance] += 1;
+                    remainder -= 2;
+                }
+
+                if (remainder > 0)
+                {
+                    rowCounts[leftCenterIndex] += 1;
+                }
+            }
+
+            return rowCounts;
+        }
+
+        private static float[] BuildCenteredRowOffsets(int[] rowCounts, float slotSpacingY)
+        {
+            if (rowCounts == null || rowCounts.Length == 0)
+            {
+                return new float[0];
+            }
+
+            var offsets = new float[rowCounts.Length];
+            var totalPropCount = Math.Max(1, rowCounts.Sum());
+            var weightedCenter = 0f;
+
+            for (int i = 0; i < rowCounts.Length; i++)
+            {
+                offsets[i] = (i - ((rowCounts.Length - 1) * 0.5f)) * slotSpacingY;
+                weightedCenter += offsets[i] * rowCounts[i];
+            }
+
+            weightedCenter /= totalPropCount;
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                offsets[i] -= weightedCenter;
+            }
+
+            return offsets;
+        }
+
+        private static float ResolveCenteredAxisOffset(int slotIndex, int slotCount, float slotSpacing)
+        {
+            if (slotCount <= 1)
+            {
+                return 0f;
+            }
+
+            return (slotIndex - ((slotCount - 1) * 0.5f)) * slotSpacing;
+        }
+
+        private static bool UsesRotatedFootprint(Vector3 attachmentRotation)
+        {
+            var yaw = Math.Abs(attachmentRotation.Z % 180f);
+            return Math.Abs(yaw - 90f) <= 0.1f;
         }
 
         private static Vector3 ResolveAttachedPropRotation(string modelName)

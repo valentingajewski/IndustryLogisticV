@@ -20,6 +20,7 @@ namespace LSOL.Config
         public Dictionary<string, float> CommodityBasePrices { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
         public List<VehicleDefinition> VehicleDefinitions { get; private set; }
+        public List<VehicleObjectLayoutDefinition> VehicleObjectLayouts { get; private set; }
         public List<BankDefinition> BankDefinitions { get; private set; }
         public List<OfficeDefinition> OfficeDefinitions { get; private set; }
         public List<OfficeObjectDefinition> OfficeObjectDefinitions { get; private set; }
@@ -55,6 +56,7 @@ namespace LSOL.Config
                 ExternalCatalog = externalCatalog,
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),
                 VehicleDefinitions = new List<VehicleDefinition>(),
+                VehicleObjectLayouts = new List<VehicleObjectLayoutDefinition>(),
                 BankDefinitions = new List<BankDefinition>(),
                 OfficeDefinitions = new List<OfficeDefinition>(),
                 OfficeObjectDefinitions = new List<OfficeObjectDefinition>(),
@@ -78,6 +80,11 @@ namespace LSOL.Config
             if (externalCatalog.VehicleDefinitions.Count > 0)
             {
                 config.VehicleDefinitions.AddRange(CloneVehicleDefinitions(externalCatalog.VehicleDefinitions));
+            }
+
+            if (externalCatalog.VehicleObjectLayouts.Count > 0)
+            {
+                config.VehicleObjectLayouts.AddRange(CloneVehicleObjectLayouts(externalCatalog.VehicleObjectLayouts));
             }
 
             if (externalCatalog.BankDefinitions.Count > 0)
@@ -412,6 +419,28 @@ namespace LSOL.Config
                     IsEnabled = x.IsEnabled,
                     IsTrailer = x.IsTrailer,
                     IsTractor = x.IsTractor,
+                })
+                .ToList();
+        }
+
+        private static IEnumerable<VehicleObjectLayoutDefinition> CloneVehicleObjectLayouts(IEnumerable<VehicleObjectLayoutDefinition> source)
+        {
+            if (source == null)
+            {
+                return new VehicleObjectLayoutDefinition[0];
+            }
+
+            return source
+                .Where(x => x != null)
+                .Select(x => new VehicleObjectLayoutDefinition
+                {
+                    ModelName = x.ModelName,
+                    DisplayName = x.DisplayName,
+                    ObjectKey = x.ObjectKey,
+                    CenterOffset = x.CenterOffset,
+                    MaxLine = x.MaxLine,
+                    MaxRow = x.MaxRow,
+                    IsEnabled = x.IsEnabled,
                 })
                 .ToList();
         }

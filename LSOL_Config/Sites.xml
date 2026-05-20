@@ -165,7 +165,7 @@
   </Site>
   <Site catalogId="114" legacyKey="AlcoholFactory" name="La Mesa Alcohol Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true" groundLevel="true">
     <Marker x="837" y="-1937.4" z="29" />
-    <VehicleSpawn x="840" y="-1968" z="29.29" heading="87" />
+    <VehicleSpawn x="815.41" y="-1960.58" z="29.29" heading="38" />
     <DisplaySpawn x="843.24" y="-1950" z="29" heading="278" />
     <Display maxLine="3" objectModelHash="2221734764" maxRow="2" />
     <Inputs outputs="Alcohol" primary="Crops" boost="Omega" />
@@ -278,7 +278,7 @@
     <Marker x="346" y="3407.65" z="36.57" />
     <VehicleSpawn x="334" y="3424.55" z="36.38" heading="318" />
     <DisplaySpawn x="370.21" y="3409.53" z="36.33" heading="203" />
-    <Display maxLine="5" objectModelHash="1711856655" maxRow="10" />
+    <Display maxLine="5" objectModelHash="1711856655" maxRow="5" />
     <Inputs outputs="Bricks" primary="Cement,Gravel" boost="Omega" recipeInputs="Cement:1,Gravel:1" inputCapacityWeights="Cement:1,Gravel:1" />
     <Economy>
       <Casual productionRate="19.2" licencePrice="10500" purchasePrice="195000" inputCapacityTons="468" outputCapacityTons="208" productionRatio="1" permitRequired="true" />

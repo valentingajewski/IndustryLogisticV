@@ -276,6 +276,72 @@ namespace LSOL.Config
             return catalog.ObjectModels.Count > 0;
         }
 
+        public static bool TryPopulateVehicleObjectLayouts(string configDirectory, ExternalConfigCatalog catalog)
+        {
+            if (catalog == null)
+            {
+                return false;
+            }
+
+            var document = LoadDocument(
+                configDirectory,
+                "VehiclesObjects.xml",
+                catalog.ValidationMessages,
+                "VehiclesObjects.xml missing. Vehicle cargo object layouts will use legacy placement.");
+            if (document == null || document.Root == null)
+            {
+                return false;
+            }
+
+            var loadedAny = false;
+
+            foreach (var element in document.Root.Elements("Vehicle"))
+            {
+                var modelName = ReadAttribute(element, "model");
+                if (string.IsNullOrWhiteSpace(modelName))
+                {
+                    catalog.ValidationMessages.Add("VehiclesObjects.xml contains a vehicle layout with no model.");
+                    continue;
+                }
+
+                if (catalog.VehicleObjectLayouts.Any(existing => existing != null && string.Equals(existing.ModelName, modelName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' duplicates an existing vehicle layout and was skipped.", modelName));
+                    continue;
+                }
+
+                var centerX = ReadFloatAttribute(element, "centerX", float.NaN);
+                var centerY = ReadFloatAttribute(element, "centerY", float.NaN);
+                var centerZ = ReadFloatAttribute(element, "centerZ", float.NaN);
+                if (float.IsNaN(centerX) || float.IsNaN(centerY) || float.IsNaN(centerZ))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' is missing valid center coordinates.", modelName));
+                    continue;
+                }
+
+                var objectKey = ReadAttribute(element, "objectKey");
+                if (!string.IsNullOrWhiteSpace(objectKey) && !catalog.ObjectModels.ContainsKey(objectKey))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' references unknown objectKey '{1}'.", modelName, objectKey));
+                }
+
+                catalog.VehicleObjectLayouts.Add(new VehicleObjectLayoutDefinition
+                {
+                    ModelName = modelName,
+                    DisplayName = ReadAttribute(element, "name", modelName),
+                    ObjectKey = objectKey,
+                    CenterOffset = new Vector3(centerX, centerY, centerZ),
+                    MaxLine = Math.Max(0, ReadIntAttribute(element, "maxLine", 0)),
+                    MaxRow = Math.Max(0, ReadIntAttribute(element, "maxRow", 0)),
+                    IsEnabled = ReadBoolAttribute(element, "enabled", true),
+                });
+
+                loadedAny = true;
+            }
+
+            return loadedAny;
+        }
+
         public static bool TryPopulateDistricts(string configDirectory, ExternalConfigCatalog catalog)
         {
             if (catalog == null)
