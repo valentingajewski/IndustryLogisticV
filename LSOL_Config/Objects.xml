@@ -23,4 +23,5 @@
   <Group key="Elecbox" models="vw_prop_vw_elecbox_01a" />
   <Group key="Dieseltank" models="prop_ind_deiseltank" />
   <Group key="Railtrack" models="prop_railstack04" />
+  <Group key="Omega" models="prop_boxpile_06b" />
 </Objects>
