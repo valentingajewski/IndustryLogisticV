@@ -1220,17 +1220,28 @@ namespace LSOL.UI
                 size - 10f);
 
             var caption = item != null && item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
-            DrawTextBlock(
+            var captionWidth = Math.Max(22f, size - 8f);
+            string fittedCaption;
+            float captionScale;
+            FitDashboardTileCaption(
                 resolution,
                 caption,
+                GTA.UI.Font.ChaletLondon,
+                0.18f,
+                captionWidth,
+                out fittedCaption,
+                out captionScale);
+            DrawTextBlock(
+                resolution,
+                fittedCaption,
                 x + (size * 0.5f),
                 y + size + 8f,
-                0.18f,
+                captionScale,
                 palette.Get(ModColorRole.TextPrimary, 224),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Center,
                 12f,
-                size - 8f);
+                captionWidth);
         }
 
         private static void DrawDashboardDetailCard(Size resolution, MenuItem item, float x, float y, float width, float height)
@@ -1417,6 +1428,104 @@ namespace LSOL.UI
             Function.Call(Hash.ADD_TEXT_COMPONENT_SUBSTRING_PLAYER_NAME, text);
             var normalizedWidth = Function.Call<float>(Hash.END_TEXT_COMMAND_GET_SCREEN_WIDTH_OF_DISPLAY_TEXT, true);
             return Math.Max(0f, normalizedWidth * resolution.Width);
+        }
+
+        private static void FitDashboardTileCaption(Size resolution, string caption, GTA.UI.Font font, float baseScale, float maxWidth, out string fittedCaption, out float fittedScale)
+        {
+            fittedCaption = string.IsNullOrWhiteSpace(caption) ? string.Empty : caption.Trim();
+            fittedScale = baseScale;
+
+            if (string.IsNullOrWhiteSpace(fittedCaption) || maxWidth <= 0f)
+            {
+                return;
+            }
+
+            if (!ContainsLineBreak(fittedCaption))
+            {
+                fittedCaption = TrySplitDashboardTileCaption(resolution, fittedCaption, font, baseScale, maxWidth);
+            }
+
+            const float minimumScale = 0.13f;
+            for (float scale = baseScale; scale >= minimumScale; scale -= 0.01f)
+            {
+                if (DoesDashboardCaptionFit(resolution, fittedCaption, font, scale, maxWidth))
+                {
+                    fittedScale = scale;
+                    return;
+                }
+            }
+
+            fittedScale = minimumScale;
+        }
+
+        private static string TrySplitDashboardTileCaption(Size resolution, string caption, GTA.UI.Font font, float scale, float maxWidth)
+        {
+            if (string.IsNullOrWhiteSpace(caption))
+            {
+                return string.Empty;
+            }
+
+            var trimmedCaption = caption.Trim();
+            var singleLineWidth = MeasureHudTextWidthPixels(resolution, trimmedCaption, scale, font);
+            if (singleLineWidth <= maxWidth)
+            {
+                return trimmedCaption;
+            }
+
+            var bestCandidate = trimmedCaption;
+            var bestWidth = singleLineWidth;
+
+            for (int i = 1; i < trimmedCaption.Length - 1; i++)
+            {
+                if (!char.IsWhiteSpace(trimmedCaption[i]))
+                {
+                    continue;
+                }
+
+                var firstLine = trimmedCaption.Substring(0, i).TrimEnd();
+                var secondLine = trimmedCaption.Substring(i + 1).TrimStart();
+                if (firstLine.Length == 0 || secondLine.Length == 0)
+                {
+                    continue;
+                }
+
+                var candidateWidth = Math.Max(
+                    MeasureHudTextWidthPixels(resolution, firstLine, scale, font),
+                    MeasureHudTextWidthPixels(resolution, secondLine, scale, font));
+
+                if (candidateWidth < bestWidth)
+                {
+                    bestCandidate = firstLine + "\n" + secondLine;
+                    bestWidth = candidateWidth;
+                }
+            }
+
+            return bestCandidate;
+        }
+
+        private static bool DoesDashboardCaptionFit(Size resolution, string caption, GTA.UI.Font font, float scale, float maxWidth)
+        {
+            if (string.IsNullOrWhiteSpace(caption))
+            {
+                return true;
+            }
+
+            var lines = caption.Replace("\r", string.Empty).Split(new[] { '\n' }, StringSplitOptions.None);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (string.IsNullOrWhiteSpace(line))
+                {
+                    continue;
+                }
+
+                if (MeasureHudTextWidthPixels(resolution, line, scale, font) > maxWidth)
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         private static bool ContainsLineBreak(string text)

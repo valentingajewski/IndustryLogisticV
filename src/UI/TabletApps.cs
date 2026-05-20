@@ -826,7 +826,7 @@ namespace LSOL.UI
                 MaxVisibleItems = 0,
                 Layout = SimpleMenuTabletLayout.Dashboard,
                 DashboardSidebarCount = 2,
-                DashboardTileColumns = 8,
+                DashboardTileColumns = 6,
                 BottomPanelHeight = 146f,
                 BottomPanelRenderer = panel => TabletChartRenderer.DrawHistoryPanel(
                     panel,
