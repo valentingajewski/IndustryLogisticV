@@ -14,11 +14,15 @@ namespace LSOL.Systems
 {
     public sealed class OfficeObjectManager
     {
+        private const string PlacementControlsHint = "NUMPAD 8/2/4/6 move | PGUP/PGDN height | NUMPAD 7/9 rotate | ENTER place | BACKSPACE cancel";
         private const float PreviewForwardDistance = 2.85f;
         private const float PreviewRightDistance = 1.1f;
         private const float OfficeStreamingDistance = 180f;
         private const float OfficePlacementRadius = 20f;
         private const float PlacementRotationStep = 15f;
+        private const float PlacementContinuousRotationStep = 2f;
+        private const float PlacementHorizontalMoveStep = 0.12f;
+        private const float PlacementVerticalMoveStep = 0.08f;
         private const float PlacementPadding = 0.2f;
         private const float HaulUnloadDistance = 6f;
         private const float FuelDeliveryPriceMultiplier = 1.05f;
@@ -54,6 +58,8 @@ namespace LSOL.Systems
             public string InstanceId { get; set; }
 
             public string OfficeId { get; set; }
+
+            public Vector3 Position { get; set; }
 
             public float Heading { get; set; }
         }
@@ -202,13 +208,13 @@ namespace LSOL.Systems
             }
 
             controls = controls ?? new ControlBindings();
-            if (key == controls.MenuLeft)
+            if (key == controls.MenuLeft || key == WinForms.Keys.Left)
             {
                 _placement.Heading = NormalizeHeading(_placement.Heading - PlacementRotationStep);
                 return true;
             }
 
-            if (key == controls.MenuRight)
+            if (key == controls.MenuRight || key == WinForms.Keys.Right)
             {
                 _placement.Heading = NormalizeHeading(_placement.Heading + PlacementRotationStep);
                 return true;
@@ -220,7 +226,7 @@ namespace LSOL.Systems
                 return true;
             }
 
-            if (key == controls.MenuBack || key == WinForms.Keys.Escape)
+            if (key == controls.MenuBack || key == WinForms.Keys.Back || key == WinForms.Keys.Escape)
             {
                 CancelPlacement("Placement cancelled.");
                 return true;
@@ -268,17 +274,10 @@ namespace LSOL.Systems
                 return TryStartHaulDelivery(office, entry, definition, out message);
             }
 
-            _placement = new PlacementSession
-            {
-                InstanceId = entry.InstanceId,
-                OfficeId = office.OfficeId,
-                Heading = entry.IsPlaced && Math.Abs(entry.Rotation.Z) > 0.01f
-                    ? NormalizeHeading(entry.Rotation.Z)
-                    : NormalizeHeading(Game.Player.Character != null && Game.Player.Character.Exists() ? Game.Player.Character.Heading : office.SpawnHeading),
-            };
+            _placement = CreatePlacementSession(Game.Player.Character, office, entry, definition);
 
             ClearPreviewProp();
-            message = string.Format("Placement mode: rotate with Left/Right, confirm with Enter, cancel with Back.");
+            message = string.Format("Placement mode: {0}", PlacementControlsHint);
             return true;
         }
 
@@ -690,7 +689,7 @@ namespace LSOL.Systems
             Vector3 position;
             Vector3 rotation;
             string error;
-            if (!TryComputePlacementTransform(player, office, definition, _placement.Heading, entry.InstanceId, out position, out rotation, out error))
+            if (!TryComputePlacementTransform(player, office, definition, _placement.Position, _placement.Heading, entry.InstanceId, out position, out rotation, out error))
             {
                 if (!string.IsNullOrWhiteSpace(error))
                 {
@@ -741,10 +740,12 @@ namespace LSOL.Systems
                 return;
             }
 
+            UpdatePlacementInput(player);
+
             Vector3 position;
             Vector3 rotation;
             string error;
-            var canPlace = TryComputePlacementTransform(player, office, definition, _placement.Heading, entry.InstanceId, out position, out rotation, out error);
+            var canPlace = TryComputePlacementTransform(player, office, definition, _placement.Position, _placement.Heading, entry.InstanceId, out position, out rotation, out error);
 
             var preview = EnsurePreviewProp(definition, true);
             if (preview == null || !preview.Exists())
@@ -756,8 +757,8 @@ namespace LSOL.Systems
             Function.Call(Hash.SET_ENTITY_ALPHA, preview.Handle, canPlace ? 190 : 120, false);
 
             var prompt = canPlace
-                ? string.Format("Placing {0}. Left/Right rotate, Enter confirm, Back cancel.", definition.DisplayName)
-                : (string.IsNullOrWhiteSpace(error) ? "Move to a valid office placement spot." : error);
+                ? string.Format("Placing {0}. {1}", definition.DisplayName, PlacementControlsHint)
+                : string.Format("{0} {1}", string.IsNullOrWhiteSpace(error) ? "Move to a valid office placement spot." : error, PlacementControlsHint);
             Screen.ShowHelpTextThisFrame(prompt);
         }
 
@@ -912,7 +913,10 @@ namespace LSOL.Systems
                 _spawnedOfficeId = activeOfficeId;
             }
 
-            var desiredEntries = _propertyManager.GetOfficeObjects(activeOfficeId, false);
+            var activePlacementInstanceId = _placement != null ? _placement.InstanceId ?? string.Empty : string.Empty;
+            var desiredEntries = _propertyManager.GetOfficeObjects(activeOfficeId, false)
+                .Where(entry => entry != null && !string.Equals(entry.InstanceId, activePlacementInstanceId, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
             var desiredIds = new HashSet<string>(desiredEntries.Select(entry => entry.InstanceId), StringComparer.OrdinalIgnoreCase);
 
             var toRemove = _spawnedProps.Keys.Where(key => !desiredIds.Contains(key)).ToList();
@@ -922,7 +926,7 @@ namespace LSOL.Systems
                 _spawnedProps.Remove(toRemove[i]);
             }
 
-            for (int i = 0; i < desiredEntries.Count; i++)
+            for (int i = 0; i < desiredEntries.Length; i++)
             {
                 var entry = desiredEntries[i];
                 if (entry == null || string.IsNullOrWhiteSpace(entry.InstanceId))
@@ -1002,15 +1006,10 @@ namespace LSOL.Systems
             }
 
             CleanupHaulDelivery();
-            _placement = new PlacementSession
-            {
-                InstanceId = entry.InstanceId,
-                OfficeId = office.OfficeId,
-                Heading = NormalizeHeading(player != null && player.Exists() ? player.Heading : office.SpawnHeading),
-            };
+            _placement = CreatePlacementSession(player, office, entry, definition);
 
             ClearPreviewProp();
-            _showStatus?.Invoke(string.Format("{0} unloaded. Move it manually and press Enter to place it.", definition.DisplayName));
+            _showStatus?.Invoke(string.Format("{0} unloaded. {1}", definition.DisplayName, PlacementControlsHint));
         }
 
         private bool TryGetHaulDeliveryContext(HaulDeliverySession delivery, out OfficeDefinition office, out OfficeObjectPersistenceEntry entry, out OfficeObjectDefinition definition)
@@ -1616,7 +1615,6 @@ namespace LSOL.Systems
                 // Heading still covers the intended office placement rotation around the Z axis.
             }
 
-            TryPlacePropOnGround(prop);
             Function.Call(Hash.FREEZE_ENTITY_POSITION, prop.Handle, true);
             return prop;
         }
@@ -1654,9 +1652,111 @@ namespace LSOL.Systems
             position = SnapPlacementHeight(position, definition);
         }
 
-        private bool TryComputePlacementTransform(Ped player, OfficeDefinition office, OfficeObjectDefinition definition, float heading, string instanceId, out Vector3 position, out Vector3 rotation, out string error)
+        private PlacementSession CreatePlacementSession(Ped player, OfficeDefinition office, OfficeObjectPersistenceEntry entry, OfficeObjectDefinition definition)
         {
-            position = office != null ? office.SpawnPosition : Vector3.Zero;
+            return new PlacementSession
+            {
+                InstanceId = entry != null ? entry.InstanceId : string.Empty,
+                OfficeId = office != null ? office.OfficeId : string.Empty,
+                Position = ResolveInitialPlacementPosition(player, office, entry, definition),
+                Heading = ResolveInitialPlacementHeading(player, office, entry),
+            };
+        }
+
+        private Vector3 ResolveInitialPlacementPosition(Ped player, OfficeDefinition office, OfficeObjectPersistenceEntry entry, OfficeObjectDefinition definition)
+        {
+            if (entry != null && entry.IsPlaced && entry.Position.LengthSquared() > 0.01f)
+            {
+                return entry.Position;
+            }
+
+            var origin = player != null && player.Exists()
+                ? player.Position
+                : (office != null ? office.SpawnPosition : Vector3.Zero);
+            var distance = GetPlacementDistance(definition != null ? definition.Size : OfficeObjectSize.Medium);
+            var candidate = origin + (GetFlatGameplayCameraForward(player) * distance) + new Vector3(0f, 0f, 1f);
+            candidate = SnapPlacementHeight(candidate, definition, office);
+
+            if (office != null && !IsWithinOfficePlacementBounds(candidate, office, true))
+            {
+                candidate = SnapPlacementHeight(office.SpawnPosition, definition, office);
+            }
+
+            return candidate;
+        }
+
+        private static float ResolveInitialPlacementHeading(Ped player, OfficeDefinition office, OfficeObjectPersistenceEntry entry)
+        {
+            if (entry != null && entry.IsPlaced && Math.Abs(entry.Rotation.Z) > 0.01f)
+            {
+                return NormalizeHeading(entry.Rotation.Z);
+            }
+
+            try
+            {
+                return NormalizeHeading(GameplayCamera.Rotation.Z);
+            }
+            catch
+            {
+                return NormalizeHeading(player != null && player.Exists() ? player.Heading : (office != null ? office.SpawnHeading : 0f));
+            }
+        }
+
+        private void UpdatePlacementInput(Ped player)
+        {
+            if (_placement == null)
+            {
+                return;
+            }
+
+            var forward = GetFlatGameplayCameraForward(player);
+            var right = new Vector3(forward.Y, -forward.X, 0f);
+            right = right.LengthSquared() <= 0.0001f ? new Vector3(1f, 0f, 0f) : right.Normalized;
+
+            if (Game.IsKeyPressed(WinForms.Keys.NumPad8))
+            {
+                _placement.Position += forward * PlacementHorizontalMoveStep;
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.NumPad2))
+            {
+                _placement.Position -= forward * PlacementHorizontalMoveStep;
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.NumPad6))
+            {
+                _placement.Position += right * PlacementHorizontalMoveStep;
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.NumPad4))
+            {
+                _placement.Position -= right * PlacementHorizontalMoveStep;
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.PageUp))
+            {
+                _placement.Position += new Vector3(0f, 0f, PlacementVerticalMoveStep);
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.PageDown))
+            {
+                _placement.Position -= new Vector3(0f, 0f, PlacementVerticalMoveStep);
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.NumPad7))
+            {
+                _placement.Heading = NormalizeHeading(_placement.Heading + PlacementContinuousRotationStep);
+            }
+
+            if (Game.IsKeyPressed(WinForms.Keys.NumPad9))
+            {
+                _placement.Heading = NormalizeHeading(_placement.Heading - PlacementContinuousRotationStep);
+            }
+        }
+
+        private bool TryComputePlacementTransform(Ped player, OfficeDefinition office, OfficeObjectDefinition definition, Vector3 candidatePosition, float heading, string instanceId, out Vector3 position, out Vector3 rotation, out string error)
+        {
+            position = candidatePosition;
             rotation = new Vector3(0f, 0f, NormalizeHeading(heading));
             error = string.Empty;
 
@@ -1678,19 +1778,15 @@ namespace LSOL.Systems
                 return false;
             }
 
-            var forward = GetFlatDirectionFromHeading(player.Heading);
-            var distance = GetPlacementDistance(definition.Size);
-            position = player.Position + (forward * distance);
-            position = SnapPlacementHeight(position, definition, office);
             rotation = new Vector3(0f, 0f, NormalizeHeading(heading));
 
-            if (!IsWithinOfficePlacementBounds(position, office))
+            if (!IsWithinOfficePlacementBounds(position, office, true))
             {
                 error = string.Format("Keep {0} inside the active office yard.", definition.DisplayName);
                 return false;
             }
 
-            if (player.Position.DistanceTo(position) <= 0.9f)
+            if (GetHorizontalDistanceSquared(player.Position, position) <= 0.9f * 0.9f)
             {
                 error = "Step back slightly before placing the object.";
                 return false;
@@ -1764,13 +1860,24 @@ namespace LSOL.Systems
 
         private bool IsWithinOfficePlacementBounds(Vector3 position, OfficeDefinition office)
         {
+            return IsWithinOfficePlacementBounds(position, office, false);
+        }
+
+        private bool IsWithinOfficePlacementBounds(Vector3 position, OfficeDefinition office, bool useHorizontalDistanceOnly)
+        {
             if (office == null)
             {
                 return false;
             }
 
-            return position.DistanceToSquared(office.SpawnPosition) <= OfficePlacementRadius * OfficePlacementRadius
-                || position.DistanceToSquared(office.MarkerPosition) <= OfficePlacementRadius * OfficePlacementRadius;
+            if (!useHorizontalDistanceOnly)
+            {
+                return position.DistanceToSquared(office.SpawnPosition) <= OfficePlacementRadius * OfficePlacementRadius
+                    || position.DistanceToSquared(office.MarkerPosition) <= OfficePlacementRadius * OfficePlacementRadius;
+            }
+
+            return GetHorizontalDistanceSquared(position, office.SpawnPosition) <= OfficePlacementRadius * OfficePlacementRadius
+                || GetHorizontalDistanceSquared(position, office.MarkerPosition) <= OfficePlacementRadius * OfficePlacementRadius;
         }
 
         private Vector3 SnapPlacementHeight(Vector3 position, OfficeObjectDefinition definition, OfficeDefinition office = null)
@@ -1997,6 +2104,27 @@ namespace LSOL.Systems
         private static bool IsPlayerUsingAnyVehicle(Ped player)
         {
             return player != null && player.Exists() && player.CurrentVehicle != null && player.CurrentVehicle.Exists();
+        }
+
+        private static float GetHorizontalDistanceSquared(Vector3 a, Vector3 b)
+        {
+            var deltaX = a.X - b.X;
+            var deltaY = a.Y - b.Y;
+            return (deltaX * deltaX) + (deltaY * deltaY);
+        }
+
+        private static Vector3 GetFlatGameplayCameraForward(Ped player)
+        {
+            try
+            {
+                return GetFlatDirectionFromHeading(GameplayCamera.Rotation.Z);
+            }
+            catch
+            {
+                return player != null && player.Exists()
+                    ? GetFlatDirectionFromHeading(player.Heading)
+                    : new Vector3(0f, 1f, 0f);
+            }
         }
 
         private static Vector3 GetFlatDirectionFromHeading(float heading)
