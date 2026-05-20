@@ -500,6 +500,78 @@
       <Hardcore purchasePrice="254800" inputCapacityTons="32" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
+  <Site catalogId="506" legacyKey="Store7" name="Davis Avenue Gas Station Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="160" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="-38.57" y="-1745" z="29.12" />
+    <Inputs primary="Alcohol,ProcessedFood,Paper" />
+    <Economy>
+      <Casual purchasePrice="48750" inputCapacityTons="10.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="65000" inputCapacityTons="8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="91000" inputCapacityTons="6.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="507" legacyKey="Store8" name="Strawberry Clothes Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="64.85" y="-1400" z="29.12" />
+    <Inputs primary="Clothes" />
+    <Economy>
+      <Casual purchasePrice="37500" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="50000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="70000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="508" legacyKey="Store9" name="Strawberry Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="160" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="26.79" y="-1310.45" z="29.12" />
+    <Inputs primary="Alcohol,ProcessedFood" />
+    <Economy>
+      <Casual purchasePrice="45000" inputCapacityTons="10.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="60000" inputCapacityTons="8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="84000" inputCapacityTons="6.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="509" legacyKey="Store10" name="Yellow Jack" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
+    <Marker x="1990" y="3037.65" z="47" />
+    <Inputs primary="Alcohol" />
+    <Economy>
+      <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="510" legacyKey="Store11" name="Sandy Shores Bar" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
+    <Marker x="1990" y="3037.65" z="47" />
+    <Inputs primary="Alcohol" />
+    <Economy>
+      <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="511" legacyKey="Store12" name="Sandy Shores Store" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
+    <Marker x="1964.33" y="3756" z="32.25" />
+    <Inputs primary="ProcessedFood,Paper" />
+    <Economy>
+      <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="512" legacyKey="Store13" name="Grapeseed Clothing Store" role="StoreSink" district="Grapeseed" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
+    <Marker x="1689.69" y="4833" z="42" />
+    <Inputs primary="Clothes" />
+    <Economy>
+      <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="513" legacyKey="Store14" name="Paleto Bay Clothing Store" role="StoreSink" district="PaletoBay" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
+    <Marker x="19.71" y="6504" z="31.49" />
+    <Inputs primary="Clothes" />
+    <Economy>
+      <Casual purchasePrice="33750" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="45000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="63000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
   <Site catalogId="700" legacyKey="Petrol Station 01" name="Davis Avenue" role="FuelSink" district="SouthLosSantos" company="LTD" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
     <Marker x="-66" y="-1759" z="29" />
     <VehicleSpawn x="-66" y="-1759" z="29" heading="340" />
