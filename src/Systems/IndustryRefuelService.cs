@@ -11,15 +11,21 @@ namespace LSOL.Systems
     public sealed class IndustryRefuelService
     {
         private const float ServiceArrivalDistance = 18f;
+        private const float VisibleDispatchApproachDistance = 150f;
+        private const float VisibleReturnCleanupDistance = 180f;
+        private const float OffscreenDispatchSpeedMps = 30f;
         private const int ServiceDriveRefreshIntervalMs = 4000;
         private const int ServiceTimeoutMs = 900000;
+        private const int MaterializationRetryIntervalMs = 1500;
+        private const int MaxMaterializationAttempts = 6;
         private const int ServiceDriveStyle = 786603;
         private const string DefaultDriverModel = "s_m_m_trucker_01";
 
         private enum RemoteRefuelDispatchPhase
         {
-            Delivering = 0,
-            Returning = 1,
+            OffscreenDelivering = 0,
+            VisibleDelivering = 1,
+            VisibleReturning = 2,
         }
 
         private sealed class RemoteRefuelDispatch
@@ -30,11 +36,19 @@ namespace LSOL.Systems
 
             public int RequestedAtMs { get; set; }
 
+            public int NextMaterializationAttemptMs { get; set; }
+
             public int NextDriveTaskRefreshMs { get; set; }
+
+            public int MaterializationAttemptCount { get; set; }
 
             public RemoteRefuelDispatchPhase Phase { get; set; }
 
             public int TargetVehicleHandle { get; set; }
+
+            public VehicleDefinition TankerTrailerDefinition { get; set; }
+
+            public VehicleDefinition TractorDefinition { get; set; }
 
             public Ped Driver { get; set; }
 
@@ -43,6 +57,8 @@ namespace LSOL.Systems
             public Vehicle CargoVehicle { get; set; }
 
             public Blip RouteBlip { get; set; }
+
+            public Vector3? ReturnCleanupAnchorPosition { get; set; }
         }
 
         private readonly FleetManager _fleetManager;
@@ -137,56 +153,30 @@ namespace LSOL.Systems
                 return false;
             }
 
-            Vector3 spawnPosition;
-            float spawnHeading;
-            ResolveDispatchSpawn(sourceIndustry, fuelTelemetry.PoweredVehicle.Position, out spawnPosition, out spawnHeading);
-
-            Vehicle truck;
-            Vehicle cargoVehicle;
-            if (!_fleetManager.SpawnSelectedVehicle(
-                tankerTrailer,
-                tractorDefinition,
-                spawnPosition,
-                spawnHeading,
-                out truck,
-                out cargoVehicle,
-                out message))
-            {
-                return false;
-            }
-
-            var driver = CreateDispatchDriver(truck);
-            if (driver == null || !driver.Exists())
-            {
-                if (cargoVehicle != null && cargoVehicle.Exists())
-                {
-                    cargoVehicle.Delete();
-                }
-
-                if (truck != null && truck.Exists())
-                {
-                    truck.Delete();
-                }
-
-                message = "Failed to dispatch refuel tanker.";
-                return false;
-            }
-
             _activeDispatch = new RemoteRefuelDispatch
             {
                 SourceIndustry = sourceIndustry,
-                SourceSpawnPosition = spawnPosition,
+                SourceSpawnPosition = ResolveDispatchSpawn(sourceIndustry, fuelTelemetry.PoweredVehicle.Position),
                 RequestedAtMs = now,
+                NextMaterializationAttemptMs = now,
                 NextDriveTaskRefreshMs = 0,
-                Phase = RemoteRefuelDispatchPhase.Delivering,
+                MaterializationAttemptCount = 0,
+                Phase = RemoteRefuelDispatchPhase.OffscreenDelivering,
                 TargetVehicleHandle = fuelTelemetry.PoweredVehicle.Handle,
-                Driver = driver,
-                Truck = truck,
-                CargoVehicle = cargoVehicle,
-                RouteBlip = CreateDispatchBlip(truck, sourceIndustry),
+                TankerTrailerDefinition = tankerTrailer,
+                TractorDefinition = tractorDefinition,
+                ReturnCleanupAnchorPosition = null,
             };
 
-            EnsureDispatchDriveTask(_activeDispatch, fuelTelemetry.PoweredVehicle.Position, now);
+            if (HasCompletedOffscreenTravel(_activeDispatch, fuelTelemetry.PoweredVehicle.Position, now))
+            {
+                if (!TryMaterializeDispatch(_activeDispatch, fuelTelemetry.PoweredVehicle.Position, now))
+                {
+                    _activeDispatch.MaterializationAttemptCount++;
+                    _activeDispatch.NextMaterializationAttemptMs = now + MaterializationRetryIntervalMs;
+                }
+            }
+
             message = string.Format("Refuel tanker dispatched from {0}.", sourceIndustry.Name);
             return true;
         }
@@ -204,6 +194,39 @@ namespace LSOL.Systems
                 return false;
             }
 
+            var targetVehicle = Entity.FromHandle(_activeDispatch.TargetVehicleHandle) as Vehicle;
+            if ((_activeDispatch.Phase == RemoteRefuelDispatchPhase.OffscreenDelivering
+                    || _activeDispatch.Phase == RemoteRefuelDispatchPhase.VisibleDelivering)
+                && (targetVehicle == null || !targetVehicle.Exists()))
+            {
+                CancelActiveDispatch("Refuel tanker cancelled because the target vehicle is no longer available.");
+                return false;
+            }
+
+            if (_activeDispatch.Phase == RemoteRefuelDispatchPhase.OffscreenDelivering)
+            {
+                if (!HasCompletedOffscreenTravel(_activeDispatch, targetVehicle.Position, now)
+                    || now < _activeDispatch.NextMaterializationAttemptMs)
+                {
+                    return false;
+                }
+
+                if (TryMaterializeDispatch(_activeDispatch, targetVehicle.Position, now))
+                {
+                    return false;
+                }
+
+                _activeDispatch.MaterializationAttemptCount++;
+                if (_activeDispatch.MaterializationAttemptCount >= MaxMaterializationAttempts)
+                {
+                    CancelActiveDispatch("Refuel tanker failed before reaching the target.");
+                    return false;
+                }
+
+                _activeDispatch.NextMaterializationAttemptMs = now + MaterializationRetryIntervalMs;
+                return false;
+            }
+
             if (_activeDispatch.Driver == null || !_activeDispatch.Driver.Exists() || _activeDispatch.Truck == null || !_activeDispatch.Truck.Exists())
             {
                 CancelActiveDispatch("Refuel tanker failed before reaching the target.");
@@ -212,22 +235,17 @@ namespace LSOL.Systems
 
             RefreshDispatchBlip(_activeDispatch);
 
-            if (_activeDispatch.Phase == RemoteRefuelDispatchPhase.Returning)
+            if (_activeDispatch.Phase == RemoteRefuelDispatchPhase.VisibleReturning)
             {
-                if (_activeDispatch.Truck.Position.DistanceTo(_activeDispatch.SourceSpawnPosition) <= ServiceArrivalDistance)
+                if (_activeDispatch.Truck.Position.DistanceTo(_activeDispatch.SourceSpawnPosition) <= ServiceArrivalDistance
+                    || (_activeDispatch.ReturnCleanupAnchorPosition.HasValue
+                        && _activeDispatch.Truck.Position.DistanceTo(_activeDispatch.ReturnCleanupAnchorPosition.Value) >= VisibleReturnCleanupDistance))
                 {
                     CleanupDispatch();
                     return false;
                 }
 
                 EnsureDispatchDriveTask(_activeDispatch, _activeDispatch.SourceSpawnPosition, now);
-                return false;
-            }
-
-            var targetVehicle = Entity.FromHandle(_activeDispatch.TargetVehicleHandle) as Vehicle;
-            if (targetVehicle == null || !targetVehicle.Exists())
-            {
-                CancelActiveDispatch("Refuel tanker cancelled because the target vehicle is no longer available.");
                 return false;
             }
 
@@ -246,7 +264,7 @@ namespace LSOL.Systems
                         : string.Format("Tanker service failed: {0}", message));
                 }
 
-                BeginDispatchReturn(_activeDispatch, now);
+                    BeginDispatchReturn(_activeDispatch, targetVehicle.Position, now);
                 return changed;
             }
 
@@ -493,9 +511,9 @@ namespace LSOL.Systems
             return true;
         }
 
-        private void ResolveDispatchSpawn(Industry sourceIndustry, Vector3 targetPosition, out Vector3 spawnPosition, out float spawnHeading)
+        private Vector3 ResolveDispatchSpawn(Industry sourceIndustry, Vector3 targetPosition)
         {
-            spawnPosition = sourceIndustry != null && sourceIndustry.VehicleSpawnPosition.HasValue
+            var spawnPosition = sourceIndustry != null && sourceIndustry.VehicleSpawnPosition.HasValue
                 ? sourceIndustry.VehicleSpawnPosition.Value
                 : (sourceIndustry != null ? sourceIndustry.Position : targetPosition);
             if (_getGroundPosition != null)
@@ -503,16 +521,7 @@ namespace LSOL.Systems
                 spawnPosition = _getGroundPosition(spawnPosition);
             }
 
-            if (sourceIndustry != null && sourceIndustry.VehicleSpawnHeading.HasValue)
-            {
-                spawnHeading = sourceIndustry.VehicleSpawnHeading.Value;
-                return;
-            }
-
-            var delta = targetPosition - spawnPosition;
-            spawnHeading = delta.LengthSquared() <= 0.001f
-                ? 0f
-                : Function.Call<float>(Hash.GET_HEADING_FROM_VECTOR_2D, delta.X, delta.Y);
+            return spawnPosition;
         }
 
         private Ped CreateDispatchDriver(Vehicle truck)
@@ -582,14 +591,220 @@ namespace LSOL.Systems
             Function.Call(Hash.CLEAR_PED_TASKS, driver.Handle);
         }
 
-        private void BeginDispatchReturn(RemoteRefuelDispatch dispatch, int now)
+        private bool HasCompletedOffscreenTravel(RemoteRefuelDispatch dispatch, Vector3 targetPosition, int now)
+        {
+            if (dispatch == null)
+            {
+                return false;
+            }
+
+            var offscreenDistance = Math.Max(0f, dispatch.SourceSpawnPosition.DistanceTo(targetPosition) - VisibleDispatchApproachDistance);
+            var requiredTravelMs = OffscreenDispatchSpeedMps <= 0.01f
+                ? 0f
+                : (offscreenDistance / OffscreenDispatchSpeedMps) * 1000f;
+            return now - dispatch.RequestedAtMs >= requiredTravelMs;
+        }
+
+        private bool TryMaterializeDispatch(RemoteRefuelDispatch dispatch, Vector3 targetPosition, int now)
+        {
+            if (dispatch == null || dispatch.TankerTrailerDefinition == null || dispatch.TractorDefinition == null)
+            {
+                return false;
+            }
+
+            Vector3 spawnPosition;
+            float spawnHeading;
+            ResolveVisibleDispatchSpawn(dispatch, targetPosition, dispatch.MaterializationAttemptCount, out spawnPosition, out spawnHeading);
+
+            Vehicle truck;
+            Vehicle cargoVehicle;
+            string message;
+            if (!_fleetManager.SpawnSelectedVehicle(
+                dispatch.TankerTrailerDefinition,
+                dispatch.TractorDefinition,
+                spawnPosition,
+                spawnHeading,
+                out truck,
+                out cargoVehicle,
+                out message))
+            {
+                return false;
+            }
+
+            var driver = CreateDispatchDriver(truck);
+            if (driver == null || !driver.Exists())
+            {
+                if (cargoVehicle != null && cargoVehicle.Exists())
+                {
+                    cargoVehicle.Delete();
+                }
+
+                if (truck != null && truck.Exists())
+                {
+                    truck.Delete();
+                }
+
+                return false;
+            }
+
+            dispatch.Driver = driver;
+            dispatch.Truck = truck;
+            dispatch.CargoVehicle = cargoVehicle;
+            dispatch.RouteBlip = CreateDispatchBlip(truck, dispatch.SourceIndustry);
+            dispatch.ReturnCleanupAnchorPosition = null;
+            dispatch.NextDriveTaskRefreshMs = 0;
+            dispatch.NextMaterializationAttemptMs = 0;
+            dispatch.Phase = RemoteRefuelDispatchPhase.VisibleDelivering;
+            EnsureDispatchDriveTask(dispatch, targetPosition, now);
+            return true;
+        }
+
+        private void ResolveVisibleDispatchSpawn(RemoteRefuelDispatch dispatch, Vector3 targetPosition, int recoveryAttempt, out Vector3 spawnPosition, out float spawnHeading)
+        {
+            var sourcePosition = dispatch != null ? dispatch.SourceSpawnPosition : targetPosition;
+            var approachDirection = targetPosition - sourcePosition;
+            if (approachDirection.LengthSquared() <= 0.001f)
+            {
+                approachDirection = new Vector3(1f, 0f, 0f);
+            }
+
+            approachDirection.Normalize();
+            var lateralDirection = new Vector3(-approachDirection.Y, approachDirection.X, 0f);
+            var attempt = Math.Max(0, recoveryAttempt);
+            var lateralPattern = attempt % 5;
+            var lateralOffset = lateralPattern == 1
+                ? 24f
+                : lateralPattern == 2
+                    ? -24f
+                    : lateralPattern == 3
+                        ? 42f
+                        : lateralPattern == 4
+                            ? -42f
+                            : 0f;
+            var approachDistance = VisibleDispatchApproachDistance + (attempt * 18f);
+            var seedPosition = targetPosition - (approachDirection * approachDistance) + (lateralDirection * lateralOffset);
+            spawnPosition = ResolveRoadSafePosition(seedPosition, targetPosition, attempt);
+
+            var headingDelta = targetPosition - spawnPosition;
+            spawnHeading = headingDelta.LengthSquared() <= 0.001f
+                ? 0f
+                : Function.Call<float>(Hash.GET_HEADING_FROM_VECTOR_2D, headingDelta.X, headingDelta.Y);
+        }
+
+        private Vector3 ResolveRoadSafePosition(Vector3 seedPosition, Vector3 referencePosition, int recoveryAttempt)
+        {
+            Vector3 roadPosition;
+            if (TryGetClosestVehicleNode(seedPosition, out roadPosition))
+            {
+                return roadPosition;
+            }
+
+            var direction = seedPosition - referencePosition;
+            if (direction.LengthSquared() <= 0.001f)
+            {
+                direction = new Vector3(1f, 0f, 0f);
+            }
+
+            direction.Normalize();
+            var offsetDistance = 16f + (Math.Max(0, recoveryAttempt) * 4f);
+            return SnapRoutePosition(seedPosition - (direction * offsetDistance));
+        }
+
+        private bool TryGetClosestVehicleNode(Vector3 seedPosition, out Vector3 roadPosition)
+        {
+            roadPosition = Vector3.Zero;
+            var nodeArg = new OutputArgument();
+            try
+            {
+                if (Function.Call<bool>(Hash.GET_CLOSEST_VEHICLE_NODE, seedPosition.X, seedPosition.Y, seedPosition.Z, nodeArg, 1, 3f, 0f))
+                {
+                    roadPosition = SnapRoutePosition(nodeArg.GetResult<Vector3>());
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private Vector3 SnapRoutePosition(Vector3 position)
+        {
+            var fallback = _getGroundPosition != null ? _getGroundPosition(position) : position;
+            float groundZ;
+            if (TryProbeGroundZ(position, out groundZ))
+            {
+                return new Vector3(position.X, position.Y, groundZ);
+            }
+
+            return fallback;
+        }
+
+        private static bool TryProbeGroundZ(Vector3 position, out float groundZ)
+        {
+            groundZ = position.Z;
+            var sampleHeights = new[]
+            {
+                Math.Max(position.Z + 4f, 8f),
+                Math.Max(position.Z + 25f, 40f),
+                250f,
+                1000f,
+            };
+
+            for (int i = 0; i < sampleHeights.Length; i++)
+            {
+                if (TryProbeGroundZAtHeight(position.X, position.Y, sampleHeights[i], out groundZ))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool TryProbeGroundZAtHeight(float x, float y, float z, out float groundZ)
+        {
+            groundZ = z;
+
+            var groundArg = new OutputArgument();
+            try
+            {
+                if (Function.Call<bool>(Hash.GET_GROUND_Z_FOR_3D_COORD, x, y, z, groundArg, false, false))
+                {
+                    groundZ = groundArg.GetResult<float>();
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            groundArg = new OutputArgument();
+            try
+            {
+                if (Function.Call<bool>(Hash.GET_GROUND_Z_FOR_3D_COORD, x, y, z, groundArg, false))
+                {
+                    groundZ = groundArg.GetResult<float>();
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private void BeginDispatchReturn(RemoteRefuelDispatch dispatch, Vector3 cleanupAnchorPosition, int now)
         {
             if (dispatch == null)
             {
                 return;
             }
 
-            dispatch.Phase = RemoteRefuelDispatchPhase.Returning;
+            dispatch.Phase = RemoteRefuelDispatchPhase.VisibleReturning;
+            dispatch.ReturnCleanupAnchorPosition = cleanupAnchorPosition;
             dispatch.NextDriveTaskRefreshMs = 0;
             EnsureDispatchDriveTask(dispatch, dispatch.SourceSpawnPosition, now);
         }
