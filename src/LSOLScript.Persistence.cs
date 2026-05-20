@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml;
 using GTA;
 using LSOL.Systems;
 using LSOL.UI;
@@ -95,7 +96,7 @@ namespace LSOL
             }
 
             var filePath = BuildNamedSavePath(saveName);
-            if (File.Exists(filePath))
+            if (PersistencePathExists(filePath))
             {
                 ShowStatus(Text(ModTextKey.DetailSaveExists));
                 return;
@@ -130,7 +131,7 @@ namespace LSOL
             }
 
             var filePath = BuildNamedSavePath(_pendingSaveName);
-            if (File.Exists(filePath))
+            if (PersistencePathExists(filePath))
             {
                 ShowStatus(Text(ModTextKey.DetailSaveExists));
                 return;
@@ -188,7 +189,8 @@ namespace LSOL
         {
             _pendingDeleteSavePath = null;
 
-            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
+            var loadPath = ResolveExistingSavePath(entry);
+            if (entry == null || string.IsNullOrWhiteSpace(loadPath) || !File.Exists(loadPath))
             {
                 ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
                 RebuildSaveSlotsMenuItems();
@@ -201,7 +203,7 @@ namespace LSOL
             }
 
             IndustryPersistenceLoadResult loadResult;
-            if (!TryLoadIndustryPersistenceFromPath(entry.FilePath, true, out loadResult))
+            if (!TryLoadIndustryPersistenceFromPath(loadPath, true, out loadResult))
             {
                 return;
             }
@@ -214,7 +216,8 @@ namespace LSOL
 
         private void ConfirmOrDeleteNamedSave(NamedSaveEntry entry)
         {
-            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
+            var existingPath = ResolveExistingSavePath(entry);
+            if (entry == null || string.IsNullOrWhiteSpace(existingPath) || !File.Exists(existingPath))
             {
                 _pendingDeleteSavePath = null;
                 ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
@@ -237,18 +240,28 @@ namespace LSOL
         {
             _pendingDeleteSavePath = null;
 
-            if (entry == null || string.IsNullOrWhiteSpace(entry.FilePath) || !File.Exists(entry.FilePath))
+            var existingPath = ResolveExistingSavePath(entry);
+            if (entry == null || string.IsNullOrWhiteSpace(existingPath) || !File.Exists(existingPath))
             {
                 ShowStatus(Text(ModTextKey.DetailSelectedSaveMissing));
                 RebuildSaveSlotsMenuItems();
                 return;
             }
 
-            var deletedActiveSave = PathsEqual(_industryStatePath, entry.FilePath);
+            var deletedActiveSave = PathsEqual(_industryStatePath, entry.FilePath)
+                || PathsEqual(_industryStatePath, existingPath);
 
             try
             {
-                File.Delete(entry.FilePath);
+                if (File.Exists(entry.FilePath))
+                {
+                    File.Delete(entry.FilePath);
+                }
+
+                if (!PathsEqual(existingPath, entry.FilePath) && File.Exists(existingPath))
+                {
+                    File.Delete(existingPath);
+                }
             }
             catch (IOException ex)
             {
@@ -261,6 +274,11 @@ namespace LSOL
                 return;
             }
             catch (ArgumentException ex)
+            {
+                ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
+                return;
+            }
+            catch (InvalidDataException ex)
             {
                 ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
                 return;
@@ -411,7 +429,15 @@ namespace LSOL
             {
                 ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
             }
+            catch (InvalidDataException ex)
+            {
+                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+            }
             catch (NotSupportedException ex)
+            {
+                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+            }
+            catch (XmlException ex)
             {
                 ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
             }
@@ -658,7 +684,7 @@ namespace LSOL
 
         private string ResolveIndustryStatePath()
         {
-            return Path.Combine(ResolveRuntimeDirectory(), "LSOL.state.ini");
+            return Path.Combine(ResolveRuntimeDirectory(), "LSOL.state.xml");
         }
 
         private string ResolveSavegamesDirectoryPath()
@@ -674,9 +700,21 @@ namespace LSOL
             }
 
             return Directory
-                .GetFiles(_savegamesDirectoryPath, "*.state.ini")
+                .GetFiles(_savegamesDirectoryPath, "*.state.xml")
                 .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
-                .Select(path => new NamedSaveEntry(ExtractSaveDisplayName(path), path))
+                .Select(path => new NamedSaveEntry(ExtractSaveDisplayName(path), path, path))
+                .Concat(
+                    Directory
+                        .GetFiles(_savegamesDirectoryPath, "*.state.ini")
+                        .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                        .Select(path => new NamedSaveEntry(
+                            ExtractSaveDisplayName(path),
+                            BuildNamedSavePath(ExtractSaveDisplayName(path)),
+                            path))
+                        .Where(entry => !string.IsNullOrWhiteSpace(entry.DisplayName)))
+                .GroupBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
 
@@ -707,7 +745,7 @@ namespace LSOL
 
             try
             {
-                var lastWriteTime = File.GetLastWriteTime(entry.FilePath);
+                var lastWriteTime = File.GetLastWriteTime(ResolveExistingSavePath(entry));
                 return string.Format("{0} Last updated {1:yyyy-MM-dd HH:mm}.", action, lastWriteTime);
             }
             catch
@@ -724,7 +762,9 @@ namespace LSOL
                 return false;
             }
 
-            activeSave = new NamedSaveEntry(ExtractSaveDisplayName(_industryStatePath), _industryStatePath);
+            var displayName = ExtractSaveDisplayName(_industryStatePath);
+            var canonicalPath = BuildNamedSavePath(displayName);
+            activeSave = new NamedSaveEntry(displayName, canonicalPath, ResolveExistingPersistencePath(canonicalPath));
             return true;
         }
 
@@ -773,31 +813,82 @@ namespace LSOL
 
         private string BuildNamedSavePath(string saveName)
         {
-            return Path.Combine(_savegamesDirectoryPath, saveName + ".state.ini");
+            return Path.Combine(_savegamesDirectoryPath, saveName + ".state.xml");
         }
 
         private bool IsNamedSavePath(string filePath)
         {
-            if (string.IsNullOrWhiteSpace(filePath) || PathsEqual(filePath, _defaultIndustryStatePath))
+            if (string.IsNullOrWhiteSpace(filePath)
+                || PathsEqual(filePath, _defaultIndustryStatePath)
+                || PathsEqual(filePath, ResolveLegacyPersistencePath(_defaultIndustryStatePath)))
             {
                 return false;
             }
 
             var directory = Path.GetDirectoryName(filePath) ?? string.Empty;
-            return filePath.EndsWith(".state.ini", StringComparison.OrdinalIgnoreCase)
+            return (filePath.EndsWith(".state.xml", StringComparison.OrdinalIgnoreCase)
+                    || filePath.EndsWith(".state.ini", StringComparison.OrdinalIgnoreCase))
                 && PathsEqual(directory, _savegamesDirectoryPath);
         }
 
         private static string ExtractSaveDisplayName(string filePath)
         {
             var fileName = Path.GetFileName(filePath) ?? string.Empty;
-            const string stateSuffix = ".state.ini";
-            if (fileName.EndsWith(stateSuffix, StringComparison.OrdinalIgnoreCase))
+            const string xmlStateSuffix = ".state.xml";
+            if (fileName.EndsWith(xmlStateSuffix, StringComparison.OrdinalIgnoreCase))
             {
-                return fileName.Substring(0, fileName.Length - stateSuffix.Length);
+                return fileName.Substring(0, fileName.Length - xmlStateSuffix.Length);
+            }
+
+            const string legacyStateSuffix = ".state.ini";
+            if (fileName.EndsWith(legacyStateSuffix, StringComparison.OrdinalIgnoreCase))
+            {
+                return fileName.Substring(0, fileName.Length - legacyStateSuffix.Length);
             }
 
             return Path.GetFileNameWithoutExtension(fileName);
+        }
+
+        private static string ResolveLegacyPersistencePath(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return string.Empty;
+            }
+
+            return Path.ChangeExtension(filePath, ".ini");
+        }
+
+        private static string ResolveExistingPersistencePath(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return string.Empty;
+            }
+
+            if (File.Exists(filePath))
+            {
+                return filePath;
+            }
+
+            var legacyPath = ResolveLegacyPersistencePath(filePath);
+            return File.Exists(legacyPath) ? legacyPath : filePath;
+        }
+
+        private static string ResolveExistingSavePath(NamedSaveEntry entry)
+        {
+            if (entry == null)
+            {
+                return string.Empty;
+            }
+
+            return ResolveExistingPersistencePath(string.IsNullOrWhiteSpace(entry.LoadPath) ? entry.FilePath : entry.LoadPath);
+        }
+
+        private static bool PersistencePathExists(string filePath)
+        {
+            return !string.IsNullOrWhiteSpace(ResolveExistingPersistencePath(filePath))
+                && (File.Exists(filePath) || File.Exists(ResolveLegacyPersistencePath(filePath)));
         }
 
         private static string SanitizeSaveName(string rawName)

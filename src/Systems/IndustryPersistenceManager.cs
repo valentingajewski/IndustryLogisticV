@@ -1,8 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Xml.Linq;
+using GTA;
 using GTA.Math;
 using LSOL.Config;
 using LSOL.Domain;
@@ -12,6 +16,10 @@ namespace LSOL.Systems
 {
     public static class IndustryPersistenceManager
     {
+        private const string PersistenceRootElementName = "LSOLState";
+        private const string PersistenceSectionElementName = "Section";
+        private const string PersistenceValueElementName = "Value";
+
         public static int Load(string filePath, IEnumerable<Industry> industries)
         {
             return LoadWithMetadata(filePath, industries).RestoredCount;
@@ -34,12 +42,17 @@ namespace LSOL.Systems
                 Metadata = new IndustryPersistenceMetadata(),
             };
 
-            if (string.IsNullOrWhiteSpace(filePath) || industries == null || !File.Exists(filePath))
+            if (string.IsNullOrWhiteSpace(filePath) || industries == null)
             {
                 return result;
             }
 
-            var ini = IniFile.Load(filePath);
+            var ini = LoadPersistenceIni(filePath);
+            if (ini == null)
+            {
+                return result;
+            }
+
             result.Metadata = ReadMetadata(ini);
             var territorySnapshot = territoryManager != null
                 ? ReadTerritorySnapshot(ini)
@@ -146,201 +159,209 @@ namespace LSOL.Systems
                 Directory.CreateDirectory(directory);
             }
 
-            using (var writer = new StreamWriter(filePath, false))
+            var document = BuildPersistenceXmlDocument(industries, metadata, territorySnapshot);
+            document.Save(filePath);
+        }
+
+        private static void WriteLegacyIniPersistence(StreamWriter writer, IEnumerable<Industry> industries, IndustryPersistenceMetadata metadata, TerritoryPersistenceSnapshot territorySnapshot)
+        {
+            if (writer == null || industries == null)
             {
-                writer.WriteLine("[Meta]");
-                var persistenceVersion = 1;
-                if (metadata != null || territorySnapshot != null)
+                return;
+            }
+
+            writer.WriteLine("[Meta]");
+            var persistenceVersion = 1;
+            if (metadata != null || territorySnapshot != null)
+            {
+                persistenceVersion = 6;
+            }
+
+            if (metadata != null && metadata.Analytics != null)
+            {
+                persistenceVersion = 7;
+            }
+
+            if (metadata != null && (HasOwnedFleetData(metadata.OwnedFleet) || HasNpcLogisticsData(metadata.NpcLogistics)))
+            {
+                persistenceVersion = 8;
+            }
+
+            if (metadata != null && (metadata.Language.HasValue || metadata.ColorblindMode.HasValue))
+            {
+                persistenceVersion = 9;
+            }
+
+            if (metadata != null && HasSpecialMissionData(metadata.SpecialMissions))
+            {
+                persistenceVersion = 11;
+            }
+            if (metadata != null && HasPropertyOwnershipData(metadata.PropertyOwnership))
+            {
+                persistenceVersion = 12;
+            }
+
+            if (metadata != null && HasNpcWorldDispatchData(metadata.NpcLogistics))
+            {
+                persistenceVersion = 13;
+            }
+
+            if (metadata != null && HasFinanceData(metadata.Finance))
+            {
+                persistenceVersion = 14;
+            }
+
+            if (metadata != null && HasBankLoanData(metadata.BankLoans))
+            {
+                persistenceVersion = 15;
+            }
+
+            if (metadata != null && HasPlayerStatisticsData(metadata.PlayerStatistics))
+            {
+                persistenceVersion = 16;
+            }
+
+            if (HasTerritoryDistrictReputationOffsetData(territorySnapshot))
+            {
+                persistenceVersion = 17;
+            }
+
+            if (metadata != null && HasGlobalMarketData(metadata.Market))
+            {
+                persistenceVersion = 18;
+            }
+
+            if (HasTerritoryData(territorySnapshot))
+            {
+                persistenceVersion = 19;
+            }
+
+            if ((metadata != null && HasPhaseFourPlayerStatisticsData(metadata.PlayerStatistics)) || HasTerritoryCompetitionData(territorySnapshot))
+            {
+                persistenceVersion = 20;
+            }
+
+            writer.WriteLine(
+                "Version={0}",
+                persistenceVersion);
+            writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
+            if (metadata != null)
+            {
+                writer.WriteLine("Profit={0}", FormatFloat(metadata.Profit));
+                writer.WriteLine("StartingBalance={0}", FormatFloat(metadata.StartingBalance));
+                if (metadata.Language.HasValue)
                 {
-                    persistenceVersion = 6;
+                    writer.WriteLine("Language={0}", metadata.Language.Value);
                 }
 
-                if (metadata != null && metadata.Analytics != null)
+                if (metadata.ColorblindMode.HasValue)
                 {
-                    persistenceVersion = 7;
+                    writer.WriteLine("ColorblindMode={0}", metadata.ColorblindMode.Value);
                 }
 
-                if (metadata != null && (HasOwnedFleetData(metadata.OwnedFleet) || HasNpcLogisticsData(metadata.NpcLogistics)))
+                writer.WriteLine("UseMetricSpeedDisplay={0}", metadata.UseMetricSpeedDisplay ? "true" : "false");
+                writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("CargoWeightPowerDifficultyEnabled={0}", metadata.CargoWeightPowerDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("CorridorRestrictionDifficultyEnabled={0}", metadata.CorridorRestrictionDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("ReputationDifficultyEnabled={0}", metadata.ReputationDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("OfficeGarageLimitDifficultyEnabled={0}", metadata.OfficeGarageLimitDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("OfficeNpcLimitDifficultyEnabled={0}", metadata.OfficeNpcLimitDifficultyEnabled ? "true" : "false");
+                writer.WriteLine("EconomyDifficultyPreset={0}", metadata.EconomyDifficultyPreset);
+                writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
+                writer.WriteLine("NpcRouteLimit={0}", metadata.NpcRouteLimit);
+                writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
+            }
+            writer.WriteLine();
+
+            foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (industry == null || string.IsNullOrWhiteSpace(industry.Id))
                 {
-                    persistenceVersion = 8;
+                    continue;
                 }
 
-                if (metadata != null && (metadata.Language.HasValue || metadata.ColorblindMode.HasValue))
-                {
-                    persistenceVersion = 9;
-                }
+                writer.WriteLine("[{0}]", BuildIndustrySectionName(industry.Id));
+                writer.WriteLine("Name={0}", industry.Name ?? string.Empty);
+                writer.WriteLine("ProductionRate={0}", FormatFloat(industry.ProductionRate));
+                writer.WriteLine("InputCapacityTons={0}", FormatFloat(industry.InputCapacityTons));
+                writer.WriteLine("OutputCapacityTons={0}", FormatFloat(industry.OutputCapacityTons));
+                writer.WriteLine("OmegaCapacityTons={0}", FormatFloat(industry.OmegaCapacityTons));
+                writer.WriteLine("OmegaStorage={0}", FormatFloat(industry.OmegaStorage));
+                writer.WriteLine("ProductionModuleLevel={0}", industry.ProductionModuleLevel);
+                writer.WriteLine("InputStorageModuleLevel={0}", industry.InputStorageModuleLevel);
+                writer.WriteLine("OutputStorageModuleLevel={0}", industry.OutputStorageModuleLevel);
+                writer.WriteLine("OmegaStorageModuleLevel={0}", industry.OmegaStorageModuleLevel);
+                writer.WriteLine("IsOwned={0}", industry.IsOwned ? "true" : "false");
+                writer.WriteLine("HasContractorPermit={0}", industry.HasContractorPermit ? "true" : "false");
+                writer.WriteLine("StorageCondition={0}", FormatFloat(industry.StorageCondition));
+                writer.WriteLine("LastStoragePressureDayIndex={0}", industry.LastStoragePressureDayIndex);
+                writer.WriteLine("LifetimeStorageLossTons={0}", FormatFloat(industry.LifetimeStorageLossTons));
+                writer.WriteLine("LifetimeStorageLossValue={0}", FormatFloat(industry.LifetimeStorageLossValue));
 
-                if (metadata != null && HasSpecialMissionData(metadata.SpecialMissions))
+                foreach (var stock in industry.BufferStorage.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
                 {
-                    persistenceVersion = 11;
-                }
-                if (metadata != null && HasPropertyOwnershipData(metadata.PropertyOwnership))
-                {
-                    persistenceVersion = 12;
-                }
-
-                if (metadata != null && HasNpcWorldDispatchData(metadata.NpcLogistics))
-                {
-                    persistenceVersion = 13;
-                }
-
-                if (metadata != null && HasFinanceData(metadata.Finance))
-                {
-                    persistenceVersion = 14;
-                }
-
-                if (metadata != null && HasBankLoanData(metadata.BankLoans))
-                {
-                    persistenceVersion = 15;
-                }
-
-                if (metadata != null && HasPlayerStatisticsData(metadata.PlayerStatistics))
-                {
-                    persistenceVersion = 16;
-                }
-
-                if (HasTerritoryDistrictReputationOffsetData(territorySnapshot))
-                {
-                    persistenceVersion = 17;
-                }
-
-                if (metadata != null && HasGlobalMarketData(metadata.Market))
-                {
-                    persistenceVersion = 18;
-                }
-
-                if (HasTerritoryData(territorySnapshot))
-                {
-                    persistenceVersion = 19;
-                }
-
-                if ((metadata != null && HasPhaseFourPlayerStatisticsData(metadata.PlayerStatistics)) || HasTerritoryCompetitionData(territorySnapshot))
-                {
-                    persistenceVersion = 20;
-                }
-
-                writer.WriteLine(
-                    "Version={0}",
-                    persistenceVersion);
-                writer.WriteLine("SavedAtUtc={0}", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture));
-                if (metadata != null)
-                {
-                    writer.WriteLine("Profit={0}", FormatFloat(metadata.Profit));
-                    writer.WriteLine("StartingBalance={0}", FormatFloat(metadata.StartingBalance));
-                    if (metadata.Language.HasValue)
-                    {
-                        writer.WriteLine("Language={0}", metadata.Language.Value);
-                    }
-
-                    if (metadata.ColorblindMode.HasValue)
-                    {
-                        writer.WriteLine("ColorblindMode={0}", metadata.ColorblindMode.Value);
-                    }
-
-                    writer.WriteLine("UseMetricSpeedDisplay={0}", metadata.UseMetricSpeedDisplay ? "true" : "false");
-                    writer.WriteLine("VehicleFuelDifficultyEnabled={0}", metadata.VehicleFuelDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("CargoWeightPowerDifficultyEnabled={0}", metadata.CargoWeightPowerDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("CargoDamageDifficultyEnabled={0}", metadata.CargoDamageDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("IndustryPricingDifficultyEnabled={0}", metadata.IndustryPricingDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("LicensingDifficultyEnabled={0}", metadata.LicensingDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("CorridorRestrictionDifficultyEnabled={0}", metadata.CorridorRestrictionDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("ReputationDifficultyEnabled={0}", metadata.ReputationDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("OfficeGarageLimitDifficultyEnabled={0}", metadata.OfficeGarageLimitDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("OfficeNpcLimitDifficultyEnabled={0}", metadata.OfficeNpcLimitDifficultyEnabled ? "true" : "false");
-                    writer.WriteLine("EconomyDifficultyPreset={0}", metadata.EconomyDifficultyPreset);
-                    writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
-                    writer.WriteLine("NpcRouteLimit={0}", metadata.NpcRouteLimit);
-                    writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
-                }
-                writer.WriteLine();
-
-                foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
-                {
-                    if (industry == null || string.IsNullOrWhiteSpace(industry.Id))
+                    var commodity = CommodityCatalog.Normalize(stock.Key);
+                    if (string.IsNullOrWhiteSpace(commodity))
                     {
                         continue;
                     }
 
-                    writer.WriteLine("[{0}]", BuildIndustrySectionName(industry.Id));
-                    writer.WriteLine("Name={0}", industry.Name ?? string.Empty);
-                    writer.WriteLine("ProductionRate={0}", FormatFloat(industry.ProductionRate));
-                    writer.WriteLine("InputCapacityTons={0}", FormatFloat(industry.InputCapacityTons));
-                    writer.WriteLine("OutputCapacityTons={0}", FormatFloat(industry.OutputCapacityTons));
-                    writer.WriteLine("OmegaCapacityTons={0}", FormatFloat(industry.OmegaCapacityTons));
-                    writer.WriteLine("OmegaStorage={0}", FormatFloat(industry.OmegaStorage));
-                    writer.WriteLine("ProductionModuleLevel={0}", industry.ProductionModuleLevel);
-                    writer.WriteLine("InputStorageModuleLevel={0}", industry.InputStorageModuleLevel);
-                    writer.WriteLine("OutputStorageModuleLevel={0}", industry.OutputStorageModuleLevel);
-                    writer.WriteLine("OmegaStorageModuleLevel={0}", industry.OmegaStorageModuleLevel);
-                    writer.WriteLine("IsOwned={0}", industry.IsOwned ? "true" : "false");
-                    writer.WriteLine("HasContractorPermit={0}", industry.HasContractorPermit ? "true" : "false");
-                    writer.WriteLine("StorageCondition={0}", FormatFloat(industry.StorageCondition));
-                    writer.WriteLine("LastStoragePressureDayIndex={0}", industry.LastStoragePressureDayIndex);
-                    writer.WriteLine("LifetimeStorageLossTons={0}", FormatFloat(industry.LifetimeStorageLossTons));
-                    writer.WriteLine("LifetimeStorageLossValue={0}", FormatFloat(industry.LifetimeStorageLossValue));
-
-                    foreach (var stock in industry.BufferStorage.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
-                    {
-                        var commodity = CommodityCatalog.Normalize(stock.Key);
-                        if (string.IsNullOrWhiteSpace(commodity))
-                        {
-                            continue;
-                        }
-
-                        writer.WriteLine("Buffer.{0}={1}", commodity, FormatFloat(Math.Max(0f, stock.Value)));
-                    }
-
-                    writer.WriteLine();
+                    writer.WriteLine("Buffer.{0}={1}", commodity, FormatFloat(Math.Max(0f, stock.Value)));
                 }
 
-                if (territorySnapshot != null)
-                {
-                    WriteTerritorySnapshot(writer, territorySnapshot);
-                }
+                writer.WriteLine();
+            }
 
-                if (metadata != null && metadata.Analytics != null)
-                {
-                    WriteAnalyticsSnapshot(writer, metadata.Analytics);
-                }
+            if (territorySnapshot != null)
+            {
+                WriteTerritorySnapshot(writer, territorySnapshot);
+            }
 
-                if (metadata != null && HasGlobalMarketData(metadata.Market))
-                {
-                    WriteGlobalMarketSnapshot(writer, metadata.Market);
-                }
+            if (metadata != null && metadata.Analytics != null)
+            {
+                WriteAnalyticsSnapshot(writer, metadata.Analytics);
+            }
 
-                if (metadata != null && HasOwnedFleetData(metadata.OwnedFleet))
-                {
-                    WriteOwnedFleetSnapshot(writer, metadata.OwnedFleet);
-                }
+            if (metadata != null && HasGlobalMarketData(metadata.Market))
+            {
+                WriteGlobalMarketSnapshot(writer, metadata.Market);
+            }
 
-                if (metadata != null && HasNpcLogisticsData(metadata.NpcLogistics))
-                {
-                    WriteNpcLogisticsSnapshot(writer, metadata.NpcLogistics);
-                }
+            if (metadata != null && HasOwnedFleetData(metadata.OwnedFleet))
+            {
+                WriteOwnedFleetSnapshot(writer, metadata.OwnedFleet);
+            }
 
-                if (metadata != null && HasSpecialMissionData(metadata.SpecialMissions))
-                {
-                    WriteSpecialMissionSnapshot(writer, metadata.SpecialMissions);
-                }
-                if (metadata != null && HasPropertyOwnershipData(metadata.PropertyOwnership))
-                {
-                    WritePropertyOwnershipSnapshot(writer, metadata.PropertyOwnership);
-                }
+            if (metadata != null && HasNpcLogisticsData(metadata.NpcLogistics))
+            {
+                WriteNpcLogisticsSnapshot(writer, metadata.NpcLogistics);
+            }
 
-                if (metadata != null && HasFinanceData(metadata.Finance))
-                {
-                    WriteFinanceSnapshot(writer, metadata.Finance);
-                }
+            if (metadata != null && HasSpecialMissionData(metadata.SpecialMissions))
+            {
+                WriteSpecialMissionSnapshot(writer, metadata.SpecialMissions);
+            }
+            if (metadata != null && HasPropertyOwnershipData(metadata.PropertyOwnership))
+            {
+                WritePropertyOwnershipSnapshot(writer, metadata.PropertyOwnership);
+            }
 
-                if (metadata != null && HasBankLoanData(metadata.BankLoans))
-                {
-                    WriteBankLoanSnapshot(writer, metadata.BankLoans);
-                }
+            if (metadata != null && HasFinanceData(metadata.Finance))
+            {
+                WriteFinanceSnapshot(writer, metadata.Finance);
+            }
 
-                if (metadata != null && HasPlayerStatisticsData(metadata.PlayerStatistics))
-                {
-                    WritePlayerStatisticsSnapshot(writer, metadata.PlayerStatistics);
-                }
+            if (metadata != null && HasBankLoanData(metadata.BankLoans))
+            {
+                WriteBankLoanSnapshot(writer, metadata.BankLoans);
+            }
+
+            if (metadata != null && HasPlayerStatisticsData(metadata.PlayerStatistics))
+            {
+                WritePlayerStatisticsSnapshot(writer, metadata.PlayerStatistics);
             }
         }
 
@@ -1129,6 +1150,13 @@ namespace LSOL.Systems
                 writer.WriteLine("SourceIndustryId={0}", vehicle.SourceIndustryId ?? string.Empty);
                 writer.WriteLine("SourceDistrictName={0}", vehicle.SourceDistrictName ?? string.Empty);
                 writer.WriteLine("CurrentFuelLiters={0}", FormatFloat(vehicle.CurrentFuelLiters));
+                writer.WriteLine("MaintenanceCondition={0}", FormatFloat(vehicle.MaintenanceCondition));
+                writer.WriteLine("LastMaintenanceWeekIndex={0}", vehicle.LastMaintenanceWeekIndex);
+                writer.WriteLine("LastInspectionWeekIndex={0}", vehicle.LastInspectionWeekIndex);
+                writer.WriteLine("InspectionOverdueWeeks={0}", vehicle.InspectionOverdueWeeks);
+                writer.WriteLine("LifetimeMaintenanceCost={0}", FormatFloat(vehicle.LifetimeMaintenanceCost));
+                WriteVehicleAppearanceSnapshot(writer, "PoweredAppearance", vehicle.PoweredAppearance);
+                WriteVehicleAppearanceSnapshot(writer, "CargoAppearance", vehicle.CargoAppearance);
                 writer.WriteLine();
             }
 
@@ -1148,6 +1176,7 @@ namespace LSOL.Systems
                 writer.WriteLine("IsDeployed={0}", vehicle.IsDeployed ? "true" : "false");
                 writer.WriteLine("Position={0}", FormatVector3(vehicle.Position));
                 writer.WriteLine("Heading={0}", FormatFloat(vehicle.Heading));
+                WriteVehicleAppearanceSnapshot(writer, "Appearance", vehicle.Appearance);
                 writer.WriteLine();
             }
         }
@@ -1268,6 +1297,8 @@ namespace LSOL.Systems
                             LastInspectionWeekIndex = ParseInt(ini.GetString(section, "LastInspectionWeekIndex", "-1"), -1),
                             InspectionOverdueWeeks = ParseInt(ini.GetString(section, "InspectionOverdueWeeks", "0"), 0),
                             LifetimeMaintenanceCost = ini.GetFloat(section, "LifetimeMaintenanceCost", 0f),
+                            PoweredAppearance = ReadVehicleAppearanceSnapshot(ini, section, "PoweredAppearance"),
+                            CargoAppearance = ReadVehicleAppearanceSnapshot(ini, section, "CargoAppearance"),
                         });
                     }
 
@@ -1290,12 +1321,312 @@ namespace LSOL.Systems
                             IsDeployed = ini.GetBool(section, "IsDeployed", false),
                             Position = ParseVector3(ini.GetString(section, "Position", string.Empty), Vector3.Zero),
                             Heading = ini.GetFloat(section, "Heading", 0f),
+                            Appearance = ReadVehicleAppearanceSnapshot(ini, section, "Appearance"),
                         });
                     }
                 }
             }
 
             return snapshot.HasData ? snapshot : null;
+        }
+
+        private static void WriteVehicleAppearanceSnapshot(StreamWriter writer, string keyPrefix, VehicleAppearancePersistenceSnapshot snapshot)
+        {
+            if (writer == null || string.IsNullOrWhiteSpace(keyPrefix) || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            if (snapshot.ColorCombination.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "ColorCombination"), snapshot.ColorCombination.Value);
+            }
+
+            writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "LicensePlate"), snapshot.LicensePlate ?? string.Empty);
+
+            if (snapshot.LicensePlateStyle.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "LicensePlateStyle"), snapshot.LicensePlateStyle.Value);
+            }
+
+            if (snapshot.WindowTint.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "WindowTint"), snapshot.WindowTint.Value);
+            }
+
+            if (snapshot.Livery.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "Livery"), snapshot.Livery.Value);
+            }
+
+            if (snapshot.WheelType.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "WheelType"), snapshot.WheelType.Value);
+            }
+
+            if (snapshot.PrimaryColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "PrimaryColor"), snapshot.PrimaryColor.Value);
+            }
+
+            if (snapshot.SecondaryColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "SecondaryColor"), snapshot.SecondaryColor.Value);
+            }
+
+            if (snapshot.PearlescentColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "PearlescentColor"), snapshot.PearlescentColor.Value);
+            }
+
+            if (snapshot.RimColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "RimColor"), snapshot.RimColor.Value);
+            }
+
+            if (snapshot.DashboardColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "DashboardColor"), snapshot.DashboardColor.Value);
+            }
+
+            if (snapshot.TrimColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "TrimColor"), snapshot.TrimColor.Value);
+            }
+
+            if (snapshot.CustomPrimaryColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "CustomPrimaryColor"), FormatColor(snapshot.CustomPrimaryColor.Value));
+            }
+
+            if (snapshot.CustomSecondaryColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "CustomSecondaryColor"), FormatColor(snapshot.CustomSecondaryColor.Value));
+            }
+
+            if (snapshot.NeonLightsColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "NeonLightsColor"), FormatColor(snapshot.NeonLightsColor.Value));
+            }
+
+            if (snapshot.TireSmokeColor.HasValue)
+            {
+                writer.WriteLine("{0}={1}", BuildAppearanceKey(keyPrefix, "TireSmokeColor"), FormatColor(snapshot.TireSmokeColor.Value));
+            }
+
+            if (snapshot.Mods != null)
+            {
+                foreach (var mod in snapshot.Mods
+                    .Where(entry => entry != null)
+                    .OrderBy(entry => entry.Type.ToString(), StringComparer.OrdinalIgnoreCase))
+                {
+                    writer.WriteLine("{0}={1}", BuildAppearanceModKey(keyPrefix, mod.Type, "Index"), mod.Index);
+                    writer.WriteLine("{0}={1}", BuildAppearanceModKey(keyPrefix, mod.Type, "Variation"), mod.Variation ? "true" : "false");
+                }
+            }
+
+            if (snapshot.ToggleMods != null)
+            {
+                foreach (var toggleMod in snapshot.ToggleMods
+                    .Where(entry => entry != null)
+                    .OrderBy(entry => entry.Type.ToString(), StringComparer.OrdinalIgnoreCase))
+                {
+                    writer.WriteLine("{0}={1}", BuildAppearanceToggleModKey(keyPrefix, toggleMod.Type), toggleMod.IsInstalled ? "true" : "false");
+                }
+            }
+        }
+
+        private static VehicleAppearancePersistenceSnapshot ReadVehicleAppearanceSnapshot(IniFile ini, string section, string keyPrefix)
+        {
+            if (ini == null || string.IsNullOrWhiteSpace(section) || string.IsNullOrWhiteSpace(keyPrefix) || !ini.HasSection(section))
+            {
+                return null;
+            }
+
+            var block = ini.GetSection(section);
+            var scopedPrefix = keyPrefix + ".";
+            if (block.Count == 0 || !block.Keys.Any(key => key != null && key.StartsWith(scopedPrefix, StringComparison.OrdinalIgnoreCase)))
+            {
+                return null;
+            }
+
+            var snapshot = new VehicleAppearancePersistenceSnapshot();
+            string rawValue;
+            if (TryGetAppearanceValue(block, keyPrefix, "ColorCombination", out rawValue))
+            {
+                snapshot.ColorCombination = ParseInt(rawValue, 0);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "LicensePlate", out rawValue))
+            {
+                snapshot.LicensePlate = rawValue;
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "LicensePlateStyle", out rawValue))
+            {
+                snapshot.LicensePlateStyle = ParseOptionalEnum<LicensePlateStyle>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "WindowTint", out rawValue))
+            {
+                snapshot.WindowTint = ParseOptionalEnum<VehicleWindowTint>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "Livery", out rawValue))
+            {
+                snapshot.Livery = ParseInt(rawValue, -1);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "WheelType", out rawValue))
+            {
+                snapshot.WheelType = ParseOptionalEnum<VehicleWheelType>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "PrimaryColor", out rawValue))
+            {
+                snapshot.PrimaryColor = ParseOptionalEnum<VehicleColor>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "SecondaryColor", out rawValue))
+            {
+                snapshot.SecondaryColor = ParseOptionalEnum<VehicleColor>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "PearlescentColor", out rawValue))
+            {
+                snapshot.PearlescentColor = ParseOptionalEnum<VehicleColor>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "RimColor", out rawValue))
+            {
+                snapshot.RimColor = ParseOptionalEnum<VehicleColor>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "DashboardColor", out rawValue))
+            {
+                snapshot.DashboardColor = ParseOptionalEnum<VehicleColor>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "TrimColor", out rawValue))
+            {
+                snapshot.TrimColor = ParseOptionalEnum<VehicleColor>(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "CustomPrimaryColor", out rawValue))
+            {
+                snapshot.CustomPrimaryColor = ParseColor(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "CustomSecondaryColor", out rawValue))
+            {
+                snapshot.CustomSecondaryColor = ParseColor(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "NeonLightsColor", out rawValue))
+            {
+                snapshot.NeonLightsColor = ParseColor(rawValue);
+            }
+
+            if (TryGetAppearanceValue(block, keyPrefix, "TireSmokeColor", out rawValue))
+            {
+                snapshot.TireSmokeColor = ParseColor(rawValue);
+            }
+
+            var modsByType = new Dictionary<VehicleModType, VehicleModPersistenceEntry>();
+            foreach (var pair in block)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                {
+                    continue;
+                }
+
+                if (pair.Key.StartsWith(scopedPrefix + "Mod.", StringComparison.OrdinalIgnoreCase))
+                {
+                    var remainder = pair.Key.Substring((scopedPrefix + "Mod.").Length).Trim();
+                    var separatorIndex = remainder.LastIndexOf('.');
+                    if (separatorIndex <= 0)
+                    {
+                        continue;
+                    }
+
+                    var modTypeRaw = remainder.Substring(0, separatorIndex).Trim();
+                    var propertyName = remainder.Substring(separatorIndex + 1).Trim();
+                    VehicleModType modType;
+                    if (!Enum.TryParse(modTypeRaw, true, out modType))
+                    {
+                        continue;
+                    }
+
+                    VehicleModPersistenceEntry modEntry;
+                    if (!modsByType.TryGetValue(modType, out modEntry))
+                    {
+                        modEntry = new VehicleModPersistenceEntry
+                        {
+                            Type = modType,
+                            Index = -1,
+                        };
+                        modsByType[modType] = modEntry;
+                        snapshot.Mods.Add(modEntry);
+                    }
+
+                    if (propertyName.Equals("Index", StringComparison.OrdinalIgnoreCase))
+                    {
+                        modEntry.Index = ParseInt(pair.Value, -1);
+                    }
+                    else if (propertyName.Equals("Variation", StringComparison.OrdinalIgnoreCase))
+                    {
+                        modEntry.Variation = ParseBoolValue(pair.Value, false);
+                    }
+
+                    continue;
+                }
+
+                if (!pair.Key.StartsWith(scopedPrefix + "ToggleMod.", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var toggleTypeRaw = pair.Key.Substring((scopedPrefix + "ToggleMod.").Length).Trim();
+                VehicleToggleModType toggleType;
+                if (!Enum.TryParse(toggleTypeRaw, true, out toggleType))
+                {
+                    continue;
+                }
+
+                snapshot.ToggleMods.Add(new VehicleToggleModPersistenceEntry
+                {
+                    Type = toggleType,
+                    IsInstalled = ParseBoolValue(pair.Value, false),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
+        private static string BuildAppearanceKey(string keyPrefix, string propertyName)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "{0}.{1}", keyPrefix ?? string.Empty, propertyName ?? string.Empty);
+        }
+
+        private static string BuildAppearanceModKey(string keyPrefix, VehicleModType modType, string propertyName)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "{0}.Mod.{1}.{2}", keyPrefix ?? string.Empty, modType, propertyName ?? string.Empty);
+        }
+
+        private static string BuildAppearanceToggleModKey(string keyPrefix, VehicleToggleModType toggleModType)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "{0}.ToggleMod.{1}", keyPrefix ?? string.Empty, toggleModType);
+        }
+
+        private static bool TryGetAppearanceValue(Dictionary<string, string> block, string keyPrefix, string propertyName, out string value)
+        {
+            value = string.Empty;
+            if (block == null)
+            {
+                return false;
+            }
+
+            return block.TryGetValue(BuildAppearanceKey(keyPrefix, propertyName), out value);
         }
 
         private static void WriteNpcLogisticsSnapshot(StreamWriter writer, NpcLogisticsPersistenceSnapshot snapshot)
@@ -2140,6 +2471,16 @@ namespace LSOL.Systems
             return value.ToString("0.####", CultureInfo.InvariantCulture);
         }
 
+        private static string FormatColor(Color value)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0},{1},{2}",
+                value.R,
+                value.G,
+                value.B);
+        }
+
         private static string FormatVector3(Vector3 value)
         {
             return string.Format(
@@ -2171,6 +2512,25 @@ namespace LSOL.Systems
             return fallback;
         }
 
+        private static Color? ParseColor(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            var parts = raw.Split(',');
+            if (parts.Length != 3)
+            {
+                return null;
+            }
+
+            var red = Math.Max(0, Math.Min(255, ParseInt(parts[0], 0)));
+            var green = Math.Max(0, Math.Min(255, ParseInt(parts[1], 0)));
+            var blue = Math.Max(0, Math.Min(255, ParseInt(parts[2], 0)));
+            return Color.FromArgb(red, green, blue);
+        }
+
         private static int ParseInt(string raw, int fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -2190,6 +2550,46 @@ namespace LSOL.Systems
             }
 
             return fallback;
+        }
+
+        private static bool ParseBoolValue(string raw, bool fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            bool parsed;
+            if (bool.TryParse(raw.Trim(), out parsed))
+            {
+                return parsed;
+            }
+
+            if (raw.Trim().Equals("1", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (raw.Trim().Equals("0", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            return fallback;
+        }
+
+        private static T? ParseOptionalEnum<T>(string raw)
+            where T : struct
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return null;
+            }
+
+            T parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed)
+                ? parsed
+                : (T?)null;
         }
 
         private static Vector3 ParseVector3(string raw, Vector3 fallback)
@@ -2302,6 +2702,229 @@ namespace LSOL.Systems
 
             CompanyFinanceCategory parsed;
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static IniFile LoadPersistenceIni(string filePath)
+        {
+            var resolvedPath = ResolveReadablePersistencePath(filePath);
+            if (string.IsNullOrWhiteSpace(resolvedPath))
+            {
+                return null;
+            }
+
+            if (!resolvedPath.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+            {
+                return IniFile.Load(resolvedPath);
+            }
+
+            var document = XDocument.Load(resolvedPath);
+            if (document.Root == null || !document.Root.Elements(PersistenceSectionElementName).Any())
+            {
+                var legacyPath = ResolveLegacyPersistencePath(resolvedPath);
+                if (!string.IsNullOrWhiteSpace(legacyPath) && File.Exists(legacyPath))
+                {
+                    return IniFile.Load(legacyPath);
+                }
+
+                throw new InvalidDataException("Save file contains no persisted sections.");
+            }
+
+            return IniFile.LoadFromString(BuildLegacyIniContentFromXml(document));
+        }
+
+        private static string ResolveReadablePersistencePath(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return string.Empty;
+            }
+
+            if (File.Exists(filePath))
+            {
+                return filePath;
+            }
+
+            var legacyPath = ResolveLegacyPersistencePath(filePath);
+            if (!string.IsNullOrWhiteSpace(legacyPath) && File.Exists(legacyPath))
+            {
+                return legacyPath;
+            }
+
+            return string.Empty;
+        }
+
+        private static string ResolveLegacyPersistencePath(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                return string.Empty;
+            }
+
+            return Path.ChangeExtension(filePath, ".ini");
+        }
+
+        private static XDocument BuildPersistenceXmlDocument(
+            IEnumerable<Industry> industries,
+            IndustryPersistenceMetadata metadata,
+            TerritoryPersistenceSnapshot territorySnapshot)
+        {
+            var iniContent = BuildLegacyIniPersistenceContent(industries, metadata, territorySnapshot);
+            var sections = ParseLegacyIniSections(iniContent);
+
+            return new XDocument(
+                new XDeclaration("1.0", "utf-8", "yes"),
+                new XElement(
+                    PersistenceRootElementName,
+                    new XAttribute("format", "section-key-v1"),
+                    sections
+                        .Where(section => section != null && section.Entries.Count > 0)
+                        .Select(section =>
+                            new XElement(
+                                PersistenceSectionElementName,
+                                new XAttribute("name", section.Name ?? string.Empty),
+                                section.Entries.Select(entry =>
+                                    new XElement(
+                                        PersistenceValueElementName,
+                                        new XAttribute("key", entry.Key ?? string.Empty),
+                                        entry.Value ?? string.Empty))))));
+        }
+
+        private static string BuildLegacyIniPersistenceContent(
+            IEnumerable<Industry> industries,
+            IndustryPersistenceMetadata metadata,
+            TerritoryPersistenceSnapshot territorySnapshot)
+        {
+            using (var stream = new MemoryStream())
+            {
+                using (var writer = new StreamWriter(stream, new UTF8Encoding(false), 1024, true))
+                {
+                    WriteLegacyIniPersistence(writer, industries, metadata, territorySnapshot);
+                    writer.Flush();
+                }
+
+                return Encoding.UTF8.GetString(stream.ToArray());
+            }
+        }
+
+        private static List<PersistenceSectionDocument> ParseLegacyIniSections(string content)
+        {
+            var sections = new List<PersistenceSectionDocument>();
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return sections;
+            }
+
+            PersistenceSectionDocument currentSection = null;
+            var normalized = content
+                .Replace("\r\n", "\n")
+                .Replace('\r', '\n');
+            foreach (var rawLine in normalized.Split('\n'))
+            {
+                if (rawLine == null)
+                {
+                    continue;
+                }
+
+                var line = rawLine.Trim();
+                if (line.Length == 0 || line.StartsWith("#") || line.StartsWith(";"))
+                {
+                    continue;
+                }
+
+                if (line.StartsWith("[") && line.EndsWith("]"))
+                {
+                    currentSection = new PersistenceSectionDocument(line.Substring(1, line.Length - 2).Trim());
+                    sections.Add(currentSection);
+                    continue;
+                }
+
+                var separatorIndex = line.IndexOf('=');
+                if (separatorIndex <= 0)
+                {
+                    continue;
+                }
+
+                if (currentSection == null)
+                {
+                    currentSection = new PersistenceSectionDocument("Global");
+                    sections.Add(currentSection);
+                }
+
+                var key = line.Substring(0, separatorIndex).Trim();
+                var value = separatorIndex + 1 < line.Length
+                    ? line.Substring(separatorIndex + 1).Trim()
+                    : string.Empty;
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    continue;
+                }
+
+                currentSection.Entries.Add(new PersistenceValueDocument(key, value));
+            }
+
+            return sections;
+        }
+
+        private static string BuildLegacyIniContentFromXml(XDocument document)
+        {
+            if (document == null || document.Root == null || !string.Equals(document.Root.Name.LocalName, PersistenceRootElementName, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("Save file is not a valid LSOL state XML document.");
+            }
+
+            var builder = new StringBuilder();
+            foreach (var sectionElement in document.Root.Elements(PersistenceSectionElementName))
+            {
+                var nameAttribute = sectionElement.Attribute("name");
+                var sectionName = nameAttribute != null ? nameAttribute.Value : string.Empty;
+                if (string.IsNullOrWhiteSpace(sectionName))
+                {
+                    continue;
+                }
+
+                builder.Append('[').Append(sectionName.Trim()).AppendLine("]");
+                foreach (var valueElement in sectionElement.Elements(PersistenceValueElementName))
+                {
+                    var keyAttribute = valueElement.Attribute("key");
+                    var key = keyAttribute != null ? keyAttribute.Value : string.Empty;
+                    if (string.IsNullOrWhiteSpace(key))
+                    {
+                        continue;
+                    }
+
+                    builder.Append(key.Trim()).Append('=').Append(valueElement.Value ?? string.Empty).AppendLine();
+                }
+
+                builder.AppendLine();
+            }
+
+            return builder.ToString();
+        }
+
+        private sealed class PersistenceSectionDocument
+        {
+            public PersistenceSectionDocument(string name)
+            {
+                Name = name;
+                Entries = new List<PersistenceValueDocument>();
+            }
+
+            public string Name { get; private set; }
+
+            public List<PersistenceValueDocument> Entries { get; private set; }
+        }
+
+        private sealed class PersistenceValueDocument
+        {
+            public PersistenceValueDocument(string key, string value)
+            {
+                Key = key;
+                Value = value;
+            }
+
+            public string Key { get; private set; }
+
+            public string Value { get; private set; }
         }
     }
 

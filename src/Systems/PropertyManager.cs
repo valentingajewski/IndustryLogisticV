@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Drawing;
 using GTA;
 using GTA.Math;
+using GTA.Native;
 using LSOL.Config;
 using LSOL.Domain;
 
@@ -1287,6 +1289,7 @@ namespace LSOL.Systems
             var vehicle = Entity.FromHandle(runtime.VehicleHandle) as Vehicle;
             if (vehicle != null && vehicle.Exists())
             {
+                entry.Appearance = CaptureVehicleAppearance(vehicle);
                 entry.Position = vehicle.Position;
                 entry.Heading = vehicle.Heading;
                 vehicle.Delete();
@@ -1712,6 +1715,7 @@ namespace LSOL.Systems
                     continue;
                 }
 
+                entry.Appearance = CaptureVehicleAppearance(vehicle);
                 entry.Position = vehicle.Position;
                 entry.Heading = vehicle.Heading;
                 entry.IsDeployed = true;
@@ -1795,6 +1799,34 @@ namespace LSOL.Systems
                 ApplyCommercialVehicleMaintenanceState(cargoVehicle, entry.MaintenanceCondition);
             }
 
+            if (truck != null && truck.Exists())
+            {
+                if (entry.PoweredAppearance != null && entry.PoweredAppearance.HasData)
+                {
+                    ApplyVehicleAppearance(truck, entry.PoweredAppearance);
+                }
+                else
+                {
+                    entry.PoweredAppearance = CaptureVehicleAppearance(truck);
+                }
+            }
+
+            if (cargoVehicle != null && cargoVehicle.Exists() && cargoVehicle.Handle != truck.Handle)
+            {
+                if (entry.CargoAppearance != null && entry.CargoAppearance.HasData)
+                {
+                    ApplyVehicleAppearance(cargoVehicle, entry.CargoAppearance);
+                }
+                else
+                {
+                    entry.CargoAppearance = CaptureVehicleAppearance(cargoVehicle);
+                }
+            }
+            else
+            {
+                entry.CargoAppearance = null;
+            }
+
             _commercialRuntime[entry.AssetId] = new CommercialVehicleRuntimeState
             {
                 TruckHandle = truck != null && truck.Exists() ? truck.Handle : 0,
@@ -1860,6 +1892,11 @@ namespace LSOL.Systems
                 entry.CurrentFuelLiters = telemetry != null ? telemetry.CurrentLiters : entry.CurrentFuelLiters;
             }
 
+            entry.PoweredAppearance = CaptureVehicleAppearance(truck);
+            entry.CargoAppearance = cargoVehicle != null && cargoVehicle.Exists() && cargoVehicle.Handle != truck.Handle
+                ? CaptureVehicleAppearance(cargoVehicle)
+                : null;
+
             if (deleteVehicles)
             {
                 cargoVehicle.Delete();
@@ -1918,6 +1955,15 @@ namespace LSOL.Systems
             }
 
             vehicle.IsPersistent = true;
+            if (entry.Appearance != null && entry.Appearance.HasData)
+            {
+                ApplyVehicleAppearance(vehicle, entry.Appearance);
+            }
+            else
+            {
+                entry.Appearance = CaptureVehicleAppearance(vehicle);
+            }
+
             entry.Position = vehicle.Position;
             entry.Heading = vehicle.Heading;
             entry.IsDeployed = true;
@@ -3027,6 +3073,13 @@ namespace LSOL.Systems
                     SourceIndustryId = entry.SourceIndustryId,
                     SourceDistrictName = entry.SourceDistrictName,
                     CurrentFuelLiters = entry.CurrentFuelLiters,
+                    MaintenanceCondition = entry.MaintenanceCondition,
+                    LastMaintenanceWeekIndex = entry.LastMaintenanceWeekIndex,
+                    LastInspectionWeekIndex = entry.LastInspectionWeekIndex,
+                    InspectionOverdueWeeks = entry.InspectionOverdueWeeks,
+                    LifetimeMaintenanceCost = entry.LifetimeMaintenanceCost,
+                    PoweredAppearance = CloneVehicleAppearance(entry.PoweredAppearance),
+                    CargoAppearance = CloneVehicleAppearance(entry.CargoAppearance),
                 });
             }
 
@@ -3049,10 +3102,406 @@ namespace LSOL.Systems
                     IsDeployed = entry.IsDeployed,
                     Position = entry.Position,
                     Heading = entry.Heading,
+                    Appearance = CloneVehicleAppearance(entry.Appearance),
                 });
             }
 
             return clone;
+        }
+
+        private static VehicleAppearancePersistenceSnapshot CaptureVehicleAppearance(Vehicle vehicle)
+        {
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return null;
+            }
+
+            var snapshot = new VehicleAppearancePersistenceSnapshot();
+            var mods = vehicle.Mods;
+            if (mods == null)
+            {
+                return null;
+            }
+
+            try
+            {
+                Function.Call(Hash.SET_VEHICLE_MOD_KIT, vehicle.Handle, 0);
+            }
+            catch
+            {
+            }
+
+            snapshot.ColorCombination = mods.ColorCombination;
+            snapshot.LicensePlate = mods.LicensePlate;
+            snapshot.LicensePlateStyle = mods.LicensePlateStyle;
+            snapshot.WindowTint = mods.WindowTint;
+            snapshot.Livery = mods.Livery;
+            snapshot.WheelType = mods.WheelType;
+            snapshot.PrimaryColor = mods.PrimaryColor;
+            snapshot.SecondaryColor = mods.SecondaryColor;
+            snapshot.PearlescentColor = mods.PearlescentColor;
+            snapshot.RimColor = mods.RimColor;
+            snapshot.DashboardColor = mods.DashboardColor;
+            snapshot.TrimColor = mods.TrimColor;
+            snapshot.CustomPrimaryColor = mods.IsPrimaryColorCustom ? (Color?)mods.CustomPrimaryColor : null;
+            snapshot.CustomSecondaryColor = mods.IsSecondaryColorCustom ? (Color?)mods.CustomSecondaryColor : null;
+            snapshot.NeonLightsColor = mods.NeonLightsColor;
+            snapshot.TireSmokeColor = mods.TireSmokeColor;
+
+            foreach (VehicleModType modType in Enum.GetValues(typeof(VehicleModType)))
+            {
+                try
+                {
+                    var mod = mods[modType];
+                    if (mod != null && (mod.Index >= 0 || mod.Variation))
+                    {
+                        snapshot.Mods.Add(new VehicleModPersistenceEntry
+                        {
+                            Type = modType,
+                            Index = mod.Index,
+                            Variation = mod.Variation,
+                        });
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            foreach (VehicleToggleModType toggleModType in Enum.GetValues(typeof(VehicleToggleModType)))
+            {
+                try
+                {
+                    var toggleMod = mods[toggleModType];
+                    if (toggleMod != null && toggleMod.IsInstalled)
+                    {
+                        snapshot.ToggleMods.Add(new VehicleToggleModPersistenceEntry
+                        {
+                            Type = toggleModType,
+                            IsInstalled = true,
+                        });
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
+        private static void ApplyVehicleAppearance(Vehicle vehicle, VehicleAppearancePersistenceSnapshot snapshot)
+        {
+            if (vehicle == null || !vehicle.Exists() || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            var mods = vehicle.Mods;
+            if (mods == null)
+            {
+                return;
+            }
+
+            try
+            {
+                Function.Call(Hash.SET_VEHICLE_MOD_KIT, vehicle.Handle, 0);
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                mods.ColorCombination = snapshot.ColorCombination.HasValue
+                    ? snapshot.ColorCombination.Value
+                    : mods.ColorCombination;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                mods.LicensePlate = snapshot.LicensePlate ?? string.Empty;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.LicensePlateStyle.HasValue)
+                {
+                    mods.LicensePlateStyle = snapshot.LicensePlateStyle.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.WindowTint.HasValue)
+                {
+                    mods.WindowTint = snapshot.WindowTint.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.WheelType.HasValue)
+                {
+                    mods.WheelType = snapshot.WheelType.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.PrimaryColor.HasValue)
+                {
+                    mods.PrimaryColor = snapshot.PrimaryColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.SecondaryColor.HasValue)
+                {
+                    mods.SecondaryColor = snapshot.SecondaryColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.PearlescentColor.HasValue)
+                {
+                    mods.PearlescentColor = snapshot.PearlescentColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.RimColor.HasValue)
+                {
+                    mods.RimColor = snapshot.RimColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.DashboardColor.HasValue)
+                {
+                    mods.DashboardColor = snapshot.DashboardColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.TrimColor.HasValue)
+                {
+                    mods.TrimColor = snapshot.TrimColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.Livery.HasValue)
+                {
+                    mods.Livery = snapshot.Livery.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.CustomPrimaryColor.HasValue)
+                {
+                    mods.CustomPrimaryColor = snapshot.CustomPrimaryColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.CustomSecondaryColor.HasValue)
+                {
+                    mods.CustomSecondaryColor = snapshot.CustomSecondaryColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.NeonLightsColor.HasValue)
+                {
+                    mods.NeonLightsColor = snapshot.NeonLightsColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                if (snapshot.TireSmokeColor.HasValue)
+                {
+                    mods.TireSmokeColor = snapshot.TireSmokeColor.Value;
+                }
+            }
+            catch
+            {
+            }
+
+            if (snapshot.Mods != null)
+            {
+                for (int i = 0; i < snapshot.Mods.Count; i++)
+                {
+                    var persistedMod = snapshot.Mods[i];
+                    if (persistedMod == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var mod = mods[persistedMod.Type];
+                        if (mod == null)
+                        {
+                            continue;
+                        }
+
+                        mod.Index = persistedMod.Index;
+                        mod.Variation = persistedMod.Variation;
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            if (snapshot.ToggleMods != null)
+            {
+                for (int i = 0; i < snapshot.ToggleMods.Count; i++)
+                {
+                    var persistedToggle = snapshot.ToggleMods[i];
+                    if (persistedToggle == null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        var toggleMod = mods[persistedToggle.Type];
+                        if (toggleMod == null)
+                        {
+                            continue;
+                        }
+
+                        toggleMod.IsInstalled = persistedToggle.IsInstalled;
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+        }
+
+        private static VehicleAppearancePersistenceSnapshot CloneVehicleAppearance(VehicleAppearancePersistenceSnapshot source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            var clone = new VehicleAppearancePersistenceSnapshot
+            {
+                ColorCombination = source.ColorCombination,
+                LicensePlate = source.LicensePlate,
+                LicensePlateStyle = source.LicensePlateStyle,
+                WindowTint = source.WindowTint,
+                Livery = source.Livery,
+                WheelType = source.WheelType,
+                PrimaryColor = source.PrimaryColor,
+                SecondaryColor = source.SecondaryColor,
+                PearlescentColor = source.PearlescentColor,
+                RimColor = source.RimColor,
+                DashboardColor = source.DashboardColor,
+                TrimColor = source.TrimColor,
+                CustomPrimaryColor = source.CustomPrimaryColor,
+                CustomSecondaryColor = source.CustomSecondaryColor,
+                NeonLightsColor = source.NeonLightsColor,
+                TireSmokeColor = source.TireSmokeColor,
+            };
+
+            if (source.Mods != null)
+            {
+                for (int i = 0; i < source.Mods.Count; i++)
+                {
+                    var mod = source.Mods[i];
+                    if (mod == null)
+                    {
+                        continue;
+                    }
+
+                    clone.Mods.Add(new VehicleModPersistenceEntry
+                    {
+                        Type = mod.Type,
+                        Index = mod.Index,
+                        Variation = mod.Variation,
+                    });
+                }
+            }
+
+            if (source.ToggleMods != null)
+            {
+                for (int i = 0; i < source.ToggleMods.Count; i++)
+                {
+                    var toggleMod = source.ToggleMods[i];
+                    if (toggleMod == null)
+                    {
+                        continue;
+                    }
+
+                    clone.ToggleMods.Add(new VehicleToggleModPersistenceEntry
+                    {
+                        Type = toggleMod.Type,
+                        IsInstalled = toggleMod.IsInstalled,
+                    });
+                }
+            }
+
+            return clone.HasData ? clone : null;
         }
 
         private static int GetWeekIndex(int currentInGameMinute)

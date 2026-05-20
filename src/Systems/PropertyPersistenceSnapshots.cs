@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using System.Drawing;
+using GTA;
 using GTA.Math;
 using LSOL.Domain;
 
@@ -153,6 +155,10 @@ namespace LSOL.Systems
         public int InspectionOverdueWeeks { get; set; }
 
         public float LifetimeMaintenanceCost { get; set; }
+
+        public VehicleAppearancePersistenceSnapshot PoweredAppearance { get; set; }
+
+        public VehicleAppearancePersistenceSnapshot CargoAppearance { get; set; }
     }
 
     public sealed class OwnedPersonalVehiclePersistenceEntry
@@ -174,5 +180,93 @@ namespace LSOL.Systems
         public Vector3 Position { get; set; }
 
         public float Heading { get; set; }
+
+        public VehicleAppearancePersistenceSnapshot Appearance { get; set; }
+    }
+
+    public sealed class VehicleAppearancePersistenceSnapshot
+    {
+        public VehicleAppearancePersistenceSnapshot()
+        {
+            Mods = new List<VehicleModPersistenceEntry>();
+            ToggleMods = new List<VehicleToggleModPersistenceEntry>();
+        }
+
+        public int? ColorCombination { get; set; }
+
+        public string LicensePlate { get; set; }
+
+        public LicensePlateStyle? LicensePlateStyle { get; set; }
+
+        public VehicleWindowTint? WindowTint { get; set; }
+
+        public int? Livery { get; set; }
+
+        public VehicleWheelType? WheelType { get; set; }
+
+        public VehicleColor? PrimaryColor { get; set; }
+
+        public VehicleColor? SecondaryColor { get; set; }
+
+        public VehicleColor? PearlescentColor { get; set; }
+
+        public VehicleColor? RimColor { get; set; }
+
+        public VehicleColor? DashboardColor { get; set; }
+
+        public VehicleColor? TrimColor { get; set; }
+
+        public Color? CustomPrimaryColor { get; set; }
+
+        public Color? CustomSecondaryColor { get; set; }
+
+        public Color? NeonLightsColor { get; set; }
+
+        public Color? TireSmokeColor { get; set; }
+
+        public List<VehicleModPersistenceEntry> Mods { get; }
+
+        public List<VehicleToggleModPersistenceEntry> ToggleMods { get; }
+
+        public bool HasData
+        {
+            get
+            {
+                return ColorCombination.HasValue
+                    || !string.IsNullOrWhiteSpace(LicensePlate)
+                    || LicensePlateStyle.HasValue
+                    || WindowTint.HasValue
+                    || Livery.HasValue
+                    || WheelType.HasValue
+                    || PrimaryColor.HasValue
+                    || SecondaryColor.HasValue
+                    || PearlescentColor.HasValue
+                    || RimColor.HasValue
+                    || DashboardColor.HasValue
+                    || TrimColor.HasValue
+                    || CustomPrimaryColor.HasValue
+                    || CustomSecondaryColor.HasValue
+                    || NeonLightsColor.HasValue
+                    || TireSmokeColor.HasValue
+                    || Mods.Count > 0
+                    || ToggleMods.Count > 0;
+            }
+        }
+    }
+
+    public sealed class VehicleModPersistenceEntry
+    {
+        public VehicleModType Type { get; set; }
+
+        public int Index { get; set; }
+
+        public bool Variation { get; set; }
+    }
+
+    public sealed class VehicleToggleModPersistenceEntry
+    {
+        public VehicleToggleModType Type { get; set; }
+
+        public bool IsInstalled { get; set; }
     }
 }

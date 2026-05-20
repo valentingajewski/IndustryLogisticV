@@ -6151,15 +6151,18 @@ namespace LSOL
 
         private sealed class NamedSaveEntry
         {
-            public NamedSaveEntry(string displayName, string filePath)
+            public NamedSaveEntry(string displayName, string filePath, string loadPath = null)
             {
                 DisplayName = displayName;
                 FilePath = filePath;
+                LoadPath = string.IsNullOrWhiteSpace(loadPath) ? filePath : loadPath;
             }
 
             public string DisplayName { get; private set; }
 
             public string FilePath { get; private set; }
+
+            public string LoadPath { get; private set; }
         }
 
     }
