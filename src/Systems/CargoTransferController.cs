@@ -233,8 +233,15 @@ namespace LSOL.Systems
                 return;
             }
 
-            var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
+            var tonsToUnload = Math.Max(0f, cargoState.WeightTons);
+            var targetUnloadTons = ResolveUnloadTargetTons(industry, commodity, tonsToUnload);
+            if (targetUnloadTons <= 0.001f)
+            {
+                _showStatus("Unloading failed: destination storage full.");
+                return;
+            }
+
             var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(cargoState.CargoType)
                 || CommodityCatalog.UsesDoorAnimation(commodity);
 
@@ -245,7 +252,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                string.Format("Unloading {0} {1}...", ModFormatting.FormatTons(tonsToUnload), commodity),
+                BuildUnloadingTransferLabel(0f, targetUnloadTons, commodity),
                 2800,
                 () =>
                 {
@@ -316,6 +323,16 @@ namespace LSOL.Systems
                             SetRearCargoDoors(cargoVehicle, false);
                         }
                     }
+                },
+                progress =>
+                {
+                    if (_pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    var currentTons = targetUnloadTons * ModMath.Clamp01(progress);
+                    _pendingTransfer.Label = BuildUnloadingTransferLabel(currentTons, targetUnloadTons, commodity);
                 });
         }
 
@@ -443,8 +460,15 @@ namespace LSOL.Systems
                 return;
             }
 
-            var tonsToUnload = cargoState.WeightTons;
             var commodity = cargoState.Commodity;
+            var tonsToUnload = Math.Max(0f, cargoState.WeightTons);
+            var targetUnloadTons = ResolveUnloadTargetTons(industry, commodity, tonsToUnload);
+            if (targetUnloadTons <= 0.001f)
+            {
+                _showStatus("Unloading failed: destination storage full.");
+                return;
+            }
+
             var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
             var shouldAnimateCrateDoors = CommodityCatalog.UsesDoorAnimation(cargoState.CargoType)
                 || CommodityCatalog.UsesDoorAnimation(commodity);
@@ -456,7 +480,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                string.Format("Unloading {0} {1}...", ModFormatting.FormatTons(tonsToUnload), commodity),
+                BuildUnloadingTransferLabel(0f, targetUnloadTons, commodity),
                 2800,
                 () =>
                 {
@@ -516,6 +540,16 @@ namespace LSOL.Systems
                             SetRearCargoDoors(cargoVehicle, false);
                         }
                     }
+                },
+                progress =>
+                {
+                    if (_pendingTransfer == null)
+                    {
+                        return;
+                    }
+
+                    var currentTons = targetUnloadTons * ModMath.Clamp01(progress);
+                    _pendingTransfer.Label = BuildUnloadingTransferLabel(currentTons, targetUnloadTons, commodity);
                 });
         }
 
@@ -619,7 +653,7 @@ namespace LSOL.Systems
                 });
         }
 
-        private static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)
+        internal static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)
         {
             if (industry == null || string.IsNullOrWhiteSpace(commodity) || requestedTons <= 0f)
             {
@@ -628,6 +662,17 @@ namespace LSOL.Systems
 
             var available = Math.Max(0f, industry.GetStock(commodity));
             return Math.Min(requestedTons, available);
+        }
+
+        internal static float ResolveUnloadTargetTons(Industry industry, string commodity, float requestedTons)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(commodity) || requestedTons <= 0f)
+            {
+                return 0f;
+            }
+
+            var acceptedCapacity = Math.Max(0f, industry.GetMaxTransferTonsForCommodity(commodity));
+            return Math.Min(Math.Max(0f, requestedTons), acceptedCapacity);
         }
 
         private static bool CanTopUpCargoState(VehicleCargoState cargoState, string selectedProduct, out string message)
@@ -665,10 +710,18 @@ namespace LSOL.Systems
             return true;
         }
 
-        private static string BuildLoadingTransferLabel(float currentTons, float targetTons, string commodity)
+        internal static string BuildLoadingTransferLabel(float currentTons, float targetTons, string commodity)
         {
             return string.Format(
                 "Loading {0} {1}...",
+                ModFormatting.FormatRatio(Math.Max(0f, currentTons), Math.Max(0f, targetTons), "t"),
+                commodity ?? string.Empty);
+        }
+
+        internal static string BuildUnloadingTransferLabel(float currentTons, float targetTons, string commodity)
+        {
+            return string.Format(
+                "Unloading {0} {1}...",
                 ModFormatting.FormatRatio(Math.Max(0f, currentTons), Math.Max(0f, targetTons), "t"),
                 commodity ?? string.Empty);
         }

@@ -7,7 +7,7 @@
   </Office>
   <Office id="2" legacyKey="LaMesaOffice" name="La Mesa Logistic Office" district="EastLosSantos" price="260000" weeklyRent="10000" maxCommercialVehicles="12">
     <Marker x="896.4" y="-1036.2" z="35" />
-    <Spawn x="900.4" y="-1021.13" z="35" heading="273" />
+    <Spawn x="864.66" y="-1010.78" z="32" heading="95" />
   </Office>
   <Office id="3" legacyKey="BanningOffice" name="Banning Logistic Office" district="SouthLosSantos" price="700000" weeklyRent="27000" maxCommercialVehicles="24">
     <Marker x="167.85" y="-2223" z="7.24" />

@@ -35,7 +35,9 @@
   <Site catalogId="103" legacyKey="PlasticFactory" name="Los Santos Plastic Factory" role="ProcessingPlant" district="Port" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.25" enabled="true">
     <Marker x="269" y="-3024" z="5.72" />
     <VehicleSpawn x="227.55" y="-3045.57" z="6" heading="99" />
+    <DisplaySpawn x="260" y="-3032.75" z="5.76" heading="97" />
     <Worker x="252" y="-3042.5" z="5.88" />
+    <Display maxLine="2" objectModelHash="1280771616" maxRow="2" />
     <Inputs outputs="Plastic" primary="Oil" boost="Omega" />
     <Economy>
       <Casual productionRate="28.8" licencePrice="12600" purchasePrice="225000" inputCapacityTons="416" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
