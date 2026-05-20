@@ -507,11 +507,11 @@ namespace LSOL.UI
                 var hasMultipleInputs = _industry.Inputs != null && _industry.Inputs.Count > 1;
                 var canChooseOmegaUnloadMode = _industry.SupportsOmegaBoost && hasMultipleInputs;
                 var isOmegaOnlyUnload = _industry.SupportsOmegaBoost && !hasMultipleInputs;
-                var unloadTitle = isOmegaOnlyUnload ? "UNLOAD OMEGA FLUID" : "UNLOAD CARGO";
+                var unloadTitle = isOmegaOnlyUnload ? "UNLOAD OMEGA" : "UNLOAD CARGO";
                 var unloadSubtitle = canChooseOmegaUnloadMode
                     ? "Choose Omega or truck cargo in-tablet"
                     : (isOmegaOnlyUnload
-                        ? "Deliver Omega boost fluid from your tanker"
+                        ? "Deliver Omega boost cargo from your active cargo vehicle"
                         : "Deliver current truck cargo to this industry");
                 var loadSubtitle = _loadOptions.Count > 1
                     ? "Choose resource in-tablet after pressing load"
@@ -660,13 +660,13 @@ namespace LSOL.UI
                 DrawUpgradeModuleButton(
                     0,
                     "UNLOAD TRUCK CARGO",
-                    "Deliver your current tanker commodity",
+                    "Deliver your current cargo vehicle commodity",
                     _selectedUnloadOptionIndex == 0);
 
                 DrawUpgradeModuleButton(
                     1,
                     "UNLOAD OMEGA",
-                    "Only unload if your tanker carries Omega",
+                    "Only unload if your active cargo vehicle carries Omega cargo",
                     _selectedUnloadOptionIndex == 1);
 
                 DrawUpgradeModuleButton(

@@ -5,4 +5,7 @@
   <Motel id="motel_002" name="Pink Cage" igName="Motel" type="Standard" restPrice="110">
     <ExteriorPosition x="313.20" y="-225.35" z="54.22" />
   </Motel>
+  <Motel id="motel_003" name="Bilingsgate" igName="Motel" type="Budget" restPrice="65">
+    <ExteriorPosition x="570.49" y="-1745.73" z="29.33" />
+  </Motel>
 </Motels>

@@ -2800,7 +2800,7 @@ namespace LSOL.UI
             {
                 items.Add(TabletUiHelpers.CreateActionItem(
                     "Unload Omega Only",
-                    "Only unload if the active tanker carries Omega boost fluid.",
+                    "Only unload if the active cargo vehicle carries Omega boost cargo.",
                     () =>
                     {
                         _unloadModeRequested?.Invoke(industry, true);
@@ -3013,7 +3013,7 @@ namespace LSOL.UI
 
             if (CargoTransferController.IsOmegaOnlyUnloadIndustry(industry))
             {
-                return "This site only accepts Omega fluid from a tanker.";
+                return "This site only accepts Omega cargo.";
             }
 
             return string.Format("Unload {0} from the active cargo vehicle.", snapshot.CargoCommodity);

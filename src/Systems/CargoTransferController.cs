@@ -223,7 +223,7 @@ namespace LSOL.Systems
 
             if (omegaOnly && !cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
             {
-                _showStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
+                _showStatus(string.Format("Vehicle cargo is {0}. Omega cargo required.", cargoState.Commodity));
                 return;
             }
 

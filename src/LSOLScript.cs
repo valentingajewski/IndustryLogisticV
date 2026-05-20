@@ -4880,7 +4880,7 @@ namespace LSOL
             var omegaOnly = CargoTransferController.IsOmegaOnlyUnloadIndustry(industry);
             if (omegaOnly && !cargoState.Commodity.Equals("Omega", StringComparison.OrdinalIgnoreCase))
             {
-                ShowStatus(string.Format("Vehicle cargo is {0}. Omega fluid required.", cargoState.Commodity));
+                ShowStatus(string.Format("Vehicle cargo is {0}. Omega cargo required.", cargoState.Commodity));
                 return;
             }
 

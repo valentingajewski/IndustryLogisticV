@@ -27,6 +27,7 @@
     <Commodity name="Paper" basePrice="550" />
     <Commodity name="Medicine" basePrice="2400" />
     <Commodity name="MechanicalParts" basePrice="1100" />
+    <Commodity name="Omega" basePrice="7000" />
     <Commodity name="TV" basePrice="3000" />
     <Commodity name="Computer" basePrice="3800" />
     <Commodity name="Electronic" basePrice="1400" />
@@ -37,7 +38,6 @@
     <Commodity name="LiquidFertilizer" basePrice="600" />
     <Commodity name="Oil" basePrice="380" />
     <Commodity name="Water" basePrice="220" />
-    <Commodity name="Omega" basePrice="7000" />
   </Group>
   <Group name="DryBulk" cargoType="DryBulk">
     <Commodity name="Asphalt" basePrice="400" />
