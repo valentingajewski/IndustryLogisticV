@@ -13,13 +13,28 @@ namespace LSOL.Systems
         private const float BarrierOpenAngleDegrees = 82f;
 
         private readonly int[] _barrierModelHashes;
-        private readonly HashSet<int> _animatedBarrierModelHashes;
+        private readonly HashSet<int> _doorSystemBarrierModelHashes;
+        private readonly HashSet<int> _securityBarrierModelHashes;
+        private readonly HashSet<int> _legacyRotationBarrierModelHashes;
+        private readonly HashSet<int> _configDiscoveredBarrierModelHashes;
         private readonly Dictionary<int, float> _barrierClosedHeadings;
 
-        public BarrierInteractionHandler()
+        public BarrierInteractionHandler(Func<IEnumerable<int>> getConfiguredBarrierModelHashes = null)
         {
-            _barrierModelHashes = CreateBarrierModelHashes();
-            _animatedBarrierModelHashes = new HashSet<int>(CreateAnimatedBarrierModelHashes());
+            _doorSystemBarrierModelHashes = new HashSet<int>(CreateDoorSystemBarrierModelHashes());
+            _securityBarrierModelHashes = new HashSet<int>(CreateSecurityBarrierModelHashes());
+            _legacyRotationBarrierModelHashes = new HashSet<int>(CreateLegacyRotationBarrierModelHashes());
+
+            var recognizedBarrierModelHashes = new HashSet<int>(_doorSystemBarrierModelHashes);
+            recognizedBarrierModelHashes.UnionWith(_securityBarrierModelHashes);
+            recognizedBarrierModelHashes.UnionWith(_legacyRotationBarrierModelHashes);
+
+            _configDiscoveredBarrierModelHashes = new HashSet<int>(
+                GetConfiguredBarrierModelHashes(getConfiguredBarrierModelHashes)
+                    .Where(modelHash => !recognizedBarrierModelHashes.Contains(modelHash)));
+            recognizedBarrierModelHashes.UnionWith(_configDiscoveredBarrierModelHashes);
+
+            _barrierModelHashes = recognizedBarrierModelHashes.ToArray();
             _barrierClosedHeadings = new Dictionary<int, float>();
         }
 
@@ -84,9 +99,15 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (_animatedBarrierModelHashes.Contains(nearestBarrier.Model.Hash))
+            var modelHash = nearestBarrier.Model.Hash;
+            if (ShouldUseNativeAnimation(modelHash))
             {
-                return TryOpenBarrierWithNativeAnimation(nearestBarrier);
+                return TryOpenBarrierWithNativeAnimation(nearestBarrier, player);
+            }
+
+            if (!_legacyRotationBarrierModelHashes.Contains(modelHash))
+            {
+                return false;
             }
 
             float closedHeading;
@@ -107,7 +128,7 @@ namespace LSOL.Systems
             _barrierClosedHeadings.Clear();
         }
 
-        private bool TryOpenBarrierWithNativeAnimation(Prop barrier)
+        private bool TryOpenBarrierWithNativeAnimation(Prop barrier, Ped player)
         {
             if (barrier == null || !barrier.Exists())
             {
@@ -115,7 +136,34 @@ namespace LSOL.Systems
             }
 
             var modelHash = barrier.Model.Hash;
-            if (!_animatedBarrierModelHashes.Contains(modelHash))
+            if (!ShouldUseNativeAnimation(modelHash))
+            {
+                return false;
+            }
+
+            if (TryOpenBarrierWithDoorSystem(barrier))
+            {
+                return true;
+            }
+
+            if (_securityBarrierModelHashes.Contains(modelHash) || _configDiscoveredBarrierModelHashes.Contains(modelHash))
+            {
+                return TryOpenBarrierWithClosestDoorNatives(barrier, player);
+            }
+
+            return false;
+        }
+
+        private bool ShouldUseNativeAnimation(int modelHash)
+        {
+            return _doorSystemBarrierModelHashes.Contains(modelHash)
+                || _securityBarrierModelHashes.Contains(modelHash)
+                || _configDiscoveredBarrierModelHashes.Contains(modelHash);
+        }
+
+        private static bool TryOpenBarrierWithDoorSystem(Prop barrier)
+        {
+            if (barrier == null || !barrier.Exists())
             {
                 return false;
             }
@@ -123,6 +171,7 @@ namespace LSOL.Systems
             try
             {
                 var pos = barrier.Position;
+                var modelHash = barrier.Model.Hash;
                 int doorSystemHash;
                 if (!TryGetDoorSystemHash(pos, modelHash, out doorSystemHash))
                 {
@@ -146,6 +195,32 @@ namespace LSOL.Systems
                 Function.Call(Hash.DOOR_SYSTEM_SET_HOLD_OPEN, doorSystemHash, true);
                 Function.Call(Hash.DOOR_SYSTEM_SET_OPEN_RATIO, doorSystemHash, 1f, true, true);
 
+                return true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        private static bool TryOpenBarrierWithClosestDoorNatives(Prop barrier, Ped player)
+        {
+            if (barrier == null || !barrier.Exists())
+            {
+                return false;
+            }
+
+            try
+            {
+                var pos = barrier.Position;
+                var openHeading = 1f;
+                if (player != null && player.Exists())
+                {
+                    var playerLocalOffset = barrier.GetPositionOffset(player.Position);
+                    openHeading = playerLocalOffset.X >= 0f ? -1f : 1f;
+                }
+
+                Function.Call(Hash.SET_STATE_OF_CLOSEST_DOOR_OF_TYPE, barrier.Model.Hash, pos.X, pos.Y, pos.Z, false, openHeading, false);
                 return true;
             }
             catch (Exception)
@@ -191,35 +266,65 @@ namespace LSOL.Systems
             return unchecked((int)composed);
         }
 
-        private static int[] CreateBarrierModelHashes()
+        private static int[] GetConfiguredBarrierModelHashes(Func<IEnumerable<int>> getConfiguredBarrierModelHashes)
         {
-            return new[]
-                {
-                    "prop_sec_barier_01a",
-                    "prop_sec_barier_02a",
-                    "prop_sec_barier_03a",
-                    "prop_sec_barier_04a",
-                    "prop_sec_barrier_ld_01a",
-                    "prop_sec_barrier_ld_02a",
-                    "prop_fnclink_03gate5",
-                    "prop_gate_airport_01",
-                    "prop_gate_docks_ld",
-                }
-                .Select(x => new Model(x))
-                .Where(x => x.IsInCdImage && x.IsValid)
-                .Select(x => x.Hash)
-                .Distinct()
-                .ToArray();
+            if (getConfiguredBarrierModelHashes == null)
+            {
+                return new int[0];
+            }
+
+            try
+            {
+                return (getConfiguredBarrierModelHashes() ?? Enumerable.Empty<int>())
+                    .Where(modelHash => modelHash != 0)
+                    .Distinct()
+                    .ToArray();
+            }
+            catch (Exception)
+            {
+                return new int[0];
+            }
         }
 
-        private static int[] CreateAnimatedBarrierModelHashes()
+        private static int[] CreateDoorSystemBarrierModelHashes()
         {
-            return new[]
+            return CreateModelHashes(
+                new[]
                 {
                     "prop_fnclink_03gate5",
                     "prop_gate_airport_01",
                     "prop_gate_docks_ld",
-                }
+                });
+        }
+
+        private static int[] CreateSecurityBarrierModelHashes()
+        {
+            return CreateModelHashes(
+                new[]
+                {
+                    "prop_sec_barrier_ld_01a",
+                    "prop_sec_barier_04b",
+                    "prop_sec_barier_03b",
+                    "prop_sec_barier_02b",
+                    "prop_sec_barier_02a",
+                    "prop_sec_barier_03a",
+                });
+        }
+
+        private static int[] CreateLegacyRotationBarrierModelHashes()
+        {
+            return CreateModelHashes(
+                new[]
+                {
+                    "prop_sec_barier_01a",
+                    "prop_sec_barier_04a",
+                    "prop_sec_barrier_ld_02a",
+                });
+        }
+
+        private static int[] CreateModelHashes(IEnumerable<string> modelNames)
+        {
+            return (modelNames ?? Enumerable.Empty<string>())
                 .Select(x => new Model(x))
                 .Where(x => x.IsInCdImage && x.IsValid)
                 .Select(x => x.Hash)

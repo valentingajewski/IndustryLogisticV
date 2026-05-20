@@ -239,7 +239,11 @@ namespace LSOL
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
             _vehicleSpawnMarkerSeed = _config.VehicleSpawnPosition;
-            _barrierInteractionHandler = new BarrierInteractionHandler();
+            _barrierInteractionHandler = new BarrierInteractionHandler(
+                () => (_propertyManager != null ? _propertyManager.Offices.Select(x => x.BarrierModelHash) : Enumerable.Empty<int?>())
+                    .Concat(_industryManager != null ? _industryManager.Industries.Select(x => x.BarrierModelHash) : Enumerable.Empty<int?>())
+                    .Where(x => x.HasValue)
+                    .Select(x => x.Value));
             _blipLifecycleManager = new BlipLifecycleManager(
                 _industryManager,
                 () => _propertyManager != null ? _propertyManager.Offices : new OfficeDefinition[0],
