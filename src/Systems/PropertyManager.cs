@@ -1897,6 +1897,13 @@ namespace LSOL.Systems
                 ? CaptureVehicleAppearance(cargoVehicle)
                 : null;
 
+            if (!deleteVehicles)
+            {
+                entry.IsDeployed = true;
+                message = string.Format("Captured {0}.", entry.DisplayName);
+                return true;
+            }
+
             if (deleteVehicles)
             {
                 cargoVehicle.Delete();
