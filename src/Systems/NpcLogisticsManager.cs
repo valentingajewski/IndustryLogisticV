@@ -2428,7 +2428,7 @@ namespace LSOL.Systems
 
             VehicleDefinition selectedVehicle;
             VehicleDefinition selectedTractor;
-            if (!TryResolveVehicleForCommodity(job.Commodity, out selectedVehicle, out selectedTractor, out failureReason))
+            if (!TryResolveAmbientWorldVehicleForCommodity(job.Commodity, job.Tons, out selectedVehicle, out selectedTractor, out failureReason))
             {
                 return false;
             }
@@ -5132,6 +5132,64 @@ namespace LSOL.Systems
             return TryResolveVehicleForCommodity(commodity, out selectedVehicle, out selectedTractor, out failureReason);
         }
 
+        private bool TryResolveAmbientWorldVehicleForCommodity(string commodity, float tons, out VehicleDefinition selectedVehicle, out VehicleDefinition selectedTractor, out string failureReason)
+        {
+            selectedVehicle = null;
+            selectedTractor = null;
+            failureReason = string.Empty;
+
+            if (_fleetManager == null)
+            {
+                failureReason = "Fleet manager unavailable";
+                return false;
+            }
+
+            commodity = CommodityCatalog.Normalize(commodity);
+            var candidates = _fleetManager
+                .GetSpawnableForCommodity(commodity)
+                .Where(definition => definition != null)
+                .ToList();
+            if (candidates.Count <= 0)
+            {
+                failureReason = string.Format("No enabled vehicle can carry {0}", commodity);
+                return false;
+            }
+
+            var requiredTons = GetAmbientWorldVehicleSelectionTons(tons);
+            var rigidVehicles = candidates
+                .Where(definition => !definition.IsTrailer)
+                .ToList();
+            var trailerVehicles = candidates
+                .Where(definition => definition.IsTrailer)
+                .ToList();
+
+            selectedVehicle = SelectAmbientBestFitVehicle(rigidVehicles, requiredTons)
+                ?? SelectAmbientBestFitVehicle(trailerVehicles, requiredTons)
+                ?? SelectAmbientFallbackVehicle(candidates);
+            if (selectedVehicle == null)
+            {
+                failureReason = string.Format("No enabled vehicle can carry {0}", commodity);
+                return false;
+            }
+
+            if (selectedVehicle.IsTrailer)
+            {
+                selectedTractor = ChooseAmbientRandomDefinition(
+                    _fleetManager
+                        .GetTractorDefinitions()
+                        .Where(definition => definition != null)
+                        .ToList());
+                if (selectedTractor == null)
+                {
+                    selectedVehicle = null;
+                    failureReason = string.Format("No enabled truck tractor is configured for {0}", commodity);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         private bool TryResolveVehicleForCommodity(string commodity, out VehicleDefinition selectedVehicle, out VehicleDefinition selectedTractor, out string failureReason)
         {
             selectedVehicle = null;
@@ -5170,6 +5228,77 @@ namespace LSOL.Systems
             }
 
             return true;
+        }
+
+        private float GetAmbientWorldVehicleSelectionTons(float tons)
+        {
+            var minimumTons = _worldDispatchConfig != null
+                ? Math.Max(0f, _worldDispatchConfig.MinDispatchTons)
+                : 0f;
+            return Math.Max(minimumTons, Math.Max(0f, tons));
+        }
+
+        private VehicleDefinition SelectAmbientBestFitVehicle(IReadOnlyList<VehicleDefinition> candidates, float requiredTons)
+        {
+            if (candidates == null || candidates.Count <= 0)
+            {
+                return null;
+            }
+
+            var adequateCandidates = candidates
+                .Where(definition => definition != null && definition.CapacityTons + 0.001f >= requiredTons)
+                .OrderBy(definition => definition.CapacityTons)
+                .ToList();
+            if (adequateCandidates.Count <= 0)
+            {
+                return null;
+            }
+
+            var bestCapacity = adequateCandidates[0].CapacityTons;
+            var tolerance = GetAmbientVehicleCapacityTolerance(bestCapacity);
+            return ChooseAmbientRandomDefinition(
+                adequateCandidates
+                    .Where(definition => Math.Abs(definition.CapacityTons - bestCapacity) <= tolerance)
+                    .ToList());
+        }
+
+        private VehicleDefinition SelectAmbientFallbackVehicle(IReadOnlyList<VehicleDefinition> candidates)
+        {
+            if (candidates == null || candidates.Count <= 0)
+            {
+                return null;
+            }
+
+            var fallbackCandidates = candidates
+                .Where(definition => definition != null)
+                .OrderByDescending(definition => definition.CapacityTons)
+                .ToList();
+            if (fallbackCandidates.Count <= 0)
+            {
+                return null;
+            }
+
+            var bestCapacity = fallbackCandidates[0].CapacityTons;
+            var tolerance = GetAmbientVehicleCapacityTolerance(bestCapacity);
+            return ChooseAmbientRandomDefinition(
+                fallbackCandidates
+                    .Where(definition => Math.Abs(definition.CapacityTons - bestCapacity) <= tolerance)
+                    .ToList());
+        }
+
+        private float GetAmbientVehicleCapacityTolerance(float capacityTons)
+        {
+            return Math.Max(0.25f, Math.Abs(capacityTons) * 0.05f);
+        }
+
+        private VehicleDefinition ChooseAmbientRandomDefinition(IReadOnlyList<VehicleDefinition> candidates)
+        {
+            if (candidates == null || candidates.Count <= 0)
+            {
+                return null;
+            }
+
+            return candidates[_random.Next(candidates.Count)];
         }
 
         private bool TryGetConfiguredOriginSpawnAnchor(NpcLogisticsContract contract, out Vector3 position, out float heading)

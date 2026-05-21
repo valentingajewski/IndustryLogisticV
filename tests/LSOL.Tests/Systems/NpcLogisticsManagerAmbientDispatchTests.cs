@@ -15,6 +15,93 @@ namespace LSOL.Tests.Systems
     public sealed class NpcLogisticsManagerAmbientDispatchTests
     {
         [TestMethod]
+        public void TryResolveAmbientWorldVehicleForCommodity_SmallCargo_PrefersSmallRigidVehicle()
+        {
+            var context = CreateContext(CreateGeneralCargoVehicleDefinitions());
+
+            VehicleDefinition selectedVehicle;
+            VehicleDefinition selectedTractor;
+            string failureReason;
+            var resolved = InvokeTryResolveAmbientWorldVehicleForCommodity(context.Manager, "ProcessedFood", 2.5f, out selectedVehicle, out selectedTractor, out failureReason);
+
+            Assert.IsTrue(resolved, failureReason);
+            Assert.IsNotNull(selectedVehicle);
+            Assert.AreEqual("van-3", selectedVehicle.Id);
+            Assert.IsFalse(selectedVehicle.IsTrailer);
+            Assert.IsNull(selectedTractor);
+        }
+
+        [TestMethod]
+        public void TryResolveAmbientWorldVehicleForCommodity_MediumCargo_PrefersMediumRigidVehicle()
+        {
+            var context = CreateContext(CreateGeneralCargoVehicleDefinitions());
+
+            VehicleDefinition selectedVehicle;
+            VehicleDefinition selectedTractor;
+            string failureReason;
+            var resolved = InvokeTryResolveAmbientWorldVehicleForCommodity(context.Manager, "ProcessedFood", 8f, out selectedVehicle, out selectedTractor, out failureReason);
+
+            Assert.IsTrue(resolved, failureReason);
+            Assert.IsNotNull(selectedVehicle);
+            Assert.AreEqual("truck-10", selectedVehicle.Id);
+            Assert.IsFalse(selectedVehicle.IsTrailer);
+            Assert.IsNull(selectedTractor);
+        }
+
+        [TestMethod]
+        public void TryResolveAmbientWorldVehicleForCommodity_LargeCargoWithinRigidCapacity_UsesBigRigidBeforeTrailer()
+        {
+            var context = CreateContext(CreateGeneralCargoVehicleDefinitions());
+
+            VehicleDefinition selectedVehicle;
+            VehicleDefinition selectedTractor;
+            string failureReason;
+            var resolved = InvokeTryResolveAmbientWorldVehicleForCommodity(context.Manager, "ProcessedFood", 18f, out selectedVehicle, out selectedTractor, out failureReason);
+
+            Assert.IsTrue(resolved, failureReason);
+            Assert.IsNotNull(selectedVehicle);
+            Assert.AreEqual("truck-20", selectedVehicle.Id);
+            Assert.IsFalse(selectedVehicle.IsTrailer);
+            Assert.IsNull(selectedTractor);
+        }
+
+        [TestMethod]
+        public void TryResolveAmbientWorldVehicleForCommodity_OverflowCargo_UsesTrailerRig()
+        {
+            var context = CreateContext(CreateGeneralCargoVehicleDefinitions());
+
+            VehicleDefinition selectedVehicle;
+            VehicleDefinition selectedTractor;
+            string failureReason;
+            var resolved = InvokeTryResolveAmbientWorldVehicleForCommodity(context.Manager, "ProcessedFood", 22f, out selectedVehicle, out selectedTractor, out failureReason);
+
+            Assert.IsTrue(resolved, failureReason);
+            Assert.IsNotNull(selectedVehicle);
+            Assert.AreEqual("trailer-24", selectedVehicle.Id);
+            Assert.IsTrue(selectedVehicle.IsTrailer);
+            Assert.IsNotNull(selectedTractor);
+            Assert.IsTrue(selectedTractor.IsTractor);
+        }
+
+        [TestMethod]
+        public void TryResolveAmbientWorldVehicleForCommodity_SpecializedTrailerOnlyCommodity_UsesTrailerSetup()
+        {
+            var context = CreateContext(CreateSpecializedTrailerVehicleDefinitions());
+
+            VehicleDefinition selectedVehicle;
+            VehicleDefinition selectedTractor;
+            string failureReason;
+            var resolved = InvokeTryResolveAmbientWorldVehicleForCommodity(context.Manager, "Oil", 10f, out selectedVehicle, out selectedTractor, out failureReason);
+
+            Assert.IsTrue(resolved, failureReason);
+            Assert.IsNotNull(selectedVehicle);
+            Assert.AreEqual("tanker-trailer", selectedVehicle.Id);
+            Assert.IsTrue(selectedVehicle.IsTrailer);
+            Assert.IsNotNull(selectedTractor);
+            Assert.IsTrue(selectedTractor.IsTractor);
+        }
+
+        [TestMethod]
         public void CanAmbientWorldDispatchBetween_CrossDistrictRequiresLicensedCorridor()
         {
             var context = CreateContext();
@@ -89,7 +176,7 @@ namespace LSOL.Tests.Systems
             Assert.AreEqual(baselineCorridorLevel, corridor.RightLevel);
         }
 
-        private static AmbientDispatchTestContext CreateContext()
+        private static AmbientDispatchTestContext CreateContext(IReadOnlyList<VehicleDefinition> vehicleDefinitions = null)
         {
             var config = new ModConfig();
             SetProperty(config, nameof(ModConfig.IndustryOmegaCapacityMultiplier), 0.2f);
@@ -99,7 +186,7 @@ namespace LSOL.Tests.Systems
                 { "bravo-plant", CreateDestinationIndustryConfig() },
             });
             SetProperty(config, nameof(ModConfig.DistrictConfigs), new Dictionary<string, DistrictConfig>(StringComparer.OrdinalIgnoreCase));
-            SetProperty(config, nameof(ModConfig.VehicleDefinitions), new List<VehicleDefinition>());
+            SetProperty(config, nameof(ModConfig.VehicleDefinitions), vehicleDefinitions != null ? new List<VehicleDefinition>(vehicleDefinitions) : new List<VehicleDefinition>());
             SetProperty(config, nameof(ModConfig.ObjectModels), new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase));
 
             var industryManager = new IndustryManager(config);
@@ -132,6 +219,49 @@ namespace LSOL.Tests.Systems
                 TerritoryManager = territoryManager,
                 Origin = industryManager.Industries[0],
                 Destination = industryManager.Industries[1],
+            };
+        }
+
+        private static IReadOnlyList<VehicleDefinition> CreateGeneralCargoVehicleDefinitions()
+        {
+            return new List<VehicleDefinition>
+            {
+                CreateVehicleDefinition("van-3", "Light Van", "speedo", VehicleCargoType.CraftedGoods, 3f, false, false, "ProcessedFood"),
+                CreateVehicleDefinition("van-5", "Box Van", "boxville4", VehicleCargoType.CraftedGoods, 5f, false, false, "ProcessedFood"),
+                CreateVehicleDefinition("truck-10", "Medium Truck", "mule", VehicleCargoType.CraftedGoods, 10f, false, false, "ProcessedFood"),
+                CreateVehicleDefinition("truck-20", "Heavy Truck", "pounder", VehicleCargoType.CraftedGoods, 20f, false, false, "ProcessedFood"),
+                CreateVehicleDefinition("trailer-24", "Cargo Trailer", "trailers2", VehicleCargoType.CraftedGoods, 24f, true, false, "ProcessedFood"),
+                CreateVehicleDefinition("tractor-1", "Fleet Tractor A", "phantom", VehicleCargoType.Trailer, 0f, false, true),
+                CreateVehicleDefinition("tractor-2", "Fleet Tractor B", "hauler", VehicleCargoType.Trailer, 0f, false, true),
+            };
+        }
+
+        private static IReadOnlyList<VehicleDefinition> CreateSpecializedTrailerVehicleDefinitions()
+        {
+            return new List<VehicleDefinition>
+            {
+                CreateVehicleDefinition("craft-van", "Craft Van", "rumpo3", VehicleCargoType.CraftedGoods, 5f, false, false, "ProcessedFood"),
+                CreateVehicleDefinition("tanker-trailer", "Tanker Trailer", "tanker", VehicleCargoType.Liquid, 24f, true, false, "Oil"),
+                CreateVehicleDefinition("tractor-1", "Fleet Tractor A", "phantom", VehicleCargoType.Trailer, 0f, false, true),
+                CreateVehicleDefinition("tractor-2", "Fleet Tractor B", "hauler", VehicleCargoType.Trailer, 0f, false, true),
+            };
+        }
+
+        private static VehicleDefinition CreateVehicleDefinition(string id, string displayName, string modelName, VehicleCargoType cargoType, float capacityTons, bool isTrailer, bool isTractor, params string[] acceptedCommodities)
+        {
+            return new VehicleDefinition
+            {
+                Id = id,
+                DisplayName = displayName,
+                ModelName = modelName,
+                CargoType = cargoType,
+                AcceptedCommodities = acceptedCommodities != null && acceptedCommodities.Length > 0
+                    ? new HashSet<string>(acceptedCommodities, StringComparer.OrdinalIgnoreCase)
+                    : new HashSet<string>(StringComparer.OrdinalIgnoreCase),
+                CapacityTons = capacityTons,
+                IsEnabled = true,
+                IsTrailer = isTrailer,
+                IsTractor = isTractor,
             };
         }
 
@@ -205,6 +335,18 @@ namespace LSOL.Tests.Systems
             var arguments = new object[] { job, origin, destination, now, string.Empty };
             var result = (bool)method.Invoke(manager, arguments);
             outcome = arguments[4] as string ?? string.Empty;
+            return result;
+        }
+
+        private static bool InvokeTryResolveAmbientWorldVehicleForCommodity(NpcLogisticsManager manager, string commodity, float tons, out VehicleDefinition selectedVehicle, out VehicleDefinition selectedTractor, out string failureReason)
+        {
+            var method = typeof(NpcLogisticsManager).GetMethod("TryResolveAmbientWorldVehicleForCommodity", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, "TryResolveAmbientWorldVehicleForCommodity");
+            var arguments = new object[] { commodity, tons, null, null, string.Empty };
+            var result = (bool)method.Invoke(manager, arguments);
+            selectedVehicle = arguments[2] as VehicleDefinition;
+            selectedTractor = arguments[3] as VehicleDefinition;
+            failureReason = arguments[4] as string ?? string.Empty;
             return result;
         }
 
