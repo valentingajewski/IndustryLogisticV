@@ -2368,7 +2368,7 @@ namespace LSOL.Systems
                 switch (_stage)
                 {
                     case TrailerDeliveryStage.CollectTrailer:
-                        if (ResolveTowVehicle(trailer) != null)
+                        if (IsPlayerTowingMissionTrailer(player, trailer))
                         {
                             AdvanceTo(TrailerDeliveryStage.DeliverTrailer, "Trailer connected. Deliver the heavy machinery to the quarry.");
                         }
@@ -2616,31 +2616,72 @@ namespace LSOL.Systems
                     : Vector3.Zero;
             }
 
-            private static Vehicle ResolveTowVehicle(Vehicle vehicle)
+            private static bool IsPlayerTowingMissionTrailer(Ped player, Vehicle trailer)
+            {
+                if (player == null || !player.Exists() || trailer == null || !trailer.Exists())
+                {
+                    return false;
+                }
+
+                var truck = player.CurrentVehicle;
+                if (truck == null || !truck.Exists())
+                {
+                    return false;
+                }
+
+                var attachedTrailer = ResolveAttachedTrailer(truck);
+                return attachedTrailer != null
+                    && attachedTrailer.Exists()
+                    && attachedTrailer.Handle == trailer.Handle;
+            }
+
+            private static Vehicle ResolveAttachedTrailer(Vehicle vehicle)
             {
                 if (vehicle == null || !vehicle.Exists())
                 {
                     return null;
                 }
 
-                int attachedHandle;
+                var towedVehicle = vehicle.TowedVehicle;
+                if (towedVehicle != null && towedVehicle.Exists())
+                {
+                    return towedVehicle;
+                }
+
+                var trailerHandleArg = new OutputArgument();
+                bool hasTrailer;
                 try
                 {
-                    attachedHandle = Function.Call<int>(Hash.GET_ENTITY_ATTACHED_TO, vehicle.Handle);
+                    hasTrailer = Function.Call<bool>(Hash.GET_VEHICLE_TRAILER_VEHICLE, vehicle.Handle, trailerHandleArg);
                 }
                 catch
                 {
                     return null;
                 }
 
-                if (attachedHandle <= 0 || attachedHandle == vehicle.Handle)
+                if (!hasTrailer)
                 {
                     return null;
                 }
 
-                var attachedVehicle = Entity.FromHandle(attachedHandle) as Vehicle;
-                return attachedVehicle != null && attachedVehicle.Exists()
-                    ? attachedVehicle
+                int trailerHandle;
+                try
+                {
+                    trailerHandle = trailerHandleArg.GetResult<int>();
+                }
+                catch
+                {
+                    return null;
+                }
+
+                if (trailerHandle <= 0)
+                {
+                    return null;
+                }
+
+                var trailerEntity = Entity.FromHandle(trailerHandle) as Vehicle;
+                return trailerEntity != null && trailerEntity.Exists()
+                    ? trailerEntity
                     : null;
             }
 
