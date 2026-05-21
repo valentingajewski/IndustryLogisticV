@@ -58,6 +58,11 @@ namespace LSOL.Systems
     {
         private const int RepossessionCooldownMs = 60000;
         private const int MinutesPerWeek = 7 * 24 * 60;
+        private const float ServiceSinkPassiveIncomeStockThresholdTons = 0.05f;
+        private const float ServiceSiteWeeklyWageRatio = 0.12f;
+        private const float ServiceSiteWeeklyWageMinimum = 75f;
+        private const float ServiceSiteWeeklyWageMaximum = 300f;
+        private const float ServiceSiteWeeklyWageStep = 25f;
 
         private readonly IndustryManager _industryManager;
         private readonly Dictionary<string, Industry> _industriesById;
@@ -198,6 +203,71 @@ namespace LSOL.Systems
             return _sitesById.TryGetValue(industry.Id, out siteState)
                 ? siteState
                 : null;
+        }
+
+        public bool HasServiceSiteOperatorAssigned(Industry industry)
+        {
+            var siteState = GetSiteState(industry);
+            return siteState != null && siteState.SiteOperatorAssigned;
+        }
+
+        public bool IsServiceSinkStockedForPassiveIncome(Industry industry)
+        {
+            return IsServiceSinkStocked(industry);
+        }
+
+        public bool IsServiceSinkOperationalForPassiveIncome(Industry industry)
+        {
+            var siteState = GetSiteState(industry);
+            return ShouldAwardServiceSinkPassiveIncome(industry, siteState);
+        }
+
+        public float GetServiceSiteWeeklyStaffingCost(Industry industry)
+        {
+            return ComputeServiceSiteWeeklyStaffingCost(industry);
+        }
+
+        public bool TrySetServiceSiteOperatorAssigned(Industry industry, bool assigned, out string result)
+        {
+            if (industry == null)
+            {
+                result = "No site selected.";
+                return false;
+            }
+
+            if (!IsServiceSink(industry))
+            {
+                result = "Site operators are only used at owned stores and gas stations.";
+                return false;
+            }
+
+            if (!industry.IsOwned)
+            {
+                result = string.Format("Buy {0} before assigning a site operator.", industry.Name);
+                return false;
+            }
+
+            var siteState = GetSiteState(industry);
+            if (siteState == null)
+            {
+                result = "Site state unavailable.";
+                return false;
+            }
+
+            if (siteState.SiteOperatorAssigned == assigned)
+            {
+                result = assigned
+                    ? string.Format("{0} already has a site operator assigned.", industry.Name)
+                    : string.Format("{0} already has no site operator assigned.", industry.Name);
+                return false;
+            }
+
+            siteState.SiteOperatorAssigned = assigned;
+            RefreshComputedState();
+            result = assigned
+                ? string.Format("Assigned a site operator to {0}. Weekly wage {1:0}.", industry.Name, ComputeServiceSiteWeeklyStaffingCost(industry))
+                : string.Format("Released the site operator at {0}.", industry.Name);
+            return true;
         }
 
         public TerritoryDistrictState GetDistrictState(string districtName)
@@ -1425,7 +1495,11 @@ namespace LSOL.Systems
                     || siteState.CurrentWeekServiceTons > 0.001f
                     || siteState.ServicePenaltySteps > 0
                     || siteState.ServiceSuccessStreak > 0
-                    || siteState.ServiceTargetMetLastWeek;
+                    || siteState.ServiceTargetMetLastWeek
+                    || siteState.SiteOperatorAssigned
+                    || siteState.LastPassiveIncomeAmount > 0.001f
+                    || siteState.LastPassiveIncomeWeekIndex >= 0
+                    || !string.IsNullOrWhiteSpace(siteState.LastPassiveIncomeStatus);
                 if (!hasState)
                 {
                     continue;
@@ -1456,6 +1530,10 @@ namespace LSOL.Systems
                     ServicePenaltySteps = siteState.ServicePenaltySteps,
                     ServiceSuccessStreak = siteState.ServiceSuccessStreak,
                     ServiceTargetMetLastWeek = siteState.ServiceTargetMetLastWeek,
+                    SiteOperatorAssigned = siteState.SiteOperatorAssigned,
+                    LastPassiveIncomeAmount = siteState.LastPassiveIncomeAmount,
+                    LastPassiveIncomeWeekIndex = siteState.LastPassiveIncomeWeekIndex,
+                    LastPassiveIncomeStatus = siteState.LastPassiveIncomeStatus,
                 });
             }
 
@@ -1593,6 +1671,10 @@ namespace LSOL.Systems
                 target.ServicePenaltySteps = Math.Max(0, source.ServicePenaltySteps);
                 target.ServiceSuccessStreak = Math.Max(0, source.ServiceSuccessStreak);
                 target.ServiceTargetMetLastWeek = source.ServiceTargetMetLastWeek;
+                target.SiteOperatorAssigned = source.SiteOperatorAssigned;
+                target.LastPassiveIncomeAmount = Math.Max(0f, source.LastPassiveIncomeAmount);
+                target.LastPassiveIncomeWeekIndex = source.LastPassiveIncomeWeekIndex;
+                target.LastPassiveIncomeStatus = source.LastPassiveIncomeStatus ?? string.Empty;
             }
 
             for (int i = 0; i < snapshot.Districts.Count; i++)
@@ -1674,12 +1756,18 @@ namespace LSOL.Systems
                     siteState.RequiredWeeklyServiceTons = GetServiceContractTargetTons(industry);
                     siteState.EffectiveFranchiseLevel = ApplyFranchisePenalty(siteState.FranchiseLevel, siteState.ServicePenaltySteps);
                     siteState.ServiceContractStatus = BuildServiceContractStatus(industry, siteState);
+                    siteState.PassiveIncomeStockReady = IsServiceSinkStocked(industry);
+                    siteState.PassiveIncomeOperational = ShouldAwardServiceSinkPassiveIncome(industry, siteState);
+                    siteState.PassiveIncomeStatus = BuildServiceSinkPassiveIncomeOperationalStatus(industry, siteState);
                 }
                 else
                 {
                     siteState.RequiredWeeklyServiceTons = 0f;
                     siteState.EffectiveFranchiseLevel = TerritoryFranchiseLevel.None;
                     siteState.ServiceContractStatus = string.Empty;
+                    siteState.PassiveIncomeStockReady = false;
+                    siteState.PassiveIncomeOperational = false;
+                    siteState.PassiveIncomeStatus = string.Empty;
                 }
 
                 districtState.SiteCount += 1;
@@ -2547,13 +2635,15 @@ namespace LSOL.Systems
             return siteState != null && siteState.ServicePenaltySteps > 0;
         }
 
-        private static bool ShouldAwardServiceSinkPassiveIncome(Industry industry)
+        private bool ShouldAwardServiceSinkPassiveIncome(Industry industry, TerritorySiteState siteState)
         {
             return industry != null
+            && siteState != null
                 && industry.IsOwned
                 && (industry.IsStore || industry.IsGasStation)
                 && industry.WeeklyPassiveIncome > 0.01f
-                && industry.GetInputStockTotal() > 0.05f;
+            && siteState.SiteOperatorAssigned
+            && IsServiceSinkStocked(industry);
         }
 
         private bool IsCorridorAtRisk(TerritoryCorridorState corridorState)
@@ -2633,16 +2723,30 @@ namespace LSOL.Systems
 
                 if (!industry.IsOwned)
                 {
+                    siteState.SiteOperatorAssigned = false;
                     siteState.ServicePenaltySteps = 0;
                     siteState.ServiceSuccessStreak = 0;
                     siteState.ServiceTargetMetLastWeek = false;
+                    siteState.LastPassiveIncomeAmount = 0f;
+                    siteState.LastPassiveIncomeWeekIndex = -1;
+                    siteState.LastPassiveIncomeStatus = string.Empty;
                     continue;
                 }
 
-                if (ShouldAwardServiceSinkPassiveIncome(industry))
+                if (siteState.SiteOperatorAssigned)
+                {
+                    result.ServiceSinkStaffingExpense += ComputeServiceSiteWeeklyStaffingCost(industry);
+                }
+
+                var awardedPassiveIncome = ShouldAwardServiceSinkPassiveIncome(industry, siteState);
+                if (awardedPassiveIncome)
                 {
                     result.ServiceSinkPassiveIncome += industry.WeeklyPassiveIncome;
                 }
+
+                siteState.LastPassiveIncomeAmount = awardedPassiveIncome ? industry.WeeklyPassiveIncome : 0f;
+                siteState.LastPassiveIncomeWeekIndex = weekIndex;
+                siteState.LastPassiveIncomeStatus = BuildServiceSinkPassiveIncomeWeeklyOutcome(industry, siteState, awardedPassiveIncome);
 
                 var targetTons = siteState.RequiredWeeklyServiceTons > 0.01f
                     ? siteState.RequiredWeeklyServiceTons
@@ -2903,6 +3007,92 @@ namespace LSOL.Systems
             }
 
             return "Awaiting weekly service";
+        }
+
+        private static bool IsServiceSinkStocked(Industry industry)
+        {
+            return industry != null && industry.GetInputStockTotal() > ServiceSinkPassiveIncomeStockThresholdTons;
+        }
+
+        private static float ComputeServiceSiteWeeklyStaffingCost(Industry industry)
+        {
+            if (industry == null || !(industry.IsStore || industry.IsGasStation) || industry.WeeklyPassiveIncome <= 0.01f)
+            {
+                return 0f;
+            }
+
+            var scaledWage = Math.Max(ServiceSiteWeeklyWageMinimum, Math.Min(ServiceSiteWeeklyWageMaximum, industry.WeeklyPassiveIncome * ServiceSiteWeeklyWageRatio));
+            return (float)(Math.Ceiling(scaledWage / ServiceSiteWeeklyWageStep) * ServiceSiteWeeklyWageStep);
+        }
+
+        private string BuildServiceSinkPassiveIncomeOperationalStatus(Industry industry, TerritorySiteState siteState)
+        {
+            if (industry == null || siteState == null || !IsServiceSink(industry))
+            {
+                return string.Empty;
+            }
+
+            if (!industry.IsOwned)
+            {
+                return "Open market";
+            }
+
+            if (!siteState.SiteOperatorAssigned)
+            {
+                return "No staff assigned";
+            }
+
+            if (!IsServiceSinkStocked(industry))
+            {
+                return "Understocked";
+            }
+
+            if (siteState.ServicePenaltySteps >= 2)
+            {
+                return "Passive income active | Contract at risk";
+            }
+
+            if (siteState.ServicePenaltySteps == 1)
+            {
+                return "Passive income active | Contract watch";
+            }
+
+            return "Passive income active";
+        }
+
+        private string BuildServiceSinkPassiveIncomeWeeklyOutcome(Industry industry, TerritorySiteState siteState, bool awardedPassiveIncome)
+        {
+            if (industry == null || siteState == null || !industry.IsOwned)
+            {
+                return string.Empty;
+            }
+
+            if (awardedPassiveIncome)
+            {
+                if (siteState.ServicePenaltySteps >= 2)
+                {
+                    return "Paid last week | Contract at risk";
+                }
+
+                if (siteState.ServicePenaltySteps == 1)
+                {
+                    return "Paid last week | Contract watch";
+                }
+
+                return "Paid last week";
+            }
+
+            if (!siteState.SiteOperatorAssigned)
+            {
+                return "Missed last week | No staff assigned";
+            }
+
+            if (!IsServiceSinkStocked(industry))
+            {
+                return "Missed last week | Understocked";
+            }
+
+            return "Missed last week";
         }
 
         private string BuildCorridorStatus(TerritoryCorridorState corridorState)
@@ -3392,6 +3582,7 @@ namespace LSOL.Systems
         public int HighCompetitionDistrictCount { get; set; }
         public int CompetitiveWinCount { get; set; }
         public float ServiceSinkPassiveIncome { get; set; }
+        public float ServiceSinkStaffingExpense { get; set; }
         public List<string> Messages { get; private set; }
     }
 
@@ -3427,6 +3618,13 @@ namespace LSOL.Systems
         public int ServiceSuccessStreak { get; set; }
         public bool ServiceTargetMetLastWeek { get; set; }
         public string ServiceContractStatus { get; set; }
+        public bool SiteOperatorAssigned { get; set; }
+        public bool PassiveIncomeStockReady { get; set; }
+        public bool PassiveIncomeOperational { get; set; }
+        public string PassiveIncomeStatus { get; set; }
+        public float LastPassiveIncomeAmount { get; set; }
+        public int LastPassiveIncomeWeekIndex { get; set; } = -1;
+        public string LastPassiveIncomeStatus { get; set; }
     }
 
     public sealed class TerritoryDistrictState
@@ -3532,6 +3730,10 @@ namespace LSOL.Systems
         public int ServicePenaltySteps { get; set; }
         public int ServiceSuccessStreak { get; set; }
         public bool ServiceTargetMetLastWeek { get; set; }
+        public bool SiteOperatorAssigned { get; set; }
+        public float LastPassiveIncomeAmount { get; set; }
+        public int LastPassiveIncomeWeekIndex { get; set; } = -1;
+        public string LastPassiveIncomeStatus { get; set; }
     }
 
     public sealed class TerritoryDistrictSnapshot

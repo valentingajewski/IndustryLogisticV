@@ -53,6 +53,21 @@ namespace LSOL.Tests.UI
         }
 
         [TestMethod]
+        public void BuildLocationOverviewDetail_PreservesOwnedServiceIncomeStatusText()
+        {
+            var summary = new TabletLocationSummary
+            {
+                OwnershipTag = "~g~[OWNED]~s~",
+                PermitTag = "~g~[OPEN]~s~",
+                OverviewDetail = "Income $750/wk | Operational | Staffed | Stock ready | Contract watch",
+            };
+
+            Assert.AreEqual(
+                "~g~OWNED~s~ | ~g~OPEN~s~ | Income $750/wk | Operational | Staffed | Stock ready | Contract watch",
+                TabletUiHelpers.BuildLocationOverviewDetail(summary));
+        }
+
+        [TestMethod]
         public void BuildPermitCaption_ReturnsSiteNameWithoutPermitTag()
         {
             var summary = new TabletLocationSummary

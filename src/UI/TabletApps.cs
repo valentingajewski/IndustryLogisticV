@@ -1339,6 +1339,7 @@ namespace LSOL.UI
         private readonly Action _clearGpsRoute;
         private readonly Action _requestRefuelService;
         private readonly Action _requestRepairService;
+        private readonly Func<Industry, string> _toggleServiceSiteOperator;
         private readonly Action<string> _showStatus;
         private LocationListFilterMode _industryFilterMode;
         private LocationListFilterMode _permitFilterMode;
@@ -1346,7 +1347,7 @@ namespace LSOL.UI
         private LocationListFilterMode _stationFilterMode;
         private DispatchDiagnosticsFilterMode _dispatchDiagnosticsFilterMode;
 
-        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService, Action<string> showStatus = null)
+        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService, Func<Industry, string> toggleServiceSiteOperator, Action<string> showStatus = null)
         {
             _interactionDistance = interactionDistance;
             _purchasePermit = purchasePermit;
@@ -1354,6 +1355,7 @@ namespace LSOL.UI
             _clearGpsRoute = clearGpsRoute;
             _requestRefuelService = requestRefuelService;
             _requestRepairService = requestRepairService;
+            _toggleServiceSiteOperator = toggleServiceSiteOperator;
             _showStatus = showStatus;
             _industryFilterMode = LocationListFilterMode.All;
             _permitFilterMode = LocationListFilterMode.All;
@@ -2864,6 +2866,8 @@ namespace LSOL.UI
                 };
             }
 
+            var summary = TabletUiHelpers.FindSummary(context, industry);
+
             var title = industry.IsGasStation
                 ? "Petrol Station"
                 : (industry.SiteRole == SiteRole.Warehouse
@@ -2879,32 +2883,126 @@ namespace LSOL.UI
                         ? "Open stockpile, utilization, and retail delivery statistics for this store."
                         : "Open stockpile, utilization, and per-commodity statistics for this industry.")));
 
-            var items = new List<MenuItem>
+            var items = new List<MenuItem>();
+            if (summary != null && summary.HasServiceBusinessInfo)
             {
-                TabletUiHelpers.CreateActionItem(
-                    "View Statistics",
-                    statisticsDetail,
-                    () => context.Push(TabletAppIds.Network, "stats", industry)),
-                TabletUiHelpers.CreateActionItem(
-                    "Add GPS Route",
-                    "Set a map waypoint to this site so you can drive there directly.",
-                    () => _addGpsRoute?.Invoke(industry)),
-                TabletUiHelpers.CreateActionItem(
-                    "Clear GPS Route",
-                    "Remove the current waypoint from the map.",
-                    () => _clearGpsRoute?.Invoke()),
-                TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous site list.", () => context.GoBack(), "BACK"),
-            };
+                items.Add(TabletUiHelpers.CreateBannerItem(
+                    string.Format("{0} {1} {2}", summary.Name, summary.OwnershipTag, summary.PermitTag),
+                    summary.ServicePassiveIncomeStatus));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Weekly income",
+                    BuildServiceSiteIncomeDetail(summary)));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Staff",
+                    string.Format(
+                        "{0} | Wage {1}/wk",
+                        summary.ServiceStaffStatus,
+                        ModFormatting.FormatMoney(summary.ServiceWeeklyStaffingCost))));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Stock",
+                    summary.ServiceStockReady
+                        ? string.Format("{0} | {1:0.0}t on hand", summary.ServiceStockStatus, summary.StorageTons)
+                        : string.Format("{0} | Resupply to restart passive income", summary.ServiceStockStatus)));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Operations",
+                    BuildServiceSiteOperationsDetail(summary)));
+
+                if (!string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
+                    && !string.Equals(summary.ServiceContractStatus, "Open market", StringComparison.OrdinalIgnoreCase))
+                {
+                    items.Add(TabletUiHelpers.CreateInfoItem("Contract", summary.ServiceContractStatus));
+                }
+
+                if (_toggleServiceSiteOperator != null)
+                {
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        summary.ServiceStaffAssigned ? "Release Site Operator" : "Assign Site Operator",
+                        BuildServiceSiteStaffActionDetail(summary),
+                        () =>
+                        {
+                            var message = _toggleServiceSiteOperator(industry);
+                            if (!string.IsNullOrWhiteSpace(message))
+                            {
+                                _showStatus?.Invoke(message);
+                            }
+
+                            context.Refresh();
+                        }));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "View Statistics",
+                statisticsDetail,
+                () => context.Push(TabletAppIds.Network, "stats", industry)));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Add GPS Route",
+                "Set a map waypoint to this site so you can drive there directly.",
+                () => _addGpsRoute?.Invoke(industry)));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Clear GPS Route",
+                "Remove the current waypoint from the map.",
+                () => _clearGpsRoute?.Invoke()));
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous site list.", () => context.GoBack(), "BACK"));
 
             return new TabletShellPage
             {
                 Title = title,
                 Subtitle = industry.Name,
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                WidthScale = 0.84f,
-                MaxVisibleItems = 5,
+                WidthScale = 0.92f,
+                MaxVisibleItems = 7,
                 Items = items,
             };
+        }
+
+        private static string BuildServiceSiteIncomeDetail(TabletLocationSummary summary)
+        {
+            if (summary == null)
+            {
+                return string.Empty;
+            }
+
+            var detail = string.Format("Expected {0}/wk", ModFormatting.FormatMoney(summary.ServiceWeeklyIncome));
+            if (summary.ServiceLastPassiveIncome > 0.01f)
+            {
+                detail += string.Format(" | Last payout {0}", ModFormatting.FormatMoney(summary.ServiceLastPassiveIncome));
+            }
+
+            if (!string.IsNullOrWhiteSpace(summary.ServiceRecentPayoutStatus))
+            {
+                detail += string.Format(" | {0}", summary.ServiceRecentPayoutStatus);
+            }
+
+            return detail;
+        }
+
+        private static string BuildServiceSiteOperationsDetail(TabletLocationSummary summary)
+        {
+            if (summary == null)
+            {
+                return string.Empty;
+            }
+
+            var segments = new List<string>
+            {
+                summary.ServiceOperationsStatus,
+                summary.ServicePassiveIncomeStatus,
+            };
+
+            return string.Join(" | ", segments.Where(segment => !string.IsNullOrWhiteSpace(segment)).ToArray());
+        }
+
+        private static string BuildServiceSiteStaffActionDetail(TabletLocationSummary summary)
+        {
+            if (summary == null)
+            {
+                return string.Empty;
+            }
+
+            return summary.ServiceStaffAssigned
+                ? string.Format("Release the site operator and stop {0}/wk staffing cost. Passive income pauses until staff return.", ModFormatting.FormatMoney(summary.ServiceWeeklyStaffingCost))
+                : string.Format("Assign one site operator for {0}/wk. Stores and gas stations need staff plus stock to pay passive income.", ModFormatting.FormatMoney(summary.ServiceWeeklyStaffingCost));
         }
 
         private TabletShellPage BuildIndustryStatisticsPage(TabletShellContext context, Industry industry)

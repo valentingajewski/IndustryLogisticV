@@ -403,6 +403,10 @@ namespace LSOL.Tests.Systems
                     NpcLoads = 3,
                     NpcDeliveries = 2,
                     LastCommodity = "Iron",
+                    SiteOperatorAssigned = true,
+                    LastPassiveIncomeAmount = 425f,
+                    LastPassiveIncomeWeekIndex = 12,
+                    LastPassiveIncomeStatus = "Paid last week",
                 });
                 territorySnapshot.Corridors.Add(new TerritoryCorridorSnapshot
                 {
@@ -437,6 +441,10 @@ namespace LSOL.Tests.Systems
                 Assert.AreEqual(3, siteState.NpcLoads);
                 Assert.AreEqual(2, siteState.NpcDeliveries);
                 Assert.AreEqual("Ore", siteState.LastCommodity);
+                Assert.IsTrue(siteState.SiteOperatorAssigned);
+                Assert.AreEqual(425f, siteState.LastPassiveIncomeAmount, 0.01f);
+                Assert.AreEqual(12, siteState.LastPassiveIncomeWeekIndex);
+                Assert.AreEqual("Paid last week", siteState.LastPassiveIncomeStatus);
 
                 Assert.IsNotNull(corridorState);
                 Assert.AreEqual(12, corridorState.DeliveryCount);

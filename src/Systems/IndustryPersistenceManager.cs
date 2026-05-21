@@ -2318,6 +2318,10 @@ namespace LSOL.Systems
                 writer.WriteLine("ServicePenaltySteps={0}", site.ServicePenaltySteps);
                 writer.WriteLine("ServiceSuccessStreak={0}", site.ServiceSuccessStreak);
                 writer.WriteLine("ServiceTargetMetLastWeek={0}", site.ServiceTargetMetLastWeek ? "true" : "false");
+                writer.WriteLine("SiteOperatorAssigned={0}", site.SiteOperatorAssigned ? "true" : "false");
+                writer.WriteLine("LastPassiveIncomeAmount={0}", FormatFloat(site.LastPassiveIncomeAmount));
+                writer.WriteLine("LastPassiveIncomeWeekIndex={0}", site.LastPassiveIncomeWeekIndex);
+                writer.WriteLine("LastPassiveIncomeStatus={0}", site.LastPassiveIncomeStatus ?? string.Empty);
                 writer.WriteLine();
             }
 
@@ -2425,6 +2429,10 @@ namespace LSOL.Systems
                         ServicePenaltySteps = ParseInt(ini.GetString(section, "ServicePenaltySteps", "0"), 0),
                         ServiceSuccessStreak = ParseInt(ini.GetString(section, "ServiceSuccessStreak", "0"), 0),
                         ServiceTargetMetLastWeek = ini.GetBool(section, "ServiceTargetMetLastWeek", false),
+                        SiteOperatorAssigned = ini.GetBool(section, "SiteOperatorAssigned", false),
+                        LastPassiveIncomeAmount = ini.GetFloat(section, "LastPassiveIncomeAmount", 0f),
+                        LastPassiveIncomeWeekIndex = ParseInt(ini.GetString(section, "LastPassiveIncomeWeekIndex", "-1"), -1),
+                        LastPassiveIncomeStatus = ini.GetString(section, "LastPassiveIncomeStatus", string.Empty),
                     });
 
                     continue;

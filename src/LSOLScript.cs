@@ -488,6 +488,7 @@ namespace LSOL
                 _propertyManager,
                 _bankLoanManager,
                 _financeTracker,
+                _territoryManager,
                 GetCurrentInGameWeekMinute,
                 () => Game.Player.Character,
                 () => _nearestIndustry,
@@ -520,7 +521,7 @@ namespace LSOL
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
             _tabletShellController.RegisterApp(new SuccessesTabletApp(_playerSuccessTracker));
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
-            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested, message => ShowStatus(message)));
+            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested, ToggleServiceSiteOperatorFromTablet, message => ShowStatus(message)));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
                 IndustryInteractionDistance,
                 HandleTabletLoadRequested,
@@ -3972,6 +3973,29 @@ namespace LSOL
             }
 
             RebuildOfficeMenuItems();
+            return result;
+        }
+
+        private string ToggleServiceSiteOperatorFromTablet(Industry industry)
+        {
+            if (_territoryManager == null)
+            {
+                return "Territory manager unavailable.";
+            }
+
+            var assignOperator = !_territoryManager.HasServiceSiteOperatorAssigned(industry);
+            string result;
+            var changed = _territoryManager.TrySetServiceSiteOperatorAssigned(industry, assignOperator, out result);
+            if (changed)
+            {
+                if (_tabletStateStore != null)
+                {
+                    _tabletStateStore.MarkAllDirty();
+                }
+
+                RebuildOfficeMenuItems();
+            }
+
             return result;
         }
 

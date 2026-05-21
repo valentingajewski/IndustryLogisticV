@@ -33,6 +33,7 @@ namespace LSOL.Systems
         FleetMaintenance = 18,
         InventoryLoss = 19,
         PlayerContract = 20,
+        ServiceSiteStaffing = 21,
     }
 
     public sealed class CompanyFinanceTransaction

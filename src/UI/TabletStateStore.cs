@@ -156,6 +156,32 @@ namespace LSOL.UI
         public string PrimaryConversion { get; set; }
 
         public string ModuleSummary { get; set; }
+
+        public bool HasServiceBusinessInfo { get; set; }
+
+        public bool ServiceStaffAssigned { get; set; }
+
+        public bool ServiceStockReady { get; set; }
+
+        public bool ServiceOperational { get; set; }
+
+        public float ServiceWeeklyIncome { get; set; }
+
+        public float ServiceWeeklyStaffingCost { get; set; }
+
+        public float ServiceLastPassiveIncome { get; set; }
+
+        public string ServiceStaffStatus { get; set; }
+
+        public string ServiceStockStatus { get; set; }
+
+        public string ServiceOperationsStatus { get; set; }
+
+        public string ServicePassiveIncomeStatus { get; set; }
+
+        public string ServiceRecentPayoutStatus { get; set; }
+
+        public string ServiceContractStatus { get; set; }
     }
 
     internal sealed class IndustryLoadOptionsSnapshot
@@ -322,6 +348,7 @@ namespace LSOL.UI
             CompanyFinanceCategory.ApartmentRent,
             CompanyFinanceCategory.VehicleRent,
             CompanyFinanceCategory.NpcWages,
+            CompanyFinanceCategory.ServiceSiteStaffing,
             CompanyFinanceCategory.TerritoryOperations,
             CompanyFinanceCategory.CorporateOverhead,
             CompanyFinanceCategory.FleetMaintenance,
@@ -343,6 +370,7 @@ namespace LSOL.UI
         private readonly PropertyManager _propertyManager;
         private readonly BankLoanManager _bankLoanManager;
         private readonly CompanyFinanceTracker _financeTracker;
+        private readonly TerritoryManager _territoryManager;
         private readonly Func<int> _getCurrentInGameMinute;
         private readonly Func<Ped> _getPlayer;
         private readonly Func<Industry> _getNearestIndustry;
@@ -398,6 +426,7 @@ namespace LSOL.UI
             PropertyManager propertyManager,
             BankLoanManager bankLoanManager,
             CompanyFinanceTracker financeTracker,
+            TerritoryManager territoryManager,
             Func<int> getCurrentInGameMinute,
             Func<Ped> getPlayer,
             Func<Industry> getNearestIndustry,
@@ -422,6 +451,7 @@ namespace LSOL.UI
             _propertyManager = propertyManager;
             _bankLoanManager = bankLoanManager;
             _financeTracker = financeTracker;
+            _territoryManager = territoryManager;
             _getCurrentInGameMinute = getCurrentInGameMinute;
             _getPlayer = getPlayer;
             _getNearestIndustry = getNearestIndustry;
@@ -1408,7 +1438,7 @@ namespace LSOL.UI
                 var hasPermitForGameplay = _industryManager.HasContractorPermitForGameplay(industry);
                 var isOwnedByPlayer = industry.IsOwned;
 
-                summaries.Add(new TabletLocationSummary
+                var summary = new TabletLocationSummary
                 {
                     Industry = industry,
                     LocationKind = locationKind,
@@ -1439,10 +1469,84 @@ namespace LSOL.UI
                         industry.InputStorageModuleLevel,
                         industry.OutputStorageModuleLevel,
                         industry.OmegaStorageModuleLevel),
-                });
+                };
+
+                PopulateOwnedServiceSiteBusinessSummary(summary, industry, fillRatio);
+                summaries.Add(summary);
             }
 
             return summaries;
+        }
+
+        private void PopulateOwnedServiceSiteBusinessSummary(TabletLocationSummary summary, Industry industry, float fillRatio)
+        {
+            if (summary == null
+                || industry == null
+                || _territoryManager == null
+                || !industry.IsOwned
+                || (!industry.IsStore && !industry.IsGasStation))
+            {
+                return;
+            }
+
+            var siteState = _territoryManager.GetSiteState(industry);
+            summary.HasServiceBusinessInfo = true;
+            summary.ServiceStaffAssigned = siteState != null && siteState.SiteOperatorAssigned;
+            summary.ServiceStockReady = _territoryManager.IsServiceSinkStockedForPassiveIncome(industry);
+            summary.ServiceOperational = _territoryManager.IsServiceSinkOperationalForPassiveIncome(industry);
+            summary.ServiceWeeklyIncome = Math.Max(0f, industry.WeeklyPassiveIncome);
+            summary.ServiceWeeklyStaffingCost = _territoryManager.GetServiceSiteWeeklyStaffingCost(industry);
+            summary.ServiceLastPassiveIncome = siteState != null ? Math.Max(0f, siteState.LastPassiveIncomeAmount) : 0f;
+            summary.ServiceStaffStatus = summary.ServiceStaffAssigned ? "Assigned" : "Missing";
+            summary.ServiceStockStatus = summary.ServiceStockReady ? "Ready" : "Low stock";
+            summary.ServiceOperationsStatus = summary.ServiceOperational ? "Operational" : "Inactive";
+            summary.ServicePassiveIncomeStatus = siteState != null && !string.IsNullOrWhiteSpace(siteState.PassiveIncomeStatus)
+                ? siteState.PassiveIncomeStatus
+                : (summary.ServiceOperational ? "Passive income active" : "Inactive");
+            summary.ServiceRecentPayoutStatus = BuildOwnedServiceSitePayoutStatus(siteState);
+            summary.ServiceContractStatus = siteState != null ? siteState.ServiceContractStatus ?? string.Empty : string.Empty;
+            summary.OverviewDetail = BuildOwnedServiceSiteOverviewDetail(summary, industry, fillRatio);
+        }
+
+        private static string BuildOwnedServiceSiteOverviewDetail(TabletLocationSummary summary, Industry industry, float fillRatio)
+        {
+            if (summary == null || industry == null)
+            {
+                return string.Empty;
+            }
+
+            var segments = new List<string>
+            {
+                string.Format("Income {0}/wk", ModFormatting.FormatMoney(summary.ServiceWeeklyIncome)),
+                summary.ServiceOperational ? "Operational" : "Inactive",
+                summary.ServiceStaffAssigned ? "Staffed" : "No staff",
+                summary.ServiceStockReady ? "Stock ready" : "Low stock",
+            };
+
+            if (!string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
+                && !string.Equals(summary.ServiceContractStatus, "Open market", StringComparison.OrdinalIgnoreCase))
+            {
+                segments.Add(summary.ServiceContractStatus);
+            }
+
+            if (industry.IsGasStation)
+            {
+                segments.Add(string.Format("{0:0}% full", fillRatio * 100f));
+            }
+
+            return string.Join(" | ", segments.Where(segment => !string.IsNullOrWhiteSpace(segment)).ToArray());
+        }
+
+        private static string BuildOwnedServiceSitePayoutStatus(TerritorySiteState siteState)
+        {
+            if (siteState == null || siteState.LastPassiveIncomeWeekIndex < 0)
+            {
+                return "No completed weekly payout yet";
+            }
+
+            return !string.IsNullOrWhiteSpace(siteState.LastPassiveIncomeStatus)
+                ? siteState.LastPassiveIncomeStatus
+                : "No recent payout";
         }
 
         private IReadOnlyList<TabletMarketHighlight> BuildMarketHighlights(Industry nearestIndustry, VehicleCargoState cargoState)
@@ -1610,13 +1714,13 @@ namespace LSOL.UI
         private List<TabletUpcomingBillEntry> GetUpcomingBillsInternal(int currentMinute)
         {
             var bills = new List<TabletUpcomingBillEntry>();
+            var currentWeekIndex = GetWeekIndex(currentMinute);
+            var currentDayIndex = GetDayIndex(currentMinute);
+            var nextWeekDueInMinutes = Math.Max(0, ((currentWeekIndex + 1) * InGameMinutesPerWeek) - currentMinute);
+            var nextDayDueInMinutes = Math.Max(0, ((currentDayIndex + 1) * InGameMinutesPerDay) - currentMinute);
+
             if (_propertyManager != null)
             {
-                var currentWeekIndex = GetWeekIndex(currentMinute);
-                var currentDayIndex = GetDayIndex(currentMinute);
-                var nextWeekDueInMinutes = Math.Max(0, ((currentWeekIndex + 1) * InGameMinutesPerWeek) - currentMinute);
-                var nextDayDueInMinutes = Math.Max(0, ((currentDayIndex + 1) * InGameMinutesPerDay) - currentMinute);
-
                 foreach (var office in _propertyManager.Offices.Where(entry => entry != null))
                 {
                     var state = _propertyManager.GetOfficeState(office.OfficeId);
@@ -1757,6 +1861,8 @@ namespace LSOL.UI
                 }
             }
 
+            AddServiceSiteStaffingBills(bills, _industryManager != null ? _industryManager.Industries : null, _territoryManager, nextWeekDueInMinutes);
+
             if (_npcLogisticsManager != null && _npcLogisticsManager.Contracts != null)
             {
                 foreach (var contract in _npcLogisticsManager.Contracts.Where(entry => entry != null && entry.Tier != null))
@@ -1836,6 +1942,43 @@ namespace LSOL.UI
                 .ThenByDescending(entry => entry.Amount)
                 .ThenBy(entry => entry.Label, StringComparer.OrdinalIgnoreCase)
                 .ToList();
+        }
+
+        internal static void AddServiceSiteStaffingBills(
+            ICollection<TabletUpcomingBillEntry> bills,
+            IEnumerable<Industry> industries,
+            TerritoryManager territoryManager,
+            int dueInMinutes)
+        {
+            if (bills == null || industries == null || territoryManager == null)
+            {
+                return;
+            }
+
+            foreach (var industry in industries.Where(entry => entry != null && entry.IsOwned && (entry.IsStore || entry.IsGasStation)))
+            {
+                if (!territoryManager.HasServiceSiteOperatorAssigned(industry))
+                {
+                    continue;
+                }
+
+                var weeklyCost = territoryManager.GetServiceSiteWeeklyStaffingCost(industry);
+                if (weeklyCost <= 0.01f)
+                {
+                    continue;
+                }
+
+                bills.Add(new TabletUpcomingBillEntry
+                {
+                    Category = CompanyFinanceCategory.ServiceSiteStaffing,
+                    Label = industry.Name,
+                    Detail = industry.IsGasStation
+                        ? "Weekly station operator payroll"
+                        : "Weekly store operator payroll",
+                    Amount = weeklyCost,
+                    DueInMinutes = Math.Max(0, dueInMinutes),
+                });
+            }
         }
 
         private TabletBudgetForecast BuildWeeklyForecast(int currentMinute, float currentBalance, IReadOnlyList<TabletUpcomingBillEntry> bills)
@@ -1992,6 +2135,8 @@ namespace LSOL.UI
                     return "Vehicle rent";
                 case CompanyFinanceCategory.NpcWages:
                     return "NPC wages";
+                case CompanyFinanceCategory.ServiceSiteStaffing:
+                    return "Site staffing";
                 case CompanyFinanceCategory.TerritoryOperations:
                     return "Territory operations";
                 case CompanyFinanceCategory.CorporateOverhead:

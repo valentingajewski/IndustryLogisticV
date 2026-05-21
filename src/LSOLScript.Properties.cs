@@ -451,6 +451,14 @@ namespace LSOL
                 return;
             }
 
+            if (result.ServiceSinkStaffingExpense > 0.01f)
+            {
+                DeductProfit(
+                    CompanyFinanceCategory.ServiceSiteStaffing,
+                    result.ServiceSinkStaffingExpense,
+                    BuildServiceSiteStaffingFinanceDescription(result));
+            }
+
             if (result.ServiceSinkPassiveIncome > 0.01f)
             {
                 AddProfit(
@@ -466,18 +474,27 @@ namespace LSOL
 
             RebuildOfficeMenuItems();
             var summaryMessage = result.Messages.Count > 0 ? result.Messages[result.Messages.Count - 1] : string.Empty;
+            var staffingMessage = BuildServiceSiteStaffingStatus(result);
             var passiveIncomeMessage = BuildServiceSinkPassiveIncomeStatus(result);
-            if (!string.IsNullOrWhiteSpace(passiveIncomeMessage) && !string.IsNullOrWhiteSpace(summaryMessage))
+            var statusSegments = new List<string>();
+            if (!string.IsNullOrWhiteSpace(staffingMessage))
             {
-                ShowStatus(passiveIncomeMessage + " " + summaryMessage, 5000);
+                statusSegments.Add(staffingMessage);
             }
-            else if (!string.IsNullOrWhiteSpace(passiveIncomeMessage))
+
+            if (!string.IsNullOrWhiteSpace(passiveIncomeMessage))
             {
-                ShowStatus(passiveIncomeMessage, 5000);
+                statusSegments.Add(passiveIncomeMessage);
             }
-            else if (!string.IsNullOrWhiteSpace(summaryMessage))
+
+            if (!string.IsNullOrWhiteSpace(summaryMessage))
             {
-                ShowStatus(summaryMessage, 5000);
+                statusSegments.Add(summaryMessage);
+            }
+
+            if (statusSegments.Count > 0)
+            {
+                ShowStatus(string.Join(" ", statusSegments.ToArray()), 5000);
             }
         }
 
@@ -485,10 +502,20 @@ namespace LSOL
         {
             if (result != null && result.ProcessedWeekCount > 1)
             {
-                return string.Format("Passive income from supplied stores and gas stations ({0} weeks)", result.ProcessedWeekCount);
+                return string.Format("Passive income from staffed and supplied stores and gas stations ({0} weeks)", result.ProcessedWeekCount);
             }
 
-            return "Passive income from supplied stores and gas stations";
+            return "Passive income from staffed and supplied stores and gas stations";
+        }
+
+        private static string BuildServiceSiteStaffingFinanceDescription(TerritoryWeeklyMaintenanceResult result)
+        {
+            if (result != null && result.ProcessedWeekCount > 1)
+            {
+                return string.Format("Weekly site staffing for owned stores and gas stations ({0} weeks)", result.ProcessedWeekCount);
+            }
+
+            return "Weekly site staffing for owned stores and gas stations";
         }
 
         private static string BuildServiceSinkPassiveIncomeStatus(TerritoryWeeklyMaintenanceResult result)
@@ -501,14 +528,34 @@ namespace LSOL
             if (result.ProcessedWeekCount > 1)
             {
                 return string.Format(
-                    "Supplied stores and gas stations generated {0} in passive income over {1} weeks.",
+                    "Staffed and supplied stores and gas stations generated {0} in passive income over {1} weeks.",
                     ModFormatting.FormatMoney(result.ServiceSinkPassiveIncome),
                     result.ProcessedWeekCount);
             }
 
             return string.Format(
-                "Supplied stores and gas stations generated {0} in passive income.",
+                "Staffed and supplied stores and gas stations generated {0} in passive income.",
                 ModFormatting.FormatMoney(result.ServiceSinkPassiveIncome));
+        }
+
+        private static string BuildServiceSiteStaffingStatus(TerritoryWeeklyMaintenanceResult result)
+        {
+            if (result == null || result.ServiceSinkStaffingExpense <= 0.01f)
+            {
+                return string.Empty;
+            }
+
+            if (result.ProcessedWeekCount > 1)
+            {
+                return string.Format(
+                    "Store and gas-station payroll billed {0} over {1} weeks.",
+                    ModFormatting.FormatMoney(result.ServiceSinkStaffingExpense),
+                    result.ProcessedWeekCount);
+            }
+
+            return string.Format(
+                "Store and gas-station payroll billed {0}.",
+                ModFormatting.FormatMoney(result.ServiceSinkStaffingExpense));
         }
 
         private void DrawPropertyMarkers(Ped player, bool canShowPrompts, ref bool promptShown)
