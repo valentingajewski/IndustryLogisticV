@@ -835,6 +835,7 @@ namespace LSOL.Systems
                 CasualEconomy = CloneSiteEconomy(source.CasualEconomy),
                 StandardEconomy = CloneSiteEconomy(source.StandardEconomy),
                 HardcoreEconomy = CloneSiteEconomy(source.HardcoreEconomy),
+                ImpossibleEconomy = CloneSiteEconomy(source.ImpossibleEconomy),
             };
         }
 
@@ -902,18 +903,21 @@ namespace LSOL.Systems
             switch (preset)
             {
                 case EconomyDifficultyPreset.Casual:
-                    return CloneSiteEconomy(config.CasualEconomy ?? config.StandardEconomy ?? config.HardcoreEconomy);
+                    return CloneSiteEconomy(config.CasualEconomy ?? config.StandardEconomy ?? config.HardcoreEconomy ?? config.ImpossibleEconomy);
                 case EconomyDifficultyPreset.Hardcore:
-                    return CloneSiteEconomy(config.HardcoreEconomy ?? config.StandardEconomy ?? config.CasualEconomy);
+                    return CloneSiteEconomy(config.HardcoreEconomy ?? config.StandardEconomy ?? config.CasualEconomy ?? config.ImpossibleEconomy);
+                case EconomyDifficultyPreset.Impossible:
+                    return CloneSiteEconomy(config.ImpossibleEconomy ?? config.HardcoreEconomy ?? config.StandardEconomy ?? config.CasualEconomy);
                 default:
-                    return CloneSiteEconomy(config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy);
+                    return CloneSiteEconomy(config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy ?? config.ImpossibleEconomy);
             }
         }
 
         private static SiteEconomyPresetValues ResolveAuthoredSitePresetValues(IndustryConfig config, EconomyDifficultyPreset preset)
         {
+            var authoredImpossible = CloneSiteEconomy(config != null ? config.ImpossibleEconomy : null);
             var authoredStandard = CloneSiteEconomy(config != null
-                ? (config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy)
+                ? (config.StandardEconomy ?? config.CasualEconomy ?? config.HardcoreEconomy ?? config.ImpossibleEconomy)
                 : null);
             if (authoredStandard == null)
             {
@@ -938,6 +942,20 @@ namespace LSOL.Systems
                         authoredStandard.PurchasePrice * 1.40f,
                         authoredStandard.InputCapacityTons * 0.80f,
                         authoredStandard.OutputCapacityTons * 0.80f,
+                        authoredStandard.ProductionRatio,
+                        authoredStandard.PermitRequired);
+                case EconomyDifficultyPreset.Impossible:
+                    if (authoredImpossible != null)
+                    {
+                        return authoredImpossible;
+                    }
+
+                    return SiteEconomyPresetValues.Create(
+                        authoredStandard.ProductionRate * 0.70f,
+                        authoredStandard.LicencePrice * 1.70f,
+                        authoredStandard.PurchasePrice * 1.80f,
+                        authoredStandard.InputCapacityTons * 0.65f,
+                        authoredStandard.OutputCapacityTons * 0.65f,
                         authoredStandard.ProductionRatio,
                         authoredStandard.PermitRequired);
                 default:
@@ -970,6 +988,8 @@ namespace LSOL.Systems
                     return new EconomyPresetValues(40f, 8000f, 200000f, 180000f, 150000f);
                 case EconomyDifficultyPreset.Hardcore:
                     return new EconomyPresetValues(24f, 18000f, 800000f, 80000f, 70000f);
+                case EconomyDifficultyPreset.Impossible:
+                    return new EconomyPresetValues(17f, 25000f, 1400000f, 55000f, 50000f);
                 default:
                     return new EconomyPresetValues(32f, 13000f, 450000f, 120000f, 100000f);
             }
@@ -985,6 +1005,8 @@ namespace LSOL.Systems
                         return 1.75f;
                     case EconomyDifficultyPreset.Hardcore:
                         return 1.25f;
+                    case EconomyDifficultyPreset.Impossible:
+                        return 1.10f;
                     default:
                         return 1.5f;
                 }
@@ -998,6 +1020,8 @@ namespace LSOL.Systems
                         return 3f;
                     case EconomyDifficultyPreset.Hardcore:
                         return 2f;
+                    case EconomyDifficultyPreset.Impossible:
+                        return 1.75f;
                     default:
                         return 2.5f;
                 }
@@ -1057,6 +1081,8 @@ namespace LSOL.Systems
                     return Math.Max(0.15f, baseOwnerCut - 0.05f);
                 case EconomyDifficultyPreset.Hardcore:
                     return Math.Min(0.45f, baseOwnerCut + 0.05f);
+                case EconomyDifficultyPreset.Impossible:
+                    return Math.Min(0.55f, baseOwnerCut + 0.10f);
                 default:
                     return baseOwnerCut;
             }
@@ -1077,6 +1103,9 @@ namespace LSOL.Systems
                     break;
                 case EconomyDifficultyPreset.Hardcore:
                     multiplier = 1.15f;
+                    break;
+                case EconomyDifficultyPreset.Impossible:
+                    multiplier = 1.30f;
                     break;
             }
 
@@ -1101,10 +1130,16 @@ namespace LSOL.Systems
                     case EconomyDifficultyPreset.Hardcore:
                         multiplier = 1.15f;
                         break;
+                    case EconomyDifficultyPreset.Impossible:
+                        multiplier = 1.30f;
+                        break;
                 }
             }
 
-            return Math.Max(0f, config.WeeklyPassiveIncome * multiplier);
+            return ServiceSiteEconomyPolicy.NormalizeWeeklyPassiveIncome(
+                config.SiteRole,
+                config.RefuelIsFree,
+                config.WeeklyPassiveIncome * multiplier);
         }
 
         private static float ApplyProductionModuleLevels(float productionRate, int moduleLevel)
@@ -1391,6 +1426,7 @@ namespace LSOL.Systems
         Casual = 0,
         Standard = 1,
         Hardcore = 2,
+        Impossible = 3,
     }
 
     internal struct EconomyPresetValues

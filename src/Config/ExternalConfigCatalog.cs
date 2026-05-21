@@ -151,6 +151,7 @@ namespace LSOL.Config
         public SiteEconomyPresetValues CasualEconomy { get; set; }
         public SiteEconomyPresetValues StandardEconomy { get; set; }
         public SiteEconomyPresetValues HardcoreEconomy { get; set; }
+        public SiteEconomyPresetValues ImpossibleEconomy { get; set; }
     }
 
     public sealed class ResourceGroupConfig

@@ -9,6 +9,7 @@
       <Casual productionRate="28.8" licencePrice="2800" purchasePrice="75000" inputCapacityTons="78" outputCapacityTons="468" productionRatio="1" permitRequired="true" />
       <Standard productionRate="24" licencePrice="4000" purchasePrice="100000" inputCapacityTons="60" outputCapacityTons="360" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="20.4" licencePrice="5400" purchasePrice="140000" inputCapacityTons="48" outputCapacityTons="288" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="16.8" licencePrice="6800" purchasePrice="180000" inputCapacityTons="39" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="101" legacyKey="OilField" name="Grand Senora Desert Oil Field" role="RawProducer" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
@@ -19,6 +20,7 @@
       <Casual productionRate="24" licencePrice="8400" purchasePrice="165000" inputCapacityTons="78" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
       <Standard productionRate="20" licencePrice="12000" purchasePrice="220000" inputCapacityTons="60" outputCapacityTons="180" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="17" licencePrice="16200" purchasePrice="308000" inputCapacityTons="48" outputCapacityTons="144" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="14" licencePrice="20400" purchasePrice="396000" inputCapacityTons="39" outputCapacityTons="117" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="102" legacyKey="Refinery" name="El Burro Heights Refinery" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.3" enabled="true">
@@ -30,6 +32,7 @@
       <Casual productionRate="57.6" licencePrice="12600" purchasePrice="262500" inputCapacityTons="624" outputCapacityTons="312" productionRatio="1" permitRequired="true" />
       <Standard productionRate="48" licencePrice="18000" purchasePrice="350000" inputCapacityTons="480" outputCapacityTons="240" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="40.8" licencePrice="24300" purchasePrice="490000" inputCapacityTons="384" outputCapacityTons="192" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="33.6" licencePrice="30600" purchasePrice="630000" inputCapacityTons="312" outputCapacityTons="156" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="103" legacyKey="PlasticFactory" name="Los Santos Plastic Factory" role="ProcessingPlant" district="Port" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.25" enabled="true">
@@ -43,6 +46,7 @@
       <Casual productionRate="28.8" licencePrice="12600" purchasePrice="225000" inputCapacityTons="416" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
       <Standard productionRate="24" licencePrice="18000" purchasePrice="300000" inputCapacityTons="320" outputCapacityTons="180" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="20.4" licencePrice="24300" purchasePrice="420000" inputCapacityTons="256" outputCapacityTons="144" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="16.8" licencePrice="30600" purchasePrice="540000" inputCapacityTons="208" outputCapacityTons="117" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="104" legacyKey="SmeltingFactory" name="Cypress Flats Smelting Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.3" enabled="true" groundLevel="true" objectToDelete="3008087081,3066743879">
@@ -56,6 +60,7 @@
       <Casual productionRate="24" licencePrice="19600" purchasePrice="375000" inputCapacityTons="468" outputCapacityTons="468" productionRatio="1" permitRequired="true" />
       <Standard productionRate="20" licencePrice="28000" purchasePrice="500000" inputCapacityTons="360" outputCapacityTons="360" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="17" licencePrice="37800" purchasePrice="700000" inputCapacityTons="288" outputCapacityTons="288" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="14" licencePrice="47600" purchasePrice="900000" inputCapacityTons="234" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="105" legacyKey="MechanicalPartsFactory" name="La Mesa Mechanical Parts Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.3" enabled="true" groundLevel="true">
@@ -68,6 +73,7 @@
       <Casual productionRate="16.8" licencePrice="14000" purchasePrice="240000" inputCapacityTons="468" outputCapacityTons="208" productionRatio="1" permitRequired="true" />
       <Standard productionRate="14" licencePrice="20000" purchasePrice="320000" inputCapacityTons="360" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="11.9" licencePrice="27000" purchasePrice="448000" inputCapacityTons="288" outputCapacityTons="128" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="9.8" licencePrice="34000" purchasePrice="576000" inputCapacityTons="234" outputCapacityTons="104" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="106" legacyKey="ProcessorFactory" name="Cypress Flats Processor Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.35" enabled="true" groundLevel="true">
@@ -80,6 +86,7 @@
       <Casual productionRate="16.8" licencePrice="24500" purchasePrice="487500" inputCapacityTons="624" outputCapacityTons="312" productionRatio="1" permitRequired="true" />
       <Standard productionRate="14" licencePrice="35000" purchasePrice="650000" inputCapacityTons="480" outputCapacityTons="240" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="11.9" licencePrice="47250" purchasePrice="910000" inputCapacityTons="384" outputCapacityTons="192" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="9.8" licencePrice="59500" purchasePrice="1170000" inputCapacityTons="312" outputCapacityTons="156" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="107" legacyKey="ConsumerElectronicsFactory" name="Consumer Electronics Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.35" enabled="true" groundLevel="true">
@@ -92,6 +99,7 @@
       <Casual productionRate="14.4" licencePrice="31500" purchasePrice="675000" inputCapacityTons="468" outputCapacityTons="468" productionRatio="1" permitRequired="true" />
       <Standard productionRate="12" licencePrice="45000" purchasePrice="900000" inputCapacityTons="360" outputCapacityTons="360" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="10.2" licencePrice="60750" purchasePrice="1260000" inputCapacityTons="288" outputCapacityTons="288" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="8.4" licencePrice="76500" purchasePrice="1620000" inputCapacityTons="234" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="108" legacyKey="RecyclingCenter" name="La Puerta Recycling Center" role="RecyclingHub" district="WestLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.35" enabled="true" groundLevel="true">
@@ -104,6 +112,7 @@
       <Casual productionRate="28.8" licencePrice="38500" purchasePrice="825000" inputCapacityTons="416" outputCapacityTons="468" productionRatio="1" permitRequired="true" />
       <Standard productionRate="24" licencePrice="55000" purchasePrice="1100000" inputCapacityTons="320" outputCapacityTons="360" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="20.4" licencePrice="74250" purchasePrice="1540000" inputCapacityTons="256" outputCapacityTons="288" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="16.8" licencePrice="93500" purchasePrice="1980000" inputCapacityTons="208" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="109" legacyKey="OmegaFactory" name="Rancho Omega Factory" role="SpecialPlant" district="SouthLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.4" enabled="true">
@@ -116,6 +125,7 @@
       <Casual productionRate="14.4" licencePrice="63000" purchasePrice="1500000" inputCapacityTons="468" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
       <Standard productionRate="12" licencePrice="90000" purchasePrice="2000000" inputCapacityTons="360" outputCapacityTons="180" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="10.2" licencePrice="121500" purchasePrice="2800000" inputCapacityTons="288" outputCapacityTons="144" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="8.4" licencePrice="153000" purchasePrice="3600000" inputCapacityTons="234" outputCapacityTons="117" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="110" legacyKey="Forest" name="Paleto Forest" role="RawProducer" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.2" enabled="true">
@@ -126,6 +136,7 @@
       <Casual productionRate="21.6" licencePrice="5600" purchasePrice="120000" inputCapacityTons="78" outputCapacityTons="208" productionRatio="1" permitRequired="true" />
       <Standard productionRate="18" licencePrice="8000" purchasePrice="160000" inputCapacityTons="60" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="15.3" licencePrice="10800" purchasePrice="224000" inputCapacityTons="48" outputCapacityTons="128" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="12.6" licencePrice="13600" purchasePrice="288000" inputCapacityTons="39" outputCapacityTons="104" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="111" legacyKey="Sawmill" name="Paleto Bay Sawmill" role="ProcessingPlant" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
@@ -137,6 +148,7 @@
       <Casual productionRate="21.6" licencePrice="8400" purchasePrice="165000" inputCapacityTons="312" outputCapacityTons="312" productionRatio="1" permitRequired="true" />
       <Standard productionRate="18" licencePrice="12000" purchasePrice="220000" inputCapacityTons="240" outputCapacityTons="240" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="15.3" licencePrice="16200" purchasePrice="308000" inputCapacityTons="192" outputCapacityTons="192" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="12.6" licencePrice="20400" purchasePrice="396000" inputCapacityTons="156" outputCapacityTons="156" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="112" legacyKey="WoodFurnitureFactory" name="Cypress Flats Wood Furniture Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.3" enabled="true" groundLevel="true">
@@ -149,6 +161,7 @@
       <Casual productionRate="14.4" licencePrice="15400" purchasePrice="262500" inputCapacityTons="312" outputCapacityTons="182" productionRatio="1" permitRequired="true" />
       <Standard productionRate="12" licencePrice="22000" purchasePrice="350000" inputCapacityTons="240" outputCapacityTons="140" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="10.2" licencePrice="29700" purchasePrice="490000" inputCapacityTons="192" outputCapacityTons="112" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="8.4" licencePrice="37400" purchasePrice="630000" inputCapacityTons="156" outputCapacityTons="91" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="113" legacyKey="Farm" name="Grapeseed Farm" role="RawProducer" district="Grapeseed" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.2" enabled="true" groundLevel="true" objectToDelete="1911284463">
@@ -161,6 +174,7 @@
       <Casual productionRate="24" licencePrice="7000" purchasePrice="135000" inputCapacityTons="260" outputCapacityTons="286" productionRatio="1" permitRequired="true" />
       <Standard productionRate="20" licencePrice="10000" purchasePrice="180000" inputCapacityTons="200" outputCapacityTons="220" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="17" licencePrice="13500" purchasePrice="252000" inputCapacityTons="160" outputCapacityTons="176" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="14" licencePrice="17000" purchasePrice="324000" inputCapacityTons="130" outputCapacityTons="143" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="114" legacyKey="AlcoholFactory" name="La Mesa Alcohol Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true" groundLevel="true">
@@ -173,6 +187,7 @@
       <Casual productionRate="19.2" licencePrice="9800" purchasePrice="180000" inputCapacityTons="312" outputCapacityTons="195" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="14000" purchasePrice="240000" inputCapacityTons="240" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="18900" purchasePrice="336000" inputCapacityTons="192" outputCapacityTons="120" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="23800" purchasePrice="432000" inputCapacityTons="156" outputCapacityTons="97.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="115" legacyKey="Slaughterhouse" name="Elysian Island Slaughterhouse" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true" groundLevel="true">
@@ -185,6 +200,7 @@
       <Casual productionRate="19.2" licencePrice="9800" purchasePrice="180000" inputCapacityTons="312" outputCapacityTons="195" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="14000" purchasePrice="240000" inputCapacityTons="240" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="18900" purchasePrice="336000" inputCapacityTons="192" outputCapacityTons="120" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="23800" purchasePrice="432000" inputCapacityTons="156" outputCapacityTons="97.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="116" legacyKey="[FoodProcessingFactory]" name="CluckingBell Food Processing Factory" role="ProcessingPlant" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.3" enabled="true" groundLevel="true">
@@ -197,6 +213,7 @@
       <Casual productionRate="21.6" licencePrice="15400" purchasePrice="315000" inputCapacityTons="468" outputCapacityTons="234" productionRatio="1" permitRequired="true" />
       <Standard productionRate="18" licencePrice="22000" purchasePrice="420000" inputCapacityTons="360" outputCapacityTons="180" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="15.3" licencePrice="29700" purchasePrice="588000" inputCapacityTons="288" outputCapacityTons="144" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="12.6" licencePrice="37400" purchasePrice="756000" inputCapacityTons="234" outputCapacityTons="117" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="117" legacyKey="FabricFactory" name="La Mesa Fabric Factory" role="ProcessingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true" groundLevel="true">
@@ -209,6 +226,7 @@
       <Casual productionRate="19.2" licencePrice="12600" purchasePrice="225000" inputCapacityTons="468" outputCapacityTons="208" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="18000" purchasePrice="300000" inputCapacityTons="360" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="24300" purchasePrice="420000" inputCapacityTons="288" outputCapacityTons="128" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="30600" purchasePrice="540000" inputCapacityTons="234" outputCapacityTons="104" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="118" legacyKey="ClothingFactory" name="La Mesa Clothing Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.3" enabled="true" groundLevel="true">
@@ -221,6 +239,7 @@
       <Casual productionRate="16.8" licencePrice="14000" purchasePrice="240000" inputCapacityTons="312" outputCapacityTons="195" productionRatio="1" permitRequired="true" />
       <Standard productionRate="14" licencePrice="20000" purchasePrice="320000" inputCapacityTons="240" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="11.9" licencePrice="27000" purchasePrice="448000" inputCapacityTons="192" outputCapacityTons="120" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="9.8" licencePrice="34000" purchasePrice="576000" inputCapacityTons="156" outputCapacityTons="97.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="119" legacyKey="ChemicalPlant" name="Palmer-Taylor Chemical Plant" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Core" industryOwnerCut="0.3" enabled="true">
@@ -232,6 +251,7 @@
       <Casual productionRate="19.2" licencePrice="16800" purchasePrice="360000" inputCapacityTons="650" outputCapacityTons="208" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="24000" purchasePrice="480000" inputCapacityTons="500" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="32400" purchasePrice="672000" inputCapacityTons="400" outputCapacityTons="128" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="40800" purchasePrice="864000" inputCapacityTons="325" outputCapacityTons="104" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="120" legacyKey="PharmaceuticalFactory" name="Humane Labs Pharmaceutical Factory" role="ManufacturingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.35" enabled="true" groundLevel="true">
@@ -246,6 +266,7 @@
       <Casual productionRate="12" licencePrice="35000" purchasePrice="750000" inputCapacityTons="468" outputCapacityTons="156" productionRatio="1" permitRequired="true" />
       <Standard productionRate="10" licencePrice="50000" purchasePrice="1000000" inputCapacityTons="360" outputCapacityTons="120" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="8.5" licencePrice="67500" purchasePrice="1400000" inputCapacityTons="288" outputCapacityTons="96" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="7" licencePrice="85000" purchasePrice="1800000" inputCapacityTons="234" outputCapacityTons="78" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="121" legacyKey="CementFactory" name="Grand Senora Cement Factory" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Starter" industryOwnerCut="0.2" enabled="true" groundLevel="true" objectToDelete="437009729,3324172348">
@@ -259,6 +280,7 @@
       <Casual productionRate="21.6" licencePrice="4200" purchasePrice="90000" inputCapacityTons="351" outputCapacityTons="221" productionRatio="1" permitRequired="true" />
       <Standard productionRate="18" licencePrice="6000" purchasePrice="120000" inputCapacityTons="270" outputCapacityTons="170" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="15.3" licencePrice="8100" purchasePrice="168000" inputCapacityTons="216" outputCapacityTons="136" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="12.6" licencePrice="10200" purchasePrice="216000" inputCapacityTons="175.5" outputCapacityTons="110.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="122" legacyKey="ConcreteFactory" name="Elysian Island Concrete Factory" role="ProcessingPlant" district="Port" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true" groundLevel="true">
@@ -272,6 +294,7 @@
       <Casual productionRate="19.2" licencePrice="12600" purchasePrice="225000" inputCapacityTons="468" outputCapacityTons="208" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="18000" purchasePrice="300000" inputCapacityTons="360" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="24300" purchasePrice="420000" inputCapacityTons="288" outputCapacityTons="128" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="30600" purchasePrice="540000" inputCapacityTons="234" outputCapacityTons="104" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="123" legacyKey="BricksFactory" name="Grand Senora Bricks Factory" role="ProcessingPlant" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.25" enabled="true" groundLevel="true">
@@ -284,6 +307,7 @@
       <Casual productionRate="19.2" licencePrice="10500" purchasePrice="195000" inputCapacityTons="468" outputCapacityTons="208" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="15000" purchasePrice="260000" inputCapacityTons="360" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="20250" purchasePrice="364000" inputCapacityTons="288" outputCapacityTons="128" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="25500" purchasePrice="468000" inputCapacityTons="234" outputCapacityTons="104" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="124" legacyKey="BeamFactory" name="Cypress Flats Beam Factory" role="ManufacturingPlant" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.3" enabled="true">
@@ -295,6 +319,7 @@
       <Casual productionRate="16.8" licencePrice="15400" purchasePrice="285000" inputCapacityTons="312" outputCapacityTons="286" productionRatio="1" permitRequired="true" />
       <Standard productionRate="14" licencePrice="22000" purchasePrice="380000" inputCapacityTons="240" outputCapacityTons="220" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="11.9" licencePrice="29700" purchasePrice="532000" inputCapacityTons="192" outputCapacityTons="176" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="9.8" licencePrice="37400" purchasePrice="684000" inputCapacityTons="156" outputCapacityTons="143" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="125" legacyKey="VehicleFactory" name="Los Santos Vehicle Factory" role="ManufacturingPlant" district="Airport" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.4" enabled="true" groundLevel="true">
@@ -307,6 +332,7 @@
       <Casual productionRate="9.6" licencePrice="49000" purchasePrice="1200000" inputCapacityTons="936" outputCapacityTons="312" productionRatio="1" permitRequired="true" />
       <Standard productionRate="8" licencePrice="70000" purchasePrice="1600000" inputCapacityTons="720" outputCapacityTons="240" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="6.8" licencePrice="94500" purchasePrice="2240000" inputCapacityTons="576" outputCapacityTons="192" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="5.6" licencePrice="119000" purchasePrice="2880000" inputCapacityTons="468" outputCapacityTons="156" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="126" legacyKey="LiquidFertilizerFactory" name="Liquid Fertilizer" role="ProcessingPlant" district="PaletoBay" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.3" enabled="true" groundLevel="true">
@@ -319,6 +345,7 @@
       <Casual productionRate="19.2" licencePrice="14000" purchasePrice="255000" inputCapacityTons="468" outputCapacityTons="195" productionRatio="1" permitRequired="true" />
       <Standard productionRate="16" licencePrice="20000" purchasePrice="340000" inputCapacityTons="360" outputCapacityTons="150" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="13.6" licencePrice="27000" purchasePrice="476000" inputCapacityTons="288" outputCapacityTons="120" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="11.2" licencePrice="34000" purchasePrice="612000" inputCapacityTons="234" outputCapacityTons="97.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="127" legacyKey="WaterSupply" name="Tataviam Mountains Water Supply" role="RawProducer" district="EastLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.25" enabled="true">
@@ -329,6 +356,7 @@
       <Casual productionRate="24" licencePrice="12600" purchasePrice="225000" inputCapacityTons="78" outputCapacityTons="260" productionRatio="1" permitRequired="true" />
       <Standard productionRate="20" licencePrice="18000" purchasePrice="300000" inputCapacityTons="60" outputCapacityTons="200" productionRatio="1" permitRequired="true" />
       <Hardcore productionRate="17" licencePrice="24300" purchasePrice="420000" inputCapacityTons="48" outputCapacityTons="160" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="14" licencePrice="30600" purchasePrice="540000" inputCapacityTons="39" outputCapacityTons="130" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
   <Site catalogId="300" legacyKey="HarborTerminal" name="Port Terminal" role="Warehouse" district="Port" startingTankRatio="0" ownershipTier="Local" enabled="true" industryOwnerCut="0.1">
@@ -339,6 +367,7 @@
       <Casual purchasePrice="180000" inputCapacityTons="1170" outputCapacityTons="1170" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="240000" inputCapacityTons="900" outputCapacityTons="900" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="336000" inputCapacityTons="720" outputCapacityTons="720" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="432000" inputCapacityTons="585" outputCapacityTons="585" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="301" legacyKey="Warehouse2" name="San Chianski Grain Silo" role="Warehouse" district="Grapeseed" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
@@ -349,6 +378,7 @@
       <Casual purchasePrice="90000" inputCapacityTons="520" outputCapacityTons="520" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="120000" inputCapacityTons="400" outputCapacityTons="400" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="168000" inputCapacityTons="320" outputCapacityTons="320" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="216000" inputCapacityTons="260" outputCapacityTons="260" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="302" legacyKey="Warehouse3" name="The Secure Unit Storage" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
@@ -359,6 +389,7 @@
       <Casual purchasePrice="210000" inputCapacityTons="1430" outputCapacityTons="1430" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="280000" inputCapacityTons="1100" outputCapacityTons="1100" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="392000" inputCapacityTons="880" outputCapacityTons="880" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="504000" inputCapacityTons="715" outputCapacityTons="715" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="303" legacyKey="Warehouse4" name="Oil Storage Tanks" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
@@ -369,6 +400,7 @@
       <Casual purchasePrice="240000" inputCapacityTons="780" outputCapacityTons="780" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="320000" inputCapacityTons="600" outputCapacityTons="600" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="448000" inputCapacityTons="480" outputCapacityTons="480" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="576000" inputCapacityTons="390" outputCapacityTons="390" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="304" legacyKey="Warehouse7" name="Ore Storage Unit" role="Warehouse" district="Port" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
@@ -379,6 +411,7 @@
       <Casual purchasePrice="165000" inputCapacityTons="780" outputCapacityTons="780" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="220000" inputCapacityTons="600" outputCapacityTons="600" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="308000" inputCapacityTons="480" outputCapacityTons="480" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="396000" inputCapacityTons="390" outputCapacityTons="390" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="305" legacyKey="Warehouse5" name="Cold Storage Unit" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
@@ -389,6 +422,7 @@
       <Casual purchasePrice="135000" inputCapacityTons="390" outputCapacityTons="390" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="180000" inputCapacityTons="300" outputCapacityTons="300" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="252000" inputCapacityTons="240" outputCapacityTons="240" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="324000" inputCapacityTons="195" outputCapacityTons="195" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="306" legacyKey="Warehouse6" name="Grand Senora Container Storage" role="Warehouse" district="GrandSenora" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
@@ -399,6 +433,7 @@
       <Casual purchasePrice="150000" inputCapacityTons="780" outputCapacityTons="780" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="200000" inputCapacityTons="600" outputCapacityTons="600" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="280000" inputCapacityTons="480" outputCapacityTons="480" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="360000" inputCapacityTons="390" outputCapacityTons="390" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="400" legacyKey="MPConstruction" name="Mirror Park Residential Area" role="ConstructionSiteSink" district="EastLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.05" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
@@ -408,6 +443,7 @@
       <Casual purchasePrice="105000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="140000" inputCapacityTons="20" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Hardcore purchasePrice="196000" inputCapacityTons="16" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Impossible purchasePrice="252000" inputCapacityTons="13" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
   <Site catalogId="401" legacyKey="VWConstruction" name="Vinewood Construction Site" role="ConstructionSiteSink" district="WestLosSantos" startingTankRatio="0.3" density="Medium" emptyingRate="0.1" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
@@ -417,6 +453,7 @@
       <Casual purchasePrice="150000" inputCapacityTons="52" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="200000" inputCapacityTons="40" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Hardcore purchasePrice="280000" inputCapacityTons="32" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Impossible purchasePrice="360000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
   <Site catalogId="402" legacyKey="LSConstruction" name="Little Seoul Construction Site" role="ConstructionSiteSink" district="WestLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
@@ -426,6 +463,7 @@
       <Casual purchasePrice="195000" inputCapacityTons="78" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="260000" inputCapacityTons="60" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Hardcore purchasePrice="364000" inputCapacityTons="48" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Impossible purchasePrice="468000" inputCapacityTons="39" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
   <Site catalogId="403" legacyKey="PHConstruction" name="Pillbox Hill Construction Site" role="ConstructionSiteSink" district="Downtown" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
@@ -435,6 +473,7 @@
       <Casual purchasePrice="195000" inputCapacityTons="78" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="260000" inputCapacityTons="60" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Hardcore purchasePrice="364000" inputCapacityTons="48" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Impossible purchasePrice="468000" inputCapacityTons="39" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
   <Site catalogId="404" legacyKey="RWConstruction" name="Redwood Construction Site" role="ConstructionSiteSink" district="GrandSenora" startingTankRatio="0.3" density="Medium" emptyingRate="0.1" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
@@ -444,6 +483,7 @@
       <Casual purchasePrice="150000" inputCapacityTons="52" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="200000" inputCapacityTons="40" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Hardcore purchasePrice="280000" inputCapacityTons="32" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Impossible purchasePrice="360000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
   <Site catalogId="500" legacyKey="Store1" name="Davis Carson Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -453,6 +493,7 @@
       <Casual purchasePrice="117000" inputCapacityTons="52" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="156000" inputCapacityTons="40" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="218400" inputCapacityTons="32" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="280800" inputCapacityTons="26" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="501" legacyKey="Store2" name="Burton Mall" role="StoreSink" district="Vinewood" startingTankRatio="0.3" density="Low" emptyingRate="0.07" weeklyPassiveIncome="420" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -462,6 +503,7 @@
       <Casual purchasePrice="41250" inputCapacityTons="15.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="55000" inputCapacityTons="12" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="77000" inputCapacityTons="9.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="99000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="502" legacyKey="Store3" name="Sandy Shores Carson Store" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -471,6 +513,7 @@
       <Casual purchasePrice="26250" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="35000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="49000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="63000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="503" legacyKey="Store4" name="Grapeseed Store" role="StoreSink" district="Grapeseed" startingTankRatio="0.3" density="Low" emptyingRate="0.07" weeklyPassiveIncome="420" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -480,6 +523,7 @@
       <Casual purchasePrice="41250" inputCapacityTons="15.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="55000" inputCapacityTons="12" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="77000" inputCapacityTons="9.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="99000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="504" legacyKey="Store5" name="Paleto Store" role="StoreSink" district="PaletoBay" startingTankRatio="0.3" density="Medium" emptyingRate="0.12" weeklyPassiveIncome="1440" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -489,6 +533,7 @@
       <Casual purchasePrice="76500" inputCapacityTons="31.2" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="102000" inputCapacityTons="24" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="142800" inputCapacityTons="19.2" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="183600" inputCapacityTons="15.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="505" legacyKey="Store6" name="Paleto Supermarket" role="StoreSink" district="PaletoBay" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Core" enabled="true" industryOwnerCut="0.25">
@@ -498,6 +543,7 @@
       <Casual purchasePrice="136500" inputCapacityTons="52" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="182000" inputCapacityTons="40" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="254800" inputCapacityTons="32" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="327600" inputCapacityTons="26" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="506" legacyKey="Store7" name="Davis Avenue Gas Station Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="160" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -507,6 +553,7 @@
       <Casual purchasePrice="48750" inputCapacityTons="10.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="65000" inputCapacityTons="8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="91000" inputCapacityTons="6.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="117000" inputCapacityTons="5.2" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="507" legacyKey="Store8" name="Strawberry Clothes Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -516,6 +563,7 @@
       <Casual purchasePrice="37500" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="50000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="70000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="90000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="508" legacyKey="Store9" name="Strawberry Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="160" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -525,6 +573,7 @@
       <Casual purchasePrice="45000" inputCapacityTons="10.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="60000" inputCapacityTons="8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="84000" inputCapacityTons="6.4" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="108000" inputCapacityTons="5.2" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="509" legacyKey="Store10" name="Yellow Jack" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
@@ -534,6 +583,7 @@
       <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="72000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="510" legacyKey="Store11" name="Sandy Shores Bar" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
@@ -543,6 +593,7 @@
       <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="72000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="511" legacyKey="Store12" name="Sandy Shores Store" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.03" weeklyPassiveIncome="90" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
@@ -552,6 +603,7 @@
       <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="72000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="512" legacyKey="Store13" name="Grapeseed Clothing Store" role="StoreSink" district="Grapeseed" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
@@ -561,6 +613,7 @@
       <Casual purchasePrice="30000" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="40000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="56000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="72000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="513" legacyKey="Store14" name="Paleto Bay Clothing Store" role="StoreSink" district="PaletoBay" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" objectToDelete="3354248223">
@@ -570,6 +623,7 @@
       <Casual purchasePrice="33750" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="45000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="63000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="700" legacyKey="Petrol Station 01" name="Davis Avenue" role="FuelSink" district="SouthLosSantos" company="LTD" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -580,6 +634,7 @@
       <Casual purchasePrice="99000" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="132000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="184800" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="237600" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="701" legacyKey="Petrol Station 02" name="El Rancho Blvd" role="FuelSink" district="EastLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -590,6 +645,7 @@
       <Casual purchasePrice="144000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="192000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="268800" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="345600" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="702" legacyKey="Petrol Station 03" name="Popular St" role="FuelSink" district="EastLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -600,6 +656,7 @@
       <Casual purchasePrice="120000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="160000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="224000" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="288000" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="703" legacyKey="Petrol Station 04" name="Capital Blvd" role="FuelSink" district="SouthLosSantos" company="XERO" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -610,6 +667,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="704" legacyKey="Petrol Station 05" name="Calais Ave" role="FuelSink" district="WestLosSantos" company="XERO" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -620,6 +678,7 @@
       <Casual purchasePrice="99000" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="132000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="184800" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="237600" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="705" legacyKey="Petrol Station 06" name="Ginger St" role="FuelSink" district="WestLosSantos" company="LTD" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -630,6 +689,7 @@
       <Casual purchasePrice="120000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="160000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="224000" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="288000" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="706" legacyKey="Petrol Station 07" name="US Route 15" role="FuelSink" district="EastLosSantos" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -640,6 +700,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="707" legacyKey="Petrol Station 08" name="Mirror Park Blvd" role="FuelSink" district="EastLosSantos" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="700" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -650,6 +711,7 @@
       <Casual purchasePrice="63000" inputCapacityTons="45.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="84000" inputCapacityTons="35" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="117600" inputCapacityTons="28" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="151200" inputCapacityTons="22.75" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="708" legacyKey="Petrol Station 09" name="Clinton Ave" role="FuelSink" district="Downtown" company="Globe Oil" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -660,6 +722,7 @@
       <Casual purchasePrice="144000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="192000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="268800" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="345600" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="709" legacyKey="Petrol Station 10" name="Morningwood" role="FuelSink" district="WestLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
@@ -670,6 +733,7 @@
       <Casual purchasePrice="144000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="192000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="268800" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="345600" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="710" legacyKey="Petrol Station 11" name="Interstate 2" role="FuelSink" district="WestLosSantos" company="XERO" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -680,6 +744,7 @@
       <Casual purchasePrice="120000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="160000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="224000" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="288000" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="711" legacyKey="Petrol Station 12" name="Rockford Dr" role="FuelSink" district="NorthLosSantos" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="700" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -690,6 +755,7 @@
       <Casual purchasePrice="52500" inputCapacityTons="45.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="70000" inputCapacityTons="35" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="98000" inputCapacityTons="28" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="126000" inputCapacityTons="22.75" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="712" legacyKey="Petrol Station 13" name="US Route 68 - Zancudo" role="FuelSink" district="NorthLosSantos" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -700,6 +766,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="713" legacyKey="Petrol Station 14" name="US Route 68 - Grand Senora Desert - East" role="FuelSink" district="GrandSenora" company="XERO" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.02" weeklyPassiveIncome="200" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -710,6 +777,7 @@
       <Casual purchasePrice="33750" inputCapacityTons="26" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="45000" inputCapacityTons="20" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="63000" inputCapacityTons="16" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="13" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="714" legacyKey="Petrol Station 15" name="Senora Rd" role="FuelSink" district="GrandSenora" company="Globe Oil" startingTankRatio="0.3" density="VeryLow" emptyingRate="0.02" weeklyPassiveIncome="200" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -720,6 +788,7 @@
       <Casual purchasePrice="33750" inputCapacityTons="26" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="45000" inputCapacityTons="20" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="63000" inputCapacityTons="16" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="13" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="715" legacyKey="Petrol Station 16" name="US Route 68 - Grand Senora Desert - West" role="FuelSink" district="GrandSenora" company="Globe Oil" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="700" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -730,6 +799,7 @@
       <Casual purchasePrice="52500" inputCapacityTons="45.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="70000" inputCapacityTons="35" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="98000" inputCapacityTons="28" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="126000" inputCapacityTons="22.75" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="716" legacyKey="Petrol Station 17" name="US Route 13" role="FuelSink" district="GrandSenora" company="XERO" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -740,6 +810,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="717" legacyKey="Petrol Station 18" name="Sandy Shores Marina Drive" role="FuelSink" district="GrandSenora" company="XERO" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="700" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -750,6 +821,7 @@
       <Casual purchasePrice="52500" inputCapacityTons="45.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="70000" inputCapacityTons="35" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="98000" inputCapacityTons="28" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="126000" inputCapacityTons="22.75" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="718" legacyKey="Petrol Station 19" name="Grapeseed Main Street" role="FuelSink" district="Grapeseed" company="LTD" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="700" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -760,6 +832,7 @@
       <Casual purchasePrice="52500" inputCapacityTons="45.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="70000" inputCapacityTons="35" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="98000" inputCapacityTons="28" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="126000" inputCapacityTons="22.75" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="719" legacyKey="Petrol Station 20" name="US Route 13 - Mount Chiliad" role="FuelSink" district="PaletoBay" company="Globe Oil" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -770,6 +843,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="720" legacyKey="Petrol Station 21" name="US Route 1" role="FuelSink" district="PaletoBay" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -780,6 +854,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="721" legacyKey="Petrol Station 22" name="Cascabel Ave" role="FuelSink" district="PaletoBay" company="XERO" startingTankRatio="0.3" density="Low" emptyingRate="0.04" weeklyPassiveIncome="700" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -790,6 +865,7 @@
       <Casual purchasePrice="52500" inputCapacityTons="45.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="70000" inputCapacityTons="35" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="98000" inputCapacityTons="28" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="126000" inputCapacityTons="22.75" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="722" legacyKey="Petrol Station 23" name="Port Office Gas Station" role="FuelSink" district="Port" company="RON" startingTankRatio="1" density="None" emptyingRate="0" weeklyPassiveIncome="0" ownershipTier="Starter" enabled="true" refuelIsFree="true" industryOwnerCut="0">
@@ -800,6 +876,7 @@
       <Casual purchasePrice="0" inputCapacityTons="52" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="0" inputCapacityTons="40" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="0" inputCapacityTons="32" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="0" inputCapacityTons="26" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="723" legacyKey="Petrol Station 24" name="Davis Avenue 2" role="FuelSink" district="SouthLosSantos" company="RON" startingTankRatio="0.3" density="High" emptyingRate="0.1" weeklyPassiveIncome="4500" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -810,6 +887,7 @@
       <Casual purchasePrice="120000" inputCapacityTons="117" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="160000" inputCapacityTons="90" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="224000" inputCapacityTons="72" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="288000" inputCapacityTons="58.5" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
   <Site catalogId="724" legacyKey="Petrol Station 25" name="Harmony Gas Station" role="FuelSink" district="GrandSenora" company="RON" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
@@ -820,6 +898,7 @@
       <Casual purchasePrice="82500" inputCapacityTons="78" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="110000" inputCapacityTons="60" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Hardcore purchasePrice="154000" inputCapacityTons="48" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
 </Sites>

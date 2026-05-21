@@ -3119,6 +3119,8 @@ namespace LSOL
                     return Text(ModTextKey.DetailEconomyPresetCasual);
                 case EconomyDifficultyPreset.Hardcore:
                     return Text(ModTextKey.DetailEconomyPresetHardcore);
+                case EconomyDifficultyPreset.Impossible:
+                    return Text(ModTextKey.DetailEconomyPresetImpossible);
                 default:
                     return Text(ModTextKey.DetailEconomyPresetStandard);
             }
@@ -3132,6 +3134,8 @@ namespace LSOL
                     return Text(ModTextKey.ValueDifficultyCasual);
                 case EconomyDifficultyPreset.Hardcore:
                     return Text(ModTextKey.ValueDifficultyHardcore);
+                case EconomyDifficultyPreset.Impossible:
+                    return Text(ModTextKey.ValueDifficultyImpossible);
                 default:
                     return Text(ModTextKey.ValueDifficultyStandard);
             }
@@ -3203,7 +3207,7 @@ namespace LSOL
 
         private static EconomyDifficultyPreset OffsetEconomyDifficultyPreset(EconomyDifficultyPreset current, int delta)
         {
-            const int count = 3;
+            var count = Enum.GetValues(typeof(EconomyDifficultyPreset)).Length;
             var next = ((int)current + delta + count) % count;
             return (EconomyDifficultyPreset)next;
         }

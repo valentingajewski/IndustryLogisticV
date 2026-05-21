@@ -685,25 +685,34 @@ namespace LSOL.Config
                         {
                             location.HardcoreEconomy = preset;
                         }
+                        else if (presetName.Equals("Impossible", StringComparison.OrdinalIgnoreCase))
+                        {
+                            location.ImpossibleEconomy = preset;
+                        }
                     }
                 }
 
                 if (!TryReadFloatAttribute(element, "weeklyPassiveIncome", out var weeklyPassiveIncome))
                 {
-                    location.WeeklyPassiveIncome = DeriveWeeklyPassiveIncome(location);
+                    location.WeeklyPassiveIncome = ServiceSiteEconomyPolicy.NormalizeWeeklyPassiveIncome(location.SiteRole, location.RefuelIsFree, DeriveWeeklyPassiveIncome(location));
                 }
                 else
                 {
-                    location.WeeklyPassiveIncome = Math.Max(0f, weeklyPassiveIncome);
+                    location.WeeklyPassiveIncome = ServiceSiteEconomyPolicy.NormalizeWeeklyPassiveIncome(location.SiteRole, location.RefuelIsFree, weeklyPassiveIncome);
                 }
+
+                var primaryEconomy = location.StandardEconomy
+                    ?? location.CasualEconomy
+                    ?? location.HardcoreEconomy
+                    ?? location.ImpossibleEconomy;
 
                 location.FactoryProductionRatio = Math.Max(
                     0.1f,
-                    location.StandardEconomy != null && location.StandardEconomy.ProductionRatio > 0f
-                        ? location.StandardEconomy.ProductionRatio
+                    primaryEconomy != null && primaryEconomy.ProductionRatio > 0f
+                        ? primaryEconomy.ProductionRatio
                         : 1f);
-                location.IndustryPrice = location.StandardEconomy != null
-                    ? Math.Max(0f, location.StandardEconomy.PurchasePrice)
+                location.IndustryPrice = primaryEconomy != null
+                    ? Math.Max(0f, primaryEconomy.PurchasePrice)
                     : 0f;
 
                 if (string.IsNullOrWhiteSpace(location.DistrictName) || !catalog.Districts.ContainsKey(location.DistrictName))
@@ -1806,7 +1815,7 @@ namespace LSOL.Config
         private static float ResolveWeeklyPassiveIncomeInputCapacityTons(ExternalLocationConfig location)
         {
             var preset = location != null
-                ? (location.StandardEconomy ?? location.CasualEconomy ?? location.HardcoreEconomy)
+                ? (location.StandardEconomy ?? location.CasualEconomy ?? location.HardcoreEconomy ?? location.ImpossibleEconomy)
                 : null;
             if (preset != null && preset.InputCapacityTons > 0.001f)
             {

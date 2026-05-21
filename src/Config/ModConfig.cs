@@ -149,7 +149,11 @@ namespace LSOL.Config
 
         private static IndustryConfig BuildIndustryConfigFromExternalLocation(CoreXmlConfig coreConfig, ExternalLocationConfig location)
         {
-            var standardValues = location.StandardEconomy ?? SiteEconomyPresetValues.Create(0f, 0f, location.IndustryPrice, 0f, 0f, location.FactoryProductionRatio, false);
+            var standardValues = location.StandardEconomy
+                ?? location.CasualEconomy
+                ?? location.HardcoreEconomy
+                ?? location.ImpossibleEconomy
+                ?? SiteEconomyPresetValues.Create(0f, 0f, location.IndustryPrice, 0f, 0f, location.FactoryProductionRatio, false);
             var productionRatio = Math.Max(0.1f, standardValues.ProductionRatio > 0f ? standardValues.ProductionRatio : (location.FactoryProductionRatio > 0f ? location.FactoryProductionRatio : 1f));
             var productionRate = standardValues.ProductionRate > 0f
                 ? standardValues.ProductionRate * productionRatio
@@ -224,7 +228,7 @@ namespace LSOL.Config
                 StartingTankRatio = location.StartingTankRatio,
                 Density = location.Density,
                 EmptyingRate = location.EmptyingRate,
-                WeeklyPassiveIncome = Math.Max(0f, location.WeeklyPassiveIncome),
+                WeeklyPassiveIncome = ServiceSiteEconomyPolicy.NormalizeWeeklyPassiveIncome(location.SiteRole, location.RefuelIsFree, location.WeeklyPassiveIncome),
                 HasConfiguredEmptyingRate = location.HasConfiguredEmptyingRate,
                 RefuelIsFree = location.RefuelIsFree,
                 IndustryPrice = purchasePrice,
@@ -237,6 +241,7 @@ namespace LSOL.Config
                 CasualEconomy = location.CasualEconomy,
                 StandardEconomy = location.StandardEconomy,
                 HardcoreEconomy = location.HardcoreEconomy,
+                ImpossibleEconomy = location.ImpossibleEconomy,
             };
         }
 

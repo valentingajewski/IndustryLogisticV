@@ -59,10 +59,6 @@ namespace LSOL.Systems
         private const int RepossessionCooldownMs = 60000;
         private const int MinutesPerWeek = 7 * 24 * 60;
         private const float ServiceSinkPassiveIncomeStockThresholdTons = 0.05f;
-        private const float ServiceSiteWeeklyWageRatio = 0.12f;
-        private const float ServiceSiteWeeklyWageMinimum = 75f;
-        private const float ServiceSiteWeeklyWageMaximum = 300f;
-        private const float ServiceSiteWeeklyWageStep = 25f;
 
         private readonly IndustryManager _industryManager;
         private readonly Dictionary<string, Industry> _industriesById;
@@ -3016,13 +3012,7 @@ namespace LSOL.Systems
 
         private static float ComputeServiceSiteWeeklyStaffingCost(Industry industry)
         {
-            if (industry == null || !(industry.IsStore || industry.IsGasStation) || industry.WeeklyPassiveIncome <= 0.01f)
-            {
-                return 0f;
-            }
-
-            var scaledWage = Math.Max(ServiceSiteWeeklyWageMinimum, Math.Min(ServiceSiteWeeklyWageMaximum, industry.WeeklyPassiveIncome * ServiceSiteWeeklyWageRatio));
-            return (float)(Math.Ceiling(scaledWage / ServiceSiteWeeklyWageStep) * ServiceSiteWeeklyWageStep);
+            return ServiceSiteEconomyPolicy.ComputeWeeklyStaffingCost(industry);
         }
 
         private string BuildServiceSinkPassiveIncomeOperationalStatus(Industry industry, TerritorySiteState siteState)
