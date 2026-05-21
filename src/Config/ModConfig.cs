@@ -432,15 +432,65 @@ namespace LSOL.Config
 
             return source
                 .Where(x => x != null)
-                .Select(x => new VehicleObjectLayoutDefinition
+                .Select(x =>
                 {
-                    ModelName = x.ModelName,
-                    DisplayName = x.DisplayName,
-                    ObjectKey = x.ObjectKey,
-                    CenterOffset = x.CenterOffset,
-                    MaxLine = x.MaxLine,
-                    MaxRow = x.MaxRow,
-                    IsEnabled = x.IsEnabled,
+                    var clone = new VehicleObjectLayoutDefinition
+                    {
+                        ModelName = x.ModelName,
+                        DisplayName = x.DisplayName,
+                        ObjectKey = x.ObjectKey,
+                        CenterOffset = x.CenterOffset,
+                        MaxLine = x.MaxLine,
+                        MaxRow = x.MaxRow,
+                        IsEnabled = x.IsEnabled,
+                        PlacementMode = x.PlacementMode,
+                    };
+
+                    if (x.CommodityOverrides != null)
+                    {
+                        clone.CommodityOverrides.AddRange(x.CommodityOverrides
+                            .Where(overrideDefinition => overrideDefinition != null)
+                            .Select(overrideDefinition => new VehicleCommodityObjectLayoutDefinition
+                            {
+                                Commodity = overrideDefinition.Commodity,
+                                ObjectKey = overrideDefinition.ObjectKey,
+                                CenterOffset = overrideDefinition.CenterOffset,
+                                MaxLine = overrideDefinition.MaxLine,
+                                MaxRow = overrideDefinition.MaxRow,
+                                PlacementMode = overrideDefinition.PlacementMode,
+                            }));
+                    }
+
+                    if (x.LooseCargoVisuals != null)
+                    {
+                        clone.LooseCargoVisuals.AddRange(x.LooseCargoVisuals
+                            .Where(looseVisual => looseVisual != null)
+                            .Select(looseVisual =>
+                            {
+                                var looseClone = new VehicleLooseCargoVisualDefinition
+                                {
+                                    ObjectKey = looseVisual.ObjectKey,
+                                    CargoType = looseVisual.CargoType,
+                                    CenterOffset = looseVisual.CenterOffset,
+                                    MaxPropCount = looseVisual.MaxPropCount,
+                                    SpreadX = looseVisual.SpreadX,
+                                    SpreadY = looseVisual.SpreadY,
+                                    YawJitterDegrees = looseVisual.YawJitterDegrees,
+                                    PitchJitterDegrees = looseVisual.PitchJitterDegrees,
+                                    RollJitterDegrees = looseVisual.RollJitterDegrees,
+                                    IsEnabled = looseVisual.IsEnabled,
+                                };
+
+                                if (looseVisual.Commodities != null)
+                                {
+                                    looseClone.Commodities.AddRange(looseVisual.Commodities.Where(commodity => !string.IsNullOrWhiteSpace(commodity)));
+                                }
+
+                                return looseClone;
+                            }));
+                    }
+
+                    return clone;
                 })
                 .ToList();
         }

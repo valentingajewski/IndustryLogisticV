@@ -14,6 +14,7 @@ namespace LSOL.Systems
     {
         private const string AlloySolidPropModel = "prop_pipes_01b";
         private const string MetalSolidPropModel = "prop_pipes_04a";
+        private const string BeamSolidPropModel = "prop_railstack05";
         private const string DefaultLittleBoxPropModel = "prop_boxpile_07d";
         private const string DefaultTinyBoxPropModel = "prop_rub_boxpile_02";
         private const float VehicleObjectLayoutSlotPadding = 0.05f;
@@ -787,11 +788,17 @@ namespace LSOL.Systems
                 return;
             }
 
+            var definition = FindDefinition(cargoVehicle.Model);
+            if (TryApplyConfiguredLooseCargoVisuals(cargoVehicle, cargoState, definition))
+            {
+                return;
+            }
+
             List<string> modelNames;
             int count;
             bool forceCenteredPlacement;
             VehicleObjectLayoutDefinition configuredLayout;
-            if (!TryResolveCargoPropLayout(cargoVehicle, cargoState, out modelNames, out count, out forceCenteredPlacement, out configuredLayout))
+            if (!TryResolveCargoPropLayout(cargoVehicle, cargoState, definition, out modelNames, out count, out forceCenteredPlacement, out configuredLayout))
             {
                 return;
             }
@@ -808,7 +815,6 @@ namespace LSOL.Systems
             float bedMaxX;
             float bedRearY;
             float bedFrontY;
-            var definition = FindDefinition(cargoVehicle.Model);
             var useFullLengthBed = definition != null && definition.IsTrailer;
             if (!TryGetTruckBedBounds(cargoVehicle, useFullLengthBed, out modelMin, out modelMax, out bedMinX, out bedMaxX, out bedRearY, out bedFrontY))
             {
@@ -916,9 +922,102 @@ namespace LSOL.Systems
             }
         }
 
-        private int ResolveCratePropCount(Vehicle cargoVehicle, VehicleCargoState cargoState)
+        private bool TryApplyConfiguredLooseCargoVisuals(Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleDefinition definition)
         {
-            var definition = FindDefinition(cargoVehicle.Model);
+            if (cargoVehicle == null || !cargoVehicle.Exists() || cargoState == null)
+            {
+                return false;
+            }
+
+            var cargoType = CommodityCatalog.ResolveCargoType(cargoState.CargoType, cargoState.Commodity);
+            if (!CommodityCatalog.UsesLooseVisual(cargoType))
+            {
+                return false;
+            }
+
+            var looseCargoVisual = FindVehicleLooseCargoVisual(definition, cargoState.Commodity);
+            if (looseCargoVisual == null || !looseCargoVisual.IsEnabled)
+            {
+                return false;
+            }
+
+            var modelNames = ResolveNamedPropModels(looseCargoVisual.ObjectKey, null);
+            if (modelNames == null || modelNames.Count == 0)
+            {
+                return true;
+            }
+
+            Vector3 modelMin;
+            Vector3 modelMax;
+            float bedMinX;
+            float bedMaxX;
+            float bedRearY;
+            float bedFrontY;
+            var useFullLengthBed = definition != null && definition.IsTrailer;
+            if (!TryGetTruckBedBounds(cargoVehicle, useFullLengthBed, out modelMin, out modelMax, out bedMinX, out bedMaxX, out bedRearY, out bedFrontY))
+            {
+                return true;
+            }
+
+            var propCount = ResolveLooseCargoPropCount(cargoState, looseCargoVisual.MaxPropCount);
+            var centerOffset = looseCargoVisual.CenterOffset ?? Vector3.Zero;
+
+            for (int i = 0; i < propCount; i++)
+            {
+                var modelName = modelNames[_random.Next(modelNames.Count)];
+                var model = new Model(modelName);
+                if (!TryRequestModel(model, 500))
+                {
+                    continue;
+                }
+
+                Vector3 rockModelMin;
+                Vector3 rockModelMax;
+                model.GetDimensions(out rockModelMin, out rockModelMax);
+
+                var halfWidth = Math.Max(0.05f, (rockModelMax.X - rockModelMin.X) * 0.5f);
+                var halfLength = Math.Max(0.05f, (rockModelMax.Y - rockModelMin.Y) * 0.5f);
+                var localSlot = ResolveLooseCargoLocalSlot(i, propCount, centerOffset, looseCargoVisual.SpreadX, looseCargoVisual.SpreadY);
+                localSlot = ConstrainCrateLocalSlotToBed(localSlot, bedMinX, bedMaxX, bedRearY, bedFrontY, halfWidth, halfLength);
+
+                float floorLocalZ;
+                if (!TryProbeTruckBedFloor(cargoVehicle, localSlot.X, localSlot.Y, modelMin.Z, modelMax.Z, out floorLocalZ))
+                {
+                    model.MarkAsNoLongerNeeded();
+                    continue;
+                }
+
+                var modelCenter = new Vector3(
+                    (rockModelMin.X + rockModelMax.X) * 0.5f,
+                    (rockModelMin.Y + rockModelMax.Y) * 0.5f,
+                    (rockModelMin.Z + rockModelMax.Z) * 0.5f);
+                var attachOffset = new Vector3(
+                    localSlot.X - modelCenter.X,
+                    localSlot.Y - modelCenter.Y,
+                    floorLocalZ - rockModelMin.Z + 0.01f + centerOffset.Z);
+                var rotation = new Vector3(
+                    RandomRange(-looseCargoVisual.PitchJitterDegrees, looseCargoVisual.PitchJitterDegrees),
+                    RandomRange(-looseCargoVisual.RollJitterDegrees, looseCargoVisual.RollJitterDegrees),
+                    RandomRange(-looseCargoVisual.YawJitterDegrees, looseCargoVisual.YawJitterDegrees));
+
+                var spawnPosition = cargoVehicle.GetOffsetPosition(attachOffset);
+                var prop = World.CreateProp(model, spawnPosition, true, false);
+                model.MarkAsNoLongerNeeded();
+
+                if (prop == null || !prop.Exists())
+                {
+                    continue;
+                }
+
+                prop.AttachTo(cargoVehicle, attachOffset, rotation);
+                cargoState.AttachedProps.Add(prop);
+            }
+
+            return true;
+        }
+
+        private int ResolveCratePropCount(VehicleDefinition definition, string commodity, float weightTons)
+        {
             if (definition != null)
             {
                 // Keep class-based prop counts stable for gameplay readability.
@@ -933,10 +1032,10 @@ namespace LSOL.Systems
                 }
             }
 
-            var count = (int)Math.Ceiling(cargoState.WeightTons / 2f);
+            var count = (int)Math.Ceiling(Math.Max(0f, weightTons) / 2f);
             var isBrickTrailerLoad = definition != null
                 && definition.IsTrailer
-                && CommodityCatalog.Normalize(cargoState.Commodity).Equals("Bricks", StringComparison.OrdinalIgnoreCase);
+                && CommodityCatalog.Normalize(commodity).Equals("Bricks", StringComparison.OrdinalIgnoreCase);
             if (isBrickTrailerLoad)
             {
                 count += 2;
@@ -948,32 +1047,75 @@ namespace LSOL.Systems
 
         private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, out List<string> modelNames, out int count, out bool forceCenteredPlacement, out VehicleObjectLayoutDefinition configuredLayout)
         {
+            return TryResolveCargoPropLayout(cargoVehicle, cargoState, FindDefinition(cargoVehicle != null ? cargoVehicle.Model : null), out modelNames, out count, out forceCenteredPlacement, out configuredLayout);
+        }
+
+        private bool TryResolveCargoPropLayout(Vehicle cargoVehicle, VehicleCargoState cargoState, VehicleDefinition definition, out List<string> modelNames, out int count, out bool forceCenteredPlacement, out VehicleObjectLayoutDefinition configuredLayout)
+        {
             modelNames = null;
             count = 0;
             forceCenteredPlacement = false;
             configuredLayout = null;
 
-            var cargoType = CommodityCatalog.ResolveCargoType(cargoState.CargoType, cargoState.Commodity);
+            if (cargoState == null)
+            {
+                return false;
+            }
+
+            return TryResolveCargoPropLayoutDefinition(
+                definition,
+                cargoState.Commodity,
+                cargoState.CargoType,
+                cargoState.WeightTons,
+                out modelNames,
+                out count,
+                out forceCenteredPlacement,
+                out configuredLayout);
+        }
+
+        private bool TryResolveCargoPropLayoutDefinition(
+            VehicleDefinition definition,
+            string commodity,
+            VehicleCargoType cargoType,
+            float weightTons,
+            out List<string> modelNames,
+            out int count,
+            out bool forceCenteredPlacement,
+            out VehicleObjectLayoutDefinition configuredLayout)
+        {
+            modelNames = null;
+            count = 0;
+            forceCenteredPlacement = false;
+            configuredLayout = null;
+
+            cargoType = CommodityCatalog.ResolveCargoType(cargoType, commodity);
             if (!CommodityCatalog.UsesAttachedPropVisual(cargoType))
             {
                 return false;
             }
 
-            var definition = FindDefinition(cargoVehicle.Model);
-            configuredLayout = FindVehicleObjectLayout(definition);
-            if (configuredLayout != null && !configuredLayout.IsEnabled)
+            var baseLayout = FindVehicleObjectLayout(definition);
+            if (baseLayout != null && !baseLayout.IsEnabled)
             {
                 return false;
             }
 
-            modelNames = ResolveCargoPropModels(cargoState.Commodity, cargoType, definition, configuredLayout);
+            VehicleObjectPlacementMode placementMode;
+            configuredLayout = ResolveEffectiveVehicleObjectLayout(definition, commodity, cargoType, out placementMode);
+
+            modelNames = ResolveCargoPropModels(commodity, cargoType, definition, baseLayout);
             if (modelNames == null || modelNames.Count == 0)
             {
                 return false;
             }
 
-            forceCenteredPlacement = CommodityCatalog.UsesCenteredPropVisual(cargoType);
-            count = forceCenteredPlacement ? 1 : ResolveCratePropCount(cargoVehicle, cargoState);
+            forceCenteredPlacement = placementMode == VehicleObjectPlacementMode.CenteredSingle;
+            if (placementMode == VehicleObjectPlacementMode.Default)
+            {
+                forceCenteredPlacement = CommodityCatalog.UsesCenteredPropVisual(cargoType);
+            }
+
+            count = forceCenteredPlacement ? 1 : ResolveCratePropCount(definition, commodity, weightTons);
             if (configuredLayout != null && configuredLayout.HasUsableGrid)
             {
                 var maxConfiguredCount = Math.Max(1, configuredLayout.MaxLine * configuredLayout.MaxRow);
@@ -985,6 +1127,16 @@ namespace LSOL.Systems
 
         private List<string> ResolveCargoPropModels(string commodity, VehicleCargoType cargoType, VehicleDefinition definition, VehicleObjectLayoutDefinition configuredLayout)
         {
+            var commodityOverride = configuredLayout != null ? configuredLayout.FindCommodityOverride(commodity) : null;
+            if (commodityOverride != null && !string.IsNullOrWhiteSpace(commodityOverride.ObjectKey))
+            {
+                var configuredOverrideModels = ResolveNamedPropModels(commodityOverride.ObjectKey, null);
+                if (configuredOverrideModels != null)
+                {
+                    return configuredOverrideModels;
+                }
+            }
+
             if (configuredLayout != null && !string.IsNullOrWhiteSpace(configuredLayout.ObjectKey))
             {
                 var configuredModels = ResolveNamedPropModels(configuredLayout.ObjectKey, null);
@@ -1026,6 +1178,64 @@ namespace LSOL.Systems
             }
 
             return null;
+        }
+
+        private VehicleObjectLayoutDefinition ResolveEffectiveVehicleObjectLayout(VehicleDefinition definition, string commodity, VehicleCargoType cargoType, out VehicleObjectPlacementMode placementMode)
+        {
+            return ResolveEffectiveVehicleObjectLayout(FindVehicleObjectLayout(definition), commodity, cargoType, out placementMode);
+        }
+
+        private VehicleObjectLayoutDefinition ResolveEffectiveVehicleObjectLayout(VehicleObjectLayoutDefinition baseLayout, string commodity, VehicleCargoType cargoType, out VehicleObjectPlacementMode placementMode)
+        {
+            var commodityOverride = baseLayout != null ? baseLayout.FindCommodityOverride(commodity) : null;
+            placementMode = ResolveVehicleObjectPlacementMode(cargoType, baseLayout, commodityOverride);
+            if (baseLayout == null)
+            {
+                return null;
+            }
+
+            if (commodityOverride == null)
+            {
+                return baseLayout;
+            }
+
+            return new VehicleObjectLayoutDefinition
+            {
+                ModelName = baseLayout.ModelName,
+                DisplayName = baseLayout.DisplayName,
+                ObjectKey = !string.IsNullOrWhiteSpace(commodityOverride.ObjectKey) ? commodityOverride.ObjectKey : baseLayout.ObjectKey,
+                CenterOffset = commodityOverride.CenterOffset ?? baseLayout.CenterOffset,
+                MaxLine = commodityOverride.MaxLine ?? baseLayout.MaxLine,
+                MaxRow = commodityOverride.MaxRow ?? baseLayout.MaxRow,
+                IsEnabled = baseLayout.IsEnabled,
+                PlacementMode = placementMode,
+            };
+        }
+
+        private static VehicleObjectPlacementMode ResolveVehicleObjectPlacementMode(VehicleCargoType cargoType, VehicleObjectLayoutDefinition baseLayout, VehicleCommodityObjectLayoutDefinition commodityOverride)
+        {
+            if (commodityOverride != null && commodityOverride.PlacementMode != VehicleObjectPlacementMode.Default)
+            {
+                return commodityOverride.PlacementMode;
+            }
+
+            if (baseLayout != null && baseLayout.PlacementMode != VehicleObjectPlacementMode.Default)
+            {
+                return baseLayout.PlacementMode;
+            }
+
+            return CommodityCatalog.UsesCenteredPropVisual(cargoType)
+                ? VehicleObjectPlacementMode.CenteredSingle
+                : VehicleObjectPlacementMode.Default;
+        }
+
+        private VehicleLooseCargoVisualDefinition FindVehicleLooseCargoVisual(VehicleDefinition definition, string commodity)
+        {
+            var layout = FindVehicleObjectLayout(definition);
+            var cargoType = CommodityCatalog.GetCargoTypeForCommodity(commodity);
+            return layout != null
+                ? layout.FindLooseCargoVisual(commodity, cargoType)
+                : null;
         }
 
         private List<string> ResolveVehicleSpecificPropModels(VehicleDefinition definition)
@@ -1075,6 +1285,55 @@ namespace LSOL.Systems
             return _vehicleObjectLayoutsByModelName.TryGetValue(definition.ModelName.Trim(), out layout)
                 ? layout
                 : null;
+        }
+
+        private static int ResolveLooseCargoPropCount(VehicleCargoState cargoState, int configuredMaxPropCount)
+        {
+            if (cargoState == null)
+            {
+                return 0;
+            }
+
+            var maxPropCount = Math.Max(1, configuredMaxPropCount);
+            return Math.Max(1, Math.Min(maxPropCount, (int)Math.Ceiling(Math.Max(0.15f, cargoState.FillRatio) * maxPropCount)));
+        }
+
+        private static Vector3 ResolveLooseCargoLocalSlot(int index, int count, Vector3 centerOffset, float spreadX, float spreadY)
+        {
+            var safeSpreadX = Math.Max(0f, spreadX);
+            var safeSpreadY = Math.Max(0f, spreadY);
+            if (count <= 1)
+            {
+                return centerOffset;
+            }
+
+            if (count == 2)
+            {
+                return new Vector3(
+                    centerOffset.X + (index == 0 ? -safeSpreadX * 0.5f : safeSpreadX * 0.5f),
+                    centerOffset.Y + (index == 0 ? -safeSpreadY * 0.1f : safeSpreadY * 0.1f),
+                    centerOffset.Z);
+            }
+
+            switch (index)
+            {
+                case 0:
+                    return new Vector3(centerOffset.X, centerOffset.Y - (safeSpreadY * 0.3f), centerOffset.Z);
+                case 1:
+                    return new Vector3(centerOffset.X - (safeSpreadX * 0.5f), centerOffset.Y + (safeSpreadY * 0.2f), centerOffset.Z);
+                default:
+                    return new Vector3(centerOffset.X + (safeSpreadX * 0.5f), centerOffset.Y + (safeSpreadY * 0.2f), centerOffset.Z);
+            }
+        }
+
+        private float RandomRange(float min, float max)
+        {
+            if (max <= min)
+            {
+                return min;
+            }
+
+            return (float)(min + ((_random.NextDouble()) * (max - min)));
         }
 
         private void ApplyConfiguredCargoVisuals(
@@ -1339,6 +1598,11 @@ namespace LSOL.Systems
             if (normalized.Equals("Metal", StringComparison.OrdinalIgnoreCase))
             {
                 return MetalSolidPropModel;
+            }
+
+            if (normalized.Equals("Beam", StringComparison.OrdinalIgnoreCase))
+            {
+                return BeamSolidPropModel;
             }
 
             return null;

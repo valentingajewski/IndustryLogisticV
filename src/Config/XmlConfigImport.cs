@@ -325,7 +325,7 @@ namespace LSOL.Config
                     catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' references unknown objectKey '{1}'.", modelName, objectKey));
                 }
 
-                catalog.VehicleObjectLayouts.Add(new VehicleObjectLayoutDefinition
+                var layout = new VehicleObjectLayoutDefinition
                 {
                     ModelName = modelName,
                     DisplayName = ReadAttribute(element, "name", modelName),
@@ -334,12 +334,182 @@ namespace LSOL.Config
                     MaxLine = Math.Max(0, ReadIntAttribute(element, "maxLine", 0)),
                     MaxRow = Math.Max(0, ReadIntAttribute(element, "maxRow", 0)),
                     IsEnabled = ReadBoolAttribute(element, "enabled", true),
-                });
+                    PlacementMode = ParseVehicleObjectPlacementMode(ReadAttribute(element, "placement"), catalog.ValidationMessages, string.Format("VehiclesObjects.xml vehicle model '{0}'", modelName)),
+                };
+
+                PopulateVehicleObjectLayoutCommodityOverrides(element, layout, catalog);
+                PopulateVehicleLooseCargoVisuals(element, layout, catalog);
+
+                catalog.VehicleObjectLayouts.Add(layout);
 
                 loadedAny = true;
             }
 
             return loadedAny;
+        }
+
+        private static void PopulateVehicleObjectLayoutCommodityOverrides(XElement vehicleElement, VehicleObjectLayoutDefinition layout, ExternalConfigCatalog catalog)
+        {
+            if (vehicleElement == null || layout == null || catalog == null)
+            {
+                return;
+            }
+
+            foreach (var commodityElement in vehicleElement.Elements("Commodity"))
+            {
+                var commodity = CommodityCatalog.Normalize(ReadAttribute(commodityElement, "name", ReadAttribute(commodityElement, "commodity")));
+                if (string.IsNullOrWhiteSpace(commodity))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has a commodity override with no commodity.", layout.ModelName));
+                    continue;
+                }
+
+                if (layout.CommodityOverrides.Any(existing => existing != null && existing.MatchesCommodity(commodity)))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' defines duplicate commodity override '{1}'.", layout.ModelName, commodity));
+                    continue;
+                }
+
+                var objectKey = ReadAttribute(commodityElement, "objectKey");
+                if (!string.IsNullOrWhiteSpace(objectKey) && !catalog.ObjectModels.ContainsKey(objectKey))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' commodity override '{1}' references unknown objectKey '{2}'.", layout.ModelName, commodity, objectKey));
+                }
+
+                layout.CommodityOverrides.Add(new VehicleCommodityObjectLayoutDefinition
+                {
+                    Commodity = commodity,
+                    ObjectKey = objectKey,
+                    CenterOffset = TryReadOptionalVector3(commodityElement, layout.ModelName, string.Format("commodity override '{0}'", commodity), catalog.ValidationMessages),
+                    MaxLine = TryReadOptionalIntAttribute(commodityElement, "maxLine"),
+                    MaxRow = TryReadOptionalIntAttribute(commodityElement, "maxRow"),
+                    PlacementMode = ParseVehicleObjectPlacementMode(
+                        ReadAttribute(commodityElement, "placement"),
+                        catalog.ValidationMessages,
+                        string.Format("VehiclesObjects.xml vehicle model '{0}' commodity override '{1}'", layout.ModelName, commodity)),
+                });
+            }
+        }
+
+        private static void PopulateVehicleLooseCargoVisuals(XElement vehicleElement, VehicleObjectLayoutDefinition layout, ExternalConfigCatalog catalog)
+        {
+            if (vehicleElement == null || layout == null || catalog == null)
+            {
+                return;
+            }
+
+            foreach (var looseElement in vehicleElement.Elements("LooseCargo"))
+            {
+                var objectKey = ReadAttribute(looseElement, "objectKey");
+                if (string.IsNullOrWhiteSpace(objectKey))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has a loose cargo rule with no objectKey.", layout.ModelName));
+                    continue;
+                }
+
+                if (!catalog.ObjectModels.ContainsKey(objectKey))
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' loose cargo rule references unknown objectKey '{1}'.", layout.ModelName, objectKey));
+                }
+
+                var commodities = SplitCsv(ReadAttribute(looseElement, "commodities"))
+                    .Concat(SplitCsv(ReadAttribute(looseElement, "commodity")))
+                    .Select(CommodityCatalog.Normalize)
+                    .Where(commodity => !string.IsNullOrWhiteSpace(commodity))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                var cargoType = ParseCargoType(ReadAttribute(looseElement, "cargoType"));
+                if (commodities.Count == 0 && cargoType == VehicleCargoType.Unknown)
+                {
+                    catalog.ValidationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has a loose cargo rule with no commodities or cargoType.", layout.ModelName));
+                    continue;
+                }
+
+                var looseVisual = new VehicleLooseCargoVisualDefinition
+                {
+                    ObjectKey = objectKey,
+                    CargoType = cargoType,
+                    CenterOffset = TryReadOptionalVector3(looseElement, layout.ModelName, "loose cargo rule", catalog.ValidationMessages),
+                    MaxPropCount = Math.Max(1, ReadIntAttribute(looseElement, "maxPropCount", 1)),
+                    SpreadX = Math.Max(0f, ReadFloatAttribute(looseElement, "spreadX", 0.5f)),
+                    SpreadY = Math.Max(0f, ReadFloatAttribute(looseElement, "spreadY", 0.35f)),
+                    YawJitterDegrees = Math.Max(0f, ReadFloatAttribute(looseElement, "yawJitter", 12f)),
+                    PitchJitterDegrees = Math.Max(0f, ReadFloatAttribute(looseElement, "pitchJitter", 2f)),
+                    RollJitterDegrees = Math.Max(0f, ReadFloatAttribute(looseElement, "rollJitter", 2f)),
+                    IsEnabled = ReadBoolAttribute(looseElement, "enabled", true),
+                };
+
+                for (int i = 0; i < commodities.Count; i++)
+                {
+                    looseVisual.Commodities.Add(commodities[i]);
+                }
+
+                layout.LooseCargoVisuals.Add(looseVisual);
+            }
+        }
+
+        private static VehicleObjectPlacementMode ParseVehicleObjectPlacementMode(string raw, List<string> validationMessages, string context)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return VehicleObjectPlacementMode.Default;
+            }
+
+            VehicleObjectPlacementMode placementMode;
+            if (Enum.TryParse(raw.Trim(), true, out placementMode))
+            {
+                return placementMode;
+            }
+
+            if (validationMessages != null)
+            {
+                validationMessages.Add(string.Format("{0} uses unknown placement '{1}'.", context, raw));
+            }
+
+            return VehicleObjectPlacementMode.Default;
+        }
+
+        private static Vector3? TryReadOptionalVector3(XElement element, string modelName, string context, List<string> validationMessages)
+        {
+            if (element == null)
+            {
+                return null;
+            }
+
+            var hasX = element.Attribute("centerX") != null;
+            var hasY = element.Attribute("centerY") != null;
+            var hasZ = element.Attribute("centerZ") != null;
+            if (!hasX && !hasY && !hasZ)
+            {
+                return null;
+            }
+
+            float x;
+            float y;
+            float z;
+            if (!TryReadFloatAttribute(element, "centerX", out x)
+                || !TryReadFloatAttribute(element, "centerY", out y)
+                || !TryReadFloatAttribute(element, "centerZ", out z))
+            {
+                if (validationMessages != null)
+                {
+                    validationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has invalid center coordinates for {1}.", modelName, context));
+                }
+
+                return null;
+            }
+
+            return new Vector3(x, y, z);
+        }
+
+        private static int? TryReadOptionalIntAttribute(XElement element, string attributeName)
+        {
+            if (element == null || element.Attribute(attributeName) == null)
+            {
+                return null;
+            }
+
+            return Math.Max(0, ReadIntAttribute(element, attributeName, 0));
         }
 
         public static bool TryPopulateDistricts(string configDirectory, ExternalConfigCatalog catalog)

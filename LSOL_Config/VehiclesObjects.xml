@@ -28,10 +28,22 @@
   <Vehicle model="trailers2" name="Refrigerated Trailer" objectKey="" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
   <Vehicle model="trailers3" name="Trailer (with ad)" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
   <Vehicle model="trailers4" name="Container Trailer" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
-  <Vehicle model="trflat" name="Open Trailer" objectKey="" centerX="0.00" centerY="-0.80" centerZ="1.30" maxLine="2" maxRow="3"/>
+  <Vehicle model="trflat" name="Open Trailer" objectKey="" centerX="0.00" centerY="-0.80" centerZ="1.30" maxLine="1" maxRow="5">
+    <Commodity commodity="Bricks" objectKey="Bricks" placement="Grid" />
+    <Commodity commodity="Lumber" objectKey="Lumber" placement="Grid" />
+    <Commodity commodity="Alloy" objectKey="Alloy" placement="CenteredSingle" />
+    <Commodity commodity="Metal" objectKey="Metal" placement="CenteredSingle" />
+    <Commodity commodity="Beam" objectKey="Beam" placement="CenteredSingle" />
+  </Vehicle>
   <Vehicle model="mixer" name="Mixer" objectKey="" centerX="0.00" centerY="-0.85" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
   <Vehicle model="mixer2" name="Mixer" objectKey="" centerX="0.00" centerY="-0.85" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
-  <Vehicle model="rubble" name="Rubble" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
-  <Vehicle model="tiptruck" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
-  <Vehicle model="tiptruck2" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
+  <Vehicle model="rubble" name="Rubble" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
+    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="LooseRock" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="3" spreadX="0.70" spreadY="0.45" yawJitter="18" pitchJitter="4" rollJitter="4" />
+  </Vehicle>
+  <Vehicle model="tiptruck" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
+    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="LooseRock" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="3" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4" />
+  </Vehicle>
+  <Vehicle model="tiptruck2" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
+    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="LooseRock" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="3" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4" />
+  </Vehicle>
 </VehiclesObjects>
