@@ -377,6 +377,8 @@ namespace LSOL.Systems
                     TotalLostTons = cargoState.TotalLostTons,
                     SourceIndustryId = cargoState.SourceIndustryId,
                     SourceDistrictName = cargoState.SourceDistrictName,
+                    PlayerContractId = cargoState.PlayerContractId,
+                    PlayerContractDestinationIndustryId = cargoState.PlayerContractDestinationIndustryId,
                     CurrentFuelLiters = fuelTelemetry != null ? fuelTelemetry.CurrentLiters : 0f,
                 });
             }
@@ -446,6 +448,8 @@ namespace LSOL.Systems
                         cargoState.TotalLostTons = Math.Max(0f, entry.TotalLostTons);
                         cargoState.SourceIndustryId = entry.SourceIndustryId ?? string.Empty;
                         cargoState.SourceDistrictName = entry.SourceDistrictName ?? string.Empty;
+                        cargoState.PlayerContractId = entry.PlayerContractId ?? string.Empty;
+                        cargoState.PlayerContractDestinationIndustryId = entry.PlayerContractDestinationIndustryId ?? string.Empty;
                         ApplyCargoVisuals(cargoVehicle, cargoState);
                     }
                     else

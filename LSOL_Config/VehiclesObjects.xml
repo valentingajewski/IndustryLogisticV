@@ -28,9 +28,9 @@
   <Vehicle model="trailers2" name="Refrigerated Trailer" objectKey="" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
   <Vehicle model="trailers3" name="Trailer (with ad)" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
   <Vehicle model="trailers4" name="Container Trailer" objectKey="Box" centerX="0.00" centerY="-1.40" centerZ="1.05" maxLine="2" maxRow="3" enabled="false"/>
-  <Vehicle model="trflat" name="Open Trailer" objectKey="" centerX="0.00" centerY="-0.80" centerZ="1.30" maxLine="1" maxRow="5">
-    <Commodity commodity="Bricks" objectKey="Bricks" placement="Grid" />
-    <Commodity commodity="Lumber" objectKey="Lumber" placement="Grid" />
+  <Vehicle model="trflat" name="Open Trailer" objectKey="" centerX="0.00" centerY="-0.80" centerZ="1.30" maxLine="1" maxRow="6">
+    <Commodity commodity="Bricks" objectKey="Bricks" placement="Grid" centerX="0.00" centerY="0" centerZ="1.26" maxLine="1" maxRow="6" />
+    <Commodity commodity="Lumber" objectKey="Lumber" placement="Grid" centerX="0.00" centerY="0" centerZ="0.90" maxLine="1" maxRow="3" />
     <Commodity commodity="Alloy" objectKey="Alloy" placement="CenteredSingle" />
     <Commodity commodity="Metal" objectKey="Metal" placement="CenteredSingle" />
     <Commodity commodity="Beam" objectKey="Beam" placement="CenteredSingle" />

@@ -308,6 +308,7 @@ namespace LSOL.UI
         private static readonly CompanyFinanceCategory[] IncomeBudgetCategories =
         {
             CompanyFinanceCategory.PlayerDelivery,
+            CompanyFinanceCategory.PlayerContract,
             CompanyFinanceCategory.NpcDelivery,
             CompanyFinanceCategory.IndustryIncome,
             CompanyFinanceCategory.MissionReward,
@@ -338,6 +339,7 @@ namespace LSOL.UI
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly GlobalMarketManager _globalMarket;
         private readonly NpcLogisticsManager _npcLogisticsManager;
+        private readonly PlayerContractsManager _playerContractsManager;
         private readonly PropertyManager _propertyManager;
         private readonly BankLoanManager _bankLoanManager;
         private readonly CompanyFinanceTracker _financeTracker;
@@ -392,6 +394,7 @@ namespace LSOL.UI
             VehicleFuelSystem vehicleFuelSystem,
             GlobalMarketManager globalMarket,
             NpcLogisticsManager npcLogisticsManager,
+            PlayerContractsManager playerContractsManager,
             PropertyManager propertyManager,
             BankLoanManager bankLoanManager,
             CompanyFinanceTracker financeTracker,
@@ -415,6 +418,7 @@ namespace LSOL.UI
             _vehicleFuelSystem = vehicleFuelSystem ?? throw new ArgumentNullException(nameof(vehicleFuelSystem));
             _globalMarket = globalMarket ?? throw new ArgumentNullException(nameof(globalMarket));
             _npcLogisticsManager = npcLogisticsManager;
+            _playerContractsManager = playerContractsManager;
             _propertyManager = propertyManager;
             _bankLoanManager = bankLoanManager;
             _financeTracker = financeTracker;
@@ -1124,6 +1128,114 @@ namespace LSOL.UI
             return _npcLogisticsManager != null && _npcLogisticsManager.WorldJobs != null
                 ? _npcLogisticsManager.WorldJobs
                 : Array.Empty<NpcWorldJobSummary>();
+        }
+
+        public PlayerContractsOverview GetPlayerContractsOverview()
+        {
+            return _playerContractsManager != null
+                ? _playerContractsManager.GetOverview() ?? new PlayerContractsOverview()
+                : new PlayerContractsOverview();
+        }
+
+        public IReadOnlyList<PlayerContractListingSummary> GetPlayerContractListings(PlayerContractType type)
+        {
+            return _playerContractsManager != null
+                ? _playerContractsManager.GetListings(type) ?? Array.Empty<PlayerContractListingSummary>()
+                : Array.Empty<PlayerContractListingSummary>();
+        }
+
+        public IReadOnlyList<PlayerContractListingSummary> GetAcceptedPlayerContracts()
+        {
+            return _playerContractsManager != null
+                ? _playerContractsManager.GetAcceptedContracts() ?? Array.Empty<PlayerContractListingSummary>()
+                : Array.Empty<PlayerContractListingSummary>();
+        }
+
+        public PlayerContractListingSummary GetPlayerContractById(string contractId)
+        {
+            return _playerContractsManager != null
+                ? _playerContractsManager.GetContractById(contractId)
+                : null;
+        }
+
+        public void CyclePlayerContractCommodityFilter(int delta)
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.CycleCommodityFilter(delta);
+            MarkViewDirty();
+        }
+
+        public void RefreshPlayerContractsBoard()
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.ForceRefreshBoard(GetCurrentFinanceMinute());
+            MarkNetworkDirty();
+            MarkViewDirty();
+        }
+
+        public bool TryAcceptPlayerContract(string contractId, out string message)
+        {
+            message = "Player contracts are unavailable.";
+            if (_playerContractsManager == null)
+            {
+                return false;
+            }
+
+            var accepted = _playerContractsManager.TryAccept(contractId, out message);
+            if (accepted)
+            {
+                MarkNetworkDirty();
+                MarkCargoDirty();
+                MarkViewDirty();
+            }
+
+            return accepted;
+        }
+
+        public bool TryCancelPlayerContract(string contractId, out string message)
+        {
+            message = "Player contracts are unavailable.";
+            if (_playerContractsManager == null)
+            {
+                return false;
+            }
+
+            var cancelled = _playerContractsManager.TryCancelAccepted(contractId, out message);
+            if (cancelled)
+            {
+                MarkNetworkDirty();
+                MarkCargoDirty();
+                MarkViewDirty();
+            }
+
+            return cancelled;
+        }
+
+        public bool TryDeployQuickJobVehicle(string contractId, out string message)
+        {
+            message = "Player contracts are unavailable.";
+            if (_playerContractsManager == null)
+            {
+                return false;
+            }
+
+            var deployed = _playerContractsManager.TryDeployQuickJobVehicle(contractId, out message);
+            if (deployed)
+            {
+                MarkNetworkDirty();
+                MarkCargoDirty();
+                MarkViewDirty();
+            }
+
+            return deployed;
         }
 
         public IReadOnlyList<NpcWorldDispatchDiagnosticEntry> GetWorldDispatchDiagnostics()
@@ -1862,6 +1974,8 @@ namespace LSOL.UI
             {
                 case CompanyFinanceCategory.PlayerDelivery:
                     return "Player deliveries";
+                case CompanyFinanceCategory.PlayerContract:
+                    return "Player contracts";
                 case CompanyFinanceCategory.NpcDelivery:
                     return "NPC deliveries";
                 case CompanyFinanceCategory.IndustryIncome:

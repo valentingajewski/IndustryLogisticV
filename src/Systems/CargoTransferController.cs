@@ -11,6 +11,7 @@ namespace LSOL.Systems
         private readonly FleetManager _fleetManager;
         private readonly IndustryManager _industryManager;
         private readonly GlobalMarketManager _globalMarket;
+        private readonly PlayerContractsManager _playerContractsManager;
         private readonly TerritoryManager _territoryManager;
         private readonly Action<Industry> _notifyIndustryOutputChanged;
         private readonly Action<string> _showStatus;
@@ -22,6 +23,7 @@ namespace LSOL.Systems
             IndustryManager industryManager,
             GlobalMarketManager globalMarket,
             Action<string> showStatus,
+            PlayerContractsManager playerContractsManager = null,
             TerritoryManager territoryManager = null,
             Action<Industry> notifyIndustryOutputChanged = null)
         {
@@ -29,6 +31,7 @@ namespace LSOL.Systems
             _industryManager = industryManager;
             _globalMarket = globalMarket;
             _showStatus = showStatus;
+            _playerContractsManager = playerContractsManager;
             _territoryManager = territoryManager;
             _notifyIndustryOutputChanged = notifyIndustryOutputChanged;
         }
@@ -97,7 +100,19 @@ namespace LSOL.Systems
                 return;
             }
 
-            if (!EnsureIndustryTransportPermit(industry))
+            PlayerContractTransferContext contractContext = null;
+            string contractMessage = string.Empty;
+            var contractResolution = _playerContractsManager != null
+                ? _playerContractsManager.ResolveLoadContract(industry, cargoVehicle, cargoState, selectedProduct, out contractContext, out contractMessage)
+                : PlayerContractTransferResolution.None;
+            if (contractResolution == PlayerContractTransferResolution.Blocked)
+            {
+                _showStatus(contractMessage);
+                return;
+            }
+
+            var isContractLoad = contractResolution == PlayerContractTransferResolution.Allowed;
+            if (!isContractLoad && !EnsureIndustryTransportPermit(industry))
             {
                 return;
             }
@@ -109,10 +124,12 @@ namespace LSOL.Systems
             }
 
             var requestedCapacity = Math.Max(0f, cargoState.FreeCapacityTons);
-            var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
+            var targetLoadTons = isContractLoad && _playerContractsManager != null
+                ? _playerContractsManager.GetContractLoadCeiling(contractContext, cargoState)
+                : ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
             if (targetLoadTons <= 0.001f)
             {
-                _showStatus("Loading failed: product unavailable.");
+                _showStatus(isContractLoad ? "Loading failed: contract cargo is no longer available." : "Loading failed: product unavailable.");
                 return;
             }
 
@@ -154,7 +171,7 @@ namespace LSOL.Systems
                                 _fleetManager.ClearCargoVisuals(cargoState);
                             }
 
-                            _showStatus("Loading failed: product unavailable.");
+                            _showStatus(isContractLoad ? "Loading failed: contract cargo is no longer available." : "Loading failed: product unavailable.");
                             return;
                         }
 
@@ -172,14 +189,20 @@ namespace LSOL.Systems
                         cargoState.SourceIndustryId = industry != null ? industry.Id : string.Empty;
                         cargoState.SourceDistrictName = industry != null ? industry.DistrictName : string.Empty;
                         _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
-                        if (_territoryManager != null)
+                        if (isContractLoad && _playerContractsManager != null)
+                        {
+                            _playerContractsManager.CommitContractLoad(contractContext, cargoVehicle, cargoState, loaded);
+                        }
+                        else if (_territoryManager != null)
                         {
                             _territoryManager.RegisterLoad(industry, selectedProduct, loaded, false);
                         }
 
                         NotifyIndustryOutputChanged(industry);
 
-                        _showStatus(string.Format("Loaded {0} {1}.", ModFormatting.FormatTons(loaded), selectedProduct));
+                        _showStatus(isContractLoad
+                            ? string.Format("Loaded {0} {1} for the active contract.", ModFormatting.FormatTons(loaded), selectedProduct)
+                            : string.Format("Loaded {0} {1}.", ModFormatting.FormatTons(loaded), selectedProduct));
                     }
                     finally
                     {
@@ -210,14 +233,26 @@ namespace LSOL.Systems
             Action<float> addProfit,
             Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
         {
-            if (!EnsureIndustryTransportPermit(industry))
-            {
-                return;
-            }
-
             if (cargoState.IsEmpty)
             {
                 _showStatus("Vehicle is empty.");
+                return;
+            }
+
+            PlayerContractTransferContext contractContext = null;
+            string contractMessage = string.Empty;
+            var contractResolution = _playerContractsManager != null
+                ? _playerContractsManager.ResolveUnloadContract(industry, cargoVehicle, cargoState, out contractContext, out contractMessage)
+                : PlayerContractTransferResolution.None;
+            if (contractResolution == PlayerContractTransferResolution.Blocked)
+            {
+                _showStatus(contractMessage);
+                return;
+            }
+
+            var isContractUnload = contractResolution == PlayerContractTransferResolution.Allowed;
+            if (!isContractUnload && !EnsureIndustryTransportPermit(industry))
+            {
                 return;
             }
 
@@ -235,6 +270,11 @@ namespace LSOL.Systems
 
             var commodity = cargoState.Commodity;
             var tonsToUnload = Math.Max(0f, cargoState.WeightTons);
+            if (isContractUnload && contractContext != null && contractContext.Contract != null)
+            {
+                tonsToUnload = Math.Min(tonsToUnload, Math.Max(0f, contractContext.Contract.LoadedTons));
+            }
+
             var targetUnloadTons = ResolveUnloadTargetTons(industry, commodity, tonsToUnload);
             if (targetUnloadTons <= 0.001f)
             {
@@ -264,56 +304,75 @@ namespace LSOL.Systems
                             _showStatus("Unloading failed: destination storage full.");
                             return;
                         }
-
-                        var baseRevenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
-                        var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
-                        var revenue = baseRevenue * conditionRatio;
                         var sourceIndustryId = cargoState.SourceIndustryId;
                         var sourceDistrictName = cargoState.SourceDistrictName;
-                        if (_territoryManager != null)
+                        var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
+                        if (isContractUnload && _playerContractsManager != null)
                         {
-                            revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
-                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
-                        }
+                            cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                            var contractResult = _playerContractsManager.CommitContractUnload(contractContext, cargoVehicle, cargoState, accepted, Game.GameTime);
+                            addProfit(contractResult.Payout);
 
-                        addProfit(revenue);
+                            if (contractResult.ContractCompleted)
+                            {
+                                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                            }
+                            else
+                            {
+                                _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                            }
 
-                        cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
-                        var completedDelivery = cargoState.WeightTons <= 0.001f;
-                        recordDeliveryProgress?.Invoke(
-                            industry,
-                            commodity,
-                            accepted,
-                            sourceIndustryId,
-                            sourceDistrictName,
-                            completedDelivery,
-                            completedDelivery && conditionRatio >= 0.999f);
-
-                        if (completedDelivery)
-                        {
-                            ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                            _showStatus(contractResult.Message);
                         }
                         else
                         {
-                            _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
-                        }
+                            var baseRevenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                            var revenue = baseRevenue * conditionRatio;
+                            if (_territoryManager != null)
+                            {
+                                revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
+                                _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
+                            }
 
-                        if (industry != null && industry.IsWarehouse)
-                        {
-                            _showStatus(string.Format(
-                                "Stored {0} {1} | Condition {2}",
-                                ModFormatting.FormatTons(accepted),
+                            addProfit(revenue);
+
+                            cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                            var completedDelivery = cargoState.WeightTons <= 0.001f;
+                            recordDeliveryProgress?.Invoke(
+                                industry,
                                 commodity,
-                                ModFormatting.FormatPercent(conditionRatio * 100f)));
-                        }
-                        else
-                        {
-                            _showStatus(string.Format(
-                                "Unloaded {0} {1}. Profit {2} | Condition {3}",
-                                ModFormatting.FormatTons(accepted),
-                                commodity,
-                                ModFormatting.FormatSignedMoney(revenue),
-                                ModFormatting.FormatPercent(conditionRatio * 100f)));
+                                accepted,
+                                sourceIndustryId,
+                                sourceDistrictName,
+                                completedDelivery,
+                                completedDelivery && conditionRatio >= 0.999f);
+
+                            if (completedDelivery)
+                            {
+                                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                            }
+                            else
+                            {
+                                _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                            }
+
+                            if (industry != null && industry.IsWarehouse)
+                            {
+                                _showStatus(string.Format(
+                                    "Stored {0} {1} | Condition {2}",
+                                    ModFormatting.FormatTons(accepted),
+                                    commodity,
+                                    ModFormatting.FormatPercent(conditionRatio * 100f)));
+                            }
+                            else
+                            {
+                                _showStatus(string.Format(
+                                    "Unloaded {0} {1}. Profit {2} | Condition {3}",
+                                    ModFormatting.FormatTons(accepted),
+                                    commodity,
+                                    ModFormatting.FormatSignedMoney(revenue),
+                                    ModFormatting.FormatPercent(conditionRatio * 100f)));
+                            }
                         }
                     }
                     finally
@@ -343,7 +402,19 @@ namespace LSOL.Systems
             string selectedProduct,
             Action beforeStart)
         {
-            if (!EnsureIndustryTransportPermit(industry))
+            PlayerContractTransferContext contractContext = null;
+            string contractMessage = string.Empty;
+            var contractResolution = _playerContractsManager != null
+                ? _playerContractsManager.ResolveLoadContract(industry, cargoVehicle, cargoState, selectedProduct, out contractContext, out contractMessage)
+                : PlayerContractTransferResolution.None;
+            if (contractResolution == PlayerContractTransferResolution.Blocked)
+            {
+                _showStatus(contractMessage);
+                return;
+            }
+
+            var isContractLoad = contractResolution == PlayerContractTransferResolution.Allowed;
+            if (!isContractLoad && !EnsureIndustryTransportPermit(industry))
             {
                 return;
             }
@@ -355,10 +426,12 @@ namespace LSOL.Systems
             }
 
             var requestedCapacity = Math.Max(0f, cargoState.FreeCapacityTons);
-            var targetLoadTons = ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
+            var targetLoadTons = isContractLoad && _playerContractsManager != null
+                ? _playerContractsManager.GetContractLoadCeiling(contractContext, cargoState)
+                : ResolveLoadTargetTons(industry, selectedProduct, requestedCapacity);
             if (targetLoadTons <= 0.001f)
             {
-                _showStatus("Loading failed: product unavailable.");
+                _showStatus(isContractLoad ? "Loading failed: contract cargo is no longer available." : "Loading failed: product unavailable.");
                 return;
             }
 
@@ -400,7 +473,7 @@ namespace LSOL.Systems
                                 _fleetManager.ClearCargoVisuals(cargoState);
                             }
 
-                            _showStatus("Loading failed: product unavailable.");
+                            _showStatus(isContractLoad ? "Loading failed: contract cargo is no longer available." : "Loading failed: product unavailable.");
                             return;
                         }
 
@@ -418,14 +491,20 @@ namespace LSOL.Systems
                         cargoState.SourceIndustryId = industry != null ? industry.Id : string.Empty;
                         cargoState.SourceDistrictName = industry != null ? industry.DistrictName : string.Empty;
                         _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
-                        if (_territoryManager != null)
+                        if (isContractLoad && _playerContractsManager != null)
+                        {
+                            _playerContractsManager.CommitContractLoad(contractContext, cargoVehicle, cargoState, loaded);
+                        }
+                        else if (_territoryManager != null)
                         {
                             _territoryManager.RegisterLoad(industry, selectedProduct, loaded, false);
                         }
 
                         NotifyIndustryOutputChanged(industry);
 
-                        _showStatus(string.Format("Loaded {0} {1}.", ModFormatting.FormatTons(loaded), selectedProduct));
+                        _showStatus(isContractLoad
+                            ? string.Format("Loaded {0} {1} for the active contract.", ModFormatting.FormatTons(loaded), selectedProduct)
+                            : string.Format("Loaded {0} {1}.", ModFormatting.FormatTons(loaded), selectedProduct));
                     }
                     finally
                     {
@@ -455,13 +534,30 @@ namespace LSOL.Systems
             Action<float> addProfit,
             Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
         {
-            if (!EnsureIndustryTransportPermit(industry))
+            PlayerContractTransferContext contractContext = null;
+            string contractMessage = string.Empty;
+            var contractResolution = _playerContractsManager != null
+                ? _playerContractsManager.ResolveUnloadContract(industry, cargoVehicle, cargoState, out contractContext, out contractMessage)
+                : PlayerContractTransferResolution.None;
+            if (contractResolution == PlayerContractTransferResolution.Blocked)
+            {
+                _showStatus(contractMessage);
+                return;
+            }
+
+            var isContractUnload = contractResolution == PlayerContractTransferResolution.Allowed;
+            if (!isContractUnload && !EnsureIndustryTransportPermit(industry))
             {
                 return;
             }
 
             var commodity = cargoState.Commodity;
             var tonsToUnload = Math.Max(0f, cargoState.WeightTons);
+            if (isContractUnload && contractContext != null && contractContext.Contract != null)
+            {
+                tonsToUnload = Math.Min(tonsToUnload, Math.Max(0f, contractContext.Contract.LoadedTons));
+            }
+
             var targetUnloadTons = ResolveUnloadTargetTons(industry, commodity, tonsToUnload);
             if (targetUnloadTons <= 0.001f)
             {
@@ -492,45 +588,65 @@ namespace LSOL.Systems
                             _showStatus("Unloading failed: destination storage full.");
                             return;
                         }
-
-                        var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
                         var sourceIndustryId = cargoState.SourceIndustryId;
                         var sourceDistrictName = cargoState.SourceDistrictName;
-                        if (_territoryManager != null)
+                        var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
+                        if (isContractUnload && _playerContractsManager != null)
                         {
-                            revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
-                            _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
-                        }
+                            cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                            var contractResult = _playerContractsManager.CommitContractUnload(contractContext, cargoVehicle, cargoState, accepted, Game.GameTime);
+                            addProfit(contractResult.Payout);
 
-                        addProfit(revenue);
+                            if (contractResult.ContractCompleted)
+                            {
+                                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                            }
+                            else
+                            {
+                                _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                            }
 
-                        cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
-                        var completedDelivery = cargoState.WeightTons <= 0.001f;
-                        recordDeliveryProgress?.Invoke(
-                            industry,
-                            commodity,
-                            accepted,
-                            sourceIndustryId,
-                            sourceDistrictName,
-                            completedDelivery,
-                            completedDelivery && conditionRatio >= 0.999f);
-
-                        if (completedDelivery)
-                        {
-                            ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                            _showStatus(contractResult.Message);
                         }
                         else
                         {
-                            _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
-                        }
+                            var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
+                            if (_territoryManager != null)
+                            {
+                                revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
+                                _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
+                            }
 
-                        if (industry != null && industry.IsWarehouse)
-                        {
-                            _showStatus(string.Format("Stored {0} {1}", ModFormatting.FormatTons(accepted), commodity));
-                        }
-                        else
-                        {
-                            _showStatus(string.Format("Unloaded {0} {1}. Profit {2}", ModFormatting.FormatTons(accepted), commodity, ModFormatting.FormatSignedMoney(revenue)));
+                            addProfit(revenue);
+
+                            cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
+                            var completedDelivery = cargoState.WeightTons <= 0.001f;
+                            recordDeliveryProgress?.Invoke(
+                                industry,
+                                commodity,
+                                accepted,
+                                sourceIndustryId,
+                                sourceDistrictName,
+                                completedDelivery,
+                                completedDelivery && conditionRatio >= 0.999f);
+
+                            if (completedDelivery)
+                            {
+                                ClearCargoStateAndVisuals(cargoVehicle, cargoState);
+                            }
+                            else
+                            {
+                                _fleetManager.ApplyCargoVisuals(cargoVehicle, cargoState);
+                            }
+
+                            if (industry != null && industry.IsWarehouse)
+                            {
+                                _showStatus(string.Format("Stored {0} {1}", ModFormatting.FormatTons(accepted), commodity));
+                            }
+                            else
+                            {
+                                _showStatus(string.Format("Unloaded {0} {1}. Profit {2}", ModFormatting.FormatTons(accepted), commodity, ModFormatting.FormatSignedMoney(revenue)));
+                            }
                         }
                     }
                     finally

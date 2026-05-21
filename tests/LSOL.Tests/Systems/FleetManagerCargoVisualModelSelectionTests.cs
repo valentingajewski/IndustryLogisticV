@@ -59,13 +59,13 @@ namespace LSOL.Tests.Systems
         [TestMethod]
         public void TrflatBricksOverride_ResolvesGridPlacement()
         {
-            AssertTrflatCommodityPlacement("Bricks", VehicleObjectPlacementMode.Grid, "Bricks");
+            AssertTrflatCommodityPlacement("Bricks", VehicleObjectPlacementMode.Grid, "Bricks", 1, 6, 0f, 0f, 1.26f);
         }
 
         [TestMethod]
         public void TrflatLumberOverride_ResolvesGridPlacement()
         {
-            AssertTrflatCommodityPlacement("Lumber", VehicleObjectPlacementMode.Grid, "Lumber");
+            AssertTrflatCommodityPlacement("Lumber", VehicleObjectPlacementMode.Grid, "Lumber", 1, 3, 0f, 0f, 0.90f);
         }
 
         [TestMethod]
@@ -131,7 +131,15 @@ namespace LSOL.Tests.Systems
             return ModConfig.Load(Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config"));
         }
 
-        private static void AssertTrflatCommodityPlacement(string commodity, VehicleObjectPlacementMode expectedPlacementMode, string expectedObjectKey)
+        private static void AssertTrflatCommodityPlacement(
+            string commodity,
+            VehicleObjectPlacementMode expectedPlacementMode,
+            string expectedObjectKey,
+            int? expectedMaxLine = null,
+            int? expectedMaxRow = null,
+            float? expectedCenterX = null,
+            float? expectedCenterY = null,
+            float? expectedCenterZ = null)
         {
             var config = LoadRepoConfig();
             var manager = new FleetManager(config);
@@ -143,8 +151,31 @@ namespace LSOL.Tests.Systems
             Assert.IsNotNull(resolvedLayout, commodity);
             Assert.AreEqual(expectedPlacementMode, placementMode, commodity + " placement");
             Assert.AreEqual(expectedObjectKey, resolvedLayout.ObjectKey, commodity + " objectKey");
-            Assert.AreEqual(2, resolvedLayout.MaxLine, commodity + " maxLine");
-            Assert.AreEqual(3, resolvedLayout.MaxRow, commodity + " maxRow");
+
+            if (expectedMaxLine.HasValue)
+            {
+                Assert.AreEqual(expectedMaxLine.Value, resolvedLayout.MaxLine, commodity + " maxLine");
+            }
+
+            if (expectedMaxRow.HasValue)
+            {
+                Assert.AreEqual(expectedMaxRow.Value, resolvedLayout.MaxRow, commodity + " maxRow");
+            }
+
+            if (expectedCenterX.HasValue)
+            {
+                Assert.AreEqual(expectedCenterX.Value, resolvedLayout.CenterOffset.X, 0.01f, commodity + " centerX");
+            }
+
+            if (expectedCenterY.HasValue)
+            {
+                Assert.AreEqual(expectedCenterY.Value, resolvedLayout.CenterOffset.Y, 0.01f, commodity + " centerY");
+            }
+
+            if (expectedCenterZ.HasValue)
+            {
+                Assert.AreEqual(expectedCenterZ.Value, resolvedLayout.CenterOffset.Z, 0.01f, commodity + " centerZ");
+            }
         }
 
         private static List<string> InvokeResolveCargoPropModels(FleetManager manager, string commodity, VehicleCargoType cargoType, VehicleDefinition definition, VehicleObjectLayoutDefinition configuredLayout)

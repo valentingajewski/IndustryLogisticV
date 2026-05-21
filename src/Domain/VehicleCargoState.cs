@@ -25,6 +25,8 @@ namespace LSOL.Domain
         public float LastTrackedRigSpeed { get; set; }
         public string SourceIndustryId { get; set; }
         public string SourceDistrictName { get; set; }
+        public string PlayerContractId { get; set; }
+        public string PlayerContractDestinationIndustryId { get; set; }
         public List<Prop> AttachedProps { get; }
 
         public bool IsEmpty
@@ -73,6 +75,8 @@ namespace LSOL.Domain
             LastTrackedRigSpeed = 0f;
             SourceIndustryId = string.Empty;
             SourceDistrictName = string.Empty;
+            PlayerContractId = string.Empty;
+            PlayerContractDestinationIndustryId = string.Empty;
         }
     }
 }

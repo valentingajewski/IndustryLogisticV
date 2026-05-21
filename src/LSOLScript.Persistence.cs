@@ -29,6 +29,7 @@ namespace LSOL
             _specialMissionManager.ResetState();
             _globalMarket.Reset(Game.GameTime);
             _npcLogisticsManager.ClearAll();
+            _playerContractsManager.ClearAll();
             _propertyManager.ResetState();
             _fleetManager.DespawnOwnedFleet();
             _fleetManager.ClearAllStates();
@@ -517,6 +518,7 @@ namespace LSOL
                 Finance = _financeTracker.CreatePersistenceSnapshot(),
                 BankLoans = _bankLoanManager.CreatePersistenceSnapshot(),
                 PlayerStatistics = _playerSuccessTracker.CreatePersistenceSnapshot(),
+                PlayerContracts = _playerContractsManager.CreatePersistenceSnapshot(),
             };
         }
 
@@ -599,6 +601,7 @@ namespace LSOL
 
             _propertyManager.ApplySnapshot(propertySnapshot, GetCurrentInGameWeekMinute());
             _npcLogisticsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.NpcLogistics : null);
+            _playerContractsManager.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerContracts : null);
             if (_isConstructing)
             {
                 _pendingOwnedFleetRestore = ownedFleetSnapshot != null && ownedFleetSnapshot.HasData

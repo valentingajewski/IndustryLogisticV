@@ -1791,6 +1791,8 @@ namespace LSOL.Systems
                 cargoState.TotalLostTons = Math.Max(0f, entry.TotalLostTons);
                 cargoState.SourceIndustryId = entry.SourceIndustryId;
                 cargoState.SourceDistrictName = entry.SourceDistrictName;
+                cargoState.PlayerContractId = entry.PlayerContractId ?? string.Empty;
+                cargoState.PlayerContractDestinationIndustryId = entry.PlayerContractDestinationIndustryId ?? string.Empty;
             }
 
             ApplyCommercialVehicleMaintenanceState(truck, entry.MaintenanceCondition);
@@ -1883,6 +1885,8 @@ namespace LSOL.Systems
                     entry.TotalLostTons = cargoState.TotalLostTons;
                     entry.SourceIndustryId = cargoState.SourceIndustryId;
                     entry.SourceDistrictName = cargoState.SourceDistrictName;
+                    entry.PlayerContractId = cargoState.PlayerContractId;
+                    entry.PlayerContractDestinationIndustryId = cargoState.PlayerContractDestinationIndustryId;
                 }
             }
 

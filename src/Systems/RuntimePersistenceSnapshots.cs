@@ -47,6 +47,10 @@ namespace LSOL.Systems
 
         public string SourceDistrictName { get; set; }
 
+        public string PlayerContractId { get; set; }
+
+        public string PlayerContractDestinationIndustryId { get; set; }
+
         public float CurrentFuelLiters { get; set; }
 
         public float MaintenanceCondition { get; set; } = 1f;

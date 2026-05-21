@@ -241,6 +241,11 @@ namespace LSOL.Systems
                 persistenceVersion = 20;
             }
 
+            if (metadata != null && HasPlayerContractsData(metadata.PlayerContracts))
+            {
+                persistenceVersion = 21;
+            }
+
             writer.WriteLine(
                 "Version={0}",
                 persistenceVersion);
@@ -363,6 +368,11 @@ namespace LSOL.Systems
             {
                 WritePlayerStatisticsSnapshot(writer, metadata.PlayerStatistics);
             }
+
+            if (metadata != null && HasPlayerContractsData(metadata.PlayerContracts))
+            {
+                WritePlayerContractsSnapshot(writer, metadata.PlayerContracts);
+            }
         }
 
         private static IndustryPersistenceMetadata ReadMetadata(IniFile ini)
@@ -430,10 +440,12 @@ namespace LSOL.Systems
             metadata.Finance = ReadFinanceSnapshot(ini);
             metadata.BankLoans = ReadBankLoanSnapshot(ini);
             metadata.PlayerStatistics = ReadPlayerStatisticsSnapshot(ini);
+            metadata.PlayerContracts = ReadPlayerContractsSnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
-                || HasPlayerStatisticsData(metadata.PlayerStatistics);
+                || HasPlayerStatisticsData(metadata.PlayerStatistics)
+                || HasPlayerContractsData(metadata.PlayerContracts);
             return metadata;
         }
 
@@ -872,6 +884,166 @@ namespace LSOL.Systems
             return snapshot;
         }
 
+        private static void WritePlayerContractsSnapshot(StreamWriter writer, PlayerContractsPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[PlayerContracts]");
+            writer.WriteLine("NextContractId={0}", Math.Max(1, snapshot.NextContractId));
+            writer.WriteLine("LastBoardRefreshMinute={0}", snapshot.LastBoardRefreshMinute);
+            writer.WriteLine("SelectedCommodityFilter={0}", snapshot.SelectedCommodityFilter ?? string.Empty);
+            writer.WriteLine();
+
+            if (snapshot.Contracts != null)
+            {
+                foreach (var contract in snapshot.Contracts.OrderBy(entry => entry != null ? entry.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (contract == null || string.IsNullOrWhiteSpace(contract.Id))
+                    {
+                        continue;
+                    }
+
+                    writer.WriteLine("[{0}]", BuildPlayerContractSectionName(contract.Id));
+                    writer.WriteLine("Type={0}", contract.Type);
+                    writer.WriteLine("Status={0}", contract.Status);
+                    writer.WriteLine("Commodity={0}", contract.Commodity ?? string.Empty);
+                    writer.WriteLine("OriginIndustryId={0}", contract.OriginIndustryId ?? string.Empty);
+                    writer.WriteLine("DestinationIndustryId={0}", contract.DestinationIndustryId ?? string.Empty);
+                    writer.WriteLine("ListedTons={0}", FormatFloat(contract.ListedTons));
+                    writer.WriteLine("LoadedTons={0}", FormatFloat(contract.LoadedTons));
+                    writer.WriteLine("DeliveredTons={0}", FormatFloat(contract.DeliveredTons));
+                    writer.WriteLine("RouteDistanceMeters={0}", FormatFloat(contract.RouteDistanceMeters));
+                    writer.WriteLine("QuotedUnitPrice={0}", FormatFloat(contract.QuotedUnitPrice));
+                    writer.WriteLine("QuotedGrossPayout={0}", FormatFloat(contract.QuotedGrossPayout));
+                    writer.WriteLine("QuotedImbalanceScore={0}", FormatFloat(contract.QuotedImbalanceScore));
+                    writer.WriteLine("ListedAtMinute={0}", contract.ListedAtMinute);
+                    writer.WriteLine("ExpiryMinute={0}", contract.ExpiryMinute);
+                    writer.WriteLine("AcceptedAtMinute={0}", contract.AcceptedAtMinute);
+                    writer.WriteLine("AcceptedExpiryMinute={0}", contract.AcceptedExpiryMinute);
+                    writer.WriteLine("VehicleRequirementLabel={0}", contract.VehicleRequirementLabel ?? string.Empty);
+                    writer.WriteLine("SuppliesVehicle={0}", contract.SuppliesVehicle ? "true" : "false");
+                    writer.WriteLine("RequiresOwnedVehicle={0}", contract.RequiresOwnedVehicle ? "true" : "false");
+                    writer.WriteLine("AssignedCommercialVehicleAssetId={0}", contract.AssignedCommercialVehicleAssetId ?? string.Empty);
+                    writer.WriteLine("AssignedCommercialVehicleDisplayName={0}", contract.AssignedCommercialVehicleDisplayName ?? string.Empty);
+                    writer.WriteLine("QuickJobPoweredModelName={0}", contract.QuickJobPoweredModelName ?? string.Empty);
+                    writer.WriteLine("QuickJobCargoModelName={0}", contract.QuickJobCargoModelName ?? string.Empty);
+                    writer.WriteLine("QuickJobHasSeparateCargoVehicle={0}", contract.QuickJobHasSeparateCargoVehicle ? "true" : "false");
+                    writer.WriteLine("QuickJobCapacityTons={0}", FormatFloat(contract.QuickJobCapacityTons));
+                    writer.WriteLine("QuickJobNeedsDeploy={0}", contract.QuickJobNeedsDeploy ? "true" : "false");
+                    writer.WriteLine("CargoCondition={0}", FormatFloat(contract.CargoCondition));
+                    writer.WriteLine("TotalLostTons={0}", FormatFloat(contract.TotalLostTons));
+                    writer.WriteLine("SourceDistrictName={0}", contract.SourceDistrictName ?? string.Empty);
+                    writer.WriteLine("StatusMessage={0}", contract.StatusMessage ?? string.Empty);
+                    writer.WriteLine();
+                }
+            }
+
+            if (snapshot.Cooldowns == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < snapshot.Cooldowns.Count; i++)
+            {
+                var cooldown = snapshot.Cooldowns[i];
+                if (cooldown == null || string.IsNullOrWhiteSpace(cooldown.RouteKey))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPlayerContractCooldownSectionName(i + 1));
+                writer.WriteLine("RouteKey={0}", cooldown.RouteKey ?? string.Empty);
+                writer.WriteLine("AvailableAgainMinute={0}", cooldown.AvailableAgainMinute);
+                writer.WriteLine();
+            }
+        }
+
+        private static PlayerContractsPersistenceSnapshot ReadPlayerContractsSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new PlayerContractsPersistenceSnapshot();
+            if (ini.HasSection("PlayerContracts"))
+            {
+                snapshot.NextContractId = ParseInt(ini.GetString("PlayerContracts", "NextContractId", "1"), 1);
+                snapshot.LastBoardRefreshMinute = ParseInt(ini.GetString("PlayerContracts", "LastBoardRefreshMinute", "-1"), -1);
+                snapshot.SelectedCommodityFilter = CommodityCatalog.Normalize(ini.GetString("PlayerContracts", "SelectedCommodityFilter", string.Empty));
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section))
+                {
+                    continue;
+                }
+
+                if (section.StartsWith("PlayerContract:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var contractId = section.Substring("PlayerContract:".Length).Trim();
+                    if (string.IsNullOrWhiteSpace(contractId))
+                    {
+                        continue;
+                    }
+
+                    snapshot.Contracts.Add(new PlayerContractSnapshot
+                    {
+                        Id = contractId,
+                        Type = ParsePlayerContractType(ini.GetString(section, "Type", PlayerContractType.QuickJob.ToString()), PlayerContractType.QuickJob),
+                        Status = ParsePlayerContractStatus(ini.GetString(section, "Status", PlayerContractStatus.Accepted.ToString()), PlayerContractStatus.Accepted),
+                        Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                        OriginIndustryId = ini.GetString(section, "OriginIndustryId", string.Empty),
+                        DestinationIndustryId = ini.GetString(section, "DestinationIndustryId", string.Empty),
+                        ListedTons = ini.GetFloat(section, "ListedTons", 0f),
+                        LoadedTons = ini.GetFloat(section, "LoadedTons", 0f),
+                        DeliveredTons = ini.GetFloat(section, "DeliveredTons", 0f),
+                        RouteDistanceMeters = ini.GetFloat(section, "RouteDistanceMeters", 0f),
+                        QuotedUnitPrice = ini.GetFloat(section, "QuotedUnitPrice", 0f),
+                        QuotedGrossPayout = ini.GetFloat(section, "QuotedGrossPayout", 0f),
+                        QuotedImbalanceScore = ini.GetFloat(section, "QuotedImbalanceScore", 0f),
+                        ListedAtMinute = ParseInt(ini.GetString(section, "ListedAtMinute", "0"), 0),
+                        ExpiryMinute = ParseInt(ini.GetString(section, "ExpiryMinute", "0"), 0),
+                        AcceptedAtMinute = ParseInt(ini.GetString(section, "AcceptedAtMinute", "0"), 0),
+                        AcceptedExpiryMinute = ParseInt(ini.GetString(section, "AcceptedExpiryMinute", "0"), 0),
+                        VehicleRequirementLabel = ini.GetString(section, "VehicleRequirementLabel", string.Empty),
+                        SuppliesVehicle = ini.GetBool(section, "SuppliesVehicle", false),
+                        RequiresOwnedVehicle = ini.GetBool(section, "RequiresOwnedVehicle", false),
+                        AssignedCommercialVehicleAssetId = ini.GetString(section, "AssignedCommercialVehicleAssetId", string.Empty),
+                        AssignedCommercialVehicleDisplayName = ini.GetString(section, "AssignedCommercialVehicleDisplayName", string.Empty),
+                        QuickJobPoweredModelName = ini.GetString(section, "QuickJobPoweredModelName", string.Empty),
+                        QuickJobCargoModelName = ini.GetString(section, "QuickJobCargoModelName", string.Empty),
+                        QuickJobHasSeparateCargoVehicle = ini.GetBool(section, "QuickJobHasSeparateCargoVehicle", false),
+                        QuickJobCapacityTons = ini.GetFloat(section, "QuickJobCapacityTons", 0f),
+                        QuickJobNeedsDeploy = ini.GetBool(section, "QuickJobNeedsDeploy", false),
+                        CargoCondition = ini.GetFloat(section, "CargoCondition", 1f),
+                        TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
+                        SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
+                        StatusMessage = ini.GetString(section, "StatusMessage", string.Empty),
+                    });
+
+                    continue;
+                }
+
+                if (!section.StartsWith("PlayerContractCooldown:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                snapshot.Cooldowns.Add(new PlayerContractCooldownSnapshot
+                {
+                    RouteKey = ini.GetString(section, "RouteKey", string.Empty),
+                    AvailableAgainMinute = ParseInt(ini.GetString(section, "AvailableAgainMinute", "0"), 0),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
         private static void WriteNamedSeriesPersistence(
             StreamWriter writer,
             string sectionPrefix,
@@ -1000,6 +1172,8 @@ namespace LSOL.Systems
                 writer.WriteLine("TotalLostTons={0}", FormatFloat(vehicle.TotalLostTons));
                 writer.WriteLine("SourceIndustryId={0}", vehicle.SourceIndustryId ?? string.Empty);
                 writer.WriteLine("SourceDistrictName={0}", vehicle.SourceDistrictName ?? string.Empty);
+                writer.WriteLine("PlayerContractId={0}", vehicle.PlayerContractId ?? string.Empty);
+                writer.WriteLine("PlayerContractDestinationIndustryId={0}", vehicle.PlayerContractDestinationIndustryId ?? string.Empty);
                 writer.WriteLine("CurrentFuelLiters={0}", FormatFloat(vehicle.CurrentFuelLiters));
                 writer.WriteLine("MaintenanceCondition={0}", FormatFloat(vehicle.MaintenanceCondition));
                 writer.WriteLine("LastMaintenanceWeekIndex={0}", vehicle.LastMaintenanceWeekIndex);
@@ -1046,6 +1220,8 @@ namespace LSOL.Systems
                     TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
                     SourceIndustryId = ini.GetString(section, "SourceIndustryId", string.Empty),
                     SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
+                    PlayerContractId = ini.GetString(section, "PlayerContractId", string.Empty),
+                    PlayerContractDestinationIndustryId = ini.GetString(section, "PlayerContractDestinationIndustryId", string.Empty),
                     CurrentFuelLiters = ini.GetFloat(section, "CurrentFuelLiters", 0f),
                     MaintenanceCondition = ini.GetFloat(section, "MaintenanceCondition", 1f),
                     LastMaintenanceWeekIndex = ParseInt(ini.GetString(section, "LastMaintenanceWeekIndex", "-1"), -1),
@@ -1149,6 +1325,8 @@ namespace LSOL.Systems
                 writer.WriteLine("TotalLostTons={0}", FormatFloat(vehicle.TotalLostTons));
                 writer.WriteLine("SourceIndustryId={0}", vehicle.SourceIndustryId ?? string.Empty);
                 writer.WriteLine("SourceDistrictName={0}", vehicle.SourceDistrictName ?? string.Empty);
+                writer.WriteLine("PlayerContractId={0}", vehicle.PlayerContractId ?? string.Empty);
+                writer.WriteLine("PlayerContractDestinationIndustryId={0}", vehicle.PlayerContractDestinationIndustryId ?? string.Empty);
                 writer.WriteLine("CurrentFuelLiters={0}", FormatFloat(vehicle.CurrentFuelLiters));
                 writer.WriteLine("MaintenanceCondition={0}", FormatFloat(vehicle.MaintenanceCondition));
                 writer.WriteLine("LastMaintenanceWeekIndex={0}", vehicle.LastMaintenanceWeekIndex);
@@ -1291,6 +1469,8 @@ namespace LSOL.Systems
                             TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
                             SourceIndustryId = ini.GetString(section, "SourceIndustryId", string.Empty),
                             SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
+                            PlayerContractId = ini.GetString(section, "PlayerContractId", string.Empty),
+                            PlayerContractDestinationIndustryId = ini.GetString(section, "PlayerContractDestinationIndustryId", string.Empty),
                             CurrentFuelLiters = ini.GetFloat(section, "CurrentFuelLiters", 0f),
                             MaintenanceCondition = ini.GetFloat(section, "MaintenanceCondition", 1f),
                             LastMaintenanceWeekIndex = ParseInt(ini.GetString(section, "LastMaintenanceWeekIndex", "-1"), -1),
@@ -2402,6 +2582,16 @@ namespace LSOL.Systems
             return "PropertyCommercialVehicle:" + (assetId ?? string.Empty).Trim();
         }
 
+        private static string BuildPlayerContractSectionName(string contractId)
+        {
+            return "PlayerContract:" + (contractId ?? string.Empty).Trim();
+        }
+
+        private static string BuildPlayerContractCooldownSectionName(int index)
+        {
+            return "PlayerContractCooldown:" + Math.Max(1, index).ToString(CultureInfo.InvariantCulture);
+        }
+
         private static string BuildPropertyPersonalVehicleSectionName(string assetId)
         {
             return "PropertyPersonalVehicle:" + (assetId ?? string.Empty).Trim();
@@ -2677,6 +2867,11 @@ namespace LSOL.Systems
                     || snapshot.HighestDoctrineTier > 0);
         }
 
+        private static bool HasPlayerContractsData(PlayerContractsPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
         private static bool HasGlobalMarketData(GlobalMarketPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -2701,6 +2896,28 @@ namespace LSOL.Systems
             }
 
             CompanyFinanceCategory parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static PlayerContractType ParsePlayerContractType(string raw, PlayerContractType fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            PlayerContractType parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static PlayerContractStatus ParsePlayerContractStatus(string raw, PlayerContractStatus fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            PlayerContractStatus parsed;
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 
@@ -2964,5 +3181,6 @@ namespace LSOL.Systems
         public CompanyFinancePersistenceSnapshot Finance { get; set; }
         public BankLoanPersistenceSnapshot BankLoans { get; set; }
         public PlayerStatisticsPersistenceSnapshot PlayerStatistics { get; set; }
+        public PlayerContractsPersistenceSnapshot PlayerContracts { get; set; }
     }
 }

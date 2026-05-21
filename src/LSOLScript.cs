@@ -107,6 +107,7 @@ namespace LSOL
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
         private readonly NpcLogisticsManager _npcLogisticsManager;
+        private readonly PlayerContractsManager _playerContractsManager;
         private readonly IndustryRefuelService _industryRefuelService;
         private readonly OfficeObjectManager _officeObjectManager;
         private readonly NpcLogisticsController _npcLogisticsController;
@@ -264,11 +265,30 @@ namespace LSOL
                 GetIndustryMarkerPosition,
                 IsPetrolServiceStation,
                 _territoryManager);
+            _playerContractsManager = new PlayerContractsManager(
+                _industryManager,
+                _fleetManager,
+                _propertyManager,
+                _globalMarket,
+                GetGroundPosition,
+                () => Game.Player.Character,
+                GetCurrentInGameWeekMinute,
+                message => ShowStatus(message),
+                _territoryManager,
+                () =>
+                {
+                    if (_tabletStateStore != null)
+                    {
+                        _tabletStateStore.MarkNetworkDirty();
+                        _tabletStateStore.MarkCargoDirty();
+                    }
+                });
             _cargoTransferController = new CargoTransferController(
                 _fleetManager,
                 _industryManager,
                 _globalMarket,
                 message => ShowStatus(message),
+                _playerContractsManager,
                 _territoryManager,
                 industry => _industryOutputPropManager.RefreshIndustry(industry));
             var cargoFilterOrder = _config.CargoTypes != null && _config.CargoTypes.Count > 0
@@ -464,6 +484,7 @@ namespace LSOL
                 _vehicleFuelSystem,
                 _globalMarket,
                 _npcLogisticsManager,
+                _playerContractsManager,
                 _propertyManager,
                 _bankLoanManager,
                 _financeTracker,
@@ -499,7 +520,7 @@ namespace LSOL
             _tabletShellController.RegisterApp(new AnalyticsTabletApp());
             _tabletShellController.RegisterApp(new SuccessesTabletApp(_playerSuccessTracker));
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
-            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested));
+            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested, message => ShowStatus(message)));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
                 IndustryInteractionDistance,
                 HandleTabletLoadRequested,
@@ -665,6 +686,7 @@ namespace LSOL
             }
 
             _npcLogisticsManager.Update(gameTime, GetCurrentInGameWeekMinute());
+            _playerContractsManager.Update(gameTime, GetCurrentInGameWeekMinute());
             if (_industryRefuelService.Update(gameTime))
             {
                 _tabletStateStore.MarkCargoDirty();
@@ -5023,7 +5045,17 @@ namespace LSOL
                 {
                     CloseIndustryTablet();
                 },
-                amount => AddProfit(CompanyFinanceCategory.PlayerDelivery, amount, deliveryDescription),
+                amount => AddProfit(
+                    cargoState != null && !string.IsNullOrWhiteSpace(cargoState.PlayerContractId)
+                        ? CompanyFinanceCategory.PlayerContract
+                        : CompanyFinanceCategory.PlayerDelivery,
+                    amount,
+                    cargoState != null && !string.IsNullOrWhiteSpace(cargoState.PlayerContractId)
+                        ? string.Format(
+                            "Contract delivery of {0} to {1}",
+                            cargoState.Commodity ?? "cargo",
+                            industry != null ? industry.Name : "destination")
+                        : deliveryDescription),
                 RecordPlayerSuccessDeliveryProgress);
         }
 
@@ -6113,6 +6145,7 @@ namespace LSOL
             CancelApartmentSleepTransition();
             _specialMissionManager.Shutdown();
             _npcLogisticsManager.ClearAll();
+            _playerContractsManager.ClearAll();
             CancelActiveRefuelDispatchForShutdown();
             DestroyMapBlips();
             _cargoTransferController.ClearState();

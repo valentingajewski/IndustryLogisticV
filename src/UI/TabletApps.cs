@@ -1339,13 +1339,14 @@ namespace LSOL.UI
         private readonly Action _clearGpsRoute;
         private readonly Action _requestRefuelService;
         private readonly Action _requestRepairService;
+        private readonly Action<string> _showStatus;
         private LocationListFilterMode _industryFilterMode;
         private LocationListFilterMode _permitFilterMode;
         private LocationListFilterMode _storeFilterMode;
         private LocationListFilterMode _stationFilterMode;
         private DispatchDiagnosticsFilterMode _dispatchDiagnosticsFilterMode;
 
-        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService)
+        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService, Action<string> showStatus = null)
         {
             _interactionDistance = interactionDistance;
             _purchasePermit = purchasePermit;
@@ -1353,6 +1354,7 @@ namespace LSOL.UI
             _clearGpsRoute = clearGpsRoute;
             _requestRefuelService = requestRefuelService;
             _requestRepairService = requestRepairService;
+            _showStatus = showStatus;
             _industryFilterMode = LocationListFilterMode.All;
             _permitFilterMode = LocationListFilterMode.All;
             _storeFilterMode = LocationListFilterMode.All;
@@ -1375,6 +1377,16 @@ namespace LSOL.UI
                     return BuildLocationListPage(context, "Construction Sites", "Delivery sinks and build-site detail pages", context.Snapshot.ConstructionSiteSummaries, true, false);
                 case "dispatch":
                     return BuildDispatchPage(context);
+                case "dispatch-world":
+                    return BuildWorldDispatchPage(context);
+                case "dispatch-quick-jobs":
+                    return BuildPlayerContractListPage(context, PlayerContractType.QuickJob);
+                case "dispatch-freight-market":
+                    return BuildPlayerContractListPage(context, PlayerContractType.FreightMarket);
+                case "dispatch-accepted-contracts":
+                    return BuildAcceptedContractsPage(context);
+                case "dispatch-contract-detail":
+                    return BuildPlayerContractDetailPage(context, route != null ? route.Payload as string : null);
                 case "dispatch-diagnostics":
                     return BuildDispatchDiagnosticsPage(context);
                 case "stores":
@@ -1406,6 +1418,7 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var dispatchOverview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
+            var contractsOverview = context.StateStore.GetPlayerContractsOverview() ?? new PlayerContractsOverview();
             var permitSummaries = snapshot.IndustrySummaries.Concat(snapshot.ConstructionSiteSummaries).ToList();
             var items = new List<MenuItem>();
             if (!string.IsNullOrWhiteSpace(snapshot.StatusBanner))
@@ -1443,7 +1456,11 @@ namespace LSOL.UI
                 () => context.Push(TabletAppIds.Network, "warehouses")));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Dispatch",
-                string.Format("{0}\n{1}", dispatchOverview.DispatchHeadline ?? "World dispatch idle", dispatchOverview.DispatchDetail ?? "No priority bias active."),
+                string.Format(
+                    "{0}\n{1} | {2}",
+                    dispatchOverview.DispatchHeadline ?? "World dispatch idle",
+                    contractsOverview.BoardHeadline ?? "Dispatch board cooling down",
+                    contractsOverview.AcceptedHeadline ?? "No accepted contract"),
                 () => context.Push(TabletAppIds.Network, "dispatch")));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Services",
@@ -1772,6 +1789,65 @@ namespace LSOL.UI
         private TabletShellPage BuildDispatchPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var worldOverview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
+            var contractsOverview = context.StateStore.GetPlayerContractsOverview() ?? new PlayerContractsOverview();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    contractsOverview.BoardHeadline ?? "Dispatch board cooling down",
+                    contractsOverview.BoardDetail ?? "Permit-free side contracts generate from live source surpluses and destination demand."),
+                CreatePlayerContractsCommodityFilterSelectorItem(
+                    context,
+                    "Contracts Commodity",
+                    "Left/right filters Quick Jobs and Freight Market listings by commodity."),
+                TabletUiHelpers.CreateActionItem(
+                    "Refresh Contracts Board",
+                    "Force a fresh dispatch-board pull from current surplus and shortage lanes.",
+                    () =>
+                    {
+                        context.StateStore.RefreshPlayerContractsBoard();
+                        _showStatus?.Invoke("Dispatch board refreshed.");
+                        context.Refresh();
+                    },
+                    iconLabel: "REF"),
+                TabletUiHelpers.CreateActionItem(
+                    "Quick Jobs",
+                    string.Format("{0} listed | Supplied temporary vehicles | Permit-free short hauls.", Math.Max(0, contractsOverview.QuickJobCount)),
+                    () => context.Push(TabletAppIds.Network, "dispatch-quick-jobs"),
+                    iconLabel: "QJ"),
+                TabletUiHelpers.CreateActionItem(
+                    "Freight Market",
+                    string.Format("{0} listed | Company vehicles only | Permit waived per accepted contract.", Math.Max(0, contractsOverview.FreightMarketCount)),
+                    () => context.Push(TabletAppIds.Network, "dispatch-freight-market"),
+                    iconLabel: "FM"),
+                TabletUiHelpers.CreateActionItem(
+                    "Accepted Contracts",
+                    string.Format("{0}\n{1}", contractsOverview.AcceptedHeadline ?? "No accepted contract", contractsOverview.AcceptedDetail ?? "Accept a dispatch-board contract to open a permit-free side lane."),
+                    () => context.Push(TabletAppIds.Network, "dispatch-accepted-contracts"),
+                    iconLabel: "ACT"),
+                TabletUiHelpers.CreateActionItem(
+                    "World Dispatch",
+                    string.Format("{0}\n{1}", worldOverview.DispatchHeadline ?? "World dispatch idle", worldOverview.DispatchDetail ?? "No priority bias active."),
+                    () => context.Push(TabletAppIds.Network, "dispatch-world"),
+                    iconLabel: "WRL"),
+                TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"),
+            };
+
+            return new TabletShellPage
+            {
+                Title = "Dispatch",
+                Subtitle = "Ambient freight plus permit-free player side contracts",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
+                WidthScale = 0.94f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildWorldDispatchPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var overview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
             var jobs = context.StateStore.GetWorldDispatchJobs()
                 .OrderByDescending(job => job != null && job.IsSpotOpportunity)
@@ -1875,7 +1951,7 @@ namespace LSOL.UI
 
             return new TabletShellPage
             {
-                Title = "Dispatch",
+                Title = "World Dispatch",
                 Subtitle = "Ambient freight jobs, convoy status, and player priority controls",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
@@ -1883,6 +1959,325 @@ namespace LSOL.UI
                 MaxVisibleItems = 6,
                 Items = items,
             };
+        }
+
+        private TabletShellPage BuildPlayerContractListPage(TabletShellContext context, PlayerContractType type)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var listings = context.StateStore.GetPlayerContractListings(type)
+                .Where(contract => contract != null)
+                .ToList();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    type == PlayerContractType.QuickJob ? "Quick Jobs" : "Freight Market",
+                    type == PlayerContractType.QuickJob
+                        ? "Short permit-free contracts with a supplied temporary rig. These jobs do not advance main progression."
+                        : "Live imbalance contracts that pay on current demand. Use your own company commercial vehicle."),
+                CreatePlayerContractsCommodityFilterSelectorItem(
+                    context,
+                    "Commodity",
+                    "Left/right filters dispatch-board contracts by commodity."),
+            };
+
+            if (listings.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    type == PlayerContractType.QuickJob ? "No Quick Jobs listed" : "No Freight Market contracts listed",
+                    "The live board will repopulate when a real source surplus and destination shortage reopen a lane."));
+            }
+            else
+            {
+                for (int i = 0; i < listings.Count; i++)
+                {
+                    var contract = listings[i];
+                    var contractId = contract.Id;
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        BuildPlayerContractCaption(contract),
+                        BuildPlayerContractListDetail(contract),
+                        () => context.Push(TabletAppIds.Network, "dispatch-contract-detail", contractId),
+                        iconLabel: type == PlayerContractType.QuickJob ? "QJ" : "FM"));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Dispatch hub.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = type == PlayerContractType.QuickJob ? "Quick Jobs" : "Freight Market",
+                Subtitle = type == PlayerContractType.QuickJob
+                    ? "Permit-free short hauls with supplied vehicles"
+                    : "Permit-free freight listings for company vehicles",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Filter | Enter Select | Backspace/Esc Back",
+                WidthScale = 0.94f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildAcceptedContractsPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var overview = context.StateStore.GetPlayerContractsOverview() ?? new PlayerContractsOverview();
+            var acceptedContracts = context.StateStore.GetAcceptedPlayerContracts()
+                .Where(contract => contract != null)
+                .ToList();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    overview.AcceptedHeadline ?? "No accepted contract",
+                    overview.AcceptedDetail ?? "Accept a dispatch-board contract to open a permit-free side lane."),
+            };
+
+            if (acceptedContracts.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "No active contract",
+                    "Accept a Quick Job or Freight Market listing to track it here."));
+            }
+            else
+            {
+                for (int i = 0; i < acceptedContracts.Count; i++)
+                {
+                    var contract = acceptedContracts[i];
+                    var contractId = contract.Id;
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        BuildPlayerContractCaption(contract),
+                        BuildPlayerContractListDetail(contract),
+                        () => context.Push(TabletAppIds.Network, "dispatch-contract-detail", contractId),
+                        iconLabel: "ACT"));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Dispatch hub.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Accepted Contracts",
+                Subtitle = "Active dispatch-board work and next steps",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.92f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildPlayerContractDetailPage(TabletShellContext context, string contractId)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var contract = context.StateStore.GetPlayerContractById(contractId);
+            if (contract == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "Contract Detail",
+                    Subtitle = "Contract unavailable",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    WidthScale = 0.9f,
+                    MaxVisibleItems = 4,
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("Contract unavailable", "Return to the Dispatch board and choose another listing."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous Dispatch page.", () => context.GoBack(), "BACK"),
+                    },
+                };
+            }
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    BuildPlayerContractCaption(contract),
+                    string.Format("{0} | {1}", FormatPlayerContractType(contract.Type), contract.StatusDetail ?? string.Empty).Trim()),
+                TabletUiHelpers.CreateInfoItem(
+                    "Payout",
+                    string.Format(
+                        "Quoted {0} | Live est {1} | Imbalance {2}",
+                        ModFormatting.FormatMoney(contract.QuotedGrossPayout),
+                        ModFormatting.FormatMoney(contract.CurrentEstimatedGrossPayout > 0.001f ? contract.CurrentEstimatedGrossPayout : contract.QuotedGrossPayout),
+                        ModFormatting.FormatPercent(contract.CurrentImbalanceScore * 100f))),
+                TabletUiHelpers.CreateInfoItem(
+                    "Vehicle",
+                    BuildPlayerContractVehicleDetail(contract)),
+            };
+
+            if (contract.Status == PlayerContractStatus.Listed && contract.CanAccept)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Accept Contract",
+                    contract.Type == PlayerContractType.QuickJob
+                        ? "Accept this permit-free side job and deploy the supplied vehicle if needed."
+                        : "Accept this market haul and use a compatible company commercial vehicle at the origin.",
+                    () =>
+                    {
+                        string message;
+                        var accepted = context.StateStore.TryAcceptPlayerContract(contract.Id, out message);
+                        if (!string.IsNullOrWhiteSpace(message))
+                        {
+                            _showStatus?.Invoke(message);
+                        }
+
+                        if (accepted)
+                        {
+                            context.Navigate(TabletAppIds.Network, "dispatch-accepted-contracts");
+                        }
+                        else
+                        {
+                            context.Refresh();
+                        }
+                    },
+                    iconLabel: "OK"));
+            }
+
+            if (contract.Type == PlayerContractType.QuickJob && contract.NeedsQuickJobVehicleDeploy)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Deploy Quick Job Vehicle",
+                    "Spawn or redeploy the supplied temporary rig for this accepted contract.",
+                    () =>
+                    {
+                        string message;
+                        var deployed = context.StateStore.TryDeployQuickJobVehicle(contract.Id, out message);
+                        if (!string.IsNullOrWhiteSpace(message))
+                        {
+                            _showStatus?.Invoke(message);
+                        }
+
+                        if (deployed)
+                        {
+                            context.Refresh();
+                        }
+                    },
+                    iconLabel: "DEP"));
+            }
+
+            if (contract.Status == PlayerContractStatus.Accepted || contract.Status == PlayerContractStatus.Loaded)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Cancel Contract",
+                    "Forfeit this side job. Loaded contract cargo is discarded and the lane goes on cooldown.",
+                    () =>
+                    {
+                        string message;
+                        var cancelled = context.StateStore.TryCancelPlayerContract(contract.Id, out message);
+                        if (!string.IsNullOrWhiteSpace(message))
+                        {
+                            _showStatus?.Invoke(message);
+                        }
+
+                        if (cancelled)
+                        {
+                            context.Navigate(TabletAppIds.Network, "dispatch-accepted-contracts");
+                        }
+                        else
+                        {
+                            context.Refresh();
+                        }
+                    },
+                    iconLabel: "CAN"));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the previous Dispatch page.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = contract.Type == PlayerContractType.QuickJob ? "Quick Job" : "Freight Market",
+                Subtitle = string.Format("{0} contract", contract.StageLabel ?? "Dispatch"),
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.92f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private static string BuildPlayerContractCaption(PlayerContractListingSummary contract)
+        {
+            if (contract == null)
+            {
+                return "Contract";
+            }
+
+            return string.Format(
+                "{0} | {1} -> {2}",
+                contract.Commodity ?? "Cargo",
+                contract.OriginName ?? contract.OriginIndustryId ?? "Origin",
+                contract.DestinationName ?? contract.DestinationIndustryId ?? "Destination");
+        }
+
+        private static string BuildPlayerContractListDetail(PlayerContractListingSummary contract)
+        {
+            if (contract == null)
+            {
+                return "No details available.";
+            }
+
+            return string.Format(
+                "{0} | {1} | {2} | {3}",
+                FormatPlayerContractType(contract.Type),
+                ModFormatting.FormatTons(contract.ListedTons),
+                ModFormatting.FormatMoney(contract.CurrentEstimatedGrossPayout > 0.001f ? contract.CurrentEstimatedGrossPayout : contract.QuotedGrossPayout),
+                contract.StatusDetail ?? string.Empty).Trim();
+        }
+
+        private static string BuildPlayerContractVehicleDetail(PlayerContractListingSummary contract)
+        {
+            if (contract == null)
+            {
+                return "No vehicle requirement available.";
+            }
+
+            if (contract.Type == PlayerContractType.QuickJob)
+            {
+                return contract.NeedsQuickJobVehicleDeploy
+                    ? "Supplied temporary vehicle queued. Deploy it before loading the contract cargo."
+                    : string.Format("Supplied temporary vehicle. {0}", contract.VehicleRequirementLabel ?? string.Empty).Trim();
+            }
+
+            if (!string.IsNullOrWhiteSpace(contract.AssignedVehicleDisplayName))
+            {
+                return string.Format("Assigned company vehicle: {0}.", contract.AssignedVehicleDisplayName);
+            }
+
+            return string.IsNullOrWhiteSpace(contract.VehicleRequirementLabel)
+                ? "Use a compatible deployed company commercial vehicle."
+                : contract.VehicleRequirementLabel;
+        }
+
+        private static MenuItem CreatePlayerContractsCommodityFilterSelectorItem(TabletShellContext context, string captionPrefix, string detail)
+        {
+            return TabletUiHelpers.CreateSelectorItem(
+                () => string.Format("{0}: < {1} >", captionPrefix ?? "Commodity", GetPlayerContractsCommodityFilterLabel(context)),
+                () => detail ?? "Left/right filters dispatch-board contracts by commodity.",
+                () => CyclePlayerContractsCommodityFilter(context, -1),
+                () => CyclePlayerContractsCommodityFilter(context, 1),
+                () => CyclePlayerContractsCommodityFilter(context, 1),
+                "COM");
+        }
+
+        private static string GetPlayerContractsCommodityFilterLabel(TabletShellContext context)
+        {
+            var overview = context != null && context.StateStore != null
+                ? context.StateStore.GetPlayerContractsOverview() ?? new PlayerContractsOverview()
+                : new PlayerContractsOverview();
+            return string.IsNullOrWhiteSpace(overview.SelectedCommodityFilter)
+                ? "Any"
+                : overview.SelectedCommodityFilter;
+        }
+
+        private static void CyclePlayerContractsCommodityFilter(TabletShellContext context, int delta)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            context.StateStore.CyclePlayerContractCommodityFilter(delta);
+            context.Refresh();
+        }
+
+        private static string FormatPlayerContractType(PlayerContractType type)
+        {
+            return type == PlayerContractType.QuickJob ? "Quick Job" : "Freight Market";
         }
 
         private TabletShellPage BuildDispatchDiagnosticsPage(TabletShellContext context)

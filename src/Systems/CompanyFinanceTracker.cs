@@ -32,6 +32,7 @@ namespace LSOL.Systems
         CorporateOverhead = 17,
         FleetMaintenance = 18,
         InventoryLoss = 19,
+        PlayerContract = 20,
     }
 
     public sealed class CompanyFinanceTransaction

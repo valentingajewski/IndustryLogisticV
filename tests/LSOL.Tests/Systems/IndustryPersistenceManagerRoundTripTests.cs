@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Xml.Linq;
 using GTA.Math;
 using LSOL.Config;
 using LSOL.Domain;
@@ -19,7 +20,7 @@ namespace LSOL.Tests.Systems
         [TestMethod]
         public void SaveAndLoad_WithPlayerStatisticsMetadata_RestoresSnapshotAndBumpsVersion()
         {
-            var filePath = TestWorkspace.CreateTempFilePath("player-stats.state.ini");
+            var filePath = TestWorkspace.CreateTempFilePath("player-stats.state.xml");
 
             try
             {
@@ -58,8 +59,8 @@ namespace LSOL.Tests.Systems
                 IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
 
                 var rawSave = File.ReadAllText(filePath);
-                StringAssert.Contains(rawSave, "Version=16");
-                StringAssert.Contains(rawSave, "[Successes]");
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">16</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"Successes\">");
 
                 var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
                 var snapshot = result.Metadata.PlayerStatistics;
@@ -96,7 +97,7 @@ namespace LSOL.Tests.Systems
         [TestMethod]
         public void SaveAndLoad_WithApartmentRentalPropertyState_RestoresRentalFlags()
         {
-            var filePath = TestWorkspace.CreateTempFilePath("apartment-rental.state.ini");
+            var filePath = TestWorkspace.CreateTempFilePath("apartment-rental.state.xml");
 
             try
             {
@@ -126,7 +127,7 @@ namespace LSOL.Tests.Systems
                 IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
 
                 var rawSave = File.ReadAllText(filePath);
-                StringAssert.Contains(rawSave, "IsRented=true");
+                StringAssert.Contains(rawSave, "<Value key=\"IsRented\">true</Value>");
 
                 var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
                 var snapshot = result.Metadata.PropertyOwnership;
@@ -149,7 +150,7 @@ namespace LSOL.Tests.Systems
         [TestMethod]
         public void Save_WithClearedFinanceSnapshot_DoesNotWriteFinanceSections()
         {
-            var filePath = TestWorkspace.CreateTempFilePath("fresh-finance.state.ini");
+            var filePath = TestWorkspace.CreateTempFilePath("fresh-finance.state.xml");
 
             try
             {
@@ -169,8 +170,8 @@ namespace LSOL.Tests.Systems
 
                 var rawSave = File.ReadAllText(filePath);
 
-                Assert.IsFalse(rawSave.Contains("[FinanceMeta]"));
-                Assert.IsFalse(rawSave.Contains("[Finance:Transaction:"));
+                Assert.IsFalse(rawSave.Contains("<Section name=\"FinanceMeta\">"));
+                Assert.IsFalse(rawSave.Contains("<Section name=\"Finance:Transaction:"));
 
                 var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
 
@@ -189,7 +190,7 @@ namespace LSOL.Tests.Systems
         [TestMethod]
         public void SaveAndLoad_WithGlobalMarketSnapshot_RestoresCommodityMultipliersAndTimers()
         {
-            var filePath = TestWorkspace.CreateTempFilePath("market.state.ini");
+            var filePath = TestWorkspace.CreateTempFilePath("market.state.xml");
 
             try
             {
@@ -216,8 +217,8 @@ namespace LSOL.Tests.Systems
                 IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
 
                 var rawSave = File.ReadAllText(filePath);
-                StringAssert.Contains(rawSave, "Version=18");
-                StringAssert.Contains(rawSave, "[Market:Commodity:Fuel]");
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">18</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"Market:Commodity:Fuel\">");
 
                 var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
                 var restoredMarket = new GlobalMarketManager(10000, basePrices);
@@ -246,9 +247,138 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void SaveAndLoad_WithPlayerContractsSnapshot_RestoresContractsAndVehicleTagsAndBumpsVersion()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("player-contracts.state.xml");
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    PlayerContracts = new PlayerContractsPersistenceSnapshot
+                    {
+                        NextContractId = 7,
+                        LastBoardRefreshMinute = 12345,
+                        SelectedCommodityFilter = "Steel",
+                    },
+                    OwnedFleet = new OwnedFleetPersistenceSnapshot(),
+                    PropertyOwnership = new PropertyOwnershipPersistenceSnapshot(),
+                };
+
+                metadata.PlayerContracts.Contracts.Add(new PlayerContractSnapshot
+                {
+                    Id = "pc-001",
+                    Type = PlayerContractType.FreightMarket,
+                    Status = PlayerContractStatus.Loaded,
+                    Commodity = "Steel",
+                    OriginIndustryId = "alpha",
+                    DestinationIndustryId = "beta",
+                    ListedTons = 12.5f,
+                    LoadedTons = 10.5f,
+                    DeliveredTons = 2f,
+                    RouteDistanceMeters = 4200f,
+                    QuotedUnitPrice = 860f,
+                    QuotedGrossPayout = 10750f,
+                    QuotedImbalanceScore = 0.82f,
+                    ListedAtMinute = 12000,
+                    ExpiryMinute = 12180,
+                    AcceptedAtMinute = 12010,
+                    AcceptedExpiryMinute = 12310,
+                    VehicleRequirementLabel = "Flatbed or lowboy",
+                    RequiresOwnedVehicle = true,
+                    AssignedCommercialVehicleAssetId = "fleet-1",
+                    AssignedCommercialVehicleDisplayName = "Hauler Alpha",
+                    CargoCondition = 0.91f,
+                    TotalLostTons = 0.4f,
+                    SourceDistrictName = "Terminal",
+                    StatusMessage = "Loaded 10.50t Steel",
+                });
+                metadata.PlayerContracts.Cooldowns.Add(new PlayerContractCooldownSnapshot
+                {
+                    RouteKey = "alpha|beta|steel",
+                    AvailableAgainMinute = 12555,
+                });
+
+                metadata.OwnedFleet.Vehicles.Add(new OwnedFleetVehicleSnapshot
+                {
+                    PoweredModelName = "phantom3",
+                    CargoModelName = "trailers",
+                    HasSeparateCargoVehicle = true,
+                    PoweredPosition = Vector3.Zero,
+                    PoweredHeading = 180f,
+                    CargoType = VehicleCargoType.CraftedGoods,
+                    CapacityTons = 20f,
+                    Commodity = "Steel",
+                    WeightTons = 10.5f,
+                    CargoCondition = 0.91f,
+                    TotalLostTons = 0.4f,
+                    SourceIndustryId = "alpha",
+                    SourceDistrictName = "Terminal",
+                    PlayerContractId = "pc-001",
+                    PlayerContractDestinationIndustryId = "beta",
+                });
+
+                metadata.PropertyOwnership.CommercialVehicles.Add(new OwnedCommercialVehiclePersistenceEntry
+                {
+                    AssetId = "fleet-1",
+                    DisplayName = "Hauler Alpha",
+                    PoweredModelName = "phantom3",
+                    CargoModelName = "trailers",
+                    HasSeparateCargoVehicle = true,
+                    AssignedOfficeId = "office-1",
+                    InActiveGarage = true,
+                    CargoType = VehicleCargoType.CraftedGoods,
+                    CapacityTons = 20f,
+                    Commodity = "Steel",
+                    WeightTons = 10.5f,
+                    CargoCondition = 0.91f,
+                    TotalLostTons = 0.4f,
+                    SourceIndustryId = "alpha",
+                    SourceDistrictName = "Terminal",
+                    PlayerContractId = "pc-001",
+                    PlayerContractDestinationIndustryId = "beta",
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">21</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"PlayerContracts\">");
+                StringAssert.Contains(rawSave, "<Value key=\"PlayerContractId\">pc-001</Value>");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var contracts = result.Metadata.PlayerContracts;
+                var fleetVehicle = result.Metadata.OwnedFleet.Vehicles.Single();
+                var commercialVehicle = result.Metadata.PropertyOwnership.CommercialVehicles.Single();
+
+                Assert.IsNotNull(contracts);
+                Assert.IsTrue(result.Metadata.HasGameplayMetadata);
+                Assert.AreEqual(7, contracts.NextContractId);
+                Assert.AreEqual(12345, contracts.LastBoardRefreshMinute);
+                Assert.AreEqual("Steel", contracts.SelectedCommodityFilter);
+                Assert.AreEqual(1, contracts.Contracts.Count);
+                Assert.AreEqual("pc-001", contracts.Contracts[0].Id);
+                Assert.AreEqual(PlayerContractType.FreightMarket, contracts.Contracts[0].Type);
+                Assert.AreEqual(PlayerContractStatus.Loaded, contracts.Contracts[0].Status);
+                Assert.AreEqual("fleet-1", contracts.Contracts[0].AssignedCommercialVehicleAssetId);
+                Assert.AreEqual(1, contracts.Cooldowns.Count);
+                Assert.AreEqual("alpha|beta|steel", contracts.Cooldowns[0].RouteKey);
+
+                Assert.AreEqual("pc-001", fleetVehicle.PlayerContractId);
+                Assert.AreEqual("beta", fleetVehicle.PlayerContractDestinationIndustryId);
+                Assert.AreEqual("pc-001", commercialVehicle.PlayerContractId);
+                Assert.AreEqual("beta", commercialVehicle.PlayerContractDestinationIndustryId);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
         public void LoadWithMetadata_WithTerritorySnapshot_AppliesSavedSiteAndCorridorState()
         {
-            var filePath = TestWorkspace.CreateTempFilePath("territory.state.ini");
+            var filePath = TestWorkspace.CreateTempFilePath("territory.state.xml");
             var territoryManager = CreateTerritoryManager();
 
             try
@@ -325,7 +455,7 @@ namespace LSOL.Tests.Systems
         [TestMethod]
         public void SaveAndLoad_WithDistrictReputationDebugOffset_RestoresTerritoryReputationState()
         {
-            var filePath = TestWorkspace.CreateTempFilePath("territory-reputation.state.ini");
+            var filePath = TestWorkspace.CreateTempFilePath("territory-reputation.state.xml");
             var sourceTerritoryManager = CreateTerritoryManager();
             var restoredTerritoryManager = CreateTerritoryManager();
 
@@ -335,17 +465,22 @@ namespace LSOL.Tests.Systems
 
                 IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), null, sourceTerritoryManager.CreateSnapshot());
                 var rawSave = File.ReadAllText(filePath);
+                var document = XDocument.Load(filePath);
                 IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), restoredTerritoryManager);
 
                 var restoredDistrict = restoredTerritoryManager.GetDistrictState("Port");
-                var versionLine = rawSave.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
-                    .FirstOrDefault(line => line.StartsWith("Version=", StringComparison.OrdinalIgnoreCase));
+                var versionElement = document
+                    .Root?
+                    .Elements("Section")
+                    .FirstOrDefault(section => string.Equals((string)section.Attribute("name"), "Meta", StringComparison.OrdinalIgnoreCase))?
+                    .Elements("Value")
+                    .FirstOrDefault(value => string.Equals((string)value.Attribute("key"), "Version", StringComparison.OrdinalIgnoreCase));
                 int savedVersion;
 
-                Assert.IsFalse(string.IsNullOrWhiteSpace(versionLine));
-                Assert.IsTrue(int.TryParse(versionLine.Substring("Version=".Length), NumberStyles.Integer, CultureInfo.InvariantCulture, out savedVersion));
+                Assert.IsNotNull(versionElement);
+                Assert.IsTrue(int.TryParse(versionElement.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out savedVersion));
                 Assert.IsTrue(savedVersion >= 17);
-                StringAssert.Contains(rawSave, "[TerritoryDistrictReputation:Port]");
+                StringAssert.Contains(rawSave, "<Section name=\"TerritoryDistrictReputation:Port\">");
                 Assert.IsNotNull(restoredDistrict);
                 Assert.AreEqual(40f, restoredTerritoryManager.GetDistrictReputationDebugOffset("Port"), 0.01f);
                 Assert.AreEqual("Emerging", restoredDistrict.ReputationLabel);
