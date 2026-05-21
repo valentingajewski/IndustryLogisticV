@@ -1794,8 +1794,6 @@ namespace LSOL.Systems
                 TryRestoreDispatchCommodity(origin, job.Commodity, removedTons - acceptedTons);
             }
 
-            _territoryManager?.RegisterLoad(origin, job.Commodity, acceptedTons, true);
-            _territoryManager?.RegisterDelivery(destination, job.Commodity, acceptedTons, true, origin.Id, origin.DistrictName);
             _industryManager.ComputeDeliveryProfit(destination, job.Commodity, acceptedTons, _globalMarket, now);
             outcome = string.Format(
                 "{0} moved {1:0.0}t {2} from {3} to {4}.",
@@ -2202,6 +2200,15 @@ namespace LSOL.Systems
             if (origin == null || destination == null || string.Equals(origin.Id, destination.Id, StringComparison.OrdinalIgnoreCase))
             {
                 return false;
+            }
+
+            if (_territoryManager != null)
+            {
+                string routeReason;
+                if (!_territoryManager.CanCreateNpcRouteWithPermits(origin, destination, out routeReason))
+                {
+                    return false;
+                }
             }
 
             var normalizedCommodity = CommodityCatalog.Normalize(commodity);
