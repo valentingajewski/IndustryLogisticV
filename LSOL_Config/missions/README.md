@@ -1,6 +1,8 @@
-Legacy runtime mission packs still load from `scripts/LSOL_Config/missions`.
+`scripts/LSOL_Config/missions` is an active runtime mission path inside the `LSOL_Config` content root.
 
 Packaged mission add-ons also load from `scripts/LSOL_Addons/<package-id>/content/missions` when the package contains a valid `addon.xml` manifest.
+
+The repository root `missions/` folder is legacy reference content only and is not runtime-loaded.
 
 The mission XML schema below is unchanged for both locations.
 
@@ -55,4 +57,4 @@ Notes for community authors:
 - Mission vehicles and props are cleaned up automatically when the mission is cancelled, failed, or completed.
 - Active missions and completion counts are saved with the normal LSOL save system.
 
-Use `port_container_handler.xml` and `quarry_heavy_machinery.xml` in `scripts/LSOL_Config/missions` as the legacy reference implementations, or copy the sample packaged add-on from `LSOL_Addons_examples/sample.author.mission-pack/` into `scripts/LSOL_Addons/`.
+Use `port_container_handler.xml` and `quarry_heavy_machinery.xml` in `scripts/LSOL_Config/missions` as working loose-runtime reference implementations, or copy the sample packaged add-on from `LSOL_Addons_examples/sample.author.mission-pack/` into `scripts/LSOL_Addons/`.

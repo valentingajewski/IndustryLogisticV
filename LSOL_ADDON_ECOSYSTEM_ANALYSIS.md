@@ -23,13 +23,13 @@ That approach is the safest fit for LSOL's current architecture, for ScriptHookV
 
 ### 1. Runtime content root and file ownership
 
-LSOL resolves a runtime directory near the assembly, the GTA `scripts` folder, or the base directory, and then treats `LSOL_Config` under that location as the runtime content root. This matters because it means LSOL already thinks in terms of one runtime-owned content directory, which is a useful anchor for a future add-on system.
+LSOL resolves a runtime directory near the assembly, the GTA `scripts` folder, or the base directory, and then treats `LSOL_Config` under that location as the base runtime content root while scanning sibling `LSOL_Addons` packages as a separate runtime package root. This matters because it means LSOL already thinks in terms of stable runtime-owned content locations, which is a useful anchor for the add-on system.
 
 Repo-grounded evidence:
 
 - `LSOLScript.Persistence.ResolveRuntimeDirectory()` searches candidate directories for `LSOL_Config`.
 - `LSOLScript.Persistence.ResolveConfigDirectory()` returns `<runtime>/LSOL_Config`.
-- `README.md` states that `LSOL_Config` is the sole runtime content root and that root `configs/` and root `missions/` are legacy reference folders and are not loaded at runtime.
+- `README.md` states that `LSOL_Config` is the base runtime content root, `LSOL_Addons` is the runtime add-on package root, and root `configs/` and root `missions/` are legacy reference folders and are not loaded at runtime.
 
 ### 2. Core XML-driven catalogs already in use
 
@@ -69,7 +69,7 @@ This means LSOL is already highly data-driven in these areas:
 
 ### 3. Mission definitions already support auto-discovered external content
 
-`SpecialMissionCatalog.Load()` resolves `LSOL_Config/missions`, scans `*.xml`, and parses each file into a `SpecialMissionDefinition`. `LSOL_Config/missions/README.md` documents this workflow for community authors, and `README.md` presents custom mission packs as a supported player-facing feature.
+`SpecialMissionCatalog.Load()` resolves the loose runtime mission path under `LSOL_Config/missions`, scans packaged mission directories under `LSOL_Addons/*/content/missions`, and parses each file into a `SpecialMissionDefinition`. `LSOL_Config/missions/README.md` documents the loose-path workflow for community authors, and `README.md` presents both mission runtime paths as supported player-facing features.
 
 Current external mission support includes:
 
@@ -94,11 +94,12 @@ These internal patterns are important because they reduce the amount of architec
 
 ### What LSOL users can already extend today without touching existing LSOL files
 
-Only one extension surface clearly meets the user requirement of "without touching existing LSOL files":
+Runtime mission content now has two extension surfaces that meet the requirement of "without touching existing LSOL files":
 
 - New XML mission files under `scripts/LSOL_Config/missions`
+- New packaged mission add-ons under `scripts/LSOL_Addons/<package-id>/content/missions`
 
-That is a true drop-in extension surface because authors can add new files and LSOL discovers them automatically.
+Both are true drop-in extension surfaces because authors can add new files and LSOL discovers them automatically.
 
 ### What is already data-driven but not yet add-on friendly
 
@@ -439,7 +440,7 @@ GTA V/
 
 The first implementation step should not scan every possible folder immediately. The first step should scan:
 
-- `LSOL_Config/missions/*.xml` (legacy)
+- `LSOL_Config/missions/*.xml` (active loose runtime path)
 - `LSOL_Addons/*/content/missions/*.xml` (new package model)
 
 Then LSOL can grow fragment scanning for other content types later.
@@ -538,7 +539,7 @@ For add-on fragment merging of:
 
 #### Mission definition registry
 
-For mission XML discovery from both legacy and packaged add-ons.
+For mission XML discovery from both the loose runtime mission path and packaged add-ons.
 
 #### Localization registry
 
@@ -614,7 +615,7 @@ The smallest viable first step toward a real ecosystem is:
 1. add an `LSOL_Addons` package scanner
 2. require a manifest per package
 3. scan packaged mission files in `content/missions`
-4. preserve legacy `LSOL_Config/missions` support unchanged
+4. preserve active `LSOL_Config/missions` support unchanged
 
 This gives LSOL a real package model without forcing wider architectural changes immediately.
 
@@ -742,7 +743,7 @@ Why: the translation keys and palette roles already exist, but their data is com
 
 | Add-on category | Current reality | Best near-term target | Required work |
 | --- | --- | --- | --- |
-| Mission packs | Supported now through `LSOL_Config/missions/*.xml` | Package-aware mission packs plus legacy support | Already possible now |
+| Mission packs | Supported now through `LSOL_Config/missions/*.xml` and packaged `LSOL_Addons/*/content/missions/*.xml` | Continue supporting both runtime paths | Already possible now |
 | New mission type packs | Not supported | Registry-backed mission handlers after mission DSL growth | Requires medium architectural work, sometimes full plugin framework |
 | New site/content packs | Data-driven but monolithic | Additive site fragments | Possible with small core extension |
 | Commodity/resource packs | Data-driven but monolithic | Additive resource fragments | Possible with small core extension |
@@ -992,7 +993,7 @@ Smallest viable first step toward a real LSOL ecosystem:
 
 1. Introduce `LSOL_Addons/*/addon.xml`
 2. Scan `content/missions/*.xml`
-3. Preserve current `LSOL_Config/missions/*.xml`
+3. Preserve the current loose runtime mission path at `LSOL_Config/missions/*.xml`
 4. Add manifest/version/dependency validation
 5. Surface validation results to the player or log
 

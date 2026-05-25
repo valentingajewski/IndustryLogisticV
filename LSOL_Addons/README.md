@@ -2,6 +2,8 @@
 
 LSOL add-ons live under `scripts/LSOL_Addons/<package-id>/` next to `LSOL_Config`.
 
+`LSOL_Config` remains the active base runtime content root for loose XML content. `LSOL_Addons` is the sibling runtime package root for packaged add-ons, including packaged mission packs under `content/missions`.
+
 This first ecosystem pass is file-driven only. LSOL discovers package manifests, validates them, and then loads supported content directories. Third-party assemblies are not executed yet.
 
 ## Current Runtime Support
@@ -124,4 +126,4 @@ LSOL surfaces validation warnings for:
 
 The repository includes a minimal packaged mission example under `LSOL_Addons_examples/sample.author.mission-pack/`.
 
-Copy that folder into `scripts/LSOL_Addons/` to test the packaged mission path without editing `LSOL_Config/missions`.
+Copy that folder into `scripts/LSOL_Addons/` to test the packaged mission path alongside the loose runtime mission path in `LSOL_Config/missions`.

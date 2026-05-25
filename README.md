@@ -200,8 +200,8 @@ If those dependencies are missing, LSOL will not load correctly.
 3. Make sure `LemonUI.SHVDN3.dll` is available in your GTA V `scripts` setup.
 4. Copy `LSOL.dll` into your GTA V `scripts` folder.
 5. Put `LSOL.ini` next to the mod so the script can find it.
-6. Copy the full `LSOL_Config` folder next to `LSOL.ini`.
-7. If you distribute legacy custom missions, place their `.xml` files under `LSOL_Config/missions`.
+6. Copy the full `LSOL_Config` folder next to `LSOL.ini`. This is LSOL's active base runtime content root.
+7. If you distribute loose runtime mission packs, place their `.xml` files under `LSOL_Config/missions`.
 8. If you distribute packaged add-ons, place each package under `LSOL_Addons/<package-id>/` with its own `addon.xml` manifest.
 
 ### Supported `LSOL.ini` Locations
@@ -471,7 +471,7 @@ Creating a new named save resets the gameplay world and starts a fresh profile.
 
 ## Special Missions
 
-The mission board now combines built-in rotating contracts with optional mission packs loaded from `LSOL_Config/missions/*.xml` next to `LSOL.ini`.
+The mission board now combines built-in rotating contracts with optional loose mission packs loaded from `LSOL_Config/missions/*.xml` and packaged mission add-ons loaded from `LSOL_Addons/*/content/missions/*.xml` next to `LSOL.ini`.
 
 If no XML mission packs are installed, the mission board still surfaces generated district crisis jobs, weekly tenders, and priority runs once your company has enough territory presence and fleet capability.
 
@@ -523,8 +523,9 @@ Check these first:
 
 ### No special missions appear
 
-- Make sure `LSOL_Config/missions` exists next to `LSOL.ini`.
-- Make sure it contains valid `.xml` mission pack files.
+- Make sure `LSOL_Config/missions` exists next to `LSOL.ini` if you are using the loose runtime mission path.
+- Make sure any packaged mission add-ons are installed under `LSOL_Addons/<package-id>/` with a valid `addon.xml` and `content/missions` directory.
+- Make sure your mission files contain valid `.xml` mission pack definitions.
 
 ### Build succeeds but the DLL is not updated
 
