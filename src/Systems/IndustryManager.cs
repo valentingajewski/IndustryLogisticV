@@ -587,9 +587,9 @@ namespace LSOL.Systems
             }
 
             var startingRatio = Math.Max(0f, Math.Min(1f, config.StartingTankRatio));
-            if (!config.IsCsvBacked)
+            if (!config.UsesAuthoredSiteSemantics)
             {
-                SeedLegacyIndustryStartingState(industry, startingRatio);
+                SeedLegacyFactoryStartingState(industry, startingRatio);
                 return;
             }
 
@@ -638,7 +638,7 @@ namespace LSOL.Systems
             }
         }
 
-        private static void SeedLegacyIndustryStartingState(Industry industry, float startingRatio)
+        private static void SeedLegacyFactoryStartingState(Industry industry, float startingRatio)
         {
             if (industry.Outputs.Count > 0)
             {
@@ -679,19 +679,19 @@ namespace LSOL.Systems
 
             var configuredDrainRate = config.HasConfiguredEmptyingRate
                 ? Math.Max(0f, config.EmptyingRate)
-                : ResolveLegacyDensityDrainRate(config.Density);
+                : ResolveLegacyFactoryDensityDrainRate(config.Density);
 
-            // CSV sink rates are authored directly as tons/min so service sinks drain visibly.
-            // Legacy INI density values keep the previous liters/second semantics.
+            // Authored site configs carry direct tons/min drain values.
+            // Legacy factory density values preserve the older liters/second semantics.
             const float litersPerSecondToTonsPerMinute = 0.06f;
-            drainRatePerMinute = config.IsCsvBacked
+            drainRatePerMinute = config.UsesAuthoredSiteSemantics
                 ? configuredDrainRate
                 : configuredDrainRate * litersPerSecondToTonsPerMinute;
 
             return drainRatePerMinute > 0f;
         }
 
-        private static float ResolveLegacyDensityDrainRate(string density)
+        private static float ResolveLegacyFactoryDensityDrainRate(string density)
         {
             var normalized = (density ?? "medium").Trim().ToLowerInvariant();
             if (normalized == "very low" || normalized == "verylow")
@@ -831,7 +831,7 @@ namespace LSOL.Systems
                 DeliveryPayoutMultiplier = source.DeliveryPayoutMultiplier,
                 IsOwned = source.IsOwned,
                 HasContractorPermit = source.HasContractorPermit,
-                IsCsvBacked = source.IsCsvBacked,
+                UsesAuthoredSiteSemantics = source.UsesAuthoredSiteSemantics,
                 CasualEconomy = CloneSiteEconomy(source.CasualEconomy),
                 StandardEconomy = CloneSiteEconomy(source.StandardEconomy),
                 HardcoreEconomy = CloneSiteEconomy(source.HardcoreEconomy),
@@ -847,7 +847,7 @@ namespace LSOL.Systems
                 return effectiveConfig;
             }
 
-            if (effectiveConfig.IsCsvBacked)
+            if (effectiveConfig.UsesAuthoredSiteSemantics)
             {
                 var sitePreset = ResolveAuthoredSitePresetValues(effectiveConfig, preset);
                 if (sitePreset == null)

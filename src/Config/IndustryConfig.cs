@@ -52,7 +52,9 @@ namespace LSOL.Config
         public float DeliveryPayoutMultiplier { get; set; }
         public bool IsOwned { get; set; }
         public bool HasContractorPermit { get; set; }
-        public bool IsCsvBacked { get; set; }
+        // Authored site configs from the external location catalog carry their own
+        // starting-state, sink-drain, and per-preset economy semantics.
+        public bool UsesAuthoredSiteSemantics { get; set; }
         public SiteEconomyPresetValues CasualEconomy { get; set; }
         public SiteEconomyPresetValues StandardEconomy { get; set; }
         public SiteEconomyPresetValues HardcoreEconomy { get; set; }

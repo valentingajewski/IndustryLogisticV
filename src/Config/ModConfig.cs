@@ -237,7 +237,7 @@ namespace LSOL.Config
                 DeliveryPayoutMultiplier = Math.Max(0f, location.DeliveryPayoutMultiplier <= 0f ? 1f : location.DeliveryPayoutMultiplier),
                 IsOwned = hasStarterOwnership,
                 HasContractorPermit = hasStarterPermitAccess || !standardValues.PermitRequired || licencePrice <= 0f,
-                IsCsvBacked = true,
+                UsesAuthoredSiteSemantics = true,
                 CasualEconomy = location.CasualEconomy,
                 StandardEconomy = location.StandardEconomy,
                 HardcoreEconomy = location.HardcoreEconomy,
