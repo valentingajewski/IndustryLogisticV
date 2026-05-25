@@ -32,6 +32,8 @@ namespace LSOL.UI
         private Action _returnAction;
         private Action _districtDetailBackAction;
         private bool _networkViewOpen;
+        private NetworkViewSnapshot _networkViewSnapshot;
+        private NetworkLayoutCache _networkLayoutCache;
 
         private string _selectedDistrictName;
         private Industry _selectedSupportIndustry;
@@ -119,6 +121,7 @@ namespace LSOL.UI
         {
             _networkViewOpen = false;
             _districtDetailBackAction = null;
+            InvalidateNetworkViewCache();
             _rootMenu.Close();
             _districtMenu.Close();
             _districtDetailMenu.Close();
@@ -564,7 +567,7 @@ namespace LSOL.UI
         private void MoveNetworkSelection(WinForms.Keys key)
         {
             var resolution = Screen.MainWindowResolution;
-            var layouts = BuildNetworkLayouts(resolution);
+            var layouts = GetNetworkLayoutCache(resolution).Layouts;
             if (layouts.Count == 0)
             {
                 _selectedDistrictName = string.Empty;
@@ -626,6 +629,7 @@ namespace LSOL.UI
         private void DrawNetworkView()
         {
             var resolution = Screen.MainWindowResolution;
+            var networkViewSnapshot = GetNetworkViewSnapshot();
             var panelX = resolution.Width * 0.07f;
             var panelY = resolution.Height * 0.085f;
             var panelWidth = resolution.Width * 0.86f;
@@ -665,7 +669,11 @@ namespace LSOL.UI
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left);
 
-            var balanceText = string.Format("Balance {0} | {1} anchored | {2} corridors", ModFormatting.FormatMoney(_getCurrentProfit != null ? _getCurrentProfit() : 0f), _territoryManager != null ? _territoryManager.GetControlledDistrictCount() : 0, _territoryManager != null ? _territoryManager.GetActiveCorridorCount() : 0);
+            var balanceText = string.Format(
+                "Balance {0} | {1} anchored | {2} corridors",
+                ModFormatting.FormatMoney(_getCurrentProfit != null ? _getCurrentProfit() : 0f),
+                networkViewSnapshot.ControlledDistrictCount,
+                networkViewSnapshot.ActiveCorridorCount);
             DrawTextLine(
                 resolution,
                 balanceText,
@@ -683,7 +691,8 @@ namespace LSOL.UI
             DrawRect(resolution.Width, resolution.Height, graphX, footerY, panelWidth - 44f, footerHeight, Color.FromArgb(148, 8, 13, 22));
             DrawRect(resolution.Width, resolution.Height, graphX + 2f, footerY + 2f, panelWidth - 48f, footerHeight - 4f, Color.FromArgb(204, 14, 22, 32));
 
-            var layouts = BuildNetworkLayouts(resolution);
+            var layoutCache = GetNetworkLayoutCache(resolution, networkViewSnapshot);
+            var layouts = layoutCache.Layouts;
             if (layouts.Count == 0)
             {
                 DrawTextBlock(
@@ -708,33 +717,33 @@ namespace LSOL.UI
                 return;
             }
 
-            DrawNetworkCorridors(resolution, layouts);
+            DrawNetworkCorridors(resolution, layoutCache, networkViewSnapshot.VisibleCorridors);
             for (int i = 0; i < layouts.Count; i++)
             {
                 DrawNetworkNode(resolution, layouts[i]);
             }
 
-            DrawNetworkDetailPanel(resolution, detailX, detailY, detailWidth, detailHeight);
+            DrawNetworkDetailPanel(resolution, detailX, detailY, detailWidth, detailHeight, networkViewSnapshot);
             DrawNetworkFooter(resolution, graphX, footerY, panelWidth - 44f, footerHeight);
         }
 
-        private void DrawNetworkCorridors(Size resolution, List<MetroNodeLayout> layouts)
+        private void DrawNetworkCorridors(Size resolution, NetworkLayoutCache layoutCache, List<TerritoryCorridorState> visibleCorridors)
         {
-            if (_territoryManager == null)
+            if (layoutCache == null || visibleCorridors == null || visibleCorridors.Count == 0)
             {
                 return;
             }
 
-            var visibleCorridors = _territoryManager.CorridorStates
-                .Where(corridor => corridor != null && corridor.RightLevel != CorridorRightLevel.None)
-                .ToList();
-
             for (int i = 0; i < visibleCorridors.Count; i++)
             {
                 var corridor = visibleCorridors[i];
-                var left = layouts.FirstOrDefault(layout => string.Equals(layout.District.DistrictName, corridor.DistrictA, StringComparison.OrdinalIgnoreCase));
-                var right = layouts.FirstOrDefault(layout => string.Equals(layout.District.DistrictName, corridor.DistrictB, StringComparison.OrdinalIgnoreCase));
-                if (left == null || right == null)
+                MetroNodeLayout left;
+                MetroNodeLayout right;
+                if (corridor == null
+                    || !layoutCache.LayoutsByDistrict.TryGetValue(corridor.DistrictA ?? string.Empty, out left)
+                    || !layoutCache.LayoutsByDistrict.TryGetValue(corridor.DistrictB ?? string.Empty, out right)
+                    || left == null
+                    || right == null)
                 {
                     continue;
                 }
@@ -793,10 +802,13 @@ namespace LSOL.UI
                 Alignment.Left);
         }
 
-        private void DrawNetworkDetailPanel(Size resolution, float x, float y, float width, float height)
+        private void DrawNetworkDetailPanel(Size resolution, float x, float y, float width, float height, NetworkViewSnapshot snapshot)
         {
-            var district = _territoryManager != null ? _territoryManager.GetDistrictState(_selectedDistrictName) : null;
-            if (district == null)
+            TerritoryDistrictState district;
+            if (snapshot == null
+                || snapshot.DistrictsByName == null
+                || !snapshot.DistrictsByName.TryGetValue(_selectedDistrictName ?? string.Empty, out district)
+                || district == null)
             {
                 DrawTextBlock(
                     resolution,
@@ -809,6 +821,34 @@ namespace LSOL.UI
                     Alignment.Left,
                     16f);
                 return;
+            }
+
+            float supportBonus;
+            if (snapshot.SupportBonusByDistrict == null
+                || !snapshot.SupportBonusByDistrict.TryGetValue(district.DistrictName, out supportBonus))
+            {
+                supportBonus = 0f;
+            }
+
+            bool npcReady;
+            if (snapshot.NpcReadyByDistrict == null
+                || !snapshot.NpcReadyByDistrict.TryGetValue(district.DistrictName, out npcReady))
+            {
+                npcReady = false;
+            }
+
+            TerritoryDistrictOperationsEntry districtOperations;
+            if (snapshot.OperationsByDistrict == null
+                || !snapshot.OperationsByDistrict.TryGetValue(district.DistrictName, out districtOperations))
+            {
+                districtOperations = null;
+            }
+
+            List<TerritoryCorridorState> corridorLines;
+            if (snapshot.VisibleCorridorsByDistrict == null
+                || !snapshot.VisibleCorridorsByDistrict.TryGetValue(district.DistrictName, out corridorLines))
+            {
+                corridorLines = new List<TerritoryCorridorState>();
             }
 
             DrawTextLine(
@@ -830,14 +870,11 @@ namespace LSOL.UI
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left);
 
-            var supportBonus = (_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f;
-            var npcStatus = _territoryManager != null && _territoryManager.IsDistrictEstablishedForNpc(district.DistrictName)
+            var supportBonusText = supportBonus * 100f;
+            var npcStatus = npcReady
                 ? "NPC Ready"
                 : "NPC Locked";
-            var operationsByDistrict = BuildOperationsByDistrict();
-            TerritoryDistrictOperationsEntry districtOperations;
-            operationsByDistrict.TryGetValue(district.DistrictName, out districtOperations);
-            var operationsCost = GetDistrictOperationsCost(operationsByDistrict, district.DistrictName);
+            var operationsCost = GetDistrictOperationsCost(snapshot.OperationsByDistrict, district.DistrictName);
             var summary = string.Format(
                 "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nCharter {5} | Activity {6:0}/{7:0} t\nDepots {8} | Franchises {9}\nCorridor rights {10} | Support bonus {11}{12}\nCompetition {13:0}% | Opportunity {14:0}% | Wins {15}\nTerritory ops {16} / week\n{17}",
                 ModFormatting.FormatNumber(district.InfluenceScore),
@@ -851,7 +888,7 @@ namespace LSOL.UI
                 district.ControlledDepots,
                 district.FranchiseSites,
                 district.RouteRights,
-                ModFormatting.FormatSignedPercent(supportBonus),
+                ModFormatting.FormatSignedPercent(supportBonusText),
                 BuildDistrictRiskSuffix(districtOperations),
                 Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),
                 Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)),
@@ -879,19 +916,6 @@ namespace LSOL.UI
                 Color.FromArgb(236, 239, 243, 248),
                 GTA.UI.Font.ChaletComprimeCologne,
                 Alignment.Left);
-
-            var corridorLines = _territoryManager != null
-                ? _territoryManager.CorridorStates
-                    .Where(corridor => corridor != null
-                        && corridor.RightLevel != CorridorRightLevel.None
-                        && (string.Equals(corridor.DistrictA, district.DistrictName, StringComparison.OrdinalIgnoreCase)
-                            || string.Equals(corridor.DistrictB, district.DistrictName, StringComparison.OrdinalIgnoreCase)))
-                    .OrderByDescending(corridor => (int)corridor.RightLevel)
-                    .ThenByDescending(corridor => corridor.TotalDeliveredTons)
-                    .ThenBy(corridor => GetOtherDistrictName(corridor, district.DistrictName), StringComparer.OrdinalIgnoreCase)
-                    .Take(7)
-                    .ToList()
-                : new List<TerritoryCorridorState>();
 
             if (corridorLines.Count == 0)
             {
@@ -1002,6 +1026,106 @@ namespace LSOL.UI
                 16f);
         }
 
+        private void InvalidateNetworkViewCache()
+        {
+            _networkViewSnapshot = null;
+            _networkLayoutCache = null;
+        }
+
+        private NetworkViewSnapshot GetNetworkViewSnapshot()
+        {
+            var stateFingerprint = BuildNetworkViewStateFingerprint();
+            if (_networkViewSnapshot != null && _networkViewSnapshot.StateFingerprint == stateFingerprint)
+            {
+                return _networkViewSnapshot;
+            }
+
+            var orderedDistricts = GetOrderedDistricts();
+            var districtsByName = new Dictionary<string, TerritoryDistrictState>(StringComparer.OrdinalIgnoreCase);
+            var supportBonusByDistrict = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var npcReadyByDistrict = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < orderedDistricts.Count; i++)
+            {
+                var district = orderedDistricts[i];
+                if (district == null || string.IsNullOrWhiteSpace(district.DistrictName))
+                {
+                    continue;
+                }
+
+                districtsByName[district.DistrictName] = district;
+                supportBonusByDistrict[district.DistrictName] = _territoryManager != null
+                    ? _territoryManager.GetDistrictSupportBonus(district.DistrictName)
+                    : 0f;
+                npcReadyByDistrict[district.DistrictName] = _territoryManager != null
+                    && _territoryManager.IsDistrictEstablishedForNpc(district.DistrictName);
+            }
+
+            var visibleCorridors = _territoryManager != null
+                ? _territoryManager.CorridorStates
+                    .Where(corridor => corridor != null && corridor.RightLevel != CorridorRightLevel.None)
+                    .ToList()
+                : new List<TerritoryCorridorState>();
+            var operationsSummary = _territoryManager != null
+                ? (_territoryManager.GetOperationsSummary() ?? new TerritoryOperationsSummary())
+                : new TerritoryOperationsSummary();
+
+            _networkViewSnapshot = new NetworkViewSnapshot
+            {
+                StateFingerprint = stateFingerprint,
+                OrderedDistricts = orderedDistricts,
+                DistrictsByName = districtsByName,
+                OperationsByDistrict = CreateOperationsByDistrictMap(operationsSummary),
+                VisibleCorridors = visibleCorridors,
+                VisibleCorridorsByDistrict = BuildVisibleCorridorsByDistrict(visibleCorridors),
+                SupportBonusByDistrict = supportBonusByDistrict,
+                NpcReadyByDistrict = npcReadyByDistrict,
+                ControlledDistrictCount = orderedDistricts.Count(district => district != null && district.InfluenceRatio >= 0.6f),
+                ActiveCorridorCount = visibleCorridors.Count,
+            };
+
+            if (_networkLayoutCache != null && _networkLayoutCache.StateFingerprint != stateFingerprint)
+            {
+                _networkLayoutCache = null;
+            }
+
+            return _networkViewSnapshot;
+        }
+
+        private NetworkLayoutCache GetNetworkLayoutCache(Size resolution, NetworkViewSnapshot snapshot = null)
+        {
+            snapshot = snapshot ?? GetNetworkViewSnapshot();
+            if (_networkLayoutCache != null
+                && _networkLayoutCache.StateFingerprint == snapshot.StateFingerprint
+                && _networkLayoutCache.Resolution.Width == resolution.Width
+                && _networkLayoutCache.Resolution.Height == resolution.Height)
+            {
+                return _networkLayoutCache;
+            }
+
+            var layouts = BuildNetworkLayouts(resolution, snapshot.OrderedDistricts);
+            var layoutsByDistrict = new Dictionary<string, MetroNodeLayout>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < layouts.Count; i++)
+            {
+                var layout = layouts[i];
+                if (layout == null || layout.District == null || string.IsNullOrWhiteSpace(layout.District.DistrictName))
+                {
+                    continue;
+                }
+
+                layoutsByDistrict[layout.District.DistrictName] = layout;
+            }
+
+            _networkLayoutCache = new NetworkLayoutCache
+            {
+                StateFingerprint = snapshot.StateFingerprint,
+                Resolution = resolution,
+                Layouts = layouts,
+                LayoutsByDistrict = layoutsByDistrict,
+            };
+
+            return _networkLayoutCache;
+        }
+
         private List<TerritoryDistrictState> GetOrderedDistricts()
         {
             return _territoryManager != null
@@ -1012,11 +1136,10 @@ namespace LSOL.UI
                 : new List<TerritoryDistrictState>();
         }
 
-        private List<MetroNodeLayout> BuildNetworkLayouts(Size resolution)
+        private List<MetroNodeLayout> BuildNetworkLayouts(Size resolution, IList<TerritoryDistrictState> districts)
         {
-            var districts = GetOrderedDistricts();
             var layouts = new List<MetroNodeLayout>();
-            if (districts.Count == 0)
+            if (districts == null || districts.Count == 0)
             {
                 return layouts;
             }
@@ -1165,13 +1288,278 @@ namespace LSOL.UI
                 : corridor.DistrictA;
         }
 
-        private Dictionary<string, TerritoryDistrictOperationsEntry> BuildOperationsByDistrict()
+        private static Dictionary<string, TerritoryDistrictOperationsEntry> CreateOperationsByDistrictMap(TerritoryOperationsSummary summary)
         {
-            return _territoryManager != null
-                ? (_territoryManager.GetOperationsSummary() ?? new TerritoryOperationsSummary()).Districts
+            return summary != null
+                ? summary.Districts
                     .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.DistrictName))
                     .ToDictionary(entry => entry.DistrictName, entry => entry, StringComparer.OrdinalIgnoreCase)
                 : new Dictionary<string, TerritoryDistrictOperationsEntry>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static Dictionary<string, List<TerritoryCorridorState>> BuildVisibleCorridorsByDistrict(List<TerritoryCorridorState> visibleCorridors)
+        {
+            var corridorsByDistrict = new Dictionary<string, List<TerritoryCorridorState>>(StringComparer.OrdinalIgnoreCase);
+            if (visibleCorridors == null)
+            {
+                return corridorsByDistrict;
+            }
+
+            for (int i = 0; i < visibleCorridors.Count; i++)
+            {
+                var corridor = visibleCorridors[i];
+                if (corridor == null)
+                {
+                    continue;
+                }
+
+                AddVisibleCorridor(corridorsByDistrict, corridor.DistrictA, corridor);
+                AddVisibleCorridor(corridorsByDistrict, corridor.DistrictB, corridor);
+            }
+
+            foreach (var pair in corridorsByDistrict)
+            {
+                var districtName = pair.Key;
+                pair.Value.Sort((left, right) => CompareCorridorsForDistrict(left, right, districtName));
+                if (pair.Value.Count > 7)
+                {
+                    pair.Value.RemoveRange(7, pair.Value.Count - 7);
+                }
+            }
+
+            return corridorsByDistrict;
+        }
+
+        private static void AddVisibleCorridor(IDictionary<string, List<TerritoryCorridorState>> corridorsByDistrict, string districtName, TerritoryCorridorState corridor)
+        {
+            if (corridorsByDistrict == null || corridor == null || string.IsNullOrWhiteSpace(districtName))
+            {
+                return;
+            }
+
+            List<TerritoryCorridorState> districtCorridors;
+            if (!corridorsByDistrict.TryGetValue(districtName, out districtCorridors) || districtCorridors == null)
+            {
+                districtCorridors = new List<TerritoryCorridorState>();
+                corridorsByDistrict[districtName] = districtCorridors;
+            }
+
+            districtCorridors.Add(corridor);
+        }
+
+        private static int CompareCorridorsForDistrict(TerritoryCorridorState left, TerritoryCorridorState right, string districtName)
+        {
+            if (ReferenceEquals(left, right))
+            {
+                return 0;
+            }
+
+            if (left == null)
+            {
+                return 1;
+            }
+
+            if (right == null)
+            {
+                return -1;
+            }
+
+            var levelCompare = ((int)right.RightLevel).CompareTo((int)left.RightLevel);
+            if (levelCompare != 0)
+            {
+                return levelCompare;
+            }
+
+            var tonsCompare = right.TotalDeliveredTons.CompareTo(left.TotalDeliveredTons);
+            if (tonsCompare != 0)
+            {
+                return tonsCompare;
+            }
+
+            return StringComparer.OrdinalIgnoreCase.Compare(
+                GetOtherDistrictName(left, districtName),
+                GetOtherDistrictName(right, districtName));
+        }
+
+        private long BuildNetworkViewStateFingerprint()
+        {
+            if (_territoryManager == null)
+            {
+                return 0L;
+            }
+
+            var fingerprint = 17L;
+            fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.DistrictStates, BuildDistrictStateHash));
+            fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.SiteStates, BuildSiteStateHash));
+            fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.CorridorStates, BuildCorridorStateHash));
+            return fingerprint;
+        }
+
+        private static long BuildUnorderedSignature<T>(IEnumerable<T> items, Func<T, int> itemHashSelector)
+            where T : class
+        {
+            unchecked
+            {
+                var count = 0L;
+                var sum = 0L;
+                var xor = 0L;
+                var sumSquares = 0L;
+
+                if (items != null)
+                {
+                    foreach (var item in items)
+                    {
+                        if (item == null)
+                        {
+                            continue;
+                        }
+
+                        var itemHash = (long)itemHashSelector(item);
+                        count += 1L;
+                        sum += itemHash;
+                        xor ^= itemHash;
+                        sumSquares += itemHash * itemHash;
+                    }
+                }
+
+                var signature = 17L;
+                signature = CombineSignature(signature, count);
+                signature = CombineSignature(signature, sum);
+                signature = CombineSignature(signature, xor);
+                signature = CombineSignature(signature, sumSquares);
+                return signature;
+            }
+        }
+
+        private static int BuildDistrictStateHash(TerritoryDistrictState district)
+        {
+            if (district == null)
+            {
+                return 0;
+            }
+
+            var hash = 17;
+            hash = CombineHash(hash, district.DistrictName);
+            hash = CombineHash(hash, district.SiteCount);
+            hash = CombineHash(hash, district.ControlledSites);
+            hash = CombineHash(hash, district.OperationalSites);
+            hash = CombineHash(hash, district.ControlledDepots);
+            hash = CombineHash(hash, district.FranchiseSites);
+            hash = CombineHash(hash, district.RouteRights);
+            hash = CombineHash(hash, district.InfluenceScore);
+            hash = CombineHash(hash, district.InfluenceRatio);
+            hash = CombineHash(hash, district.ReputationScore);
+            hash = CombineHash(hash, district.ReputationLabel);
+            hash = CombineHash(hash, (int)district.LicenseStatus);
+            hash = CombineHash(hash, district.LicenseStrikeCount);
+            hash = CombineHash(hash, district.CurrentWeekActivityCount);
+            hash = CombineHash(hash, district.CurrentWeekActivityTons);
+            hash = CombineHash(hash, district.RequiredWeeklyActivityTons);
+            hash = CombineHash(hash, district.WeeklyLicenseCost);
+            hash = CombineHash(hash, district.CompetitivePressure);
+            hash = CombineHash(hash, district.CompetitiveOpportunity);
+            hash = CombineHash(hash, district.ActiveCompetitionJobs);
+            hash = CombineHash(hash, district.VisibleCompetitionCount);
+            hash = CombineHash(hash, district.LastCompetitiveTons);
+            hash = CombineHash(hash, district.CompetitiveResponseCount);
+            hash = CombineHash(hash, district.CompetitiveWinCount);
+            hash = CombineHash(hash, district.CompetitionStatus);
+            return hash;
+        }
+
+        private static int BuildSiteStateHash(TerritorySiteState siteState)
+        {
+            if (siteState == null)
+            {
+                return 0;
+            }
+
+            var hash = 17;
+            hash = CombineHash(hash, siteState.SiteId);
+            hash = CombineHash(hash, siteState.DistrictName);
+            hash = CombineHash(hash, (int)siteState.ControlLevel);
+            hash = CombineHash(hash, siteState.CrewAssigned);
+            hash = CombineHash(hash, siteState.TotalDeliveries);
+            hash = CombineHash(hash, siteState.TotalDeliveredTons);
+            hash = CombineHash(hash, siteState.TotalLoadedTons);
+            hash = CombineHash(hash, (int)siteState.FranchiseLevel);
+            hash = CombineHash(hash, (int)siteState.EffectiveFranchiseLevel);
+            hash = CombineHash(hash, siteState.LoaderCount);
+            hash = CombineHash(hash, siteState.MechanicCount);
+            hash = CombineHash(hash, siteState.GuardCount);
+            hash = CombineHash(hash, siteState.ManagerCount);
+            hash = CombineHash(hash, siteState.HasSpawnRights);
+            hash = CombineHash(hash, siteState.IsOperational);
+            hash = CombineHash(hash, (int)siteState.DepotSpecialization);
+            hash = CombineHash(hash, siteState.CurrentWeekServiceDeliveries);
+            hash = CombineHash(hash, siteState.CurrentWeekServiceTons);
+            hash = CombineHash(hash, siteState.RequiredWeeklyServiceTons);
+            hash = CombineHash(hash, siteState.ServicePenaltySteps);
+            hash = CombineHash(hash, siteState.ServiceSuccessStreak);
+            hash = CombineHash(hash, siteState.ServiceTargetMetLastWeek);
+            hash = CombineHash(hash, siteState.ServiceContractStatus);
+            return hash;
+        }
+
+        private static int BuildCorridorStateHash(TerritoryCorridorState corridor)
+        {
+            if (corridor == null)
+            {
+                return 0;
+            }
+
+            var hash = 17;
+            hash = CombineHash(hash, corridor.CorridorId);
+            hash = CombineHash(hash, corridor.DistrictA);
+            hash = CombineHash(hash, corridor.DistrictB);
+            hash = CombineHash(hash, corridor.DeliveryCount);
+            hash = CombineHash(hash, corridor.TotalDeliveredTons);
+            hash = CombineHash(hash, (int)corridor.RightLevel);
+            hash = CombineHash(hash, corridor.CurrentWeekDeliveryCount);
+            hash = CombineHash(hash, corridor.CurrentWeekDeliveredTons);
+            hash = CombineHash(hash, corridor.RequiredWeeklyDeliveredTons);
+            hash = CombineHash(hash, corridor.DecayPressure);
+            hash = CombineHash(hash, corridor.UpkeepStatus);
+            return hash;
+        }
+
+        private static long CombineSignature(long current, long value)
+        {
+            unchecked
+            {
+                return (current * 16777619L) ^ value;
+            }
+        }
+
+        private static int CombineHash(int current, int value)
+        {
+            unchecked
+            {
+                return (current * 397) ^ value;
+            }
+        }
+
+        private static int CombineHash(int current, float value)
+        {
+            return CombineHash(current, value.GetHashCode());
+        }
+
+        private static int CombineHash(int current, bool value)
+        {
+            return CombineHash(current, value ? 1 : 0);
+        }
+
+        private static int CombineHash(int current, string value)
+        {
+            return CombineHash(current, StringComparer.OrdinalIgnoreCase.GetHashCode(value ?? string.Empty));
+        }
+
+        private Dictionary<string, TerritoryDistrictOperationsEntry> BuildOperationsByDistrict()
+        {
+            return CreateOperationsByDistrictMap(
+                _territoryManager != null
+                    ? (_territoryManager.GetOperationsSummary() ?? new TerritoryOperationsSummary())
+                    : new TerritoryOperationsSummary());
         }
 
         private static float GetDistrictOperationsCost(IDictionary<string, TerritoryDistrictOperationsEntry> operationsByDistrict, string districtName)
@@ -1834,6 +2222,28 @@ namespace LSOL.UI
             public TerritoryDistrictState District { get; set; }
             public float CenterX { get; set; }
             public float CenterY { get; set; }
+        }
+
+        private sealed class NetworkViewSnapshot
+        {
+            public long StateFingerprint { get; set; }
+            public List<TerritoryDistrictState> OrderedDistricts { get; set; }
+            public Dictionary<string, TerritoryDistrictState> DistrictsByName { get; set; }
+            public Dictionary<string, TerritoryDistrictOperationsEntry> OperationsByDistrict { get; set; }
+            public List<TerritoryCorridorState> VisibleCorridors { get; set; }
+            public Dictionary<string, List<TerritoryCorridorState>> VisibleCorridorsByDistrict { get; set; }
+            public Dictionary<string, float> SupportBonusByDistrict { get; set; }
+            public Dictionary<string, bool> NpcReadyByDistrict { get; set; }
+            public int ControlledDistrictCount { get; set; }
+            public int ActiveCorridorCount { get; set; }
+        }
+
+        private sealed class NetworkLayoutCache
+        {
+            public long StateFingerprint { get; set; }
+            public Size Resolution { get; set; }
+            public List<MetroNodeLayout> Layouts { get; set; }
+            public Dictionary<string, MetroNodeLayout> LayoutsByDistrict { get; set; }
         }
     }
 }
