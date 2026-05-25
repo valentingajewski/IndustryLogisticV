@@ -1,0 +1,197 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Reflection;
+using LSOL.Config;
+using LSOL.Domain;
+using LSOL.Systems;
+using LSOL.Tests.TestSupport;
+using LSOL.UI;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+namespace LSOL.Tests.UI
+{
+    [TestClass]
+    public sealed class CompanyMapControllerTests
+    {
+        [TestMethod]
+        public void GetNetworkViewSnapshot_AggregatesTerritoryOperationsAndCorridorLookups()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
+
+            var snapshot = InvokeGetNetworkViewSnapshot(controller);
+            var operationsSummary = territoryManager.GetOperationsSummary();
+            var expectedOperationsByDistrict = operationsSummary.Districts
+                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.DistrictName))
+                .ToDictionary(entry => entry.DistrictName, entry => entry, StringComparer.OrdinalIgnoreCase);
+
+            var operationsByDistrict = GetPropertyValue<IDictionary<string, TerritoryDistrictOperationsEntry>>(snapshot, "OperationsByDistrict");
+            var visibleCorridors = GetPropertyValue<IList<TerritoryCorridorState>>(snapshot, "VisibleCorridors");
+            var visibleCorridorsByDistrict = GetPropertyValue<IDictionary<string, List<TerritoryCorridorState>>>(snapshot, "VisibleCorridorsByDistrict");
+            var supportBonusByDistrict = GetPropertyValue<IDictionary<string, float>>(snapshot, "SupportBonusByDistrict");
+            var npcReadyByDistrict = GetPropertyValue<IDictionary<string, bool>>(snapshot, "NpcReadyByDistrict");
+
+            Assert.AreEqual(territoryManager.GetControlledDistrictCount(), GetPropertyValue<int>(snapshot, "ControlledDistrictCount"));
+            Assert.AreEqual(territoryManager.GetActiveCorridorCount(), GetPropertyValue<int>(snapshot, "ActiveCorridorCount"));
+            Assert.AreEqual(1, visibleCorridors.Count, "Only active corridors should be exposed in the network snapshot.");
+            Assert.AreEqual(CorridorRightLevel.Priority, visibleCorridors[0].RightLevel);
+            Assert.AreEqual(territoryManager.GetDistrictSupportBonus(districtA), supportBonusByDistrict[districtA], 0.001f);
+            Assert.AreEqual(territoryManager.GetDistrictSupportBonus(districtB), supportBonusByDistrict[districtB], 0.001f);
+            Assert.AreEqual(territoryManager.IsDistrictEstablishedForNpc(districtA), npcReadyByDistrict[districtA]);
+            Assert.AreEqual(territoryManager.IsDistrictEstablishedForNpc(districtB), npcReadyByDistrict[districtB]);
+            Assert.IsTrue(visibleCorridorsByDistrict.ContainsKey(districtA));
+            Assert.IsTrue(visibleCorridorsByDistrict.ContainsKey(districtB));
+            Assert.AreEqual(1, visibleCorridorsByDistrict[districtA].Count);
+            Assert.AreEqual(1, visibleCorridorsByDistrict[districtB].Count);
+            Assert.AreEqual(expectedOperationsByDistrict[districtA].TotalWeeklyCost, operationsByDistrict[districtA].TotalWeeklyCost, 0.01f);
+            Assert.AreEqual(expectedOperationsByDistrict[districtA].CorridorRiskCount, operationsByDistrict[districtA].CorridorRiskCount);
+            Assert.AreEqual(expectedOperationsByDistrict[districtA].ServiceRiskCount, operationsByDistrict[districtA].ServiceRiskCount);
+            Assert.AreEqual(expectedOperationsByDistrict[districtB].TotalWeeklyCost, operationsByDistrict[districtB].TotalWeeklyCost, 0.01f);
+        }
+
+        [TestMethod]
+        public void GetNetworkViewSnapshot_ReusesCacheUntilTerritoryStateChanges()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out _);
+
+            var first = InvokeGetNetworkViewSnapshot(controller);
+            var second = InvokeGetNetworkViewSnapshot(controller);
+
+            Assert.AreSame(first, second);
+
+            territoryManager.GetDistrictState(districtA).InfluenceRatio += 0.05f;
+
+            var refreshed = InvokeGetNetworkViewSnapshot(controller);
+
+            Assert.AreNotSame(first, refreshed);
+        }
+
+        private static CompanyMapController CreateControllerWithScenario(
+            out TerritoryManager territoryManager,
+            out string districtA,
+            out string districtB)
+        {
+            var configDirectory = Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config");
+            var config = ModConfig.Load(configDirectory);
+            var industryManager = new IndustryManager(config);
+            territoryManager = new TerritoryManager(config, industryManager);
+
+            var supportSites = territoryManager.GetDepotIndustries()
+                .Where(industry => industry != null && !industry.IsStarterHeadquarters)
+                .GroupBy(industry => industry.DistrictName, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .Take(2)
+                .ToList();
+
+            Assert.IsTrue(supportSites.Count >= 2, "Expected at least two non-starter support sites in different districts.");
+
+            var inactiveCorridorDistrict = territoryManager.DistrictStates
+                .Select(state => state != null ? state.DistrictName : string.Empty)
+                .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)
+                    && !string.Equals(name, supportSites[0].DistrictName, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(name, supportSites[1].DistrictName, StringComparison.OrdinalIgnoreCase));
+            Assert.IsFalse(string.IsNullOrWhiteSpace(inactiveCorridorDistrict), "Expected a third district for inactive corridor filtering coverage.");
+
+            districtA = supportSites[0].DistrictName;
+            districtB = supportSites[1].DistrictName;
+
+            var snapshot = new TerritoryPersistenceSnapshot();
+            snapshot.Sites.Add(new TerritorySiteSnapshot
+            {
+                SiteId = supportSites[0].Id,
+                ControlLevel = TerritoryControlLevel.Owned,
+                CrewAssigned = true,
+                LoaderCount = 2,
+                ManagerCount = 1,
+                CurrentWeekServiceDeliveries = 4,
+                CurrentWeekServiceTons = 18f,
+                ServicePenaltySteps = 1,
+                DepotSpecialization = DepotSpecialization.Support,
+            });
+            snapshot.Sites.Add(new TerritorySiteSnapshot
+            {
+                SiteId = supportSites[1].Id,
+                ControlLevel = TerritoryControlLevel.Leased,
+                CrewAssigned = true,
+                MechanicCount = 1,
+                GuardCount = 1,
+                CurrentWeekServiceDeliveries = 3,
+                CurrentWeekServiceTons = 12f,
+                DepotSpecialization = DepotSpecialization.Dispatch,
+            });
+            snapshot.Districts.Add(new TerritoryDistrictSnapshot
+            {
+                DistrictName = districtA,
+                LicenseStatus = DistrictLicenseStatus.Active,
+                CurrentWeekActivityCount = 5,
+                CurrentWeekActivityTons = 40f,
+                CompetitivePressure = 0.2f,
+                CompetitiveOpportunity = 0.1f,
+            });
+            snapshot.Districts.Add(new TerritoryDistrictSnapshot
+            {
+                DistrictName = districtB,
+                LicenseStatus = DistrictLicenseStatus.Probation,
+                CurrentWeekActivityCount = 3,
+                CurrentWeekActivityTons = 24f,
+                CompetitivePressure = 0.35f,
+                CompetitiveOpportunity = 0.08f,
+            });
+            snapshot.Corridors.Add(new TerritoryCorridorSnapshot
+            {
+                DistrictA = districtA,
+                DistrictB = districtB,
+                RightLevel = CorridorRightLevel.Priority,
+                DeliveryCount = 12,
+                TotalDeliveredTons = 180f,
+                CurrentWeekDeliveryCount = 4,
+                CurrentWeekDeliveredTons = 28f,
+                DecayPressure = 0.1f,
+            });
+            snapshot.Corridors.Add(new TerritoryCorridorSnapshot
+            {
+                DistrictA = districtA,
+                DistrictB = inactiveCorridorDistrict,
+                RightLevel = CorridorRightLevel.None,
+                DeliveryCount = 2,
+                TotalDeliveredTons = 10f,
+            });
+
+            territoryManager.ApplySnapshot(snapshot);
+            territoryManager.GetDistrictState(districtA).InfluenceRatio = 0.72f;
+            territoryManager.GetDistrictState(districtA).ReputationScore = 78f;
+            territoryManager.GetDistrictState(districtA).ReputationLabel = "Anchored";
+            territoryManager.GetDistrictState(districtB).InfluenceRatio = 0.41f;
+            territoryManager.GetDistrictState(districtB).ReputationScore = 39f;
+            territoryManager.GetDistrictState(districtB).ReputationLabel = "Emerging";
+
+            return new CompanyMapController(
+                new ControlBindings(),
+                territoryManager,
+                industryManager,
+                () => { },
+                () => 125000f,
+                _ => string.Empty,
+                _ => string.Empty,
+                _ => string.Empty,
+                (_, __) => string.Empty,
+                (_, __) => string.Empty,
+                _ => { });
+        }
+
+        private static object InvokeGetNetworkViewSnapshot(CompanyMapController controller)
+        {
+            var method = typeof(CompanyMapController).GetMethod("GetNetworkViewSnapshot", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, "GetNetworkViewSnapshot");
+            return method.Invoke(controller, null);
+        }
+
+        private static T GetPropertyValue<T>(object target, string propertyName)
+        {
+            var property = target.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            Assert.IsNotNull(property, propertyName);
+            return (T)property.GetValue(target, null);
+        }
+    }
+}
