@@ -42,6 +42,7 @@
     </None>
   </ItemGroup>
 
+  <!-- Runtime output ships LSOL_Config only; archived root configs/ and missions/ stay repo-side. -->
   <Target Name="RemoveLegacyRuntimeConfigFromOutput" AfterTargets="Build">
     <RemoveDir Directories="$(OutDir)missions" Condition="Exists('$(OutDir)missions')" />
     <RemoveDir Directories="$(OutDir)configs" Condition="Exists('$(OutDir)configs')" />

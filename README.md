@@ -269,7 +269,7 @@ Notes:
 - Additive packaged content is currently supported for `resources`, `sites`, `vehicles`, and `office-objects`. Base LSOL content loads first, add-on fragments load second, and duplicate IDs are rejected instead of overridden.
 - Valid packaged add-ons require `addon.xml` with API/version compatibility metadata, capabilities, and content directory declarations.
 - Plugin metadata may be present in `addon.xml`, but LSOL does not load third-party DLLs in this version.
-- Root `configs/` and root `missions/` are legacy reference folders and are not loaded at runtime.
+- Root `configs/` and root `missions/` are archived legacy reference folders. They are not loaded at runtime, they are removed from build output, and they are kept in the repo only for manual reference and migration workflows such as `tools/migrate-legacy-configs.ps1`.
 
 ## Add-on Packages
 
