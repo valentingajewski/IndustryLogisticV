@@ -2784,6 +2784,7 @@ namespace LSOL.Systems
             private HandlerContainerTransferStage _stage;
             private bool _containerPickedUp;
             private bool _containerLoaded;
+            private bool _rolledBackToLoadingCheckpointOnRestore;
 
             public HandlerContainerTransferRuntime(
                 SpecialMissionManager owner,
@@ -2804,15 +2805,13 @@ namespace LSOL.Systems
 
                 if (snapshot != null)
                 {
-                    _stage = ParseStage(snapshot.StageIndex);
-                    _containerPickedUp = snapshot.HandlerContainerPickedUp;
-                    _containerLoaded = snapshot.HandlerContainerLoaded;
-
-                    // Mid-lift state cannot be restored reliably without storing live prop transforms.
-                    if (_containerPickedUp && !_containerLoaded)
-                    {
-                        _containerPickedUp = false;
-                    }
+                    int restoredStageIndex;
+                    _rolledBackToLoadingCheckpointOnRestore = ApplyRestoreCheckpointPolicy(
+                        snapshot,
+                        out restoredStageIndex,
+                        out _containerPickedUp,
+                        out _containerLoaded);
+                    _stage = ParseStage(restoredStageIndex);
 
                     ApplyCheckpointLayout();
                 }
@@ -2836,7 +2835,9 @@ namespace LSOL.Systems
 
                 if (restoredFromSave)
                 {
-                    Owner.ShowStatus(string.Format("Resumed special mission: {0}.", Definition.Name), 4500);
+                    Owner.ShowStatus(
+                        BuildRestoreStatusMessage(Definition.Name, _rolledBackToLoadingCheckpointOnRestore),
+                        _rolledBackToLoadingCheckpointOnRestore ? 6500 : 4500);
                 }
             }
 
@@ -2968,6 +2969,38 @@ namespace LSOL.Systems
                     HandlerContainerPickedUp = _containerPickedUp,
                     HandlerContainerLoaded = _containerLoaded,
                 };
+            }
+
+            private static bool ApplyRestoreCheckpointPolicy(
+                ActiveSpecialMissionPersistenceSnapshot snapshot,
+                out int stageIndex,
+                out bool containerPickedUp,
+                out bool containerLoaded)
+            {
+                stageIndex = snapshot != null ? snapshot.StageIndex : 0;
+                containerPickedUp = snapshot != null && snapshot.HandlerContainerPickedUp;
+                containerLoaded = snapshot != null && snapshot.HandlerContainerLoaded;
+
+                if (containerPickedUp && !containerLoaded)
+                {
+                    stageIndex = (int)HandlerContainerTransferStage.LoadContainer;
+                    containerPickedUp = false;
+                    return true;
+                }
+
+                return false;
+            }
+
+            private static string BuildRestoreStatusMessage(string missionName, bool rolledBackToCheckpoint)
+            {
+                var safeMissionName = string.IsNullOrWhiteSpace(missionName)
+                    ? "special mission"
+                    : missionName.Trim();
+                return rolledBackToCheckpoint
+                    ? string.Format(
+                        "Resumed special mission: {0}. Mid-lift container progress could not be restored, so it was rolled back to the loading checkpoint.",
+                        safeMissionName)
+                    : string.Format("Resumed special mission: {0}.", safeMissionName);
             }
 
             public override void Cleanup()
