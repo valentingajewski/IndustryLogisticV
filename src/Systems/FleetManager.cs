@@ -866,7 +866,7 @@ namespace LSOL.Systems
                 var placementY = localSlot.Y - centerOffsetY;
 
                 float floorLocalZ;
-                if (!TryProbeTruckBedFloor(cargoVehicle, localSlot.X, localSlot.Y, modelMin.Z, modelMax.Z, out floorLocalZ))
+                if (!TryProbeTruckBedFloor(cargoVehicle, localSlot.X, localSlot.Y, modelMin.Z, modelMax.Z, out floorLocalZ, false))
                 {
                     model.MarkAsNoLongerNeeded();
                     continue;
@@ -963,7 +963,7 @@ namespace LSOL.Systems
                 return true;
             }
 
-            var propCount = ResolveLooseCargoPropCount(cargoState, looseCargoVisual.MaxPropCount);
+            var propCount = ResolveAppliedLooseCargoPropCount(cargoState, looseCargoVisual);
             var centerOffset = looseCargoVisual.CenterOffset ?? Vector3.Zero;
 
             for (int i = 0; i < propCount; i++)
@@ -981,11 +981,18 @@ namespace LSOL.Systems
 
                 var halfWidth = Math.Max(0.05f, (rockModelMax.X - rockModelMin.X) * 0.5f);
                 var halfLength = Math.Max(0.05f, (rockModelMax.Y - rockModelMin.Y) * 0.5f);
-                var localSlot = ResolveLooseCargoLocalSlot(i, propCount, centerOffset, looseCargoVisual.SpreadX, looseCargoVisual.SpreadY);
-                localSlot = ConstrainCrateLocalSlotToBed(localSlot, bedMinX, bedMaxX, bedRearY, bedFrontY, halfWidth, halfLength);
+                var usesManualSlot = looseCargoVisual.HasManualSlots && i < looseCargoVisual.ManualSlots.Count;
+                var manualSlot = usesManualSlot ? looseCargoVisual.ManualSlots[i] : null;
+                var localSlot = usesManualSlot
+                    ? manualSlot.Offset
+                    : ResolveLooseCargoLocalSlot(i, propCount, centerOffset, looseCargoVisual.SpreadX, looseCargoVisual.SpreadY);
+                if (!usesManualSlot)
+                {
+                    localSlot = ConstrainCrateLocalSlotToBed(localSlot, bedMinX, bedMaxX, bedRearY, bedFrontY, halfWidth, halfLength);
+                }
 
                 float floorLocalZ;
-                if (!TryProbeTruckBedFloor(cargoVehicle, localSlot.X, localSlot.Y, modelMin.Z, modelMax.Z, out floorLocalZ))
+                if (!TryProbeTruckBedFloor(cargoVehicle, localSlot.X, localSlot.Y, modelMin.Z, modelMax.Z, out floorLocalZ, false))
                 {
                     model.MarkAsNoLongerNeeded();
                     continue;
@@ -998,11 +1005,13 @@ namespace LSOL.Systems
                 var attachOffset = new Vector3(
                     localSlot.X - modelCenter.X,
                     localSlot.Y - modelCenter.Y,
-                    floorLocalZ - rockModelMin.Z + 0.01f + centerOffset.Z);
-                var rotation = new Vector3(
-                    RandomRange(-looseCargoVisual.PitchJitterDegrees, looseCargoVisual.PitchJitterDegrees),
-                    RandomRange(-looseCargoVisual.RollJitterDegrees, looseCargoVisual.RollJitterDegrees),
-                    RandomRange(-looseCargoVisual.YawJitterDegrees, looseCargoVisual.YawJitterDegrees));
+                    floorLocalZ - rockModelMin.Z + 0.01f + (usesManualSlot ? manualSlot.Offset.Z : centerOffset.Z));
+                var rotation = usesManualSlot
+                    ? new Vector3(manualSlot.PitchDegrees, manualSlot.RollDegrees, manualSlot.HeadingDegrees)
+                    : new Vector3(
+                        RandomRange(-looseCargoVisual.PitchJitterDegrees, looseCargoVisual.PitchJitterDegrees),
+                        RandomRange(-looseCargoVisual.RollJitterDegrees, looseCargoVisual.RollJitterDegrees),
+                        RandomRange(-looseCargoVisual.YawJitterDegrees, looseCargoVisual.YawJitterDegrees));
 
                 var spawnPosition = cargoVehicle.GetOffsetPosition(attachOffset);
                 var prop = World.CreateProp(model, spawnPosition, true, false);
@@ -1302,6 +1311,22 @@ namespace LSOL.Systems
             return Math.Max(1, Math.Min(maxPropCount, (int)Math.Ceiling(Math.Max(0.15f, cargoState.FillRatio) * maxPropCount)));
         }
 
+        private static int ResolveAppliedLooseCargoPropCount(VehicleCargoState cargoState, VehicleLooseCargoVisualDefinition looseCargoVisual)
+        {
+            if (looseCargoVisual == null)
+            {
+                return 0;
+            }
+
+            var propCount = ResolveLooseCargoPropCount(cargoState, looseCargoVisual.MaxPropCount);
+            if (looseCargoVisual.HasManualSlots)
+            {
+                return Math.Min(propCount, looseCargoVisual.ManualSlots.Count);
+            }
+
+            return propCount;
+        }
+
         private static Vector3 ResolveLooseCargoLocalSlot(int index, int count, Vector3 centerOffset, float spreadX, float spreadY)
         {
             var safeSpreadX = Math.Max(0f, spreadX);
@@ -1311,23 +1336,31 @@ namespace LSOL.Systems
                 return centerOffset;
             }
 
-            if (count == 2)
+            var maxColumns = count <= 3
+                ? 1
+                : Math.Min(3, Math.Max(1, count));
+            var maxRows = Math.Max(1, (int)Math.Ceiling((float)count / maxColumns));
+            var rowCounts = BuildConfiguredRowCounts(count, maxColumns, maxRows);
+            var columnSpacing = maxColumns <= 1 ? 0f : safeSpreadX / (maxColumns - 1);
+            var rowSpacing = rowCounts.Length <= 1 ? 0f : safeSpreadY / (rowCounts.Length - 1);
+            var rowOffsets = BuildCenteredRowOffsets(rowCounts, rowSpacing);
+
+            var remaining = index;
+            for (int rowIndex = 0; rowIndex < rowCounts.Length; rowIndex++)
             {
-                return new Vector3(
-                    centerOffset.X + (index == 0 ? -safeSpreadX * 0.5f : safeSpreadX * 0.5f),
-                    centerOffset.Y + (index == 0 ? -safeSpreadY * 0.1f : safeSpreadY * 0.1f),
-                    centerOffset.Z);
+                var columnsInRow = rowCounts[rowIndex];
+                if (remaining < columnsInRow)
+                {
+                    return new Vector3(
+                        centerOffset.X + ResolveCenteredAxisOffset(remaining, columnsInRow, columnSpacing),
+                        centerOffset.Y + rowOffsets[rowIndex],
+                        centerOffset.Z);
+                }
+
+                remaining -= columnsInRow;
             }
 
-            switch (index)
-            {
-                case 0:
-                    return new Vector3(centerOffset.X, centerOffset.Y - (safeSpreadY * 0.3f), centerOffset.Z);
-                case 1:
-                    return new Vector3(centerOffset.X - (safeSpreadX * 0.5f), centerOffset.Y + (safeSpreadY * 0.2f), centerOffset.Z);
-                default:
-                    return new Vector3(centerOffset.X + (safeSpreadX * 0.5f), centerOffset.Y + (safeSpreadY * 0.2f), centerOffset.Z);
-            }
+            return centerOffset;
         }
 
         private float RandomRange(float min, float max)
@@ -1746,7 +1779,7 @@ namespace LSOL.Systems
             return new Vector3(x, y, localSlot.Z);
         }
 
-        private static bool TryProbeTruckBedFloor(Vehicle truck, float localX, float localY, float modelMinZ, float modelMaxZ, out float floorLocalZ)
+        private static bool TryProbeTruckBedFloor(Vehicle truck, float localX, float localY, float modelMinZ, float modelMaxZ, out float floorLocalZ, bool includeObjects = true)
         {
             floorLocalZ = 0f;
             if (truck == null || !truck.Exists())
@@ -1757,10 +1790,15 @@ namespace LSOL.Systems
             var height = Math.Max(0.1f, modelMaxZ - modelMinZ);
             var startLocalZ = modelMinZ + (height * 0.88f);
             var maxFloorZ = modelMinZ + (height * 0.94f);
+            var intersectFlags = IntersectFlags.Map | IntersectFlags.Vehicles;
+            if (includeObjects)
+            {
+                intersectFlags |= IntersectFlags.Objects;
+            }
 
             var start = truck.GetOffsetPosition(new Vector3(localX, localY, startLocalZ));
             var target = truck.GetOffsetPosition(new Vector3(localX, localY, modelMinZ - 0.9f));
-            var hit = World.Raycast(start, target, IntersectFlags.Map | IntersectFlags.Vehicles | IntersectFlags.Objects, null);
+            var hit = World.Raycast(start, target, intersectFlags, null);
             if (!hit.DidHit)
             {
                 floorLocalZ = EstimateTruckBedFloorLocalZ(modelMinZ, modelMaxZ);

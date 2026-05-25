@@ -491,6 +491,19 @@ namespace LSOL.Config
                                     looseClone.Commodities.AddRange(looseVisual.Commodities.Where(commodity => !string.IsNullOrWhiteSpace(commodity)));
                                 }
 
+                                if (looseVisual.ManualSlots != null)
+                                {
+                                    looseClone.ManualSlots.AddRange(looseVisual.ManualSlots
+                                        .Where(slot => slot != null)
+                                        .Select(slot => new VehicleLooseCargoSlotDefinition
+                                        {
+                                            Offset = slot.Offset,
+                                            HeadingDegrees = slot.HeadingDegrees,
+                                            PitchDegrees = slot.PitchDegrees,
+                                            RollDegrees = slot.RollDegrees,
+                                        }));
+                                }
+
                                 return looseClone;
                             }));
                     }

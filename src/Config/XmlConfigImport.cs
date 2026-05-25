@@ -444,7 +444,77 @@ namespace LSOL.Config
                     looseVisual.Commodities.Add(commodities[i]);
                 }
 
+                PopulateVehicleLooseCargoSlots(looseElement, layout.ModelName, looseVisual, catalog.ValidationMessages);
+
                 layout.LooseCargoVisuals.Add(looseVisual);
+            }
+        }
+
+        private static void PopulateVehicleLooseCargoSlots(XElement looseElement, string modelName, VehicleLooseCargoVisualDefinition looseVisual, List<string> validationMessages)
+        {
+            if (looseElement == null || looseVisual == null)
+            {
+                return;
+            }
+
+            foreach (var slotElement in looseElement.Elements("Slot"))
+            {
+                if (AreAttributesBlank(slotElement, "x", "y", "z"))
+                {
+                    continue;
+                }
+
+                Vector3 slotOffset;
+                if (!TryReadRequiredVector3(slotElement, "x", "y", "z", out slotOffset))
+                {
+                    if (validationMessages != null)
+                    {
+                        validationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has invalid loose cargo Slot coordinates.", modelName));
+                    }
+
+                    continue;
+                }
+
+                var headingDegrees = 0f;
+                if (!TryReadOptionalSlotHeading(slotElement, out headingDegrees))
+                {
+                    if (validationMessages != null)
+                    {
+                        validationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has invalid loose cargo Slot heading.", modelName));
+                    }
+
+                    continue;
+                }
+
+                var pitchDegrees = 0f;
+                if (!TryReadOptionalFloatAttributeValue(slotElement, "pitch", out pitchDegrees))
+                {
+                    if (validationMessages != null)
+                    {
+                        validationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has invalid loose cargo Slot pitch.", modelName));
+                    }
+
+                    continue;
+                }
+
+                var rollDegrees = 0f;
+                if (!TryReadOptionalFloatAttributeValue(slotElement, "roll", out rollDegrees))
+                {
+                    if (validationMessages != null)
+                    {
+                        validationMessages.Add(string.Format("VehiclesObjects.xml vehicle model '{0}' has invalid loose cargo Slot roll.", modelName));
+                    }
+
+                    continue;
+                }
+
+                looseVisual.ManualSlots.Add(new VehicleLooseCargoSlotDefinition
+                {
+                    Offset = slotOffset,
+                    HeadingDegrees = headingDegrees,
+                    PitchDegrees = pitchDegrees,
+                    RollDegrees = rollDegrees,
+                });
             }
         }
 
@@ -484,6 +554,11 @@ namespace LSOL.Config
                 return null;
             }
 
+            if (AreAttributesBlank(element, "centerX", "centerY", "centerZ"))
+            {
+                return null;
+            }
+
             float x;
             float y;
             float z;
@@ -500,6 +575,92 @@ namespace LSOL.Config
             }
 
             return new Vector3(x, y, z);
+        }
+
+        private static bool TryReadRequiredVector3(XElement element, string xAttributeName, string yAttributeName, string zAttributeName, out Vector3 value)
+        {
+            value = Vector3.Zero;
+            if (element == null)
+            {
+                return false;
+            }
+
+            float x;
+            float y;
+            float z;
+            if (!TryReadFloatAttribute(element, xAttributeName, out x)
+                || !TryReadFloatAttribute(element, yAttributeName, out y)
+                || !TryReadFloatAttribute(element, zAttributeName, out z))
+            {
+                return false;
+            }
+
+            value = new Vector3(x, y, z);
+            return true;
+        }
+
+        private static bool AreAttributesBlank(XElement element, params string[] attributeNames)
+        {
+            if (element == null || attributeNames == null || attributeNames.Length == 0)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < attributeNames.Length; i++)
+            {
+                var attribute = element.Attribute(attributeNames[i]);
+                if (attribute == null || !string.IsNullOrWhiteSpace(attribute.Value))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryReadOptionalSlotHeading(XElement element, out float headingDegrees)
+        {
+            headingDegrees = 0f;
+            if (element == null)
+            {
+                return true;
+            }
+
+            var headingAttribute = element.Attribute("heading");
+            if (headingAttribute != null)
+            {
+                if (string.IsNullOrWhiteSpace(headingAttribute.Value))
+                {
+                    return true;
+                }
+
+                return TryReadFloatAttribute(element, "heading", out headingDegrees);
+            }
+
+            var yawAttribute = element.Attribute("yaw");
+            if (yawAttribute == null || string.IsNullOrWhiteSpace(yawAttribute.Value))
+            {
+                return true;
+            }
+
+            return TryReadFloatAttribute(element, "yaw", out headingDegrees);
+        }
+
+        private static bool TryReadOptionalFloatAttributeValue(XElement element, string attributeName, out float value)
+        {
+            value = 0f;
+            if (element == null)
+            {
+                return true;
+            }
+
+            var attribute = element.Attribute(attributeName);
+            if (attribute == null || string.IsNullOrWhiteSpace(attribute.Value))
+            {
+                return true;
+            }
+
+            return TryReadFloatAttribute(element, attributeName, out value);
         }
 
         private static int? TryReadOptionalIntAttribute(XElement element, string attributeName)

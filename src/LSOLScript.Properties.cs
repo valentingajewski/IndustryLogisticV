@@ -89,7 +89,7 @@ namespace LSOL
             };
             _officeObjectsMenu = new LemonMenu("Office Objects")
             {
-                Subtitle = "Buy modules, haul them from the port, and place decorative props at the active office",
+                Subtitle = "Buy decorative or useful props",
                 AlignRight = true,
                 MaxVisibleItems = 10,
             };
@@ -1237,8 +1237,8 @@ namespace LSOL
                 },
             };
 
-            _officeFuelManagementMenu.Title = _menuOffice != null ? string.Format("{0} Fuel", _menuOffice.DisplayName) : "Fuel Management";
-            _officeFuelManagementMenu.Subtitle = "Refuel company vehicles, unload cargo, or request diesel delivery";
+            _officeFuelManagementMenu.Title = "Fuel Management";
+            _officeFuelManagementMenu.Subtitle = "Manage refueling operations";
             _officeFuelManagementMenu.SetItems(items);
         }
 
@@ -1290,8 +1290,8 @@ namespace LSOL
             });
             _officeObjectPreviewSlots.Add(null);
 
-            _officeObjectsMenu.Title = _menuOffice != null ? string.Format("{0} Objects", _menuOffice.DisplayName) : "Office Objects";
-            _officeObjectsMenu.Subtitle = "Buy modules, haul them from the port, and place decorative props at the active office";
+            _officeObjectsMenu.Title = "Office Objects";
+            _officeObjectsMenu.Subtitle = "Buy modules or decorative props";
             _officeObjectsMenu.SetItems(items);
         }
 

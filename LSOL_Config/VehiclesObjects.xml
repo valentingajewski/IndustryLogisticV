@@ -38,12 +38,70 @@
   <Vehicle model="mixer" name="Mixer" objectKey="" centerX="0.00" centerY="-0.85" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
   <Vehicle model="mixer2" name="Mixer" objectKey="" centerX="0.00" centerY="-0.85" centerZ="1.00" maxLine="1" maxRow="1" enabled="false" />
   <Vehicle model="rubble" name="Rubble" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
-    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="LooseRock" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="3" spreadX="0.70" spreadY="0.45" yawJitter="18" pitchJitter="4" rollJitter="4" />
+    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="Gravel" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="28" spreadX="0.70" spreadY="0.45" yawJitter="18" pitchJitter="4" rollJitter="4">
+      <Slot x="-0.4" y="0" z="0" heading="90" pitch="0" roll="0" />
+      <Slot x="0.3" y="0" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.4" y="-0.5" z="0" heading="270" pitch="0" roll="0" />
+      <Slot x="0.3" y="-0.5" z="0" heading="180" pitch="0" roll="0" />
+      <Slot x="-0.4" y="-1.5" z="0" heading="60" pitch="0" roll="0" />
+      <Slot x="0.3" y="-1.5" z="0" heading="330" pitch="" roll="" />
+      <Slot x="-0.4" y="-2.5" z="0" heading="120" pitch="" roll="" />
+      <Slot x="0.3" y="-2.5" z="0" heading="240" pitch="" roll="" />
+      <Slot x="-0.4" y="-3.5" z="0" heading="45" pitch="" roll="" />
+      <Slot x="0.3" y="-3.5" z="0" heading="80" pitch="" roll="" />
+
+      <Slot x="-0.9" y="0" z="0.8" heading="60" pitch="" roll="" />
+      <Slot x="0.1" y="0" z="0.8" heading="140" pitch="" roll="" />
+      <Slot x="0.8" y="0" z="0.8" heading="240" pitch="" roll="" />
+
+      <Slot x="-0.5" y="-0.5" z="0.8" heading="190" pitch="" roll="" />
+      <Slot x="0.3" y="-0.5" z="0.8" heading="250" pitch="" roll="" />
+      <Slot x="0.4" y="-0.5" z="0.8" heading="310" pitch="" roll="" />
+
+      <Slot x="-0.4" y="-1.0" z="0.8" heading="240" pitch="" roll="" />
+      <Slot x="0.3" y="-1.0" z="0.8" heading="300" pitch="" roll="" />
+      <Slot x="0.5" y="-1.0" z="0.8" heading="0" pitch="" roll="" />
+
+      <Slot x="-0.5" y="-2.0" z="0.8" heading="70" pitch="" roll="" />
+      <Slot x="0.3" y="-2.0" z="0.8" heading="240" pitch="" roll="" />
+      <Slot x="0.5" y="-2.0" z="0.8" heading="160" pitch="" roll="" />
+
+      <Slot x="-0.5" y="-2.5" z="0.8" heading="90" pitch="" roll="" />
+      <Slot x="0.3" y="-2.5" z="0.8" heading="270" pitch="" roll="" />
+      <Slot x="0.4" y="-2.5" z="0.8" heading="30" pitch="" roll="" />
+
+      <Slot x="-0.5" y="-3.5" z="0.8" heading="20" pitch="" roll="" />
+      <Slot x="0.3" y="-3.5" z="0.8" heading="140" pitch="" roll="" />
+      <Slot x="0.5" y="-3.5" z="0.8" heading="170" pitch="" roll="" />
+
+    </LooseCargo>
   </Vehicle>
-  <Vehicle model="tiptruck" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
-    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="LooseRock" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="3" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4" />
+  <Vehicle model="tiptruck" name="Tipper (4 Wheels)" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
+    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="Gravel" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="10" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
+      <Slot x="-0.4" y="-0.5" z="0" heading="90" pitch="0" roll="0" />
+      <Slot x="0.2" y="-0.5" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.3" y="-1.5" z="0" heading="270" pitch="0" roll="0" />
+      <Slot x="0.3" y="-1.5" z="0" heading="180" pitch="0" roll="0" />
+      <Slot x="-0.4" y="-2.5" z="0" heading="60" pitch="0" roll="0" />
+      <Slot x="0.1" y="-2.5" z="0" heading="330" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+    </LooseCargo>
   </Vehicle>
-  <Vehicle model="tiptruck2" name="Tipper" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
-    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="LooseRock" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="3" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4" />
+  <Vehicle model="tiptruck2" name="Tipper (6 Wheels)" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
+    <LooseCargo commodities="Coal,Gravel,Ore" objectKey="Gravel" centerX="" centerY="" centerZ="" maxPropCount="10" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
+      <Slot x="-0.4" y="-0.5" z="0" heading="90" pitch="0" roll="0" />
+      <Slot x="0.3" y="-0.5" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.4" y="-1.5" z="0" heading="270" pitch="0" roll="0" />
+      <Slot x="0.3" y="-1.5" z="0" heading="180" pitch="0" roll="0" />
+      <Slot x="-0.4" y="-2.5" z="0" heading="60" pitch="0" roll="0" />
+      <Slot x="0.3" y="-2.5" z="0" heading="330" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+      <Slot x="" y="" z="" heading="" pitch="" roll="" />
+    </LooseCargo>
   </Vehicle>
 </VehiclesObjects>

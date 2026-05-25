@@ -1,5 +1,6 @@
 using System.Linq;
 using System.IO;
+using GTA.Math;
 using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Tests.TestSupport;
@@ -62,6 +63,39 @@ namespace LSOL.Tests.Config
             var config = ModConfig.Load(tempConfigDirectory);
 
             Assert.AreEqual(3600f, config.IndustryConfigs["Store1"].WeeklyPassiveIncome, 0.01f);
+        }
+
+        [TestMethod]
+        public void Load_WithRepoLsolConfig_PopulatesManualDumperLooseCargoRules()
+        {
+            var configDirectory = Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config");
+
+            var config = ModConfig.Load(configDirectory);
+            var rubbleLayout = config.VehicleObjectLayouts.Single(layout => layout != null && layout.ModelName == "rubble");
+            var tiptruckLayout = config.VehicleObjectLayouts.Single(layout => layout != null && layout.ModelName == "tiptruck");
+            var tiptruck2Layout = config.VehicleObjectLayouts.Single(layout => layout != null && layout.ModelName == "tiptruck2");
+
+            AssertLooseCargoRule(rubbleLayout, 28);
+            AssertLooseCargoRule(tiptruckLayout, 10);
+            AssertLooseCargoRule(tiptruck2Layout, 10);
+        }
+
+        private static void AssertLooseCargoRule(VehicleObjectLayoutDefinition layout, int expectedMaxPropCount)
+        {
+            Assert.IsNotNull(layout);
+
+            var oreRule = layout.FindLooseCargoVisual("Ore", VehicleCargoType.Aggregates);
+            var cropsRule = layout.FindLooseCargoVisual("Crops", VehicleCargoType.Aggregates);
+
+            Assert.IsNotNull(oreRule, layout.ModelName + " ore loose cargo");
+            Assert.AreEqual("Gravel", oreRule.ObjectKey, layout.ModelName + " objectKey");
+            Assert.AreEqual(expectedMaxPropCount, oreRule.MaxPropCount, layout.ModelName + " maxPropCount");
+            Assert.IsTrue(oreRule.ManualSlots.Count >= 1, layout.ModelName + " manual slot count");
+            Assert.IsFalse(float.IsNaN(oreRule.ManualSlots[0].HeadingDegrees), layout.ModelName + " first manual slot heading");
+            Assert.IsFalse(float.IsNaN(oreRule.ManualSlots[0].PitchDegrees), layout.ModelName + " first manual slot pitch");
+            Assert.IsFalse(float.IsNaN(oreRule.ManualSlots[0].RollDegrees), layout.ModelName + " first manual slot roll");
+            CollectionAssert.AreEquivalent(new[] { "Coal", "Gravel", "Ore" }, oreRule.Commodities.ToArray(), layout.ModelName + " commodities");
+            Assert.IsNull(cropsRule, layout.ModelName + " crops loose cargo");
         }
     }
 }

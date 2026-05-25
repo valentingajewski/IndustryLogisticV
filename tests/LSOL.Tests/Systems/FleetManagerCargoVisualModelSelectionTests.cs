@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using GTA.Math;
 using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
@@ -91,6 +92,12 @@ namespace LSOL.Tests.Systems
         {
             var config = LoadRepoConfig();
             var manager = new FleetManager(config);
+            var expectedMaxPropCountByModel = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "rubble", 28 },
+                { "tiptruck", 10 },
+                { "tiptruck2", 10 },
+            };
 
             foreach (var modelName in new[] { "rubble", "tiptruck", "tiptruck2" })
             {
@@ -99,10 +106,118 @@ namespace LSOL.Tests.Systems
                 var cropOverlay = InvokeFindVehicleLooseCargoVisual(manager, definition, "Crops");
 
                 Assert.IsNotNull(oreOverlay, modelName + " ore overlay");
-                Assert.AreEqual("LooseRock", oreOverlay.ObjectKey);
-                Assert.AreEqual(3, oreOverlay.MaxPropCount);
+                Assert.AreEqual("Gravel", oreOverlay.ObjectKey);
+                Assert.AreEqual(expectedMaxPropCountByModel[modelName], oreOverlay.MaxPropCount, modelName + " maxPropCount");
+                Assert.IsTrue(oreOverlay.ManualSlots.Count >= 1);
                 Assert.IsNull(cropOverlay, modelName + " crops overlay");
             }
+        }
+
+        [TestMethod]
+        public void ResolveLooseCargoPropCount_WithConfiguredMaxThree_ScalesByFillRatio()
+        {
+            var lowFill = CreateCargoState(18f, 2f);
+            var mediumFill = CreateCargoState(18f, 8f);
+            var highFill = CreateCargoState(18f, 15f);
+
+            Assert.AreEqual(1, InvokeResolveLooseCargoPropCount(lowFill, 3));
+            Assert.AreEqual(2, InvokeResolveLooseCargoPropCount(mediumFill, 3));
+            Assert.AreEqual(3, InvokeResolveLooseCargoPropCount(highFill, 3));
+        }
+
+        [TestMethod]
+        public void ResolveLooseCargoPropCount_WithConfiguredMaxTen_ReachesTenAtFullLoad()
+        {
+            var fullLoad = CreateCargoState(22f, 22f);
+
+            Assert.AreEqual(10, InvokeResolveLooseCargoPropCount(fullLoad, 10));
+        }
+
+        [TestMethod]
+        public void ResolveAppliedLooseCargoPropCount_WithSingleManualSlot_CapsVisiblePropsToOne()
+        {
+            var fullLoad = CreateCargoState(22f, 22f);
+            var looseVisual = new VehicleLooseCargoVisualDefinition
+            {
+                MaxPropCount = 10,
+            };
+            looseVisual.ManualSlots.Add(new VehicleLooseCargoSlotDefinition
+            {
+                Offset = new Vector3(-0.16f, -1.42f, 0.04f),
+                HeadingDegrees = 0f,
+                PitchDegrees = 0f,
+                RollDegrees = 0f,
+            });
+
+            Assert.AreEqual(1, InvokeResolveAppliedLooseCargoPropCount(fullLoad, looseVisual));
+        }
+
+        [TestMethod]
+        public void ResolveAppliedLooseCargoPropCount_WithTenManualSlots_KeepsFullLoadAtTen()
+        {
+            var fullLoad = CreateCargoState(22f, 22f);
+            var looseVisual = new VehicleLooseCargoVisualDefinition
+            {
+                MaxPropCount = 10,
+            };
+
+            for (int i = 0; i < 10; i++)
+            {
+                looseVisual.ManualSlots.Add(new VehicleLooseCargoSlotDefinition
+                {
+                    Offset = new Vector3(0f, -1f + (i * 0.1f), 0.04f),
+                    HeadingDegrees = i * 10f,
+                    PitchDegrees = 0f,
+                    RollDegrees = 0f,
+                });
+            }
+
+            Assert.AreEqual(10, InvokeResolveAppliedLooseCargoPropCount(fullLoad, looseVisual));
+        }
+
+        [TestMethod]
+        public void ManualLooseCargoSlot_CarriesConfiguredRotation()
+        {
+            var slot = new VehicleLooseCargoSlotDefinition
+            {
+                Offset = new Vector3(0f, -1f, 0.04f),
+                HeadingDegrees = 37f,
+                PitchDegrees = 12f,
+                RollDegrees = -8f,
+            };
+
+            Assert.AreEqual(37f, slot.HeadingDegrees, 0.001f);
+            Assert.AreEqual(12f, slot.PitchDegrees, 0.001f);
+            Assert.AreEqual(-8f, slot.RollDegrees, 0.001f);
+        }
+
+        [TestMethod]
+        public void ResolveLooseCargoLocalSlot_WithThreeProps_StaggersFrontToBack()
+        {
+            var slots = new[]
+            {
+                InvokeResolveLooseCargoLocalSlot(0, 3, new Vector3(0f, -0.9f, 0.04f), 0.72f, 0.48f),
+                InvokeResolveLooseCargoLocalSlot(1, 3, new Vector3(0f, -0.9f, 0.04f), 0.72f, 0.48f),
+                InvokeResolveLooseCargoLocalSlot(2, 3, new Vector3(0f, -0.9f, 0.04f), 0.72f, 0.48f),
+            };
+
+            Assert.IsTrue(slots.All(slot => Math.Abs(slot.X) < 0.001f));
+            Assert.AreEqual(-1.14f, slots[0].Y, 0.001f);
+            Assert.AreEqual(-0.90f, slots[1].Y, 0.001f);
+            Assert.AreEqual(-0.66f, slots[2].Y, 0.001f);
+        }
+
+        [TestMethod]
+        public void ResolveLooseCargoLocalSlot_WhenCountExceedsThree_UsesMoreThanThreeDistinctSlots()
+        {
+            var slots = new HashSet<string>(StringComparer.Ordinal);
+            for (int i = 0; i < 6; i++)
+            {
+                var slot = InvokeResolveLooseCargoLocalSlot(i, 6, new Vector3(0f, -0.9f, 0.04f), 0.72f, 0.48f);
+                slots.Add(string.Format("{0:0.000}|{1:0.000}|{2:0.000}", slot.X, slot.Y, slot.Z));
+            }
+
+            Assert.AreEqual(6, slots.Count);
         }
 
         [TestMethod]
@@ -219,6 +334,51 @@ namespace LSOL.Tests.Systems
                 null);
             Assert.IsNotNull(method, "FindVehicleLooseCargoVisual");
             return method.Invoke(manager, new object[] { definition, commodity }) as VehicleLooseCargoVisualDefinition;
+        }
+
+        private static int InvokeResolveLooseCargoPropCount(VehicleCargoState cargoState, int configuredMaxPropCount)
+        {
+            var method = typeof(FleetManager).GetMethod(
+                "ResolveLooseCargoPropCount",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(VehicleCargoState), typeof(int) },
+                null);
+            Assert.IsNotNull(method, "ResolveLooseCargoPropCount");
+            return (int)method.Invoke(null, new object[] { cargoState, configuredMaxPropCount });
+        }
+
+        private static int InvokeResolveAppliedLooseCargoPropCount(VehicleCargoState cargoState, VehicleLooseCargoVisualDefinition looseCargoVisual)
+        {
+            var method = typeof(FleetManager).GetMethod(
+                "ResolveAppliedLooseCargoPropCount",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(VehicleCargoState), typeof(VehicleLooseCargoVisualDefinition) },
+                null);
+            Assert.IsNotNull(method, "ResolveAppliedLooseCargoPropCount");
+            return (int)method.Invoke(null, new object[] { cargoState, looseCargoVisual });
+        }
+
+        private static Vector3 InvokeResolveLooseCargoLocalSlot(int index, int count, Vector3 centerOffset, float spreadX, float spreadY)
+        {
+            var method = typeof(FleetManager).GetMethod(
+                "ResolveLooseCargoLocalSlot",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(int), typeof(int), typeof(Vector3), typeof(float), typeof(float) },
+                null);
+            Assert.IsNotNull(method, "ResolveLooseCargoLocalSlot");
+            return (Vector3)method.Invoke(null, new object[] { index, count, centerOffset, spreadX, spreadY });
+        }
+
+        private static VehicleCargoState CreateCargoState(float capacityTons, float weightTons)
+        {
+            return new VehicleCargoState(0, VehicleCargoType.Aggregates, capacityTons)
+            {
+                Commodity = "Gravel",
+                WeightTons = weightTons,
+            };
         }
 
         private static void SetProperty(object target, string propertyName, object value)

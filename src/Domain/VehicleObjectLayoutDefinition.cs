@@ -95,6 +95,7 @@ namespace LSOL.Domain
         public VehicleLooseCargoVisualDefinition()
         {
             Commodities = new List<string>();
+            ManualSlots = new List<VehicleLooseCargoSlotDefinition>();
             MaxPropCount = 1;
             SpreadX = 0.5f;
             SpreadY = 0.35f;
@@ -106,6 +107,7 @@ namespace LSOL.Domain
 
         public string ObjectKey { get; set; }
         public List<string> Commodities { get; private set; }
+        public List<VehicleLooseCargoSlotDefinition> ManualSlots { get; private set; }
         public VehicleCargoType CargoType { get; set; }
         public Vector3? CenterOffset { get; set; }
         public int MaxPropCount { get; set; }
@@ -115,6 +117,11 @@ namespace LSOL.Domain
         public float PitchJitterDegrees { get; set; }
         public float RollJitterDegrees { get; set; }
         public bool IsEnabled { get; set; }
+
+        public bool HasManualSlots
+        {
+            get { return ManualSlots != null && ManualSlots.Count > 0; }
+        }
 
         public bool MatchesCommodity(string commodity, VehicleCargoType cargoType)
         {
@@ -134,5 +141,13 @@ namespace LSOL.Domain
 
             return CargoType != VehicleCargoType.Unknown && CargoType == cargoType;
         }
+    }
+
+    public sealed class VehicleLooseCargoSlotDefinition
+    {
+        public Vector3 Offset { get; set; }
+        public float HeadingDegrees { get; set; }
+        public float PitchDegrees { get; set; }
+        public float RollDegrees { get; set; }
     }
 }

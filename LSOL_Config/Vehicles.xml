@@ -31,7 +31,7 @@
   <Vehicle id="31" name="Open Trailer" model="trflat" type="Trailer" acceptedResources="Bricks,Lumber,Steel,Alloy,Metal,Beam" capacityTons="22" fuelCapacityLiters="0" price="20000" dailyRent="850" />
   <Vehicle id="32" name="Mixer" model="mixer" type="Mixer" acceptedResources="Asphalt,Cement,Concrete" capacityTons="20" fuelCapacityLiters="450" price="0" dailyRent="0" />
   <Vehicle id="33" name="Mixer" model="mixer2" type="Mixer" acceptedResources="Asphalt,Cement,Concrete" capacityTons="20" fuelCapacityLiters="450" price="0" dailyRent="0" />
-  <Vehicle id="34" name="Rubble" model="rubble" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="20" fuelCapacityLiters="450" price="65000" dailyRent="2600" />
-  <Vehicle id="35" name="Tipper" model="tiptruck" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="18" fuelCapacityLiters="450" price="0" dailyRent="0" />
-  <Vehicle id="36" name="Tipper" model="tiptruck2" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="18" fuelCapacityLiters="450" price="0" dailyRent="0" />
+  <Vehicle id="34" name="Rubble" model="rubble" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="30" fuelCapacityLiters="450" price="30000" dailyRent="850" />
+  <Vehicle id="35" name="Tipper (4 Wheels)" model="tiptruck" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="18" fuelCapacityLiters="450" price="0" dailyRent="0" />
+  <Vehicle id="36" name="Tipper (6 Wheels)" model="tiptruck2" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="22" fuelCapacityLiters="450" price="20000" dailyRent="600" />
 </Vehicles>

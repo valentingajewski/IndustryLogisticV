@@ -5,9 +5,6 @@
 - Big concrete pipe: "3984769111"
 
 
-- How much stock industry A has, and how much free space inudstry B has
-The balance of these 2 values will decide the base payment
-But as you start moving the cargo from one industry to another, you will
-notice how the balnce is shifted. As industry A becomes emptier and industry fills up, 
-the multiplier will keep decreasing until it reaches the worst case scenario
-where industry A has very little stock and industry B is almost full
+- Gravel texture: rubble+hi.ytd
+- Gravel texture tiptruck: tiptruck2+hi.ytd, tiptruck2.ytd
+- Coal texture: dump_rubble_s
