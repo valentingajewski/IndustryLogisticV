@@ -47,6 +47,75 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void CreatePersistenceSnapshot_RoundTripsRouteFallbackAssignmentsAndStats()
+        {
+            var commercialVehicles = new List<OwnedCommercialVehiclePersistenceEntry>
+            {
+                new OwnedCommercialVehiclePersistenceEntry
+                {
+                    AssetId = "truck-1",
+                    DisplayName = "Ore Truck",
+                    PoweredModelName = "oretruck",
+                    CargoModelName = "oretruck",
+                    HasSeparateCargoVehicle = false,
+                    InActiveGarage = true,
+                    IsDeployed = false,
+                    CargoType = VehicleCargoType.Aggregates,
+                    CapacityTons = 12f,
+                },
+            };
+
+            var manager = CreateNpcLogisticsManager(commercialVehicles);
+            var tierId = manager.DriverTiers[0].Id;
+            var persistence = new NpcLogisticsPersistenceSnapshot();
+            var contract = CreateContractSnapshot(4, tierId, "alpha-depot", "bravo-depot", "truck-1");
+            contract.CurrentRouteIndex = 1;
+            contract.ContractCost = 2500f;
+            contract.PayrollElapsedInGameMinutes = 90;
+            contract.CompletedPayrollCycles = 2;
+            contract.TotalWeeklyWagesPaid = 1800f;
+            contract.CompletedDeliveries = 6;
+            contract.TotalDeliveredTons = 48f;
+            contract.TotalProfitEarned = 7200f;
+            contract.LastJourneyLossRatio = 0.15f;
+            contract.Routes.Add(new NpcLogisticsRouteSnapshot
+            {
+                OriginIndustryId = "bravo-depot",
+                DestinationIndustryId = "alpha-depot",
+                Commodity = "Ore",
+                AssignedVehicleAssetId = string.Empty,
+                AssignedVehicleDisplayName = string.Empty,
+                OriginTriggerThresholdPercent = 25,
+                DestinationTriggerThresholdPercent = 80,
+            });
+            persistence.Contracts.Add(contract);
+
+            manager.ApplyPersistenceSnapshot(persistence);
+
+            var roundTripped = manager.CreatePersistenceSnapshot();
+
+            Assert.IsNotNull(roundTripped);
+            Assert.AreEqual(1, roundTripped.Contracts.Count);
+
+            var restoredContract = roundTripped.Contracts[0];
+            Assert.AreEqual(4, restoredContract.Id);
+            Assert.AreEqual(1, restoredContract.CurrentRouteIndex);
+            Assert.AreEqual(2500f, restoredContract.ContractCost, 0.001f);
+            Assert.AreEqual(90, restoredContract.PayrollElapsedInGameMinutes);
+            Assert.AreEqual(2, restoredContract.CompletedPayrollCycles);
+            Assert.AreEqual(1800f, restoredContract.TotalWeeklyWagesPaid, 0.001f);
+            Assert.AreEqual(6, restoredContract.CompletedDeliveries);
+            Assert.AreEqual(48f, restoredContract.TotalDeliveredTons, 0.001f);
+            Assert.AreEqual(7200f, restoredContract.TotalProfitEarned, 0.001f);
+            Assert.AreEqual(0.15f, restoredContract.LastJourneyLossRatio, 0.001f);
+            Assert.AreEqual(2, restoredContract.Routes.Count);
+            Assert.AreEqual("truck-1", restoredContract.Routes[1].AssignedVehicleAssetId);
+            Assert.AreEqual("Ore Truck", restoredContract.Routes[1].AssignedVehicleDisplayName);
+            Assert.AreEqual(25, restoredContract.Routes[1].OriginTriggerThresholdPercent);
+            Assert.AreEqual(80, restoredContract.Routes[1].DestinationTriggerThresholdPercent);
+        }
+
+        [TestMethod]
         public void FindContractUsingAssignedVehicle_UsesContractLevelFallbackWhenRouteAssetIdsAreBlank()
         {
             var commercialVehicles = new List<OwnedCommercialVehiclePersistenceEntry>

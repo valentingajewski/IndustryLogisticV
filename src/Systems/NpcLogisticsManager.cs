@@ -714,54 +714,10 @@ namespace LSOL.Systems
             for (int i = 0; i < _contracts.Count; i++)
             {
                 var contract = _contracts[i];
-                var primaryRoute = contract != null && contract.Routes.Count > 0
-                    ? contract.Routes[0]
-                    : null;
-                if (contract == null || primaryRoute == null || primaryRoute.OriginIndustry == null || primaryRoute.DestinationIndustry == null || contract.Tier == null)
+                var contractSnapshot = NpcLogisticsPersistenceMapper.CreateContractSnapshotOrNull(contract);
+                if (contractSnapshot == null)
                 {
                     continue;
-                }
-
-                var contractSnapshot = new NpcLogisticsContractSnapshot
-                {
-                    Id = contract.Id,
-                    OriginIndustryId = primaryRoute.OriginIndustry.Id,
-                    DestinationIndustryId = primaryRoute.DestinationIndustry.Id,
-                    Commodity = primaryRoute.Commodity,
-                    TierId = contract.Tier.Id,
-                    AssignedVehicleAssetId = contract.AssignedVehicleAssetId,
-                    AssignedVehicleDisplayName = contract.AssignedVehicleDisplayName,
-                    OriginTriggerThresholdPercent = primaryRoute.OriginTriggerThresholdPercent,
-                    DestinationTriggerThresholdPercent = primaryRoute.DestinationTriggerThresholdPercent,
-                    CurrentRouteIndex = contract.CurrentRouteIndex,
-                    ContractCost = contract.ContractCost,
-                    PayrollElapsedInGameMinutes = contract.PayrollElapsedInGameMinutes,
-                    CompletedPayrollCycles = contract.CompletedPayrollCycles,
-                    TotalWeeklyWagesPaid = contract.TotalWeeklyWagesPaid,
-                    CompletedDeliveries = contract.CompletedDeliveries,
-                    TotalDeliveredTons = contract.TotalDeliveredTons,
-                    TotalProfitEarned = contract.TotalProfitEarned,
-                    LastJourneyLossRatio = contract.LastJourneyLossRatio,
-                };
-
-                for (int routeIndex = 0; routeIndex < contract.Routes.Count; routeIndex++)
-                {
-                    var route = contract.Routes[routeIndex];
-                    if (route == null || route.OriginIndustry == null || route.DestinationIndustry == null || string.IsNullOrWhiteSpace(route.Commodity))
-                    {
-                        continue;
-                    }
-
-                    contractSnapshot.Routes.Add(new NpcLogisticsRouteSnapshot
-                    {
-                        OriginIndustryId = route.OriginIndustry.Id,
-                        DestinationIndustryId = route.DestinationIndustry.Id,
-                        Commodity = route.Commodity,
-                        AssignedVehicleAssetId = route.AssignedVehicleAssetId,
-                        AssignedVehicleDisplayName = route.AssignedVehicleDisplayName,
-                        OriginTriggerThresholdPercent = route.OriginTriggerThresholdPercent,
-                        DestinationTriggerThresholdPercent = route.DestinationTriggerThresholdPercent,
-                    });
                 }
 
                 snapshot.Contracts.Add(contractSnapshot);
@@ -850,56 +806,16 @@ namespace LSOL.Systems
                     continue;
                 }
 
-                var normalizedCommodity = CommodityCatalog.Normalize(entry.Commodity);
-                var routeDefinitions = new List<NpcLogisticsRouteDefinition>();
-                if (entry.Routes != null && entry.Routes.Count > 0)
-                {
-                    for (int routeIndex = 0; routeIndex < entry.Routes.Count; routeIndex++)
-                    {
-                        var routeEntry = entry.Routes[routeIndex];
-                        if (routeEntry == null)
-                        {
-                            continue;
-                        }
-
-                        var routeOrigin = FindIndustryById(routeEntry.OriginIndustryId);
-                        var routeDestination = FindIndustryById(routeEntry.DestinationIndustryId);
-                        var routeCommodity = CommodityCatalog.Normalize(routeEntry.Commodity);
-                        if (routeOrigin == null || routeDestination == null || string.IsNullOrWhiteSpace(routeCommodity))
-                        {
-                            continue;
-                        }
-
-                        routeDefinitions.Add(new NpcLogisticsRouteDefinition
-                        {
-                            OriginIndustry = routeOrigin,
-                            DestinationIndustry = routeDestination,
-                            Commodity = routeCommodity,
-                            AssignedVehicleAssetId = string.IsNullOrWhiteSpace(routeEntry.AssignedVehicleAssetId) ? entry.AssignedVehicleAssetId : routeEntry.AssignedVehicleAssetId,
-                            AssignedVehicleDisplayName = string.IsNullOrWhiteSpace(routeEntry.AssignedVehicleDisplayName) ? entry.AssignedVehicleDisplayName : routeEntry.AssignedVehicleDisplayName,
-                            OriginTriggerThresholdPercent = ClampTriggerPercent(routeEntry.OriginTriggerThresholdPercent, 0),
-                            DestinationTriggerThresholdPercent = ClampTriggerPercent(routeEntry.DestinationTriggerThresholdPercent, 100),
-                        });
-                    }
-                }
-
+                var routeDefinitions = NpcLogisticsPersistenceMapper.CreateRouteDefinitionsFromSnapshot(
+                    entry,
+                    originIndustry,
+                    destinationIndustry,
+                    FindIndustryById,
+                    CommodityCatalog.Normalize,
+                    ClampTriggerPercent);
                 if (routeDefinitions.Count == 0)
                 {
-                    if (string.IsNullOrWhiteSpace(normalizedCommodity))
-                    {
-                        continue;
-                    }
-
-                    routeDefinitions.Add(new NpcLogisticsRouteDefinition
-                    {
-                        OriginIndustry = originIndustry,
-                        DestinationIndustry = destinationIndustry,
-                        Commodity = normalizedCommodity,
-                        AssignedVehicleAssetId = entry.AssignedVehicleAssetId,
-                        AssignedVehicleDisplayName = entry.AssignedVehicleDisplayName,
-                        OriginTriggerThresholdPercent = ClampTriggerPercent(entry.OriginTriggerThresholdPercent, 0),
-                        DestinationTriggerThresholdPercent = ClampTriggerPercent(entry.DestinationTriggerThresholdPercent, 100),
-                    });
+                    continue;
                 }
 
                 if (!TryPreparePersistedRouteDefinitions(routeDefinitions))
