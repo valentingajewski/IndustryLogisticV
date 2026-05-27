@@ -29,9 +29,9 @@
   <Vehicle id="29" name="Trailer (with ad)" model="trailers3" type="Trailer" acceptedResources="Livestock,Alcohol,Chemicals,Clothes,Fabric,ProcessedFood,Plastic,Paper,Medicine,MechanicalParts,TV,Computer,Electronic,Furniture,Omega" capacityTons="24" fuelCapacityLiters="0" price="22000" dailyRent="900" />
   <Vehicle id="30" name="Container Trailer" model="trailers4" type="Trailer" acceptedResources="Livestock,Alcohol,Chemicals,Clothes,Fabric,ProcessedFood,Plastic,Paper,Medicine,MechanicalParts,TV,Computer,Electronic,Furniture,Omega" capacityTons="24" fuelCapacityLiters="0" price="22000" dailyRent="900" />
   <Vehicle id="31" name="Open Trailer" model="trflat" type="Trailer" acceptedResources="Bricks,Lumber,Steel,Alloy,Metal,Beam" capacityTons="22" fuelCapacityLiters="0" price="20000" dailyRent="850" />
-  <Vehicle id="32" name="Mixer" model="mixer" type="Mixer" acceptedResources="Asphalt,Cement,Concrete" capacityTons="20" fuelCapacityLiters="450" price="0" dailyRent="0" />
-  <Vehicle id="33" name="Mixer" model="mixer2" type="Mixer" acceptedResources="Asphalt,Cement,Concrete" capacityTons="20" fuelCapacityLiters="450" price="0" dailyRent="0" />
+  <Vehicle id="32" name="Mixer" model="mixer" type="Mixer" acceptedResources="Asphalt,Cement,Concrete" capacityTons="20" fuelCapacityLiters="450" price="20000" dailyRent="0" />
+  <Vehicle id="33" name="Mixer" model="mixer2" type="Mixer" acceptedResources="Asphalt,Cement,Concrete" capacityTons="20" fuelCapacityLiters="450" price="20000" dailyRent="0" />
   <Vehicle id="34" name="Rubble" model="rubble" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="30" fuelCapacityLiters="450" price="30000" dailyRent="850" />
-  <Vehicle id="35" name="Tipper (4 Wheels)" model="tiptruck" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="18" fuelCapacityLiters="450" price="0" dailyRent="0" />
+  <Vehicle id="35" name="Tipper (4 Wheels)" model="tiptruck" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="18" fuelCapacityLiters="450" price="20000" dailyRent="0" />
   <Vehicle id="36" name="Tipper (6 Wheels)" model="tiptruck2" type="Dumper" acceptedResources="Coal,Gravel,Ore,Crops" capacityTons="22" fuelCapacityLiters="450" price="20000" dailyRent="600" />
 </Vehicles>

@@ -64,6 +64,10 @@ namespace LSOL.Systems
         public float OutstandingRent { get; set; }
 
         public int LastChargedWeekIndex { get; set; } = -1;
+
+        public bool HasConsumedFreeMixerFamilyCommercialVehicle { get; set; }
+
+        public bool HasConsumedFreeTiptruckFamilyCommercialVehicle { get; set; }
     }
 
     public sealed class OfficeObjectPersistenceEntry

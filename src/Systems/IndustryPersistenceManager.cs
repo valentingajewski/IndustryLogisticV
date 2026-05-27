@@ -1473,6 +1473,8 @@ namespace LSOL.Systems
                 writer.WriteLine("IsAccessSuspended={0}", office.IsAccessSuspended ? "true" : "false");
                 writer.WriteLine("OutstandingRent={0}", FormatFloat(office.OutstandingRent));
                 writer.WriteLine("LastChargedWeekIndex={0}", office.LastChargedWeekIndex);
+                writer.WriteLine("HasConsumedFreeMixerFamilyCommercialVehicle={0}", office.HasConsumedFreeMixerFamilyCommercialVehicle ? "true" : "false");
+                writer.WriteLine("HasConsumedFreeTiptruckFamilyCommercialVehicle={0}", office.HasConsumedFreeTiptruckFamilyCommercialVehicle ? "true" : "false");
                 writer.WriteLine();
             }
 
@@ -1609,6 +1611,8 @@ namespace LSOL.Systems
                             IsAccessSuspended = ini.GetBool(section, "IsAccessSuspended", false),
                             OutstandingRent = ini.GetFloat(section, "OutstandingRent", 0f),
                             LastChargedWeekIndex = ParseInt(ini.GetString(section, "LastChargedWeekIndex", "-1"), -1),
+                            HasConsumedFreeMixerFamilyCommercialVehicle = ini.GetBool(section, "HasConsumedFreeMixerFamilyCommercialVehicle", false),
+                            HasConsumedFreeTiptruckFamilyCommercialVehicle = ini.GetBool(section, "HasConsumedFreeTiptruckFamilyCommercialVehicle", false),
                         });
                     }
 

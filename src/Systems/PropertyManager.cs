@@ -96,6 +96,24 @@ namespace LSOL.Systems
         public float RecoveryPercentOfBaseRefund { get; set; }
     }
 
+    internal enum CommercialVehiclePurchaseEntitlementFamily
+    {
+        None = 0,
+        Mixer = 1,
+        Tiptruck = 2,
+    }
+
+    internal sealed class CommercialVehiclePurchaseQuote
+    {
+        public float StandardPrice { get; set; }
+
+        public float EffectivePrice { get; set; }
+
+        public CommercialVehiclePurchaseEntitlementFamily EntitlementFamily { get; set; }
+
+        public bool UsesFirstFreeEntitlement { get; set; }
+    }
+
     public sealed class FleetSaleSummary
     {
         public FleetSaleSummary()
@@ -1017,7 +1035,9 @@ namespace LSOL.Systems
             var poweredDefinition = tractorDefinition ?? cargoDefinition;
             var cargoRecordDefinition = cargoDefinition ?? tractorDefinition;
             var hasSeparateCargoVehicle = cargoDefinition != null && cargoDefinition.IsTrailer && tractorDefinition != null;
-            var purchasePrice = Math.Max(0f, cargoDefinition != null ? cargoDefinition.Price : 0f) + Math.Max(0f, tractorDefinition != null ? tractorDefinition.Price : 0f);
+            var officeState = GetOrCreateOfficeState(_state.ActiveOfficeId);
+            var purchaseQuote = BuildCommercialVehiclePurchaseQuote(cargoDefinition, tractorDefinition, officeState);
+            var purchasePrice = purchaseQuote.EffectivePrice;
             if (balance < purchasePrice)
             {
                 message = string.Format("Need {0} to purchase this commercial vehicle.", ModFormatting.FormatMoney(purchasePrice));
@@ -1025,15 +1045,24 @@ namespace LSOL.Systems
             }
 
             balance -= purchasePrice;
-            RecordFinanceExpense(
-                CompanyFinanceCategory.OtherExpense,
-                purchasePrice,
-                string.Format(
-                    "Purchased commercial vehicle {0}",
-                    BuildCommercialDisplayName(
-                        poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
-                        cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
-                        hasSeparateCargoVehicle)));
+            if (purchasePrice > 0.01f)
+            {
+                RecordFinanceExpense(
+                    CompanyFinanceCategory.OtherExpense,
+                    purchasePrice,
+                    string.Format(
+                        "Purchased commercial vehicle {0}",
+                        BuildCommercialDisplayName(
+                            poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
+                            cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
+                            hasSeparateCargoVehicle)));
+            }
+
+            if (purchaseQuote.UsesFirstFreeEntitlement)
+            {
+                ConsumeCommercialVehiclePurchaseEntitlement(officeState, purchaseQuote.EntitlementFamily);
+            }
+
             vehicle = new OwnedCommercialVehiclePersistenceEntry
             {
                 AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
@@ -1074,7 +1103,20 @@ namespace LSOL.Systems
             message = vehicle.InActiveGarage
                 ? string.Format("Purchased {0} for {1}. Assigned to active office garage.", vehicle.DisplayName, ModFormatting.FormatMoney(purchasePrice))
                 : string.Format("Purchased {0} for {1}. Office garage is full, so it was moved to reserve.", vehicle.DisplayName, ModFormatting.FormatMoney(purchasePrice));
+
+            if (purchaseQuote.UsesFirstFreeEntitlement)
+            {
+                message += string.Format(
+                    " First {0} vehicle for this office was free.",
+                    GetCommercialVehiclePurchaseEntitlementLabel(purchaseQuote.EntitlementFamily));
+            }
+
             return true;
+        }
+
+        internal CommercialVehiclePurchaseQuote GetCommercialVehiclePurchaseQuote(VehicleDefinition cargoDefinition, VehicleDefinition tractorDefinition)
+        {
+            return BuildCommercialVehiclePurchaseQuote(cargoDefinition, tractorDefinition, GetOfficeState(_state.ActiveOfficeId));
         }
 
         public bool TryRentCommercialVehicle(VehicleDefinition cargoDefinition, VehicleDefinition tractorDefinition, ref float balance, int currentInGameMinute, out OwnedCommercialVehiclePersistenceEntry vehicle, out string message)
@@ -2878,6 +2920,119 @@ namespace LSOL.Systems
             return state;
         }
 
+        private static CommercialVehiclePurchaseQuote BuildCommercialVehiclePurchaseQuote(
+            VehicleDefinition cargoDefinition,
+            VehicleDefinition tractorDefinition,
+            OfficeOwnershipPersistenceEntry officeState)
+        {
+            var quote = new CommercialVehiclePurchaseQuote
+            {
+                StandardPrice = Math.Max(0f, cargoDefinition != null ? cargoDefinition.Price : 0f)
+                    + Math.Max(0f, tractorDefinition != null ? tractorDefinition.Price : 0f),
+                EffectivePrice = Math.Max(0f, cargoDefinition != null ? cargoDefinition.Price : 0f)
+                    + Math.Max(0f, tractorDefinition != null ? tractorDefinition.Price : 0f),
+                EntitlementFamily = ResolveCommercialVehiclePurchaseEntitlementFamily(cargoDefinition, tractorDefinition),
+                UsesFirstFreeEntitlement = false,
+            };
+
+            if (officeState != null && IsCommercialVehiclePurchaseEntitlementAvailable(officeState, quote.EntitlementFamily))
+            {
+                quote.EffectivePrice = 0f;
+                quote.UsesFirstFreeEntitlement = true;
+            }
+
+            return quote;
+        }
+
+        private static CommercialVehiclePurchaseEntitlementFamily ResolveCommercialVehiclePurchaseEntitlementFamily(
+            VehicleDefinition cargoDefinition,
+            VehicleDefinition tractorDefinition)
+        {
+            var family = ResolveCommercialVehiclePurchaseEntitlementFamily(cargoDefinition);
+            if (family != CommercialVehiclePurchaseEntitlementFamily.None)
+            {
+                return family;
+            }
+
+            return ResolveCommercialVehiclePurchaseEntitlementFamily(tractorDefinition);
+        }
+
+        private static CommercialVehiclePurchaseEntitlementFamily ResolveCommercialVehiclePurchaseEntitlementFamily(VehicleDefinition definition)
+        {
+            var modelName = definition != null ? definition.ModelName : string.Empty;
+            if (string.IsNullOrWhiteSpace(modelName))
+            {
+                return CommercialVehiclePurchaseEntitlementFamily.None;
+            }
+
+            if (string.Equals(modelName, "mixer", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(modelName, "mixer2", StringComparison.OrdinalIgnoreCase))
+            {
+                return CommercialVehiclePurchaseEntitlementFamily.Mixer;
+            }
+
+            if (string.Equals(modelName, "tiptruck", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(modelName, "tiptruck2", StringComparison.OrdinalIgnoreCase))
+            {
+                return CommercialVehiclePurchaseEntitlementFamily.Tiptruck;
+            }
+
+            return CommercialVehiclePurchaseEntitlementFamily.None;
+        }
+
+        private static bool IsCommercialVehiclePurchaseEntitlementAvailable(
+            OfficeOwnershipPersistenceEntry officeState,
+            CommercialVehiclePurchaseEntitlementFamily family)
+        {
+            if (officeState == null)
+            {
+                return false;
+            }
+
+            switch (family)
+            {
+                case CommercialVehiclePurchaseEntitlementFamily.Mixer:
+                    return !officeState.HasConsumedFreeMixerFamilyCommercialVehicle;
+                case CommercialVehiclePurchaseEntitlementFamily.Tiptruck:
+                    return !officeState.HasConsumedFreeTiptruckFamilyCommercialVehicle;
+                default:
+                    return false;
+            }
+        }
+
+        private static void ConsumeCommercialVehiclePurchaseEntitlement(
+            OfficeOwnershipPersistenceEntry officeState,
+            CommercialVehiclePurchaseEntitlementFamily family)
+        {
+            if (officeState == null)
+            {
+                return;
+            }
+
+            switch (family)
+            {
+                case CommercialVehiclePurchaseEntitlementFamily.Mixer:
+                    officeState.HasConsumedFreeMixerFamilyCommercialVehicle = true;
+                    break;
+                case CommercialVehiclePurchaseEntitlementFamily.Tiptruck:
+                    officeState.HasConsumedFreeTiptruckFamilyCommercialVehicle = true;
+                    break;
+            }
+        }
+
+        internal static string GetCommercialVehiclePurchaseEntitlementLabel(CommercialVehiclePurchaseEntitlementFamily family)
+        {
+            switch (family)
+            {
+                case CommercialVehiclePurchaseEntitlementFamily.Mixer:
+                    return "Mixer-family";
+                case CommercialVehiclePurchaseEntitlementFamily.Tiptruck:
+                    return "Tiptruck-family";
+                default:
+                    return "commercial vehicle";
+            }
+        }
+
         private OfficeOwnershipPersistenceEntry GetTransferableOfficeRental(string excludedOfficeId)
         {
             var activeRental = GetOfficeState(_state.ActiveOfficeId);
@@ -3268,6 +3423,8 @@ namespace LSOL.Systems
                     IsAccessSuspended = entry.IsAccessSuspended,
                     OutstandingRent = entry.OutstandingRent,
                     LastChargedWeekIndex = entry.LastChargedWeekIndex,
+                    HasConsumedFreeMixerFamilyCommercialVehicle = entry.HasConsumedFreeMixerFamilyCommercialVehicle,
+                    HasConsumedFreeTiptruckFamilyCommercialVehicle = entry.HasConsumedFreeTiptruckFamilyCommercialVehicle,
                 });
             }
 

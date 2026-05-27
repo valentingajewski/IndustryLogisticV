@@ -3727,6 +3727,7 @@ namespace LSOL
         private string BuildCommercialDealershipVehicleSelectionDetail()
         {
             var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            var purchaseQuote = GetSelectedCommercialVehiclePurchaseQuote(selectedVehicle);
             if (selectedVehicle == null)
             {
                 var selectedTruck = _vehicleSpawnController.SelectedTractorDefinition;
@@ -3742,13 +3743,18 @@ namespace LSOL
                     : string.Format("Truck only. Price {0}.", truckPrice);
             }
 
-            var vehicleSpecs = BuildCommercialDealershipVehicleSpecs(selectedVehicle);
+            var vehiclePrice = selectedVehicle.IsTrailer || purchaseQuote == null || !purchaseQuote.UsesFirstFreeEntitlement
+                ? Math.Max(0f, selectedVehicle.Price)
+                : purchaseQuote.EffectivePrice;
+            var vehicleSpecs = BuildCommercialDealershipVehicleSpecs(selectedVehicle, vehiclePrice);
             var dailyRent = GetSelectedCommercialVehicleDailyRent();
             if (!selectedVehicle.IsTrailer)
             {
-                return dailyRent > 0.001f
+                var detail = dailyRent > 0.001f
                     ? string.Format("{0} | Rent {1}/day.", vehicleSpecs, ModFormatting.FormatMoney(dailyRent))
                     : string.Format("{0}.", vehicleSpecs);
+
+                return AppendCommercialVehiclePurchaseEntitlementNote(detail, purchaseQuote);
             }
 
             var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
@@ -3772,7 +3778,7 @@ namespace LSOL
                     ModFormatting.FormatMoney(totalPrice));
         }
 
-        private static string BuildCommercialDealershipVehicleSpecs(VehicleDefinition definition)
+        private static string BuildCommercialDealershipVehicleSpecs(VehicleDefinition definition, float purchasePrice)
         {
             if (definition == null)
             {
@@ -3781,7 +3787,7 @@ namespace LSOL
 
             return string.Format(
                 "Price {0} | Capacity {1} | Fuel {2} | Rent {3}/day",
-                ModFormatting.FormatMoney(Math.Max(0f, definition.Price)),
+                ModFormatting.FormatMoney(Math.Max(0f, purchasePrice)),
                 ModFormatting.FormatTons(Math.Max(0f, definition.CapacityTons)),
                 ModFormatting.FormatLiters(Math.Max(0f, definition.FuelCapacityLiters)),
                 ModFormatting.FormatMoney(Math.Max(0f, definition.DailyRent)));
@@ -3870,10 +3876,15 @@ namespace LSOL
                 return "Select a truck and/or trailer first.";
             }
 
-            var price = Math.Max(0f, selectedVehicle != null ? selectedVehicle.Price : 0f) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
+            var purchaseQuote = _propertyManager.GetCommercialVehiclePurchaseQuote(selectedVehicle, selectedTractor);
+            var price = purchaseQuote != null
+                ? purchaseQuote.EffectivePrice
+                : Math.Max(0f, selectedVehicle != null ? selectedVehicle.Price : 0f) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
             if (!IsCommercialDealershipRentMode)
             {
-                return string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price));
+                return AppendCommercialVehiclePurchaseEntitlementNote(
+                    string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price)),
+                    purchaseQuote);
             }
 
             var dailyRent = GetSelectedCommercialVehicleDailyRent();
@@ -3885,6 +3896,26 @@ namespace LSOL
             return string.Format(
                 "Rent for {0}/day with no upfront cost. Daily billing begins after the next in-game day passes.",
                 ModFormatting.FormatMoney(dailyRent));
+        }
+
+        private CommercialVehiclePurchaseQuote GetSelectedCommercialVehiclePurchaseQuote(VehicleDefinition selectedVehicle)
+        {
+            return _propertyManager.GetCommercialVehiclePurchaseQuote(
+                selectedVehicle,
+                GetSelectedCommercialDealershipTruckDefinition(selectedVehicle));
+        }
+
+        private static string AppendCommercialVehiclePurchaseEntitlementNote(string detail, CommercialVehiclePurchaseQuote purchaseQuote)
+        {
+            if (purchaseQuote == null || !purchaseQuote.UsesFirstFreeEntitlement)
+            {
+                return detail;
+            }
+
+            return string.Format(
+                "{0} First {1} vehicle for this office is free.",
+                detail,
+                PropertyManager.GetCommercialVehiclePurchaseEntitlementLabel(purchaseQuote.EntitlementFamily));
         }
 
         private VehicleDefinition GetSelectedCommercialDealershipTruckDefinition(VehicleDefinition selectedVehicle)
