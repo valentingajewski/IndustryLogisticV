@@ -3447,8 +3447,7 @@ namespace LSOL
             var clockHours = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_HOURS)) % 24;
             var minutes = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_MINUTES)) % 60;
             var seconds = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_SECONDS)) % 60;
-            var clampedDay = Math.Min(day, DateTime.DaysInMonth(year, month));
-            var currentClock = new DateTime(year, month, clampedDay, clockHours, minutes, seconds, DateTimeKind.Unspecified);
+            var currentClock = BuildInGameClockDateTime(year, month, day, clockHours, minutes, seconds);
             var advancedClock = currentClock.AddHours(hours);
 
             Function.Call(Hash.SET_CLOCK_DATE, advancedClock.Day, advancedClock.Month - 1, advancedClock.Year);

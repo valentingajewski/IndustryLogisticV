@@ -734,6 +734,8 @@ namespace LSOL
                 DrawActiveVehicleFuelHud(player);
             }
 
+            DrawAmbientClockHud();
+
             DrawOpenMenus();
             DrawTabletShell();
         }
@@ -1505,6 +1507,37 @@ namespace LSOL
                 GTA.UI.Font.ChaletLondon);
 
             DrawCompactLoadingBar(resolution, contentX, barY, barWidth, barHeight, fuelDisplay.FuelRatio, accentColor);
+        }
+
+        private void DrawAmbientClockHud()
+        {
+            if (AnyMenuOpen)
+            {
+                return;
+            }
+
+            var resolution = Screen.MainWindowResolution;
+            var x = resolution.Width - ScaleFromScriptSpaceX(resolution, 22f) - ScaleFromScriptSpaceX(resolution, 96f);
+            var y = ScaleFromScriptSpaceY(resolution, 18f);
+            var accentHeight = Math.Max(2f, ScaleFromScriptSpaceY(resolution, 3f));
+            var width = ScaleFromScriptSpaceX(resolution, 96f);
+            var height = ScaleFromScriptSpaceY(resolution, 24f);
+            var shadowOffsetX = ScaleFromScriptSpaceX(resolution, 4f);
+            var shadowOffsetY = ScaleFromScriptSpaceY(resolution, 4f);
+            var contentX = x + ScaleFromScriptSpaceX(resolution, 8f);
+            var contentY = y + ScaleFromScriptSpaceY(resolution, 4f);
+            var label = InGameClockHudFormatter.BuildCompactLabel(GetCurrentInGameClockDateTime());
+
+            DrawRect(resolution.Width, resolution.Height, x + shadowOffsetX, y + shadowOffsetY, width, height, Color.FromArgb(78, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, accentHeight, Color.FromArgb(168, 118, 136, 154));
+            DrawHudText(
+                resolution,
+                label,
+                contentX,
+                contentY,
+                0.22f,
+                Color.FromArgb(236, 224, 231, 239),
+                GTA.UI.Font.ChaletLondon);
         }
 
         private static void DrawCompactLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color fillColor)
@@ -5838,15 +5871,49 @@ namespace LSOL
                 y * (scriptHeight / resolution.Height));
         }
 
-        private static int GetCurrentInGameWeekMinute()
+        private static float ScaleFromScriptSpaceX(Size resolution, float scriptX)
+        {
+            const float scriptWidth = 1280f;
+            return scriptX * (resolution.Width / scriptWidth);
+        }
+
+        private static float ScaleFromScriptSpaceY(Size resolution, float scriptY)
+        {
+            const float scriptHeight = 720f;
+            return scriptY * (resolution.Height / scriptHeight);
+        }
+
+        private static DateTime GetCurrentInGameClockDateTime()
         {
             var year = Math.Max(2000, Function.Call<int>(Hash.GET_CLOCK_YEAR));
             var month = Math.Max(1, Math.Min(12, Function.Call<int>(Hash.GET_CLOCK_MONTH) + 1));
             var day = Math.Max(1, Function.Call<int>(Hash.GET_CLOCK_DAY_OF_MONTH));
             var hours = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_HOURS)) % 24;
             var minutes = Math.Max(0, Function.Call<int>(Hash.GET_CLOCK_MINUTES)) % 60;
-            var clampedDay = Math.Min(day, DateTime.DaysInMonth(year, month));
-            var clockDate = new DateTime(year, month, clampedDay, hours, minutes, 0, DateTimeKind.Unspecified);
+            return BuildInGameClockDateTime(year, month, day, hours, minutes, 0);
+        }
+
+        private static DateTime BuildInGameClockDateTime(int year, int month, int day, int hours, int minutes, int seconds)
+        {
+            var normalizedYear = Math.Max(2000, year);
+            var normalizedMonth = Math.Max(1, Math.Min(12, month));
+            var normalizedHours = Math.Max(0, hours) % 24;
+            var normalizedMinutes = Math.Max(0, minutes) % 60;
+            var normalizedSeconds = Math.Max(0, seconds) % 60;
+            var normalizedDay = Math.Max(1, Math.Min(day, DateTime.DaysInMonth(normalizedYear, normalizedMonth)));
+            return new DateTime(
+                normalizedYear,
+                normalizedMonth,
+                normalizedDay,
+                normalizedHours,
+                normalizedMinutes,
+                normalizedSeconds,
+                DateTimeKind.Unspecified);
+        }
+
+        private static int GetCurrentInGameWeekMinute()
+        {
+            var clockDate = GetCurrentInGameClockDateTime();
             var epoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
             return (int)(clockDate - epoch).TotalMinutes;
         }
