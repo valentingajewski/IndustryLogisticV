@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Xml;
 using GTA;
+using LSOL.Domain;
 using LSOL.Systems;
 using LSOL.UI;
 
@@ -43,6 +44,7 @@ namespace LSOL
             _bankLoanManager.ApplyPersistenceSnapshot(null, GetCurrentInGameWeekMinute());
             _playerSuccessTracker.ResetForNewSave(_profit);
             SyncPlayerSuccessBalance(false);
+            ResetAlertRuleRuntimeState(Game.GameTime, true);
             _tabletStateStore.MarkAllDirty();
         }
 
@@ -105,18 +107,7 @@ namespace LSOL
 
             _pendingSaveName = saveName;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
-            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
-            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
-            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
-            _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
-            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
-            _pendingNpcRouteLimit = _npcRouteLimit;
+            SyncPendingDifficultyProfileFromLive();
 
             _savingOptionsMenu.Close();
             RebuildNewSaveSetupMenuItems();
@@ -138,18 +129,7 @@ namespace LSOL
                 return;
             }
 
-            _vehicleFuelDifficultyEnabled = _pendingVehicleFuelDifficultyEnabled;
-            _cargoWeightPowerDifficultyEnabled = _pendingCargoWeightPowerDifficultyEnabled;
-            _cargoDamageDifficultyEnabled = _pendingCargoDamageDifficultyEnabled;
-            _industryPricingDifficultyEnabled = _pendingIndustryPricingDifficultyEnabled;
-            _licensingDifficultyEnabled = _pendingLicensingDifficultyEnabled;
-            _corridorRestrictionDifficultyEnabled = _pendingCorridorRestrictionDifficultyEnabled;
-            _reputationDifficultyEnabled = _pendingReputationDifficultyEnabled;
-            _officeGarageLimitDifficultyEnabled = _pendingOfficeGarageLimitDifficultyEnabled;
-            _officeNpcLimitDifficultyEnabled = _pendingOfficeNpcLimitDifficultyEnabled;
-            _economyDifficultyPreset = _pendingEconomyDifficultyPreset;
-            _npcWeeklyWageDifficulty = _pendingNpcWeeklyWageDifficulty;
-            _npcRouteLimit = ClampNpcRouteLimit(_pendingNpcRouteLimit);
+            SetLiveDifficultyProfile(CapturePendingDifficultyProfile());
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
             ApplyDifficultySettingsToSystems();
@@ -170,18 +150,7 @@ namespace LSOL
             var createdSaveName = _pendingSaveName;
             _pendingSaveName = string.Empty;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
-            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
-            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
-            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
-            _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
-            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
-            _pendingNpcRouteLimit = _npcRouteLimit;
+            SyncPendingDifficultyProfileFromLive();
             ReturnToSavingOptionsMenu();
             ShowStatus(Text(ModTextKey.DetailSaveCreated, createdSaveName), 4000);
         }
@@ -301,21 +270,10 @@ namespace LSOL
                 }
                 else
                 {
-                    _vehicleFuelDifficultyEnabled = false;
-                    _cargoWeightPowerDifficultyEnabled = false;
-                    _cargoDamageDifficultyEnabled = true;
-                    _industryPricingDifficultyEnabled = false;
-                    _licensingDifficultyEnabled = false;
-                    _corridorRestrictionDifficultyEnabled = true;
-                    _reputationDifficultyEnabled = true;
-                    _officeGarageLimitDifficultyEnabled = true;
-                    _officeNpcLimitDifficultyEnabled = false;
                     _language = ModLanguage.English;
-                    _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
                     _colorblindMode = ColorblindMode.Off;
                     _useMetricSpeedDisplay = false;
-                    _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
-                    _npcRouteLimit = DefaultNpcRouteLimit;
+                    SetLiveDifficultyProfile(DifficultySettingsProfile.CreateDefault());
                     _difficultySettingsLocked = false;
                     ApplyPresentationSettings(false);
                     ApplyDifficultySettingsToSystems();
@@ -330,18 +288,7 @@ namespace LSOL
                 }
 
                 _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-                _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-                _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
-                _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-                _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-                _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-                _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
-                _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
-                _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
-                _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
-                _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
-                _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
-                _pendingNpcRouteLimit = _npcRouteLimit;
+                SyncPendingDifficultyProfileFromLive();
             }
 
             RebuildSaveSlotsMenuItems();
@@ -489,25 +436,13 @@ namespace LSOL
 
         private IndustryPersistenceMetadata BuildCurrentPersistenceMetadata()
         {
-            return new IndustryPersistenceMetadata
+            var metadata = new IndustryPersistenceMetadata
             {
                 Profit = _profit,
                 StartingBalance = _currentStartingBalance,
                 Language = _language,
                 ColorblindMode = _colorblindMode,
                 UseMetricSpeedDisplay = _useMetricSpeedDisplay,
-                VehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled,
-                CargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled,
-                CargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled,
-                IndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled,
-                LicensingDifficultyEnabled = _licensingDifficultyEnabled,
-                CorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled,
-                ReputationDifficultyEnabled = _reputationDifficultyEnabled,
-                OfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled,
-                OfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled,
-                EconomyDifficultyPreset = _economyDifficultyPreset,
-                NpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty,
-                NpcRouteLimit = _npcRouteLimit,
                 DifficultySettingsLocked = _difficultySettingsLocked,
                 Analytics = _tabletStateStore.CreatePersistenceSnapshot(),
                 Market = _globalMarket.CreatePersistenceSnapshot(Game.GameTime),
@@ -519,7 +454,10 @@ namespace LSOL
                 BankLoans = _bankLoanManager.CreatePersistenceSnapshot(),
                 PlayerStatistics = _playerSuccessTracker.CreatePersistenceSnapshot(),
                 PlayerContracts = _playerContractsManager.CreatePersistenceSnapshot(),
+                AlertRules = EnsureAlertRules(),
             };
+            CaptureLiveDifficultyProfile().ApplyToMetadata(metadata);
+            return metadata;
         }
 
         private void ApplyLoadedPersistenceMetadata(IndustryPersistenceMetadata metadata, bool lockDifficultySettings)
@@ -530,38 +468,16 @@ namespace LSOL
                 _currentStartingBalance = metadata.StartingBalance;
                 _language = metadata.Language ?? ModLanguage.English;
                 _useMetricSpeedDisplay = metadata.UseMetricSpeedDisplay;
-                _vehicleFuelDifficultyEnabled = metadata.VehicleFuelDifficultyEnabled;
-                _cargoWeightPowerDifficultyEnabled = metadata.CargoWeightPowerDifficultyEnabled;
-                _cargoDamageDifficultyEnabled = metadata.CargoDamageDifficultyEnabled;
-                _industryPricingDifficultyEnabled = metadata.IndustryPricingDifficultyEnabled;
-                _licensingDifficultyEnabled = metadata.LicensingDifficultyEnabled;
-                _corridorRestrictionDifficultyEnabled = metadata.CorridorRestrictionDifficultyEnabled;
-                _reputationDifficultyEnabled = metadata.ReputationDifficultyEnabled;
-                _officeGarageLimitDifficultyEnabled = metadata.OfficeGarageLimitDifficultyEnabled;
-                _officeNpcLimitDifficultyEnabled = metadata.OfficeNpcLimitDifficultyEnabled;
-                _economyDifficultyPreset = metadata.EconomyDifficultyPreset;
+                SetLiveDifficultyProfile(DifficultySettingsProfile.FromMetadata(metadata));
                 _colorblindMode = metadata.ColorblindMode ?? ColorblindMode.Off;
-                _npcWeeklyWageDifficulty = metadata.NpcWeeklyWageDifficulty;
-                _npcRouteLimit = ClampNpcRouteLimit(metadata.NpcRouteLimit);
                 _difficultySettingsLocked = lockDifficultySettings || metadata.DifficultySettingsLocked;
             }
             else
             {
                 _language = ModLanguage.English;
                 _useMetricSpeedDisplay = false;
-                _vehicleFuelDifficultyEnabled = false;
-                _cargoWeightPowerDifficultyEnabled = false;
-                _cargoDamageDifficultyEnabled = true;
-                _industryPricingDifficultyEnabled = false;
-                _licensingDifficultyEnabled = false;
-                _corridorRestrictionDifficultyEnabled = true;
-                _reputationDifficultyEnabled = true;
-                _officeGarageLimitDifficultyEnabled = true;
-                _officeNpcLimitDifficultyEnabled = false;
-                _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
+                SetLiveDifficultyProfile(DifficultySettingsProfile.CreateDefault());
                 _colorblindMode = ColorblindMode.Off;
-                _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
-                _npcRouteLimit = DefaultNpcRouteLimit;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
@@ -574,18 +490,11 @@ namespace LSOL
             SyncPlayerSuccessBalance(false);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
-            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
-            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
-            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
-            _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
-            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
-            _pendingNpcRouteLimit = _npcRouteLimit;
+            SyncPendingDifficultyProfileFromLive();
+            _alertRules = metadata != null && metadata.AlertRules != null
+                ? metadata.AlertRules
+                : new AlertRulesPersistenceSnapshot();
+            ResetAlertRuleRuntimeState(Game.GameTime, true);
             ApplyDifficultySettingsToSystems();
             var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;
             var propertySnapshot = metadata != null ? metadata.PropertyOwnership : null;
@@ -723,6 +632,25 @@ namespace LSOL
 
         private string BuildSaveSlotDetail(NamedSaveEntry entry)
         {
+            var action = BuildSaveSlotAction(entry);
+            if (entry == null)
+            {
+                return action;
+            }
+
+            DateTime? lastWriteTime;
+            IndustryPersistenceMetadata metadata;
+            return TryLoadSaveProfilePreview(entry, out lastWriteTime, out metadata)
+                ? SaveProfilePreviewFormatter.BuildDetail(
+                    action,
+                    lastWriteTime,
+                    metadata,
+                    _propertyManager != null ? _propertyManager.Offices : null)
+                : action;
+        }
+
+        private string BuildSaveSlotAction(NamedSaveEntry entry)
+        {
             var action = _saveSlotMenuAction == SaveSlotMenuAction.Load
                 ? "Load this saved game."
                 : "Delete this saved game.";
@@ -732,29 +660,50 @@ namespace LSOL
                 return action;
             }
 
-            if (PathsEqual(entry.FilePath, _industryStatePath))
-            {
-                action = "Currently active save. " + action;
-            }
-
             if (_saveSlotMenuAction == SaveSlotMenuAction.Delete && PathsEqual(_pendingDeleteSavePath, entry.FilePath))
             {
-                action = "Press Enter again to confirm deletion. ";
-                if (PathsEqual(entry.FilePath, _industryStatePath))
-                {
-                    action = "Currently active save. " + action;
-                }
+                action = "Press Enter again to confirm deletion.";
+            }
+
+            return PathsEqual(entry.FilePath, _industryStatePath)
+                ? "Currently active save. " + action
+                : action;
+        }
+
+        private static bool TryLoadSaveProfilePreview(
+            NamedSaveEntry entry,
+            out DateTime? lastWriteTime,
+            out IndustryPersistenceMetadata metadata)
+        {
+            lastWriteTime = null;
+            metadata = null;
+
+            var existingPath = ResolveExistingSavePath(entry);
+            if (string.IsNullOrWhiteSpace(existingPath) || !File.Exists(existingPath))
+            {
+                return false;
             }
 
             try
             {
-                var lastWriteTime = File.GetLastWriteTime(ResolveExistingSavePath(entry));
-                return string.Format("{0} Last updated {1:yyyy-MM-dd HH:mm}.", action, lastWriteTime);
+                lastWriteTime = File.GetLastWriteTime(existingPath);
             }
             catch
             {
-                return action;
+                lastWriteTime = null;
             }
+
+            try
+            {
+                var result = IndustryPersistenceManager.LoadWithMetadata(existingPath, Array.Empty<Industry>());
+                metadata = result != null ? result.Metadata : null;
+            }
+            catch
+            {
+                metadata = null;
+            }
+
+            return lastWriteTime.HasValue || metadata != null;
         }
 
         private bool TryGetActiveNamedSave(out NamedSaveEntry activeSave)

@@ -436,9 +436,9 @@
       <Impossible purchasePrice="360000" inputCapacityTons="390" outputCapacityTons="390" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
-  <Site catalogId="400" legacyKey="MPConstruction" name="Mirror Park Residential Area" role="ConstructionSiteSink" district="EastLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.05" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
+  <Site catalogId="400" legacyKey="MPConstruction" name="Mirror Park Residential Area" role="ConstructionSiteSink" district="EastLosSantos" startingTankRatio="0.3" density="Low" emptyingRate="0.05" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3" sinkElasticityMultiplier="0.88">
     <Marker x="1372.42" y="-751.49" z="67" />
-    <Inputs primary="Cement,Lumber" />
+    <Inputs primary="Cement,Lumber" sinkPreferenceWeights="Cement:1.25,Lumber:0.92" />
     <Economy>
       <Casual purchasePrice="105000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="140000" inputCapacityTons="20" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -446,9 +446,9 @@
       <Impossible purchasePrice="252000" inputCapacityTons="13" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="401" legacyKey="VWConstruction" name="Vinewood Construction Site" role="ConstructionSiteSink" district="WestLosSantos" startingTankRatio="0.3" density="Medium" emptyingRate="0.1" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
+  <Site catalogId="401" legacyKey="VWConstruction" name="Vinewood Construction Site" role="ConstructionSiteSink" district="WestLosSantos" startingTankRatio="0.3" density="Medium" emptyingRate="0.1" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3" sinkElasticityMultiplier="0.92">
     <Marker x="-1112.62" y="-964" z="2.28" />
-    <Inputs primary="Lumber,Beam,Gravel,Bricks" />
+    <Inputs primary="Lumber,Beam,Gravel,Bricks" sinkPreferenceWeights="Beam:1.18,Lumber:1.08,Bricks:0.96,Gravel:0.82" />
     <Economy>
       <Casual purchasePrice="150000" inputCapacityTons="52" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="200000" inputCapacityTons="40" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -456,9 +456,9 @@
       <Impossible purchasePrice="360000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="402" legacyKey="LSConstruction" name="Little Seoul Construction Site" role="ConstructionSiteSink" district="WestLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
+  <Site catalogId="402" legacyKey="LSConstruction" name="Little Seoul Construction Site" role="ConstructionSiteSink" district="WestLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3" sinkElasticityMultiplier="0.90">
     <Marker x="-485" y="-970" z="23.55" />
-    <Inputs primary="Beam,Cement,Concrete,Bricks" />
+    <Inputs primary="Beam,Cement,Concrete,Bricks" sinkPreferenceWeights="Concrete:1.20,Beam:1.10,Cement:1.02,Bricks:0.94" />
     <Economy>
       <Casual purchasePrice="195000" inputCapacityTons="78" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="260000" inputCapacityTons="60" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -466,9 +466,9 @@
       <Impossible purchasePrice="468000" inputCapacityTons="39" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="403" legacyKey="PHConstruction" name="Pillbox Hill Construction Site" role="ConstructionSiteSink" district="Downtown" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
+  <Site catalogId="403" legacyKey="PHConstruction" name="Pillbox Hill Construction Site" role="ConstructionSiteSink" district="Downtown" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3" sinkElasticityMultiplier="0.90">
     <Marker x="-174.56" y="-1029" z="27.27" />
-    <Inputs primary="Beam,Cement,Concrete,Bricks" />
+    <Inputs primary="Beam,Cement,Concrete,Bricks" sinkPreferenceWeights="Concrete:1.18,Beam:1.12,Cement:1.00,Bricks:0.95" />
     <Economy>
       <Casual purchasePrice="195000" inputCapacityTons="78" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="260000" inputCapacityTons="60" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -476,9 +476,9 @@
       <Impossible purchasePrice="468000" inputCapacityTons="39" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="404" legacyKey="RWConstruction" name="Redwood Construction Site" role="ConstructionSiteSink" district="GrandSenora" startingTankRatio="0.3" density="Medium" emptyingRate="0.1" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3">
+  <Site catalogId="404" legacyKey="RWConstruction" name="Redwood Construction Site" role="ConstructionSiteSink" district="GrandSenora" startingTankRatio="0.3" density="Medium" emptyingRate="0.1" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3" sinkElasticityMultiplier="0.92">
     <Marker x="1097.22" y="2081.14" z="53.55" />
-    <Inputs primary="Beam,Cement,Concrete,Bricks" />
+    <Inputs primary="Beam,Cement,Concrete,Bricks" sinkPreferenceWeights="Concrete:1.16,Beam:1.08,Cement:1.02,Bricks:0.96" />
     <Economy>
       <Casual purchasePrice="150000" inputCapacityTons="52" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
       <Standard purchasePrice="200000" inputCapacityTons="40" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
@@ -486,9 +486,9 @@
       <Impossible purchasePrice="360000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
-  <Site catalogId="500" legacyKey="Store1" name="Davis Carson Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
+  <Site catalogId="500" legacyKey="Store1" name="Davis Carson Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2" sinkElasticityMultiplier="1.18">
     <Marker x="103" y="-1818" z="26.53" />
-    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Medicine,Furniture,Meat,Paper" />
+    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Medicine,Furniture,Meat,Paper" sinkPreferenceWeights="ProcessedFood:1.25,Medicine:1.20,Meat:1.10,Clothes:1.05,Furniture:0.82,TV:0.72,Computer:0.68,Alcohol:0.92,Paper:0.76" />
     <Economy>
       <Casual purchasePrice="117000" inputCapacityTons="52" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="156000" inputCapacityTons="40" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -496,9 +496,9 @@
       <Impossible purchasePrice="280800" inputCapacityTons="26" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
-  <Site catalogId="501" legacyKey="Store2" name="Burton Mall" role="StoreSink" district="Vinewood" startingTankRatio="0.3" density="Low" emptyingRate="0.07" weeklyPassiveIncome="420" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+  <Site catalogId="501" legacyKey="Store2" name="Burton Mall" role="StoreSink" district="Vinewood" startingTankRatio="0.3" density="Low" emptyingRate="0.07" weeklyPassiveIncome="420" ownershipTier="Local" enabled="true" industryOwnerCut="0.15" sinkElasticityMultiplier="1.24">
     <Marker x="-250" y="-250" z="36.52" />
-    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Furniture,Meat,Paper" />
+    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Furniture,Meat,Paper" sinkPreferenceWeights="Clothes:1.24,Furniture:1.08,Computer:1.04,TV:0.98,Alcohol:0.92,ProcessedFood:0.84,Meat:0.78,Paper:0.72" />
     <Economy>
       <Casual purchasePrice="41250" inputCapacityTons="15.6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="55000" inputCapacityTons="12" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />

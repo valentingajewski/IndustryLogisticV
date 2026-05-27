@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using LSOL.Systems;
 
 namespace LSOL.UI
@@ -26,6 +27,19 @@ namespace LSOL.UI
 
         public TabletShellPage BuildPage(TabletShellContext context, TabletRoute route)
         {
+            switch ((route != null ? route.PageId : string.Empty) ?? string.Empty)
+            {
+                case "doctrine":
+                    return BuildDoctrinePage(context, route);
+                case "prestige":
+                    return BuildPrestigePage(context);
+                default:
+                    return BuildRootPage(context);
+            }
+        }
+
+        private TabletShellPage BuildRootPage(TabletShellContext context)
+        {
             var statuses = _tracker != null
                 ? _tracker.GetStatuses()
                 : Array.Empty<PlayerSuccessStatus>();
@@ -38,16 +52,48 @@ namespace LSOL.UI
             var unlockedCount = _tracker != null ? _tracker.UnlockedCount : 0;
             var totalCount = _tracker != null ? _tracker.TotalCount : 0;
             var items = new List<MenuItem>();
+            var focusDoctrine = ResolveFocusDoctrine(endgame, doctrines);
+            var focusStatus = doctrines.FirstOrDefault(status => status != null && status.Doctrine == focusDoctrine);
 
             items.Add(TabletUiHelpers.CreateInfoItem(
                 "Progress",
                 string.Format("{0}/{1} unlocked", unlockedCount, totalCount),
                 totalCount > 0 ? (float?)unlockedCount / totalCount : null));
 
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Current Doctrine",
+                TabletEndgameStatusFormatter.BuildStatusDetail(endgame),
+                () =>
+                {
+                    if (context != null)
+                    {
+                        context.Push(TabletAppIds.Successes, "doctrine", focusDoctrine);
+                    }
+                },
+                UnlockedIdle,
+                UnlockedActive,
+                focusStatus != null ? (float?)focusStatus.ProgressRatio : 0f,
+                "DOC"));
+
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Prestige",
+                TabletEndgameStatusFormatter.BuildPrestigeSummaryDetail(endgame),
+                () =>
+                {
+                    if (context != null)
+                    {
+                        context.Push(TabletAppIds.Successes, "prestige");
+                    }
+                },
+                Color.FromArgb(178, 48, 46, 38),
+                Color.FromArgb(220, 118, 108, 78),
+                endgame.PrestigeScore > 0.001f ? (float?)(endgame.PrestigeScore / 100f) : 0f,
+                "PRS"));
+
             items.Add(TabletUiHelpers.CreateInfoItem(
-                endgame.Headline ?? "Endgame posture forming",
-                endgame.Detail ?? "Doctrine, HQ, and district prestige will appear here as the company matures.",
-                endgame.PrestigeScore > 0.001f ? (float?)(endgame.PrestigeScore / 100f) : 0f));
+                "Steering",
+                TabletEndgameStatusFormatter.BuildSteeringDetail(endgame),
+                focusStatus != null ? (float?)focusStatus.ProgressRatio : null));
 
             for (int i = 0; i < doctrines.Count; i++)
             {
@@ -58,12 +104,22 @@ namespace LSOL.UI
                 }
 
                 var capturedDoctrine = doctrine;
-                items.Add(TabletUiHelpers.CreateInfoItem(
+                items.Add(TabletUiHelpers.CreateActionItem(
                     capturedDoctrine.IsActive
                         ? string.Format("{0} [ACTIVE]", capturedDoctrine.Name ?? string.Empty)
                         : capturedDoctrine.Name ?? string.Empty,
-                    BuildDoctrineDetail(capturedDoctrine),
-                    capturedDoctrine.ProgressRatio));
+                    TabletEndgameStatusFormatter.BuildDoctrineListDetail(capturedDoctrine),
+                    () =>
+                    {
+                        if (context != null)
+                        {
+                            context.Push(TabletAppIds.Successes, "doctrine", capturedDoctrine.Doctrine);
+                        }
+                    },
+                    capturedDoctrine.IsActive ? UnlockedIdle : LockedIdle,
+                    capturedDoctrine.IsActive ? UnlockedActive : LockedActive,
+                    capturedDoctrine.ProgressRatio,
+                    capturedDoctrine.IsActive ? "LIVE" : null));
             }
 
             for (int i = 0; i < statuses.Count; i++)
@@ -91,13 +147,140 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Successes",
-                Subtitle = string.Format("{0}/{1} unlocked | Prestige {2:0}", unlockedCount, totalCount, endgame.PrestigeScore),
+                Subtitle = string.Format(
+                    "{0}/{1} unlocked | Prestige {2:0} | HQ {3}",
+                    unlockedCount,
+                    totalCount,
+                    endgame.PrestigeScore,
+                    endgame.HasLandmarkHeadquarters ? "Online" : "Offline"),
                 HeaderRightText = string.Format("{0}/{1}", unlockedCount, totalCount),
                 FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.94f,
                 CaptionScale = 0.44f,
                 DetailScale = 0.27f,
                 MaxVisibleItems = 7,
+                Layout = SimpleMenuTabletLayout.List,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildDoctrinePage(TabletShellContext context, TabletRoute route)
+        {
+            var doctrines = _tracker != null
+                ? _tracker.GetDoctrineStatuses()
+                : Array.Empty<CompanyDoctrineStatus>();
+            var endgame = _tracker != null
+                ? _tracker.GetEndgameSummary()
+                : new CompanyEndgameSummary();
+            var doctrine = route != null && route.Payload is CompanyDoctrine
+                ? (CompanyDoctrine)route.Payload
+                : ResolveFocusDoctrine(endgame, doctrines);
+            var status = doctrines.FirstOrDefault(entry => entry != null && entry.Doctrine == doctrine);
+            var items = new List<MenuItem>();
+
+            if (status == null)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem("Status", "Doctrine state unavailable."));
+            }
+            else
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem("Status", TabletEndgameStatusFormatter.BuildDoctrineDetail(status), status.ProgressRatio));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Doctrine Effect",
+                    TabletEndgameStatusFormatter.BuildDoctrineEffectsDetail(status),
+                    status.Tier > 0 ? (float?)Math.Min(1f, Math.Max(status.EffectiveTier, status.Tier) / 4f) : 0f));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "Lead Rule",
+                    endgame.DoctrineLead != null && !string.IsNullOrWhiteSpace(endgame.DoctrineLead.TieBreakSummary)
+                        ? endgame.DoctrineLead.TieBreakSummary
+                        : "Lead order: tier, then progress, then Industrial > Territorial > Service."));
+
+                foreach (var component in status.ProgressComponents ?? Array.Empty<CompanyDoctrineProgressComponent>())
+                {
+                    if (component == null)
+                    {
+                        continue;
+                    }
+
+                    var capturedComponent = component;
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        capturedComponent.Label ?? string.Empty,
+                        TabletEndgameStatusFormatter.BuildDoctrineComponentDetail(capturedComponent),
+                        capturedComponent.CompletionRatio));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Successes overview.", () =>
+            {
+                if (context != null)
+                {
+                    context.GoBack();
+                }
+            }, "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = status != null ? status.Name ?? "Doctrine" : "Doctrine",
+                Subtitle = status != null
+                    ? string.Format("{0} | Progress {1:0}%", status.IsActive ? "Live doctrine" : "Doctrine track", Math.Max(0f, status.ProgressRatio) * 100f)
+                    : "Doctrine state unavailable",
+                HeaderRightText = status != null ? string.Format("{0:0}%", Math.Max(0f, status.ProgressRatio) * 100f) : string.Empty,
+                FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
+                WidthScale = 0.94f,
+                CaptionScale = 0.44f,
+                DetailScale = 0.27f,
+                MaxVisibleItems = 6,
+                Layout = SimpleMenuTabletLayout.List,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildPrestigePage(TabletShellContext context)
+        {
+            var endgame = _tracker != null
+                ? _tracker.GetEndgameSummary()
+                : new CompanyEndgameSummary();
+            var breakdown = endgame.PrestigeBreakdown ?? new CompanyPrestigeBreakdown();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    "Prestige Total",
+                    TabletEndgameStatusFormatter.BuildPrestigeBreakdownDetail(endgame),
+                    endgame.PrestigeScore > 0.001f ? (float?)(endgame.PrestigeScore / 100f) : 0f),
+            };
+
+            foreach (var component in breakdown.Components ?? Array.Empty<CompanyPrestigeComponent>())
+            {
+                if (component == null)
+                {
+                    continue;
+                }
+
+                var capturedComponent = component;
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    capturedComponent.Label ?? string.Empty,
+                    TabletEndgameStatusFormatter.BuildPrestigeComponentDetail(capturedComponent),
+                    capturedComponent.MaxScore > 0.0005f ? (float?)(capturedComponent.Score / capturedComponent.MaxScore) : 0f));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Successes overview.", () =>
+            {
+                if (context != null)
+                {
+                    context.GoBack();
+                }
+            }, "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Prestige",
+                Subtitle = string.Format("Current {0:0}/100 | Peak {1:0}", Math.Max(0f, endgame.PrestigeScore), Math.Max(Math.Max(0f, endgame.PrestigeScore), Math.Max(0f, endgame.HighestPrestigeScore))),
+                HeaderRightText = string.Format("{0:0}", Math.Max(0f, endgame.PrestigeScore)),
+                FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
+                WidthScale = 0.94f,
+                CaptionScale = 0.44f,
+                DetailScale = 0.27f,
+                MaxVisibleItems = 6,
                 Layout = SimpleMenuTabletLayout.List,
                 Items = items,
             };
@@ -123,28 +306,26 @@ namespace LSOL.UI
             return string.Format("{0}\nProgress: {1}", status.Description ?? string.Empty, status.ProgressText);
         }
 
-        private static string BuildDoctrineDetail(CompanyDoctrineStatus status)
+        private static CompanyDoctrine ResolveFocusDoctrine(CompanyEndgameSummary endgame, IReadOnlyList<CompanyDoctrineStatus> doctrines)
         {
-            if (status == null)
+            endgame = endgame ?? new CompanyEndgameSummary();
+            doctrines = doctrines ?? Array.Empty<CompanyDoctrineStatus>();
+            if (endgame.ActiveDoctrineTier > 0)
             {
-                return string.Empty;
+                return endgame.ActiveDoctrine;
             }
 
-            if (status.Tier <= 0)
+            if (endgame.DoctrineLead != null && endgame.DoctrineLead.LeadingDoctrine != CompanyDoctrine.Balanced)
             {
-                return string.Format(
-                    "{0}\nProgress: {1}",
-                    status.FocusSummary ?? string.Empty,
-                    status.ProgressText ?? string.Empty);
+                return endgame.DoctrineLead.LeadingDoctrine;
             }
 
-            return string.Format(
-                "{0}\nTier {1} | {2}\nTradeoff: {3}\nProgress: {4}",
-                status.FocusSummary ?? string.Empty,
-                CompanyDoctrineSystem.BuildTierLabel(status.EffectiveTier > 0 ? status.EffectiveTier : status.Tier),
-                status.BonusSummary ?? string.Empty,
-                status.TradeoffSummary ?? string.Empty,
-                status.ProgressText ?? string.Empty);
+            var leader = doctrines
+                .Where(status => status != null)
+                .OrderByDescending(status => status.ProgressRatio)
+                .ThenByDescending(status => status.Tier)
+                .FirstOrDefault();
+            return leader != null ? leader.Doctrine : CompanyDoctrine.Balanced;
         }
     }
 }

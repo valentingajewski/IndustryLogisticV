@@ -148,6 +148,50 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void SaveAndLoad_WithWarehouseLossTelemetry_RestoresRecentStorageLossFields()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("warehouse-loss-telemetry.state.xml");
+
+            try
+            {
+                var original = CreateIndustryConfig("warehouse-alpha", "Warehouse Alpha", "Port");
+                original.SiteRole = SiteRole.Warehouse;
+                original.Inputs = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "ProcessedFood",
+                    "Computer",
+                };
+
+                var industry = new Industry(original, new List<ProductionRecipe>(), false, 0.2f);
+                industry.ApplyStoragePressureState(0.72f, 9, 3.5f, 4200f);
+                industry.ApplyStorageLossTelemetryState(1, 0.5f, 225f, 0.2f, 110f, 1.5f, 900f, 0.8f, 450f);
+
+                IndustryPersistenceManager.Save(filePath, new[] { industry }, null, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">25</Value>");
+                StringAssert.Contains(rawSave, "StorageTelemetryWeekIndex");
+
+                var restored = new Industry(original, new List<ProductionRecipe>(), false, 0.2f);
+                IndustryPersistenceManager.Load(filePath, new[] { restored });
+
+                Assert.AreEqual(1, restored.StorageTelemetryWeekIndex);
+                Assert.AreEqual(0.5f, restored.LastDaySpoilageTons, 0.001f);
+                Assert.AreEqual(225f, restored.LastDaySpoilageValue, 0.01f);
+                Assert.AreEqual(0.2f, restored.LastDayShrinkageTons, 0.001f);
+                Assert.AreEqual(110f, restored.LastDayShrinkageValue, 0.01f);
+                Assert.AreEqual(1.5f, restored.CurrentWeekSpoilageTons, 0.001f);
+                Assert.AreEqual(900f, restored.CurrentWeekSpoilageValue, 0.01f);
+                Assert.AreEqual(0.8f, restored.CurrentWeekShrinkageTons, 0.001f);
+                Assert.AreEqual(450f, restored.CurrentWeekShrinkageValue, 0.01f);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
         public void Save_WithClearedFinanceSnapshot_DoesNotWriteFinanceSections()
         {
             var filePath = TestWorkspace.CreateTempFilePath("fresh-finance.state.xml");
@@ -180,6 +224,160 @@ namespace LSOL.Tests.Systems
                 Assert.IsNull(result.Metadata.Finance);
                 Assert.AreEqual(20000f, result.Metadata.Profit, 0.01f);
                 Assert.AreEqual(20000f, result.Metadata.StartingBalance, 0.01f);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_WithFinanceContractMetadata_RoundTripsPlayerContractCorrelationFields()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("finance-contract-metadata.state.xml");
+
+            try
+            {
+                var financeTracker = new CompanyFinanceTracker();
+                financeTracker.RecordIncome(
+                    CompanyFinanceCategory.PlayerContract,
+                    8425f,
+                    1660,
+                    "Contract delivery of Steel to Terminal",
+                    0,
+                    "Acme Bulk | 8.00t Steel | Alpha -> Beta",
+                    "pc-778",
+                    "company:acme-bulk",
+                    "Terminal");
+
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    Finance = financeTracker.CreatePersistenceSnapshot(),
+                };
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"PlayerContractId\">pc-778</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"ShipperKey\">company:acme-bulk</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"DistrictName\">Terminal</Value>");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var transaction = result.Metadata.Finance.Transactions.Single();
+
+                Assert.AreEqual("pc-778", transaction.PlayerContractId);
+                Assert.AreEqual("company:acme-bulk", transaction.ShipperKey);
+                Assert.AreEqual("Terminal", transaction.DistrictName);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_WithBankOfferHistory_RoundTripsCurrentOffersAndHistory()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("bank-history.state.xml");
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    BankLoans = new BankLoanPersistenceSnapshot
+                    {
+                        ActiveLoan = new CompanyLoanState
+                        {
+                            BankId = "bank-1",
+                            BankName = "Union Credit",
+                            OriginalPrincipal = 120000f,
+                            LockedInterestRatePercent = 7.1f,
+                            TotalRepayment = 128520f,
+                            RemainingBalance = 85680f,
+                            WeeklyInstallment = 10710f,
+                            TermWeeks = 12,
+                            WeeksPaid = 4,
+                            LastProcessedWeekIndex = 18,
+                        },
+                    },
+                };
+                metadata.BankLoans.OfferedRates.Add(new BankOfferRateSnapshot
+                {
+                    BankId = "bank-1",
+                    WeekIndex = 19,
+                    RatePercent = 7.1f,
+                });
+                metadata.BankLoans.OfferHistory.Add(new BankOfferRateSnapshot
+                {
+                    BankId = "bank-1",
+                    WeekIndex = 19,
+                    RatePercent = 7.1f,
+                });
+                metadata.BankLoans.OfferHistory.Add(new BankOfferRateSnapshot
+                {
+                    BankId = "bank-1",
+                    WeekIndex = 18,
+                    RatePercent = 7.35f,
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">22</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"BankOffer:bank-1\">");
+                StringAssert.Contains(rawSave, "<Section name=\"BankOfferHistory:bank-1:19\">");
+                StringAssert.Contains(rawSave, "<Section name=\"BankOfferHistory:bank-1:18\">");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var snapshot = result.Metadata.BankLoans;
+
+                Assert.IsNotNull(snapshot);
+                Assert.IsNotNull(snapshot.ActiveLoan);
+                Assert.AreEqual("bank-1", snapshot.ActiveLoan.BankId);
+                Assert.AreEqual(1, snapshot.OfferedRates.Count);
+                Assert.AreEqual(2, snapshot.OfferHistory.Count);
+                Assert.AreEqual(19, snapshot.OfferHistory.Max(entry => entry.WeekIndex));
+                Assert.AreEqual(7.35f, snapshot.OfferHistory.Single(entry => entry.WeekIndex == 18).RatePercent, 0.001f);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_WithAlertRules_RoundTripsSettingsAndBumpsVersion()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("alert-rules.state.xml");
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    AlertRules = new AlertRulesPersistenceSnapshot
+                    {
+                        RentLeadTime = AlertLeadTimeMode.WithinDay,
+                        ContractLeadTime = AlertLeadTimeMode.DueNow,
+                        FleetMode = FleetAlertMode.WatchAndCritical,
+                        TerritoryMode = TerritoryAlertMode.ChargesOnly,
+                    },
+                };
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">23</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"AlertRules\">");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var snapshot = result.Metadata.AlertRules;
+
+                Assert.IsNotNull(snapshot);
+                Assert.IsTrue(result.Metadata.HasGameplayMetadata);
+                Assert.AreEqual(AlertLeadTimeMode.WithinDay, snapshot.RentLeadTime);
+                Assert.AreEqual(AlertLeadTimeMode.DueNow, snapshot.ContractLeadTime);
+                Assert.AreEqual(FleetAlertMode.WatchAndCritical, snapshot.FleetMode);
+                Assert.AreEqual(TerritoryAlertMode.ChargesOnly, snapshot.TerritoryMode);
             }
             finally
             {
@@ -260,6 +458,11 @@ namespace LSOL.Tests.Systems
                         NextContractId = 7,
                         LastBoardRefreshMinute = 12345,
                         SelectedCommodityFilter = "Steel",
+                        SelectedDistrictFilter = "Terminal",
+                        SelectedRigClassFilter = "OpenHull",
+                        SelectedSortMode = PlayerContractBoardSortMode.BestPayoutDensity,
+                        SelectedExpiryFilter = PlayerContractBoardExpiryFilter.Within120Minutes,
+                        SelectedPayoutDensityFilter = PlayerContractBoardPayoutDensityFilter.AtLeast500PerKm,
                     },
                     OwnedFleet = new OwnedFleetPersistenceSnapshot(),
                     PropertyOwnership = new PropertyOwnershipPersistenceSnapshot(),
@@ -292,11 +495,27 @@ namespace LSOL.Tests.Systems
                     TotalLostTons = 0.4f,
                     SourceDistrictName = "Terminal",
                     StatusMessage = "Loaded 10.50t Steel",
+                    ReputationOutcomeApplied = true,
+                    ShipperKey = "company:acme-bulk",
+                    ShipperDisplayName = "Acme Bulk",
+                    IsPremiumOpportunity = true,
                 });
                 metadata.PlayerContracts.Cooldowns.Add(new PlayerContractCooldownSnapshot
                 {
                     RouteKey = "alpha|beta|steel",
                     AvailableAgainMinute = 12555,
+                });
+                metadata.PlayerContracts.ShipperReputations.Add(new PlayerContractShipperReputationSnapshot
+                {
+                    ShipperKey = "company:acme-bulk",
+                    DisplayName = "Acme Bulk",
+                    TrustScore = 64f,
+                    CompletedContracts = 9,
+                    FailedContracts = 1,
+                    CleanCompletions = 7,
+                    CleanStreak = 3,
+                    DeliveredTons = 48f,
+                    LastTierAwarded = 2,
                 });
 
                 metadata.OwnedFleet.Vehicles.Add(new OwnedFleetVehicleSnapshot
@@ -342,9 +561,10 @@ namespace LSOL.Tests.Systems
                 IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
 
                 var rawSave = File.ReadAllText(filePath);
-                StringAssert.Contains(rawSave, "<Value key=\"Version\">21</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">24</Value>");
                 StringAssert.Contains(rawSave, "<Section name=\"PlayerContracts\">");
                 StringAssert.Contains(rawSave, "<Value key=\"PlayerContractId\">pc-001</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"PlayerContractShipper:1\">");
 
                 var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
                 var contracts = result.Metadata.PlayerContracts;
@@ -356,18 +576,77 @@ namespace LSOL.Tests.Systems
                 Assert.AreEqual(7, contracts.NextContractId);
                 Assert.AreEqual(12345, contracts.LastBoardRefreshMinute);
                 Assert.AreEqual("Steel", contracts.SelectedCommodityFilter);
+                Assert.AreEqual("Terminal", contracts.SelectedDistrictFilter);
+                Assert.AreEqual("OpenHull", contracts.SelectedRigClassFilter);
+                Assert.AreEqual(PlayerContractBoardSortMode.BestPayoutDensity, contracts.SelectedSortMode);
+                Assert.AreEqual(PlayerContractBoardExpiryFilter.Within120Minutes, contracts.SelectedExpiryFilter);
+                Assert.AreEqual(PlayerContractBoardPayoutDensityFilter.AtLeast500PerKm, contracts.SelectedPayoutDensityFilter);
                 Assert.AreEqual(1, contracts.Contracts.Count);
                 Assert.AreEqual("pc-001", contracts.Contracts[0].Id);
                 Assert.AreEqual(PlayerContractType.FreightMarket, contracts.Contracts[0].Type);
                 Assert.AreEqual(PlayerContractStatus.Loaded, contracts.Contracts[0].Status);
                 Assert.AreEqual("fleet-1", contracts.Contracts[0].AssignedCommercialVehicleAssetId);
+                Assert.IsTrue(contracts.Contracts[0].ReputationOutcomeApplied);
+                Assert.AreEqual("company:acme-bulk", contracts.Contracts[0].ShipperKey);
+                Assert.AreEqual("Acme Bulk", contracts.Contracts[0].ShipperDisplayName);
+                Assert.IsTrue(contracts.Contracts[0].IsPremiumOpportunity);
                 Assert.AreEqual(1, contracts.Cooldowns.Count);
                 Assert.AreEqual("alpha|beta|steel", contracts.Cooldowns[0].RouteKey);
+                Assert.AreEqual(1, contracts.ShipperReputations.Count);
+                Assert.AreEqual("company:acme-bulk", contracts.ShipperReputations[0].ShipperKey);
+                Assert.AreEqual(64f, contracts.ShipperReputations[0].TrustScore, 0.01f);
 
                 Assert.AreEqual("pc-001", fleetVehicle.PlayerContractId);
                 Assert.AreEqual("beta", fleetVehicle.PlayerContractDestinationIndustryId);
                 Assert.AreEqual("pc-001", commercialVehicle.PlayerContractId);
                 Assert.AreEqual("beta", commercialVehicle.PlayerContractDestinationIndustryId);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_PlayerContractsWithoutShipperReputation_RemainsBackwardCompatible()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("player-contracts-legacy.state.xml");
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    PlayerContracts = new PlayerContractsPersistenceSnapshot
+                    {
+                        NextContractId = 3,
+                        LastBoardRefreshMinute = 120,
+                    },
+                };
+
+                metadata.PlayerContracts.Contracts.Add(new PlayerContractSnapshot
+                {
+                    Id = "pc-legacy",
+                    Type = PlayerContractType.QuickJob,
+                    Status = PlayerContractStatus.Listed,
+                    Commodity = "Fuel",
+                    OriginIndustryId = "origin",
+                    DestinationIndustryId = "destination",
+                    ListedTons = 3f,
+                    QuotedGrossPayout = 2100f,
+                    QuotedUnitPrice = 700f,
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, null);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">21</Value>");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
+                var contracts = result.Metadata.PlayerContracts;
+
+                Assert.IsNotNull(contracts);
+                Assert.AreEqual(1, contracts.Contracts.Count);
+                Assert.AreEqual(0, contracts.ShipperReputations.Count);
             }
             finally
             {
@@ -415,6 +694,13 @@ namespace LSOL.Tests.Systems
                     DeliveryCount = 12,
                     TotalDeliveredTons = 60f,
                     RightLevel = CorridorRightLevel.Corridor,
+                    CompetitivePressure = 0.42f,
+                    CompetitiveOpportunity = 0.18f,
+                    ActiveCompetitionJobs = 2,
+                    VisibleCompetitionCount = 1,
+                    CompetitiveTons = 22f,
+                    CompetitiveWinCount = 1,
+                    ContestedWeekStreak = 3,
                 });
 
                 IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), null, territorySnapshot);
@@ -450,9 +736,312 @@ namespace LSOL.Tests.Systems
                 Assert.AreEqual(12, corridorState.DeliveryCount);
                 Assert.AreEqual(60f, corridorState.TotalDeliveredTons, 0.01f);
                 Assert.AreEqual(CorridorRightLevel.Corridor, corridorState.RightLevel);
+                Assert.AreEqual(0.42f, corridorState.CompetitivePressure, 0.01f);
+                Assert.AreEqual(0.18f, corridorState.CompetitiveOpportunity, 0.01f);
+                Assert.AreEqual(2, corridorState.ActiveCompetitionJobs);
+                Assert.AreEqual(1, corridorState.VisibleCompetitionCount);
+                Assert.AreEqual(22f, corridorState.LastCompetitiveTons, 0.01f);
+                Assert.AreEqual(1, corridorState.CompetitiveWinCount);
+                Assert.AreEqual(3, corridorState.ContestedWeekStreak);
 
                 Assert.IsNotNull(districtState);
                 Assert.AreEqual("Dominant", districtState.ReputationLabel);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_WithCarrierEcosystemMetadata_RoundTripsNpcAndTerritoryCarrierFields()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("carrier-ecosystem.state.xml");
+            var territoryManager = CreateTerritoryManager();
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    NpcLogistics = new NpcLogisticsPersistenceSnapshot
+                    {
+                        LastWorldEvaluationClockMinute = 180,
+                    },
+                };
+
+                metadata.NpcLogistics.Carriers.Add(new NpcCarrierNetworkSnapshot
+                {
+                    Id = "port-freight",
+                    DisplayName = "Port Freight",
+                    HomeDistrict = "Port",
+                    Strength = 0.61f,
+                    GrowthMomentum = 0.18f,
+                    DeclinePressure = 0.07f,
+                    IsDormant = false,
+                    DormantWeekCount = 0,
+                    LastActiveWeekIndex = 3,
+                    LastExpansionWeekIndex = 2,
+                    VisualSeed = 11,
+                });
+                metadata.NpcLogistics.Carriers[0].PreferredCommodityFamilies.Add("Ore");
+                metadata.NpcLogistics.Carriers[0].PreferredDistricts.Add("Port");
+                metadata.NpcLogistics.Carriers[0].PreferredCorridors.Add("GrandSenora|Port");
+                metadata.NpcLogistics.WorldJobs.Add(new NpcWorldLogisticsJobSnapshot
+                {
+                    Id = 1,
+                    Type = NpcWorldJobType.RivalFreight,
+                    Phase = NpcWorldJobPhase.Traveling,
+                    Commodity = "Ore",
+                    SourceLabel = "alpha-depot",
+                    DestinationLabel = "bravo-depot",
+                    OriginIndustryId = "alpha-depot",
+                    DestinationIndustryId = "bravo-depot",
+                    Tons = 6f,
+                    RemainingInGameMinutes = 45,
+                    TotalInGameMinutes = 60,
+                    CreatedClockMinute = 120,
+                    HasVisibleConvoy = true,
+                    IsRivalJob = true,
+                    CarrierId = "port-freight",
+                });
+
+                var territorySnapshot = new TerritoryPersistenceSnapshot();
+                territorySnapshot.Districts.Add(new TerritoryDistrictSnapshot
+                {
+                    DistrictName = "Port",
+                    CompetitivePressure = 0.28f,
+                    CompetitiveOpportunity = 0.12f,
+                    ActiveCompetitionJobs = 2,
+                    ActiveCarrierCount = 2,
+                    DominantCarrierId = "port-freight",
+                    DominantCarrierName = "Port Freight",
+                });
+                territorySnapshot.Corridors.Add(new TerritoryCorridorSnapshot
+                {
+                    DistrictA = "Port",
+                    DistrictB = "GrandSenora",
+                    CompetitivePressure = 0.31f,
+                    CompetitiveOpportunity = 0.16f,
+                    ActiveCompetitionJobs = 2,
+                    ActiveCarrierCount = 1,
+                    DominantCarrierId = "port-freight",
+                    DominantCarrierName = "Port Freight",
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata, territorySnapshot);
+
+                var rawSave = File.ReadAllText(filePath);
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">27</Value>");
+                StringAssert.Contains(rawSave, "<Section name=\"NpcCarrier:port-freight\">");
+                StringAssert.Contains(rawSave, "<Value key=\"CarrierId\">port-freight</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"DominantCarrierName\">Port Freight</Value>");
+
+                var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), territoryManager);
+                var npcLogistics = result.Metadata.NpcLogistics;
+                var restoredDistrict = territoryManager.GetDistrictState("Port");
+                var restoredCorridor = territoryManager.GetCorridorState("Port", "GrandSenora");
+
+                Assert.IsNotNull(npcLogistics);
+                Assert.AreEqual(1, npcLogistics.Carriers.Count);
+                Assert.AreEqual("port-freight", npcLogistics.Carriers[0].Id);
+                Assert.AreEqual("Port Freight", npcLogistics.Carriers[0].DisplayName);
+                CollectionAssert.AreEqual(new[] { "Ore" }, npcLogistics.Carriers[0].PreferredCommodityFamilies.ToArray());
+                Assert.AreEqual("port-freight", npcLogistics.WorldJobs[0].CarrierId);
+
+                Assert.IsNotNull(restoredDistrict);
+                Assert.AreEqual(2, restoredDistrict.ActiveCarrierCount);
+                Assert.AreEqual("port-freight", restoredDistrict.DominantCarrierId);
+                Assert.AreEqual("Port Freight", restoredDistrict.DominantCarrierName);
+
+                Assert.IsNotNull(restoredCorridor);
+                Assert.AreEqual(1, restoredCorridor.ActiveCarrierCount);
+                Assert.AreEqual("port-freight", restoredCorridor.DominantCarrierId);
+                Assert.AreEqual("Port Freight", restoredCorridor.DominantCarrierName);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void LoadWithMetadata_WithLegacyCorridorSnapshot_MissingRivalryFieldsDefaultsToZero()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("territory-legacy-corridor.state.xml");
+            var territoryManager = CreateTerritoryManager();
+
+            try
+            {
+                var territorySnapshot = new TerritoryPersistenceSnapshot();
+                territorySnapshot.Corridors.Add(new TerritoryCorridorSnapshot
+                {
+                    DistrictA = "Port",
+                    DistrictB = "GrandSenora",
+                    DeliveryCount = 8,
+                    TotalDeliveredTons = 42f,
+                    RightLevel = CorridorRightLevel.ServicePermit,
+                    CurrentWeekDeliveryCount = 1,
+                    CurrentWeekDeliveredTons = 8f,
+                    DecayPressure = 0.4f,
+                    CompetitivePressure = 0.35f,
+                    CompetitiveOpportunity = 0.14f,
+                    ActiveCompetitionJobs = 2,
+                    VisibleCompetitionCount = 1,
+                    CompetitiveTons = 18f,
+                    CompetitiveWinCount = 1,
+                    ContestedWeekStreak = 2,
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), null, territorySnapshot);
+
+                var document = XDocument.Load(filePath);
+                var corridorSection = document
+                    .Root?
+                    .Elements("Section")
+                    .FirstOrDefault(section => string.Equals((string)section.Attribute("name"), "TerritoryCorridor:GrandSenora|Port", StringComparison.OrdinalIgnoreCase));
+                Assert.IsNotNull(corridorSection);
+
+                var rivalryKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "CompetitivePressure",
+                    "CompetitiveOpportunity",
+                    "ActiveCompetitionJobs",
+                    "VisibleCompetitionCount",
+                    "CompetitiveTons",
+                    "CompetitiveWinCount",
+                    "ContestedWeekStreak",
+                };
+
+                corridorSection
+                    .Elements("Value")
+                    .Where(value => rivalryKeys.Contains((string)value.Attribute("key") ?? string.Empty))
+                    .Remove();
+                document.Save(filePath);
+
+                IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), territoryManager);
+
+                var corridorState = territoryManager.GetCorridorState("Port", "GrandSenora");
+                Assert.IsNotNull(corridorState);
+                Assert.AreEqual(0f, corridorState.CompetitivePressure, 0.01f);
+                Assert.AreEqual(0f, corridorState.CompetitiveOpportunity, 0.01f);
+                Assert.AreEqual(0, corridorState.ActiveCompetitionJobs);
+                Assert.AreEqual(0, corridorState.VisibleCompetitionCount);
+                Assert.AreEqual(0f, corridorState.LastCompetitiveTons, 0.01f);
+                Assert.AreEqual(0, corridorState.CompetitiveWinCount);
+                Assert.AreEqual(0, corridorState.ContestedWeekStreak);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_WithTerritoryDistrictEvent_RestoresLiveDistrictEventState()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("territory-event.state.xml");
+            var sourceTerritoryManager = CreateTerritoryManager();
+            var restoredTerritoryManager = CreateTerritoryManager();
+
+            try
+            {
+                sourceTerritoryManager.ApplySnapshot(new TerritoryPersistenceSnapshot
+                {
+                    Districts =
+                    {
+                        new TerritoryDistrictSnapshot
+                        {
+                            DistrictName = "Port",
+                            ActiveEvent = new TerritoryDistrictEventSnapshot
+                            {
+                                EventId = "district_event_port_3",
+                                DistrictName = "Port",
+                                CrisisType = DistrictCrisisType.SupplyDisruption,
+                                PreferredCommodity = "MechanicalParts",
+                                Severity = 0.58f,
+                                MarketPressureBonus = 0.21f,
+                                ResponseTargetTons = 24f,
+                                DeliveredReliefTons = 9f,
+                                ReliefDeliveryCount = 2,
+                                StartedWeekIndex = 3,
+                                EndsAtWeekIndex = 4,
+                                LastEscalatedWeekIndex = 3,
+                                TriggerSummary = "Competition 58% | Contested lanes 2 | Operational gap 25%",
+                                ImpactSummary = "Competition and site outages are choking throughput.",
+                            },
+                        },
+                    },
+                });
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), null, sourceTerritoryManager.CreateSnapshot());
+                var rawSave = File.ReadAllText(filePath);
+                IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), restoredTerritoryManager);
+
+                var restoredEvent = restoredTerritoryManager.GetDistrictEvent("Port");
+
+                StringAssert.Contains(rawSave, "<Section name=\"TerritoryDistrict:Port\">");
+                StringAssert.Contains(rawSave, "<Value key=\"ActiveEventId\">district_event_port_3</Value>");
+                Assert.IsNotNull(restoredEvent);
+                Assert.AreEqual(DistrictCrisisType.SupplyDisruption, restoredEvent.CrisisType);
+                Assert.AreEqual("MechanicalParts", restoredEvent.PreferredCommodity);
+                Assert.AreEqual(24f, restoredEvent.ResponseTargetTons, 0.01f);
+                Assert.AreEqual(9f, restoredEvent.DeliveredReliefTons, 0.01f);
+                Assert.AreEqual(2, restoredEvent.ReliefDeliveryCount);
+                Assert.AreEqual(4, restoredEvent.EndsAtWeekIndex);
+                Assert.AreEqual("Competition 58% | Contested lanes 2 | Operational gap 25%", restoredEvent.TriggerSummary);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
+        public void SaveAndLoad_WithOfficeFacilityAnchorAssignment_RestoresPropertyOfficeObjectAnchorId()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("property-office-anchor.state.xml");
+
+            try
+            {
+                var metadata = new IndustryPersistenceMetadata
+                {
+                    PropertyOwnership = new PropertyOwnershipPersistenceSnapshot
+                    {
+                        ActiveOfficeId = "main",
+                        Offices =
+                        {
+                            new OfficeOwnershipPersistenceEntry
+                            {
+                                OfficeId = "main",
+                                IsOwned = true,
+                                LastChargedWeekIndex = 2,
+                            },
+                        },
+                        OfficeObjects =
+                        {
+                            new OfficeObjectPersistenceEntry
+                            {
+                                InstanceId = "office_obj_dispatch_1",
+                                OfficeId = "main",
+                                DefinitionId = 15,
+                                IsPlaced = true,
+                                Position = new Vector3(1f, 2f, 3f),
+                                Rotation = new Vector3(0f, 0f, 90f),
+                                AssignedFacilityAnchorId = "dispatch-main",
+                                StoredResourceAmount = 0f,
+                            },
+                        },
+                    },
+                };
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), metadata);
+                var rawSave = File.ReadAllText(filePath);
+                var loaded = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), null);
+
+                StringAssert.Contains(rawSave, "<Value key=\"AssignedFacilityAnchorId\">dispatch-main</Value>");
+                Assert.IsNotNull(loaded.Metadata.PropertyOwnership);
+                Assert.AreEqual(1, loaded.Metadata.PropertyOwnership.OfficeObjects.Count);
+                Assert.AreEqual("dispatch-main", loaded.Metadata.PropertyOwnership.OfficeObjects[0].AssignedFacilityAnchorId);
             }
             finally
             {

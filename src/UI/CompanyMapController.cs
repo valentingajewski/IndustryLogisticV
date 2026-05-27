@@ -13,6 +13,19 @@ namespace LSOL.UI
 {
     public sealed class CompanyMapController
     {
+        internal enum DistrictInfluenceHeatBucket
+        {
+            Cold = 0,
+            Emerging = 1,
+            Anchored = 2,
+            Dominant = 3,
+        }
+
+        private const float MinimumWeeklyTargetTons = 0.01f;
+        private const float EmergingInfluenceThreshold = 0.35f;
+        private const float AnchoredInfluenceThreshold = 0.6f;
+        private const float DominantInfluenceThreshold = 1f;
+
         private readonly ControlBindings _controls;
         private readonly TerritoryManager _territoryManager;
         private readonly IndustryManager _industryManager;
@@ -24,6 +37,7 @@ namespace LSOL.UI
         private readonly Func<Industry, DepotStaffRole, string> _hireSupportStaff;
         private readonly Func<Industry, DepotSpecialization, string> _setDepotSpecialization;
         private readonly Action<string> _showStatus;
+        private readonly Func<RoutePlannerOverlaySnapshot> _getRoutePlannerOverlaySnapshot;
         private readonly SimpleMenu _rootMenu;
         private readonly SimpleMenu _districtMenu;
         private readonly SimpleMenu _districtDetailMenu;
@@ -49,7 +63,8 @@ namespace LSOL.UI
             Func<Industry, string> assignSupportCrew,
             Func<Industry, DepotStaffRole, string> hireSupportStaff,
             Func<Industry, DepotSpecialization, string> setDepotSpecialization,
-            Action<string> showStatus)
+            Action<string> showStatus,
+            Func<RoutePlannerOverlaySnapshot> getRoutePlannerOverlaySnapshot = null)
         {
             _controls = controls;
             _territoryManager = territoryManager;
@@ -62,6 +77,7 @@ namespace LSOL.UI
             _hireSupportStaff = hireSupportStaff;
             _setDepotSpecialization = setDepotSpecialization;
             _showStatus = showStatus;
+            _getRoutePlannerOverlaySnapshot = getRoutePlannerOverlaySnapshot;
 
             _rootMenu = BuildMenu("Company Map", "District control, support sites, and corridor rights", 0.82f, 6);
             _districtMenu = BuildMenu("District View", "Review influence, reputation, and strategic coverage", 0.96f, 7);
@@ -408,19 +424,22 @@ namespace LSOL.UI
             {
                 var district = districts[i];
                 var reputationLabel = GetReputationLabel(district);
+                var licenseForecast = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
                 TerritoryDistrictOperationsEntry districtOperations;
                 operationsByDistrict.TryGetValue(district.DistrictName, out districtOperations);
                 items.Add(new MenuItem
                 {
                     CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(reputationLabel)),
                     DetailFactory = () => string.Format(
-                        "Influence {0} | Charter {1} | Depots {2} | Corridors {3}{4} | Ops {5}/wk",
+                        "Influence {0} | Charter {1}{2} | Depots {3} | Corridors {4}{5} | Ops {6}/wk{7}",
                         ModFormatting.FormatPercent(district.InfluenceRatio * 100f),
                         GetDistrictLicenseLabel(district),
+                        string.IsNullOrWhiteSpace(licenseForecast) ? string.Empty : string.Format(" | {0}", licenseForecast.Replace("Forecast: ", string.Empty)),
                         district.ControlledDepots,
                         district.RouteRights,
                         BuildDistrictRiskSuffix(districtOperations),
-                        ModFormatting.FormatMoney(GetDistrictOperationsCost(operationsByDistrict, district.DistrictName))),
+                        ModFormatting.FormatMoney(GetDistrictOperationsCost(operationsByDistrict, district.DistrictName)),
+                        BuildDistrictEventSummarySuffix(district)),
                     OnActivate = () => OpenDistrictDetailMenu(district.DistrictName, OpenDistrictMenu),
                 });
             }
@@ -483,6 +502,11 @@ namespace LSOL.UI
             });
             items.Add(new MenuItem
             {
+                CaptionFactory = () => BuildDistrictEventCaption(district),
+                DetailFactory = () => BuildDistrictEventDetail(district),
+            });
+            items.Add(new MenuItem
+            {
                 CaptionFactory = () => "Network Coverage",
                 DetailFactory = () => string.Format(
                     "Sites {0} | Controlled {1} | Operational {2} | Depots {3}",
@@ -494,12 +518,7 @@ namespace LSOL.UI
             items.Add(new MenuItem
             {
                 CaptionFactory = () => "Service & Support",
-                DetailFactory = () => string.Format(
-                    "Franchises {0} | Corridor rights {1} | Support bonus {2}{3}",
-                    district.FranchiseSites,
-                    district.RouteRights,
-                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f),
-                    BuildDistrictRiskSuffix(districtOperations)),
+                DetailFactory = () => BuildDistrictServiceSupportDetail(district, districtOperations),
             });
             items.Add(new MenuItem
             {
@@ -508,10 +527,17 @@ namespace LSOL.UI
                     ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f))),
                     ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)))),
                 DetailFactory = () => string.Format(
-                    "{0} | Visible traffic {1} | Competition wins {2}",
+                    "{0} | Visible traffic {1} | District wins {2} | Lane holds {3}{4}{5}",
                     district.CompetitionStatus ?? string.Empty,
                     Math.Max(0, district.VisibleCompetitionCount),
-                    Math.Max(0, district.CompetitiveWinCount)),
+                    Math.Max(0, district.CompetitiveWinCount),
+                    Math.Max(0, district.CorridorHoldCount),
+                    district.ActiveCarrierCount > 0
+                        ? string.Format(" | Rival carriers {0}", Math.Max(0, district.ActiveCarrierCount))
+                        : string.Empty,
+                    !string.IsNullOrWhiteSpace(district.HottestCorridorName)
+                        ? string.Format(" | Hot lane {0} {1}", district.HottestCorridorName, ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.HottestCorridorPressure * 100f))))
+                        : string.Empty),
             });
             items.Add(new MenuItem
             {
@@ -558,6 +584,17 @@ namespace LSOL.UI
 
             if (districts.Any(district => string.Equals(district.DistrictName, _selectedDistrictName, StringComparison.OrdinalIgnoreCase)))
             {
+                return;
+            }
+
+            var plannerOverlay = _getRoutePlannerOverlaySnapshot != null
+                ? _getRoutePlannerOverlaySnapshot()
+                : null;
+            if (plannerOverlay != null
+                && !string.IsNullOrWhiteSpace(plannerOverlay.SelectedDistrictA)
+                && districts.Any(district => string.Equals(district.DistrictName, plannerOverlay.SelectedDistrictA, StringComparison.OrdinalIgnoreCase)))
+            {
+                _selectedDistrictName = plannerOverlay.SelectedDistrictA;
                 return;
             }
 
@@ -661,7 +698,7 @@ namespace LSOL.UI
                 Alignment.Left);
             DrawTextLine(
                 resolution,
-                "District reputation, corridor rights, and network posture",
+                "Influence heat, corridor rights, and network posture",
                 panelX + 22f,
                 panelY + 44f,
                 0.24f,
@@ -718,13 +755,14 @@ namespace LSOL.UI
             }
 
             DrawNetworkCorridors(resolution, layoutCache, networkViewSnapshot.VisibleCorridors);
+            DrawPlannerOverlayLanes(resolution, layoutCache, networkViewSnapshot.PlannerOverlay);
             for (int i = 0; i < layouts.Count; i++)
             {
                 DrawNetworkNode(resolution, layouts[i]);
             }
 
             DrawNetworkDetailPanel(resolution, detailX, detailY, detailWidth, detailHeight, networkViewSnapshot);
-            DrawNetworkFooter(resolution, graphX, footerY, panelWidth - 44f, footerHeight);
+            DrawNetworkFooter(resolution, graphX, footerY, panelWidth - 44f, footerHeight, networkViewSnapshot);
         }
 
         private void DrawNetworkCorridors(Size resolution, NetworkLayoutCache layoutCache, List<TerritoryCorridorState> visibleCorridors)
@@ -751,9 +789,119 @@ namespace LSOL.UI
                 var highlight = string.IsNullOrWhiteSpace(_selectedDistrictName)
                     || string.Equals(_selectedDistrictName, corridor.DistrictA, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(_selectedDistrictName, corridor.DistrictB, StringComparison.OrdinalIgnoreCase);
-                var color = GetCorridorColor(corridor.RightLevel, highlight);
-                var thickness = GetCorridorThickness(corridor.RightLevel);
+                var color = GetCorridorColor(corridor, highlight);
+                var thickness = GetCorridorThickness(corridor);
                 DrawMetroConnector(resolution, left.CenterX, left.CenterY, right.CenterX, right.CenterY, thickness, color);
+            }
+        }
+
+        private void DrawPlannerOverlayLanes(Size resolution, NetworkLayoutCache layoutCache, RoutePlannerOverlaySnapshot overlay)
+        {
+            if (layoutCache == null || overlay == null || overlay.Lanes == null || overlay.Lanes.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < overlay.Lanes.Count; i++)
+            {
+                var lane = overlay.Lanes[i];
+                if (lane == null || string.IsNullOrWhiteSpace(lane.DistrictA))
+                {
+                    continue;
+                }
+
+                MetroNodeLayout left;
+                if (!layoutCache.LayoutsByDistrict.TryGetValue(lane.DistrictA, out left) || left == null)
+                {
+                    continue;
+                }
+
+                var color = GetPlannerOverlayColor(lane);
+                if (string.IsNullOrWhiteSpace(lane.DistrictB)
+                    || string.Equals(lane.DistrictA, lane.DistrictB, StringComparison.OrdinalIgnoreCase))
+                {
+                    DrawPlannerOverlayBadge(resolution, left, color, lane.IsSelected);
+                    continue;
+                }
+
+                MetroNodeLayout right;
+                if (!layoutCache.LayoutsByDistrict.TryGetValue(lane.DistrictB, out right) || right == null)
+                {
+                    continue;
+                }
+
+                DrawMetroConnector(
+                    resolution,
+                    left.CenterX,
+                    left.CenterY,
+                    right.CenterX,
+                    right.CenterY,
+                    GetPlannerOverlayThickness(lane),
+                    color);
+            }
+        }
+
+        private void DrawPlannerOverlayBadge(Size resolution, MetroNodeLayout layout, Color color, bool isSelected)
+        {
+            if (layout == null)
+            {
+                return;
+            }
+
+            var width = isSelected ? 22f : 16f;
+            var height = isSelected ? 12f : 8f;
+            DrawRect(resolution.Width, resolution.Height, layout.CenterX + 42f, layout.CenterY - 34f, width, height, color);
+        }
+
+        private static float GetPlannerOverlayThickness(RoutePlannerOverlayLane lane)
+        {
+            if (lane == null)
+            {
+                return 4f;
+            }
+
+            if (lane.IsSelected || lane.Kind == RoutePlannerOverlayLaneKind.Selected)
+            {
+                return 10f;
+            }
+
+            switch (lane.Kind)
+            {
+                case RoutePlannerOverlayLaneKind.ActiveNpc:
+                    return 8f;
+                case RoutePlannerOverlayLaneKind.Underperforming:
+                    return 8f;
+                case RoutePlannerOverlayLaneKind.Blocked:
+                    return 6f;
+                default:
+                    return 7f;
+            }
+        }
+
+        private static Color GetPlannerOverlayColor(RoutePlannerOverlayLane lane)
+        {
+            if (lane == null)
+            {
+                return Color.FromArgb(190, 210, 220, 228);
+            }
+
+            if (lane.IsSelected || lane.Kind == RoutePlannerOverlayLaneKind.Selected)
+            {
+                return Color.FromArgb(238, 246, 244, 232);
+            }
+
+            switch (lane.Kind)
+            {
+                case RoutePlannerOverlayLaneKind.ActiveNpc:
+                    return Color.FromArgb(226, 80, 184, 214);
+                case RoutePlannerOverlayLaneKind.Recommended:
+                    return Color.FromArgb(224, 114, 204, 138);
+                case RoutePlannerOverlayLaneKind.Blocked:
+                    return Color.FromArgb(220, 214, 96, 82);
+                case RoutePlannerOverlayLaneKind.Underperforming:
+                    return Color.FromArgb(226, 230, 162, 84);
+                default:
+                    return Color.FromArgb(196, 196, 206, 216);
             }
         }
 
@@ -770,6 +918,8 @@ namespace LSOL.UI
             var x = layout.CenterX - (nodeWidth * 0.5f);
             var y = layout.CenterY - (nodeHeight * 0.5f);
             var fill = GetDistrictColor(layout.District, selected);
+            var influenceHeatColor = GetDistrictInfluenceHeatColor(layout.District.InfluenceRatio, selected);
+            var influenceHeatRatio = GetInfluenceHeatFillRatio(layout.District.InfluenceRatio);
             var frame = selected
                 ? Color.FromArgb(236, 248, 250, 252)
                 : Color.FromArgb(172, 66, 89, 112);
@@ -777,10 +927,35 @@ namespace LSOL.UI
             DrawRect(resolution.Width, resolution.Height, x + 5f, y + 7f, nodeWidth, nodeHeight, Color.FromArgb(46, 0, 0, 0));
             DrawRect(resolution.Width, resolution.Height, x, y, nodeWidth, nodeHeight, Color.FromArgb(214, 10, 15, 24));
             DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, nodeWidth - 4f, nodeHeight - 4f, fill);
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, 7f, nodeHeight - 4f, influenceHeatColor);
+            DrawRect(resolution.Width, resolution.Height, x + 11f, y + nodeHeight - 9f, nodeWidth - 20f, 4f, Color.FromArgb(96, 10, 15, 24));
+            if (influenceHeatRatio > 0f)
+            {
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    x + 11f,
+                    y + nodeHeight - 9f,
+                    (nodeWidth - 20f) * influenceHeatRatio,
+                    4f,
+                    influenceHeatColor);
+            }
+
             DrawRect(resolution.Width, resolution.Height, x, y, nodeWidth, 3f, frame);
             DrawRect(resolution.Width, resolution.Height, x, y + nodeHeight - 3f, nodeWidth, 3f, frame);
             DrawRect(resolution.Width, resolution.Height, x, y, 3f, nodeHeight, frame);
             DrawRect(resolution.Width, resolution.Height, x + nodeWidth - 3f, y, 3f, nodeHeight, frame);
+
+            var competitionSignal = Math.Max(layout.District.CompetitivePressure, layout.District.HottestCorridorPressure);
+            if (competitionSignal > 0.12f || layout.District.ActiveCompetitionJobs > 0 || layout.District.ContestedCorridorCount > 0)
+            {
+                var competitionColor = BlendColor(
+                    Color.FromArgb(220, 242, 190, 86),
+                    Color.FromArgb(236, 224, 96, 78),
+                    ModMath.Clamp01(competitionSignal),
+                    selected ? 236 : 208);
+                DrawRect(resolution.Width, resolution.Height, x + nodeWidth - 15f, y + 9f, 7f, 14f, competitionColor);
+            }
 
             DrawTextLine(
                 resolution,
@@ -875,43 +1050,64 @@ namespace LSOL.UI
                 ? "NPC Ready"
                 : "NPC Locked";
             var operationsCost = GetDistrictOperationsCost(snapshot.OperationsByDistrict, district.DistrictName);
+            var supportSummary = BuildNetworkDistrictSupportSummary(district, districtOperations, supportBonusText);
+            var plannerSummary = BuildPlannerDistrictSummary(snapshot.PlannerOverlay, district.DistrictName);
+            var posture = district.CompetitiveOpportunity > district.CompetitivePressure + 0.08f
+                ? "Opportunity opening"
+                : district.CompetitivePressure >= 0.5f
+                    ? "Defensive pressure"
+                    : district.ContestedCorridorCount > 0
+                        ? "Watching lanes"
+                        : "Calm posture";
+            var hottestLane = !string.IsNullOrWhiteSpace(district.HottestCorridorName)
+                ? string.Format("{0} {1}", district.HottestCorridorName, ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.HottestCorridorPressure * 100f))))
+                : "None";
+            var dominantCarrier = !string.IsNullOrWhiteSpace(district.DominantCarrierName)
+                ? district.DominantCarrierName
+                : "None";
             var summary = string.Format(
-                "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nCharter {5} | Activity {6:0}/{7:0} t\nDepots {8} | Franchises {9}\nCorridor rights {10} | Support bonus {11}{12}\nCompetition {13:0}% | Opportunity {14:0}% | Wins {15}\nTerritory ops {16} / week\n{17}",
+                "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nCharter {5} | Territory ops {6} / week\n{7}\n{20}\nCompetition {8:0}% | Opportunity {9:0}% | District wins {10}\nOutside jobs {11} | Rival carriers {12} | Visible {13}\nLane holds {14} | Contested lanes {15} | Hottest lane {16}\nLead carrier {17}\nPosture {18} | {19}",
                 ModFormatting.FormatNumber(district.InfluenceScore),
                 ModFormatting.FormatNumber(district.ReputationScore),
                 district.SiteCount,
                 district.ControlledSites,
                 district.OperationalSites,
                 GetDistrictLicenseLabel(district),
-                district.CurrentWeekActivityTons,
-                district.RequiredWeeklyActivityTons,
-                district.ControlledDepots,
-                district.FranchiseSites,
-                district.RouteRights,
-                ModFormatting.FormatSignedPercent(supportBonusText),
-                BuildDistrictRiskSuffix(districtOperations),
+                ModFormatting.FormatMoney(operationsCost),
+                supportSummary,
                 Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),
                 Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)),
                 Math.Max(0, district.CompetitiveWinCount),
-                ModFormatting.FormatMoney(operationsCost),
-                npcStatus);
+                Math.Max(0, district.ActiveCompetitionJobs),
+                Math.Max(0, district.ActiveCarrierCount),
+                Math.Max(0, district.VisibleCompetitionCount),
+                Math.Max(0, district.CorridorHoldCount),
+                Math.Max(0, district.ContestedCorridorCount),
+                hottestLane,
+                dominantCarrier,
+                posture,
+                string.IsNullOrWhiteSpace(plannerSummary) ? npcStatus : string.Format("{0} | {1}", npcStatus, plannerSummary),
+                BuildNetworkDistrictEventSummary(district));
             DrawTextBlock(
                 resolution,
                 summary,
                 x + 18f,
                 y + 82f,
-                0.22f,
+                0.20f,
                 Color.FromArgb(226, 228, 232, 238),
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Left,
-                16f);
+                14f);
 
-            DrawRect(resolution.Width, resolution.Height, x + 16f, y + 196f, width - 32f, 2f, Color.FromArgb(88, 115, 149, 177));
+            var activityMeterY = y + 194f;
+            DrawDistrictActivityMeter(resolution, x, activityMeterY, width, district);
+
+            DrawRect(resolution.Width, resolution.Height, x + 16f, y + 272f, width - 32f, 2f, Color.FromArgb(88, 115, 149, 177));
             DrawTextLine(
                 resolution,
                 "Connected Corridors",
                 x + 18f,
-                y + 212f,
+                y + 288f,
                 0.28f,
                 Color.FromArgb(236, 239, 243, 248),
                 GTA.UI.Font.ChaletComprimeCologne,
@@ -923,7 +1119,7 @@ namespace LSOL.UI
                     resolution,
                     "No active corridors yet. Run cross-district deliveries to unlock them.",
                     x + 18f,
-                    y + 242f,
+                    y + 318f,
                     0.22f,
                     Color.FromArgb(216, 202, 212, 223),
                     GTA.UI.Font.ChaletLondon,
@@ -932,15 +1128,21 @@ namespace LSOL.UI
                 return;
             }
 
-            var rowY = y + 246f;
+            var rowY = y + 322f;
             for (int i = 0; i < corridorLines.Count; i++)
             {
                 var corridor = corridorLines[i];
-                var corridorColor = GetCorridorColor(corridor.RightLevel, true);
+                var corridorColor = GetCorridorColor(corridor, true);
                 DrawRect(resolution.Width, resolution.Height, x + 18f, rowY + 2f, 12f, 12f, corridorColor);
                 DrawTextLine(
                     resolution,
-                    string.Format("{0}  {1}", GetOtherDistrictName(corridor, district.DistrictName), FormatCorridorLevel(corridor.RightLevel)),
+                    string.Format(
+                        "{0}  {1}{2}",
+                        GetOtherDistrictName(corridor, district.DistrictName),
+                        FormatCorridorLevel(corridor.RightLevel),
+                        corridor.CompetitivePressure >= 0.35f || corridor.ActiveCompetitionJobs > 0
+                            ? string.Format(" | {0}", GetCorridorPosture(corridor))
+                            : string.Empty),
                     x + 38f,
                     rowY,
                     0.22f,
@@ -958,18 +1160,107 @@ namespace LSOL.UI
                     Alignment.Right);
                 DrawTextLine(
                     resolution,
-                    corridor.UpkeepStatus ?? string.Empty,
+                    BuildCorridorNetworkSecondaryText(corridor),
                     x + 38f,
                     rowY + 14f,
                     0.18f,
                     Color.FromArgb(188, 176, 191, 206),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left);
-                rowY += 34f;
+                rowY += 42f;
             }
         }
 
-        private void DrawNetworkFooter(Size resolution, float x, float y, float width, float height)
+            private void DrawDistrictActivityMeter(Size resolution, float x, float y, float width, TerritoryDistrictState district)
+            {
+                var currentWeekActivityTons = district != null ? Math.Max(0f, district.CurrentWeekActivityTons) : 0f;
+                var requiredWeeklyActivityTons = district != null ? Math.Max(0f, district.RequiredWeeklyActivityTons) : 0f;
+                var hasTarget = HasWeeklyActivityTarget(requiredWeeklyActivityTons);
+                var meterRatio = GetWeeklyActivityTargetMeterRatio(currentWeekActivityTons, requiredWeeklyActivityTons);
+                var percentOfTarget = GetWeeklyActivityTargetPercentOfTarget(currentWeekActivityTons, requiredWeeklyActivityTons);
+                var forecastText = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
+                var cardX = x + 18f;
+                var cardY = y;
+                var cardWidth = width - 36f;
+                var cardHeight = !string.IsNullOrWhiteSpace(forecastText) && hasTarget ? 72f : 60f;
+                var meterColor = GetWeeklyActivityMeterColor(currentWeekActivityTons, requiredWeeklyActivityTons);
+
+                DrawRect(resolution.Width, resolution.Height, cardX, cardY, cardWidth, cardHeight, Color.FromArgb(112, 10, 15, 24));
+                DrawRect(resolution.Width, resolution.Height, cardX, cardY, cardWidth, 3f, meterColor);
+                DrawTextLine(
+                    resolution,
+                    "Weekly Activity",
+                    cardX + 10f,
+                    cardY + 8f,
+                    0.26f,
+                    Color.FromArgb(238, 239, 243, 248),
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left);
+
+                if (!hasTarget)
+                {
+                    DrawTextLine(
+                        resolution,
+                        "No weekly charter target",
+                        cardX + 10f,
+                        cardY + 26f,
+                        0.20f,
+                        Color.FromArgb(224, 208, 216, 225),
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Left);
+                    DrawTextLine(
+                        resolution,
+                        string.Format("Current week {0:0.#}t", currentWeekActivityTons),
+                        cardX + cardWidth - 10f,
+                        cardY + 26f,
+                        0.19f,
+                        Color.FromArgb(208, 184, 198, 212),
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Right);
+                    DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 44f, cardWidth - 20f, 6f, Color.FromArgb(92, 24, 34, 46));
+                    return;
+                }
+
+                DrawTextLine(
+                    resolution,
+                    string.Format("{0:0.#}/{1:0.#}t", currentWeekActivityTons, requiredWeeklyActivityTons),
+                    cardX + 10f,
+                    cardY + 26f,
+                    0.20f,
+                    Color.FromArgb(232, 226, 232, 238),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left);
+                DrawTextLine(
+                    resolution,
+                    string.Format("{0:0}% of target", percentOfTarget * 100f),
+                    cardX + cardWidth - 10f,
+                    cardY + 26f,
+                    0.19f,
+                    meterColor,
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right);
+
+                DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 42f, cardWidth - 20f, 6f, Color.FromArgb(92, 24, 34, 46));
+                if (meterRatio > 0f)
+                {
+                    DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 42f, (cardWidth - 20f) * meterRatio, 6f, meterColor);
+                }
+
+                if (!string.IsNullOrWhiteSpace(forecastText))
+                {
+                    DrawTextLine(
+                        resolution,
+                        forecastText,
+                        cardX + 10f,
+                        cardY + 54f,
+                        0.18f,
+                        Color.FromArgb(198, 176, 191, 206),
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Left);
+                }
+            }
+
+        private void DrawNetworkFooter(Size resolution, float x, float y, float width, float height, NetworkViewSnapshot snapshot)
         {
             DrawTextLine(
                 resolution,
@@ -1016,7 +1307,20 @@ namespace LSOL.UI
 
             DrawTextBlock(
                 resolution,
-                "Selected district keeps its connected corridors bright. Use district detail for charters, contract risk, and depot specialization.",
+                BuildNetworkHotspotSummary(snapshot),
+                x + width - 18f,
+                y + 54f,
+                0.20f,
+                Color.FromArgb(214, 210, 188, 170),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Right,
+                16f);
+
+            DrawTextBlock(
+                resolution,
+                string.Format(
+                    "Node heat shows cold-to-dominant influence, while warm accents mark outside-carrier pressure. Planner overlay: {0}. Selected districts keep their connected corridors bright. Use district detail for charter pace, lane posture, depot specialization, and route-planner lanes.",
+                    BuildPlannerOverlayLegend(snapshot != null ? snapshot.PlannerOverlay : null)),
                 x + width - 18f,
                 y + 18f,
                 0.20f,
@@ -1024,6 +1328,48 @@ namespace LSOL.UI
                 GTA.UI.Font.ChaletLondon,
                 Alignment.Right,
                 16f);
+        }
+
+        private static string BuildPlannerDistrictSummary(RoutePlannerOverlaySnapshot overlay, string districtName)
+        {
+            if (overlay == null || overlay.Lanes == null || overlay.Lanes.Count == 0 || string.IsNullOrWhiteSpace(districtName))
+            {
+                return string.Empty;
+            }
+
+            var touchingLanes = overlay.Lanes
+                .Where(lane => lane != null
+                    && (string.Equals(lane.DistrictA, districtName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(lane.DistrictB, districtName, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            if (touchingLanes.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var selected = touchingLanes.FirstOrDefault(lane => lane.IsSelected || lane.Kind == RoutePlannerOverlayLaneKind.Selected);
+            if (selected != null && !string.IsNullOrWhiteSpace(selected.Label))
+            {
+                return string.Format("Planner {0}", selected.Label);
+            }
+
+            var recommended = touchingLanes.Count(lane => lane.Kind == RoutePlannerOverlayLaneKind.Recommended);
+            var blocked = touchingLanes.Count(lane => lane.Kind == RoutePlannerOverlayLaneKind.Blocked);
+            var active = touchingLanes.Count(lane => lane.Kind == RoutePlannerOverlayLaneKind.ActiveNpc || lane.Kind == RoutePlannerOverlayLaneKind.Underperforming);
+            return string.Format("Planner {0} active | {1} open | {2} blocked", active, recommended, blocked);
+        }
+
+        private static string BuildPlannerOverlayLegend(RoutePlannerOverlaySnapshot overlay)
+        {
+            if (overlay == null || overlay.Lanes == null || overlay.Lanes.Count == 0)
+            {
+                return "green recommended, blue live, amber weak, red blocked";
+            }
+
+            var selected = overlay.Lanes.Count(lane => lane != null && (lane.IsSelected || lane.Kind == RoutePlannerOverlayLaneKind.Selected));
+            return selected > 0
+                ? "white selected, green recommended, blue live, amber weak, red blocked"
+                : "green recommended, blue live, amber weak, red blocked";
         }
 
         private void InvalidateNetworkViewCache()
@@ -1062,12 +1408,25 @@ namespace LSOL.UI
 
             var visibleCorridors = _territoryManager != null
                 ? _territoryManager.CorridorStates
-                    .Where(corridor => corridor != null && corridor.RightLevel != CorridorRightLevel.None)
+                    .Where(corridor => corridor != null
+                        && (corridor.RightLevel != CorridorRightLevel.None
+                            || corridor.ActiveCompetitionJobs > 0
+                            || corridor.CompetitivePressure >= 0.18f
+                            || corridor.ContestedWeekStreak > 0))
+                    .OrderByDescending(corridor => corridor.CompetitivePressure)
+                    .ThenByDescending(corridor => (int)corridor.RightLevel)
+                    .ThenBy(corridor => corridor.CorridorId, StringComparer.OrdinalIgnoreCase)
                     .ToList()
                 : new List<TerritoryCorridorState>();
             var operationsSummary = _territoryManager != null
                 ? (_territoryManager.GetOperationsSummary() ?? new TerritoryOperationsSummary())
                 : new TerritoryOperationsSummary();
+            var activeCorridorCount = _territoryManager != null
+                ? _territoryManager.CorridorStates.Count(corridor => corridor != null && corridor.RightLevel != CorridorRightLevel.None)
+                : 0;
+            var plannerOverlay = _getRoutePlannerOverlaySnapshot != null
+                ? (_getRoutePlannerOverlaySnapshot() ?? new RoutePlannerOverlaySnapshot())
+                : new RoutePlannerOverlaySnapshot();
 
             _networkViewSnapshot = new NetworkViewSnapshot
             {
@@ -1080,7 +1439,8 @@ namespace LSOL.UI
                 SupportBonusByDistrict = supportBonusByDistrict,
                 NpcReadyByDistrict = npcReadyByDistrict,
                 ControlledDistrictCount = orderedDistricts.Count(district => district != null && district.InfluenceRatio >= 0.6f),
-                ActiveCorridorCount = visibleCorridors.Count,
+                ActiveCorridorCount = activeCorridorCount,
+                PlannerOverlay = plannerOverlay,
             };
 
             if (_networkLayoutCache != null && _networkLayoutCache.StateFingerprint != stateFingerprint)
@@ -1233,6 +1593,34 @@ namespace LSOL.UI
                 : Color.FromArgb(62, color.R, color.G, color.B);
         }
 
+        private static Color GetCorridorColor(TerritoryCorridorState corridor, bool highlight)
+        {
+            if (corridor == null)
+            {
+                return GetCorridorColor(CorridorRightLevel.None, highlight);
+            }
+
+            var baseColor = corridor.RightLevel == CorridorRightLevel.None
+                ? Color.FromArgb(164, 128, 136, 148)
+                : GetCorridorColor(corridor.RightLevel, true);
+            var competitionColor = BlendColor(
+                Color.FromArgb(232, 240, 188, 90),
+                Color.FromArgb(236, 224, 96, 78),
+                ModMath.Clamp01(corridor.CompetitivePressure),
+                highlight ? 236 : 164);
+            var blended = BlendColor(
+                baseColor,
+                competitionColor,
+                Math.Max(0f, Math.Min(0.62f, corridor.CompetitivePressure * 0.7f)),
+                highlight ? Math.Max(baseColor.A, competitionColor.A) : 92);
+            if (corridor.ActiveCompetitionJobs > 0 && corridor.CompetitivePressure < 0.18f)
+            {
+                blended = BlendColor(blended, Color.FromArgb(highlight ? 224 : 144, 238, 186, 94), 0.28f, blended.A);
+            }
+
+            return blended;
+        }
+
         private static float GetCorridorThickness(CorridorRightLevel level)
         {
             switch (level)
@@ -1246,6 +1634,19 @@ namespace LSOL.UI
                 default:
                     return 2f;
             }
+        }
+
+        private static float GetCorridorThickness(TerritoryCorridorState corridor)
+        {
+            if (corridor == null)
+            {
+                return 2f;
+            }
+
+            var baseThickness = corridor.RightLevel == CorridorRightLevel.None
+                ? 3f
+                : GetCorridorThickness(corridor.RightLevel);
+            return baseThickness + (Math.Max(0f, Math.Min(1f, corridor.CompetitivePressure)) * 2f);
         }
 
         private static Color GetDistrictColor(TerritoryDistrictState district, bool selected)
@@ -1268,12 +1669,108 @@ namespace LSOL.UI
                     break;
             }
 
+            if (district != null)
+            {
+                var competitionSignal = Math.Max(district.CompetitivePressure, district.HottestCorridorPressure);
+                if (competitionSignal > 0.001f)
+                {
+                    var accent = BlendColor(
+                        Color.FromArgb(220, 242, 190, 86),
+                        Color.FromArgb(232, 224, 96, 78),
+                        ModMath.Clamp01(competitionSignal),
+                        color.A);
+                    color = BlendColor(color, accent, Math.Max(0f, Math.Min(0.45f, competitionSignal * 0.45f)), color.A);
+                }
+            }
+
             if (!selected)
             {
                 return Color.FromArgb(196, color.R, color.G, color.B);
             }
 
             return Color.FromArgb(236, Math.Min(255, color.R + 16), Math.Min(255, color.G + 16), Math.Min(255, color.B + 16));
+        }
+
+        internal static bool HasWeeklyActivityTarget(float requiredWeeklyActivityTons)
+        {
+            return Math.Max(0f, requiredWeeklyActivityTons) > MinimumWeeklyTargetTons;
+        }
+
+        internal static float GetWeeklyActivityTargetMeterRatio(float currentWeekActivityTons, float requiredWeeklyActivityTons)
+        {
+            return !HasWeeklyActivityTarget(requiredWeeklyActivityTons)
+                ? 0f
+                : ModMath.Clamp01(Math.Max(0f, currentWeekActivityTons) / Math.Max(requiredWeeklyActivityTons, MinimumWeeklyTargetTons));
+        }
+
+        internal static float GetWeeklyActivityTargetPercentOfTarget(float currentWeekActivityTons, float requiredWeeklyActivityTons)
+        {
+            return !HasWeeklyActivityTarget(requiredWeeklyActivityTons)
+                ? 0f
+                : Math.Max(0f, currentWeekActivityTons) / Math.Max(requiredWeeklyActivityTons, MinimumWeeklyTargetTons);
+        }
+
+        internal static DistrictInfluenceHeatBucket GetDistrictInfluenceHeatBucket(float influenceRatio)
+        {
+            var normalizedInfluence = Math.Max(0f, influenceRatio);
+            if (normalizedInfluence > DominantInfluenceThreshold)
+            {
+                return DistrictInfluenceHeatBucket.Dominant;
+            }
+
+            if (normalizedInfluence >= AnchoredInfluenceThreshold)
+            {
+                return DistrictInfluenceHeatBucket.Anchored;
+            }
+
+            if (normalizedInfluence >= EmergingInfluenceThreshold)
+            {
+                return DistrictInfluenceHeatBucket.Emerging;
+            }
+
+            return DistrictInfluenceHeatBucket.Cold;
+        }
+
+        private static float GetInfluenceHeatFillRatio(float influenceRatio)
+        {
+            return ModMath.Clamp01(Math.Max(0f, influenceRatio) / DominantInfluenceThreshold);
+        }
+
+        private static Color GetDistrictInfluenceHeatColor(float influenceRatio, bool selected)
+        {
+            var alpha = selected ? 228 : 206;
+            switch (GetDistrictInfluenceHeatBucket(influenceRatio))
+            {
+                case DistrictInfluenceHeatBucket.Dominant:
+                    return Color.FromArgb(alpha, 224, 186, 82);
+                case DistrictInfluenceHeatBucket.Anchored:
+                    return Color.FromArgb(alpha, 94, 196, 138);
+                case DistrictInfluenceHeatBucket.Emerging:
+                    return Color.FromArgb(alpha, 222, 168, 82);
+                default:
+                    return Color.FromArgb(alpha, 112, 154, 202);
+            }
+        }
+
+        private static Color GetWeeklyActivityMeterColor(float currentWeekActivityTons, float requiredWeeklyActivityTons)
+        {
+            if (!HasWeeklyActivityTarget(requiredWeeklyActivityTons))
+            {
+                return Color.FromArgb(188, 128, 148, 168);
+            }
+
+            var percentOfTarget = GetWeeklyActivityTargetPercentOfTarget(currentWeekActivityTons, requiredWeeklyActivityTons);
+            if (percentOfTarget >= 1f)
+            {
+                return Color.FromArgb(220, 98, 198, 142);
+            }
+
+            if (percentOfTarget >= 0.65f)
+            {
+                return Color.FromArgb(224, 224, 188, 96);
+            }
+
+            return Color.FromArgb(224, 214, 92, 78);
         }
 
         private static string GetOtherDistrictName(TerritoryCorridorState corridor, string districtName)
@@ -1392,7 +1889,45 @@ namespace LSOL.UI
             fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.DistrictStates, BuildDistrictStateHash));
             fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.SiteStates, BuildSiteStateHash));
             fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.CorridorStates, BuildCorridorStateHash));
+            fingerprint = CombineSignature(fingerprint, BuildPlannerOverlayHash(_getRoutePlannerOverlaySnapshot != null ? _getRoutePlannerOverlaySnapshot() : null));
             return fingerprint;
+        }
+
+        private static long BuildPlannerOverlayHash(RoutePlannerOverlaySnapshot overlay)
+        {
+            if (overlay == null)
+            {
+                return 0L;
+            }
+
+            var fingerprint = 17L;
+            fingerprint = CombineSignature(fingerprint, SafePlannerOverlayHash(overlay.SelectedCandidateId));
+            fingerprint = CombineSignature(fingerprint, SafePlannerOverlayHash(overlay.SelectedDistrictA));
+            fingerprint = CombineSignature(fingerprint, SafePlannerOverlayHash(overlay.SelectedDistrictB));
+            fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(overlay.Lanes, BuildPlannerOverlayLaneHash));
+            return fingerprint;
+        }
+
+        private static int SafePlannerOverlayHash(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? 0 : value.GetHashCode();
+        }
+
+        private static int BuildPlannerOverlayLaneHash(RoutePlannerOverlayLane lane)
+        {
+            if (lane == null)
+            {
+                return 0;
+            }
+
+            var hash = 17;
+            hash = CombineHash(hash, lane.CandidateId);
+            hash = CombineHash(hash, lane.DistrictA);
+            hash = CombineHash(hash, lane.DistrictB);
+            hash = CombineHash(hash, lane.Label);
+            hash = CombineHash(hash, (int)lane.Kind);
+            hash = CombineHash(hash, lane.IsSelected);
+            return hash;
         }
 
         private static long BuildUnorderedSignature<T>(IEnumerable<T> items, Func<T, int> itemHashSelector)
@@ -1459,11 +1994,22 @@ namespace LSOL.UI
             hash = CombineHash(hash, district.CompetitivePressure);
             hash = CombineHash(hash, district.CompetitiveOpportunity);
             hash = CombineHash(hash, district.ActiveCompetitionJobs);
+            hash = CombineHash(hash, district.ActiveCarrierCount);
+            hash = CombineHash(hash, district.DominantCarrierId);
+            hash = CombineHash(hash, district.DominantCarrierName);
             hash = CombineHash(hash, district.VisibleCompetitionCount);
             hash = CombineHash(hash, district.LastCompetitiveTons);
             hash = CombineHash(hash, district.CompetitiveResponseCount);
             hash = CombineHash(hash, district.CompetitiveWinCount);
+            hash = CombineHash(hash, district.ContestedCorridorCount);
+            hash = CombineHash(hash, district.CorridorHoldCount);
+            hash = CombineHash(hash, district.HottestCorridorName);
+            hash = CombineHash(hash, district.HottestCorridorPressure);
             hash = CombineHash(hash, district.CompetitionStatus);
+            hash = CombineHash(hash, district.ActiveEvent != null ? district.ActiveEvent.EventId : string.Empty);
+            hash = CombineHash(hash, district.ActiveEvent != null ? district.ActiveEvent.CrisisType.ToString() : string.Empty);
+            hash = CombineHash(hash, district.ActiveEvent != null ? district.ActiveEvent.PreferredCommodity : string.Empty);
+            hash = CombineHash(hash, district.ActiveEvent != null ? district.ActiveEvent.StatusText : string.Empty);
             return hash;
         }
 
@@ -1520,6 +2066,17 @@ namespace LSOL.UI
             hash = CombineHash(hash, corridor.RequiredWeeklyDeliveredTons);
             hash = CombineHash(hash, corridor.DecayPressure);
             hash = CombineHash(hash, corridor.UpkeepStatus);
+            hash = CombineHash(hash, corridor.CompetitivePressure);
+            hash = CombineHash(hash, corridor.CompetitiveOpportunity);
+            hash = CombineHash(hash, corridor.ActiveCompetitionJobs);
+            hash = CombineHash(hash, corridor.ActiveCarrierCount);
+            hash = CombineHash(hash, corridor.DominantCarrierId);
+            hash = CombineHash(hash, corridor.DominantCarrierName);
+            hash = CombineHash(hash, corridor.VisibleCompetitionCount);
+            hash = CombineHash(hash, corridor.LastCompetitiveTons);
+            hash = CombineHash(hash, corridor.CompetitiveWinCount);
+            hash = CombineHash(hash, corridor.ContestedWeekStreak);
+            hash = CombineHash(hash, corridor.CompetitionStatus);
             return hash;
         }
 
@@ -1643,6 +2200,95 @@ namespace LSOL.UI
             }
 
             return name.Substring(0, Math.Max(0, maxLength - 1)).TrimEnd() + "…";
+        }
+
+        private static Color BlendColor(Color from, Color to, float ratio, int alpha)
+        {
+            var clampedRatio = ModMath.Clamp01(ratio);
+            return Color.FromArgb(
+                Math.Max(0, Math.Min(255, alpha)),
+                (int)Math.Round(from.R + ((to.R - from.R) * clampedRatio)),
+                (int)Math.Round(from.G + ((to.G - from.G) * clampedRatio)),
+                (int)Math.Round(from.B + ((to.B - from.B) * clampedRatio)));
+        }
+
+        private static string GetCorridorPosture(TerritoryCorridorState corridor)
+        {
+            if (corridor == null)
+            {
+                return string.Empty;
+            }
+
+            var status = corridor.CompetitionStatus ?? string.Empty;
+            var delimiterIndex = status.IndexOf('|');
+            return delimiterIndex > 0
+                ? status.Substring(0, delimiterIndex).Trim()
+                : status.Trim();
+        }
+
+        private static string BuildCorridorNetworkSecondaryText(TerritoryCorridorState corridor)
+        {
+            if (corridor == null)
+            {
+                return string.Empty;
+            }
+
+            var forecast = CompanyMapForecastFormatter.BuildCorridorForecast(corridor);
+            var trafficSummary = string.Format(
+                "Traffic {0} | Carriers {1} | Opp {2} | Holds {3}{4}",
+                Math.Max(0, corridor.ActiveCompetitionJobs),
+                Math.Max(0, corridor.ActiveCarrierCount),
+                ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, corridor.CompetitiveOpportunity * 100f))),
+                Math.Max(0, corridor.CompetitiveWinCount),
+                !string.IsNullOrWhiteSpace(corridor.DominantCarrierName)
+                    ? string.Format(" | Lead {0}", corridor.DominantCarrierName)
+                    : string.Empty);
+            return string.IsNullOrWhiteSpace(forecast)
+                ? trafficSummary
+                : string.Format("{0} | {1}", forecast, trafficSummary);
+        }
+
+        private static string BuildNetworkHotspotSummary(NetworkViewSnapshot snapshot)
+        {
+            if (snapshot == null)
+            {
+                return string.Empty;
+            }
+
+            var hottestDistrict = snapshot.OrderedDistricts != null
+                ? snapshot.OrderedDistricts
+                    .Where(district => district != null)
+                    .OrderByDescending(district => Math.Max(district.CompetitivePressure, district.HottestCorridorPressure))
+                    .ThenByDescending(district => district.ActiveCompetitionJobs)
+                    .FirstOrDefault()
+                : null;
+            var hottestCorridor = snapshot.VisibleCorridors != null
+                ? snapshot.VisibleCorridors
+                    .Where(corridor => corridor != null)
+                    .OrderByDescending(corridor => corridor.CompetitivePressure)
+                    .ThenByDescending(corridor => corridor.ActiveCompetitionJobs)
+                    .FirstOrDefault()
+                : null;
+
+            if (hottestDistrict == null && hottestCorridor == null)
+            {
+                return "Hot now: no active competition hotspots.";
+            }
+
+            var districtSummary = hottestDistrict != null
+                ? string.Format(
+                    "District {0} {1}",
+                    hottestDistrict.DistrictName,
+                    ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, hottestDistrict.CompetitivePressure * 100f))))
+                : "District calm";
+            var corridorSummary = hottestCorridor != null
+                ? string.Format(
+                    "Lane {0} / {1} {2}",
+                    hottestCorridor.DistrictA,
+                    hottestCorridor.DistrictB,
+                    GetCorridorPosture(hottestCorridor))
+                : "Lane calm";
+            return string.Format("Hot now: {0} | {1}", districtSummary, corridorSummary);
         }
 
         private static void DrawTextBlock(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float lineSpacing)
@@ -1816,10 +2462,7 @@ namespace LSOL.UI
             items.Add(new MenuItem
             {
                 CaptionFactory = () => "District Bonus",
-                DetailFactory = () => string.Format(
-                    "Current district support bonus {0}. {1}",
-                    ModFormatting.FormatSignedPercent((_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(industry.DistrictName) : 0f) * 100f),
-                    _territoryManager != null ? _territoryManager.GetDepotSpecializationEffectSummary(industry) : string.Empty),
+                DetailFactory = () => BuildDepotDistrictBonusDetail(industry),
             });
             items.Add(new MenuItem
             {
@@ -2103,15 +2746,89 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
-            return string.Format(
-                "{0} | {1} | {2} | Staff {3}/{4}/{5}/{6}",
+            return CompanyMapDepotSpecializationFormatter.BuildDepotListDetail(
                 industry.DistrictName,
                 _territoryManager.GetActivationSummary(industry),
-                FormatDepotSpecialization(siteState.DepotSpecialization),
-                siteState.LoaderCount,
-                siteState.MechanicCount,
-                siteState.GuardCount,
-                siteState.ManagerCount);
+                BuildDepotSpecializationInfo(industry),
+                siteState);
+        }
+
+        private string BuildDistrictServiceSupportDetail(TerritoryDistrictState district, TerritoryDistrictOperationsEntry districtOperations)
+        {
+            if (district == null)
+            {
+                return string.Empty;
+            }
+
+            return CompanyMapDepotSpecializationFormatter.BuildDistrictSupportDetail(
+                district.FranchiseSites,
+                district.RouteRights,
+                (_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(district.DistrictName) : 0f) * 100f,
+                BuildDistrictRiskSuffix(districtOperations),
+                GetDistrictDepotSpecializationInfos(district.DistrictName));
+        }
+
+        private string BuildNetworkDistrictSupportSummary(TerritoryDistrictState district, TerritoryDistrictOperationsEntry districtOperations, float supportBonusPercent)
+        {
+            if (district == null)
+            {
+                return string.Empty;
+            }
+
+            return CompanyMapDepotSpecializationFormatter.BuildNetworkSupportSummary(
+                district.ControlledDepots,
+                district.FranchiseSites,
+                district.RouteRights,
+                supportBonusPercent,
+                BuildDistrictRiskSuffix(districtOperations),
+                GetDistrictDepotSpecializationInfos(district.DistrictName));
+        }
+
+        private string BuildDepotDistrictBonusDetail(Industry industry)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            return CompanyMapDepotSpecializationFormatter.BuildDepotDistrictBonusDetail(
+                (_territoryManager != null ? _territoryManager.GetDistrictSupportBonus(industry.DistrictName) : 0f) * 100f,
+                BuildDepotSpecializationInfo(industry));
+        }
+
+        private IReadOnlyList<CompanyMapDepotSpecializationInfo> GetDistrictDepotSpecializationInfos(string districtName)
+        {
+            if (_territoryManager == null || string.IsNullOrWhiteSpace(districtName))
+            {
+                return Array.Empty<CompanyMapDepotSpecializationInfo>();
+            }
+
+            return _territoryManager.GetDepotIndustries()
+                .Where(industry => industry != null && string.Equals(industry.DistrictName, districtName, StringComparison.OrdinalIgnoreCase))
+                .Where(industry =>
+                {
+                    var siteState = _territoryManager.GetSiteState(industry);
+                    return siteState != null && siteState.ControlLevel != TerritoryControlLevel.None;
+                })
+                .Select(BuildDepotSpecializationInfo)
+                .Where(info => info != null)
+                .ToArray();
+        }
+
+        private CompanyMapDepotSpecializationInfo BuildDepotSpecializationInfo(Industry industry)
+        {
+            if (industry == null || _territoryManager == null)
+            {
+                return new CompanyMapDepotSpecializationInfo();
+            }
+
+            var specialization = _territoryManager.GetDepotSpecialization(industry);
+            return new CompanyMapDepotSpecializationInfo
+            {
+                Specialization = specialization,
+                Label = FormatDepotSpecialization(specialization),
+                EffectSummary = _territoryManager.GetDepotSpecializationEffectSummary(industry) ?? string.Empty,
+            };
         }
 
         private static string GetDistrictLicenseLabel(TerritoryDistrictState district)
@@ -2154,11 +2871,15 @@ namespace LSOL.UI
 
             if (district.LicenseStatus == DistrictLicenseStatus.Active || district.LicenseStatus == DistrictLicenseStatus.Probation)
             {
-                return string.Format(
+                var detail = string.Format(
                     "Weekly fee {0} | Activity {1:0}/{2:0} t | Better delivery returns and earlier spawn rights.",
                     ModFormatting.FormatMoney(district.WeeklyLicenseCost),
                     district.CurrentWeekActivityTons,
                     district.RequiredWeeklyActivityTons);
+                var forecast = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
+                return string.IsNullOrWhiteSpace(forecast)
+                    ? detail
+                    : string.Format("{0} | {1}", detail, forecast);
             }
 
             if (_territoryManager.IsDistrictLicensable(district.DistrictName) || district.LicenseStatus == DistrictLicenseStatus.Suspended)
@@ -2170,6 +2891,54 @@ namespace LSOL.UI
             }
 
             return "Reach Established reputation before chartering this district. Starter-headquarters districts stay under home-market coverage.";
+        }
+
+        private static string BuildDistrictEventCaption(TerritoryDistrictState district)
+        {
+            return district != null && district.ActiveEvent != null && !string.IsNullOrWhiteSpace(district.ActiveEvent.Headline)
+                ? string.Format("District Event: {0}", district.ActiveEvent.Headline)
+                : "District Event: Stable";
+        }
+
+        private static string BuildDistrictEventDetail(TerritoryDistrictState district)
+        {
+            if (district == null || district.ActiveEvent == null)
+            {
+                return "No active district event. Market shocks and crisis contracts will return when local pressure spikes again.";
+            }
+
+            var activeEvent = district.ActiveEvent;
+            var commodity = string.IsNullOrWhiteSpace(activeEvent.PreferredCommodity)
+                ? string.Empty
+                : string.Format(" | Relief commodity {0}", activeEvent.PreferredCommodity);
+            var trigger = string.IsNullOrWhiteSpace(activeEvent.TriggerSummary)
+                ? string.Empty
+                : string.Format(" | {0}", activeEvent.TriggerSummary);
+            var impact = string.IsNullOrWhiteSpace(activeEvent.ImpactSummary)
+                ? string.Empty
+                : string.Format(" | {0}", activeEvent.ImpactSummary);
+            return string.Format("{0}{1}{2}{3}", activeEvent.StatusText, commodity, trigger, impact).Trim();
+        }
+
+        private static string BuildDistrictEventSummarySuffix(TerritoryDistrictState district)
+        {
+            return district != null && district.ActiveEvent != null && !string.IsNullOrWhiteSpace(district.ActiveEvent.Headline)
+                ? string.Format(" | Event {0}", district.ActiveEvent.Headline)
+                : string.Empty;
+        }
+
+        private static string BuildNetworkDistrictEventSummary(TerritoryDistrictState district)
+        {
+            if (district == null || district.ActiveEvent == null)
+            {
+                return "District event Stable | No live disruption.";
+            }
+
+            var activeEvent = district.ActiveEvent;
+            var commodity = string.IsNullOrWhiteSpace(activeEvent.PreferredCommodity)
+                ? string.Empty
+                : string.Format(" | Relief commodity {0}", activeEvent.PreferredCommodity);
+            return string.Format("District event {0} | {1}{2}", activeEvent.Headline, activeEvent.StatusText, commodity).Trim();
         }
 
         private static string BuildDistrictRiskSuffix(TerritoryDistrictOperationsEntry entry)
@@ -2234,6 +3003,7 @@ namespace LSOL.UI
             public Dictionary<string, List<TerritoryCorridorState>> VisibleCorridorsByDistrict { get; set; }
             public Dictionary<string, float> SupportBonusByDistrict { get; set; }
             public Dictionary<string, bool> NpcReadyByDistrict { get; set; }
+            public RoutePlannerOverlaySnapshot PlannerOverlay { get; set; }
             public int ControlledDistrictCount { get; set; }
             public int ActiveCorridorCount { get; set; }
         }

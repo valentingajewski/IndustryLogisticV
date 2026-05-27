@@ -4,6 +4,12 @@
     <Spawn x="-97.75" y="-2498.41" z="6" heading="234" />
     <Gate x="10.43" y="-2538.56" z="5.55" barrierModelHash="1286392437" />
     <Worker x="-78.23" y="-2532" z="6" />
+    <FacilityAnchor id="reception-main" type="ReceptionDesk" label="Reception Desk" x="-72.4" y="-2528.95" z="6" heading="54" radius="2.4" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="dispatch-main" type="DispatchDesk" label="Dispatch Desk" x="-80.65" y="-2524.42" z="6" heading="55" radius="2.4" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="maintenance-main" type="MaintenanceDesk" label="Maintenance Office" x="-89.18" y="-2510.65" z="6" heading="88" radius="2.4" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="fuel-main" type="FuelDesk" label="Fuel Service Counter" x="-86.72" y="-2516.84" z="6" heading="146" radius="2.4" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="boardroom-main" type="Boardroom" label="Boardroom Annex" x="-75.84" y="-2522.18" z="6" heading="233" radius="2.6" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="break-main" type="BreakRoom" label="Crew Break Nook" x="-78.76" y="-2533.86" z="6" heading="143" radius="2.2" scenario="WORLD_HUMAN_STAND_IMPATIENT" />
   </Office>
   <Office id="2" legacyKey="LaMesaOffice" name="La Mesa Logistic Office" district="EastLosSantos" price="260000" weeklyRent="10000" maxCommercialVehicles="12">
     <Marker x="896.4" y="-1036.2" z="35" />
@@ -12,6 +18,11 @@
   <Office id="3" legacyKey="BanningOffice" name="Banning Logistic Office" district="SouthLosSantos" price="700000" weeklyRent="27000" maxCommercialVehicles="24">
     <Marker x="167.85" y="-2223" z="7.24" />
     <Spawn x="161.74" y="-2232.35" z="6" heading="267" />
+    <FacilityAnchor id="reception-banning" type="ReceptionDesk" label="Reception Desk" x="165.48" y="-2227.01" z="6" heading="179" radius="2.3" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="dispatch-banning" type="DispatchDesk" label="Dispatch Desk" x="162.95" y="-2229.86" z="6" heading="215" radius="2.3" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="maintenance-banning" type="MaintenanceDesk" label="Maintenance Office" x="158.72" y="-2234.12" z="6" heading="268" radius="2.3" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="fuel-banning" type="FuelDesk" label="Fuel Service Counter" x="160.91" y="-2237.74" z="6" heading="315" radius="2.3" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="boardroom-banning" type="Boardroom" label="Boardroom Annex" x="166.92" y="-2231.46" z="6" heading="122" radius="2.5" scenario="WORLD_HUMAN_CLIPBOARD" />
   </Office>
   <Office id="4" legacyKey="StrawberryOffice" name="Strawberry Logistic Office" district="SouthLosSantos" price="420000" weeklyRent="16000" maxCommercialVehicles="16">
     <Marker x="-193" y="-1260.75" z="31.3" />
@@ -24,6 +35,11 @@
   <Office id="6" legacyKey="VinewoodOffice" name="Vinewood Logistic Office" district="Downtown" price="550000" weeklyRent="21000" maxCommercialVehicles="22">
     <Marker x="84.7" y="190.32" z="105.26" />
     <Spawn x="112.25" y="164.38" z="104.52" heading="250" />
+    <FacilityAnchor id="reception-vinewood" type="ReceptionDesk" label="Reception Desk" x="107.61" y="171.42" z="104.52" heading="160" radius="2.2" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="dispatch-vinewood" type="DispatchDesk" label="Dispatch Desk" x="109.17" y="168.8" z="104.52" heading="158" radius="2.2" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="fuel-vinewood" type="FuelDesk" label="Fuel Service Counter" x="111.63" y="170.33" z="104.52" heading="247" radius="2.2" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="boardroom-vinewood" type="Boardroom" label="Boardroom Annex" x="110.78" y="166.03" z="104.52" heading="250" radius="2.5" scenario="WORLD_HUMAN_CLIPBOARD" />
+    <FacilityAnchor id="break-vinewood" type="BreakRoom" label="Crew Break Nook" x="114" y="167.58" z="104.52" heading="70" radius="2.2" scenario="WORLD_HUMAN_STAND_IMPATIENT" />
   </Office>
   <Office id="7" legacyKey="GrandSenoraOffice1" name="Grand Senora Logistic Office" district="GrandSenora" price="45000" weeklyRent="1800" maxCommercialVehicles="4">
     <Marker x="905.63" y="3586.89" z="33.4" />

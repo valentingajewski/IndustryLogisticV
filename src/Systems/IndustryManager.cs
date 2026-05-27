@@ -7,6 +7,50 @@ using LSOL.Domain;
 
 namespace LSOL.Systems
 {
+    internal sealed class WarehouseStoragePressureDayResult
+    {
+        public WarehouseStoragePressureDayResult()
+        {
+            CommodityLossTons = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        public Dictionary<string, float> CommodityLossTons { get; private set; }
+
+        public float StorageTons { get; set; }
+
+        public float TotalCapacityTons { get; set; }
+
+        public float FillRatio { get; set; }
+
+        public float StabilityScore { get; set; }
+
+        public float StoragePressure { get; set; }
+
+        public float CurrentStorageCondition { get; set; }
+
+        public float NextStorageCondition { get; set; }
+
+        public float InventoryValue { get; set; }
+
+        public float AdjustedInventoryValue { get; set; }
+
+        public float SpoilageSensitiveTons { get; set; }
+
+        public float ShrinkageSensitiveTons { get; set; }
+
+        public float SpoilageTons { get; set; }
+
+        public float SpoilageValue { get; set; }
+
+        public float ShrinkageTons { get; set; }
+
+        public float ShrinkageValue { get; set; }
+
+        public WarehouseLossClass DominantLossClass { get; set; }
+
+        public string DominantCommodity { get; set; }
+    }
+
     public sealed class IndustryManager
     {
         private const float NearestIndustryCellSize = 160f;
@@ -73,6 +117,7 @@ namespace LSOL.Systems
                 var supportsOmegaBoost = ShouldUseOmegaBoost(runtimeConfig);
                 var recipes = BuildRecipes(runtimeConfig, supportsOmegaBoost);
                 var industry = new Industry(runtimeConfig, recipes, supportsOmegaBoost, config.IndustryOmegaCapacityMultiplier);
+                ConfigureIndustryEconomics(industry);
                 SeedIndustryStartingState(industry, runtimeConfig);
                 _industries.Add(industry);
                 AddIndustryToSpatialIndex(industry);
@@ -269,9 +314,56 @@ namespace LSOL.Systems
                     defaultConfig.DeliveryPayoutMultiplier,
                     defaultConfig.WeeklyPassiveIncome);
                 industry.ApplyStoragePressureState(1f, -1, 0f, 0f);
+                industry.ApplyStorageLossTelemetryState(-1, 0f, 0f, 0f, 0f, 0f, 0f, 0f, 0f);
 
                 SeedIndustryStartingState(industry, defaultConfig);
             }
+        }
+
+        public WarehouseStorageRiskSnapshot GetWarehouseStorageRiskSnapshot(Industry industry)
+        {
+            if (industry == null || !industry.IsWarehouse)
+            {
+                return null;
+            }
+
+            var dayResult = EvaluateWarehouseStoragePressureDay(
+                industry,
+                GetDistrictState(industry.DistrictName),
+                industry.BufferStorage,
+                ClampWarehouseStorageCondition(industry.StorageCondition));
+
+            return new WarehouseStorageRiskSnapshot
+            {
+                Industry = industry,
+                StorageTons = dayResult.StorageTons,
+                TotalCapacityTons = dayResult.TotalCapacityTons,
+                FillRatio = dayResult.FillRatio,
+                StorageCondition = dayResult.CurrentStorageCondition,
+                ProjectedNextCondition = dayResult.NextStorageCondition,
+                StabilityScore = dayResult.StabilityScore,
+                StoragePressure = dayResult.StoragePressure,
+                InventoryValue = dayResult.InventoryValue,
+                AdjustedInventoryValue = dayResult.AdjustedInventoryValue,
+                ProjectedAdjustedInventoryValue = dayResult.InventoryValue * dayResult.NextStorageCondition,
+                SpoilageSensitiveTons = dayResult.SpoilageSensitiveTons,
+                ShrinkageSensitiveTons = dayResult.ShrinkageSensitiveTons,
+                LastDaySpoilageTons = industry.LastDaySpoilageTons,
+                LastDaySpoilageValue = industry.LastDaySpoilageValue,
+                LastDayShrinkageTons = industry.LastDayShrinkageTons,
+                LastDayShrinkageValue = industry.LastDayShrinkageValue,
+                CurrentWeekSpoilageTons = industry.CurrentWeekSpoilageTons,
+                CurrentWeekSpoilageValue = industry.CurrentWeekSpoilageValue,
+                CurrentWeekShrinkageTons = industry.CurrentWeekShrinkageTons,
+                CurrentWeekShrinkageValue = industry.CurrentWeekShrinkageValue,
+                ProjectedSpoilageTons = dayResult.SpoilageTons,
+                ProjectedSpoilageValue = dayResult.SpoilageValue,
+                ProjectedShrinkageTons = dayResult.ShrinkageTons,
+                ProjectedShrinkageValue = dayResult.ShrinkageValue,
+                DominantLossClass = ResolveDominantLossClass(industry, dayResult),
+                DominantCommodity = dayResult.DominantCommodity ?? string.Empty,
+                HasSensitiveExposure = (dayResult.SpoilageSensitiveTons + dayResult.ShrinkageSensitiveTons) > 0.01f,
+            };
         }
 
         public void Update(float deltaMinutes, float omegaMultiplier)
@@ -534,7 +626,7 @@ namespace LSOL.Systems
             {
                 if (market != null)
                 {
-                    market.RegisterDelivery(commodity, gameTimeMs);
+                    market.RegisterDelivery(commodity, deliveredTons, gameTimeMs);
                 }
 
                 payout = deliveredTons * unitPrice;
@@ -720,6 +812,23 @@ namespace LSOL.Systems
                 return recipes;
             }
 
+            if (config.RecipeVariants != null && config.RecipeVariants.Count > 0)
+            {
+                foreach (var variant in config.RecipeVariants.Where(x => x != null))
+                {
+                    var recipe = BuildVariantRecipe(variant, supportsOmegaBoost);
+                    if (recipe != null)
+                    {
+                        recipes.Add(recipe);
+                    }
+                }
+
+                if (recipes.Count > 0)
+                {
+                    return recipes;
+                }
+            }
+
             var boostInputs = GetEffectiveBoostInputs(config);
             var weightedInputs = ClonePositiveWeights(config.RecipeInputWeights);
             if (weightedInputs.Count == 0)
@@ -776,6 +885,81 @@ namespace LSOL.Systems
             return recipes;
         }
 
+        private static ProductionRecipe BuildVariantRecipe(IndustryRecipeVariantConfig variant, bool supportsOmegaBoost)
+        {
+            if (variant == null)
+            {
+                return null;
+            }
+
+            var boostInputs = CloneCommoditySet(variant.BoostInputs);
+            var weightedInputs = ClonePositiveWeights(variant.RecipeInputWeights);
+            if (weightedInputs.Count == 0)
+            {
+                var fallbackInputs = CloneCommoditySet(variant.Inputs)
+                    .Concat(CloneCommoditySet(variant.OptionalInputs))
+                    .Distinct(StringComparer.OrdinalIgnoreCase);
+                foreach (var input in fallbackInputs)
+                {
+                    if (boostInputs.Contains(input))
+                    {
+                        continue;
+                    }
+
+                    if (supportsOmegaBoost && input.Equals("Omega", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    weightedInputs[input] = 1f;
+                }
+            }
+            else
+            {
+                foreach (var boostInput in boostInputs)
+                {
+                    weightedInputs.Remove(boostInput);
+                }
+
+                if (supportsOmegaBoost)
+                {
+                    weightedInputs.Remove("Omega");
+                }
+            }
+
+            var weightedOutputs = ClonePositiveWeights(variant.RecipeOutputWeights);
+            if (weightedOutputs.Count == 0)
+            {
+                var outputs = CloneCommoditySet(variant.Outputs);
+                foreach (var output in outputs)
+                {
+                    weightedOutputs[output] = 1f;
+                }
+            }
+
+            if (weightedOutputs.Count == 0)
+            {
+                return null;
+            }
+
+            return new ProductionRecipe(
+                weightedInputs,
+                weightedOutputs,
+                variant.Id,
+                string.IsNullOrWhiteSpace(variant.DisplayName) ? variant.Id : variant.DisplayName,
+                variant.SelectionPriority,
+                ClonePositiveWeights(variant.OptionalInputWeights),
+                CloneCommoditySet(variant.OptionalInputs),
+                boostInputs);
+        }
+
+        private static HashSet<string> CloneCommoditySet(IEnumerable<string> source)
+        {
+            return source == null
+                ? new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(source.Where(x => !string.IsNullOrWhiteSpace(x)).Select(CommodityCatalog.Normalize), StringComparer.OrdinalIgnoreCase);
+        }
+
         private static IndustryConfig CloneIndustryConfig(IndustryConfig source)
         {
             if (source == null)
@@ -813,8 +997,11 @@ namespace LSOL.Systems
                 Outputs = new HashSet<string>(source.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
                 RecipeInputWeights = ClonePositiveWeights(source.RecipeInputWeights),
                 RecipeOutputWeights = ClonePositiveWeights(source.RecipeOutputWeights),
+                RecipeVariants = CloneRecipeVariants(source.RecipeVariants),
                 InputCapacityWeights = ClonePositiveWeights(source.InputCapacityWeights),
                 OutputCapacityWeights = ClonePositiveWeights(source.OutputCapacityWeights),
+                SinkPreferenceWeights = ClonePositiveWeights(source.SinkPreferenceWeights),
+                SinkElasticityMultiplier = Math.Max(0.05f, source.SinkElasticityMultiplier <= 0f ? 1f : source.SinkElasticityMultiplier),
                 FactoryProductionRatio = source.FactoryProductionRatio,
                 InputCapacityTons = source.InputCapacityTons,
                 OutputCapacityTons = source.OutputCapacityTons,
@@ -837,6 +1024,33 @@ namespace LSOL.Systems
                 HardcoreEconomy = CloneSiteEconomy(source.HardcoreEconomy),
                 ImpossibleEconomy = CloneSiteEconomy(source.ImpossibleEconomy),
             };
+        }
+
+        private static List<IndustryRecipeVariantConfig> CloneRecipeVariants(IEnumerable<IndustryRecipeVariantConfig> source)
+        {
+            if (source == null)
+            {
+                return new List<IndustryRecipeVariantConfig>();
+            }
+
+            return source
+                .Where(variant => variant != null)
+                .Select(variant => new IndustryRecipeVariantConfig
+                {
+                    Id = variant.Id,
+                    DisplayName = variant.DisplayName,
+                    SelectionPriority = variant.SelectionPriority,
+                    Inputs = CloneCommoditySet(variant.Inputs),
+                    OptionalInputs = CloneCommoditySet(variant.OptionalInputs),
+                    BoostInputs = CloneCommoditySet(variant.BoostInputs),
+                    Outputs = CloneCommoditySet(variant.Outputs),
+                    RecipeInputWeights = ClonePositiveWeights(variant.RecipeInputWeights),
+                    RecipeOutputWeights = ClonePositiveWeights(variant.RecipeOutputWeights),
+                    OptionalInputWeights = ClonePositiveWeights(variant.OptionalInputWeights),
+                    InputCapacityWeights = ClonePositiveWeights(variant.InputCapacityWeights),
+                    OutputCapacityWeights = ClonePositiveWeights(variant.OutputCapacityWeights),
+                })
+                .ToList();
         }
 
         private static IndustryConfig BuildEffectiveIndustryConfig(IndustryConfig baseConfig, EconomyDifficultyPreset preset)
@@ -1180,6 +1394,16 @@ namespace LSOL.Systems
             return effectiveOmegaCapacityTons;
         }
 
+        private void ConfigureIndustryEconomics(Industry industry)
+        {
+            if (industry == null)
+            {
+                return;
+            }
+
+            industry.ConfigureRecipeSelectionEconomics(ComputeRecipeEconomicScore);
+        }
+
         private void DrainSinkStock(Industry industry, float deltaMinutes, float drainRatePerMinute)
         {
             if (industry == null || deltaMinutes <= 0f || drainRatePerMinute <= 0f)
@@ -1187,9 +1411,7 @@ namespace LSOL.Systems
                 return;
             }
 
-            var acceptedInputs = industry.Inputs
-                .Concat(industry.OptionalInputs)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
+            var acceptedInputs = industry.SortedAcceptedInputs
                 .Where(commodity => industry.GetStock(commodity) > 0.0001f)
                 .ToList();
             if (acceptedInputs.Count == 0)
@@ -1203,36 +1425,248 @@ namespace LSOL.Systems
                 return;
             }
 
-            var totalWeight = 0f;
-            var commodityWeights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < acceptedInputs.Count; i++)
-            {
-                var commodity = acceptedInputs[i];
-                var weight = _globalMarket != null
-                    ? _globalMarket.GetSinkDemandMultiplier(industry.DistrictName, commodity)
-                    : 1f;
-                weight = Math.Max(0.1f, weight);
-                commodityWeights[commodity] = weight;
-                totalWeight += weight;
-            }
+            var remainingConsumption = consumed;
+            var availableInputs = new List<string>(acceptedInputs);
+            var maxPasses = Math.Max(2, acceptedInputs.Count * 3);
 
-            if (totalWeight <= 0.001f)
+            for (var pass = 0; pass < maxPasses && remainingConsumption > 0.0001f && availableInputs.Count > 0; pass++)
             {
-                totalWeight = acceptedInputs.Count;
-            }
-
-            for (int i = 0; i < acceptedInputs.Count; i++)
-            {
-                var commodity = acceptedInputs[i];
-                float weight;
-                if (!commodityWeights.TryGetValue(commodity, out weight))
+                var commodityWeights = BuildElasticSinkDemandWeights(industry, availableInputs, remainingConsumption);
+                var totalWeight = commodityWeights.Values.Sum();
+                if (totalWeight <= 0.001f)
                 {
-                    weight = 1f;
+                    totalWeight = availableInputs.Count;
                 }
 
-                var perCommodityConsumption = consumed * (weight / totalWeight);
-                industry.BufferStorage[commodity] = Math.Max(0f, industry.GetStock(commodity) - perCommodityConsumption);
+                var remainingAtPassStart = remainingConsumption;
+                for (int i = 0; i < availableInputs.Count && remainingConsumption > 0.0001f; i++)
+                {
+                    var commodity = availableInputs[i];
+                    var currentStock = industry.GetStock(commodity);
+                    if (currentStock <= 0.0001f)
+                    {
+                        continue;
+                    }
+
+                    float weight;
+                    if (!commodityWeights.TryGetValue(commodity, out weight) || weight <= 0f)
+                    {
+                        weight = 1f;
+                    }
+
+                    var desiredShare = remainingAtPassStart * (weight / Math.Max(0.001f, totalWeight));
+                    var removed = industry.RemoveInput(commodity, Math.Min(currentStock, desiredShare));
+                    if (removed <= 0.0001f)
+                    {
+                        continue;
+                    }
+
+                    if (_globalMarket != null)
+                    {
+                        _globalMarket.RegisterSinkDemand(commodity, removed);
+                    }
+
+                    remainingConsumption = Math.Max(0f, remainingConsumption - removed);
+                }
+
+                availableInputs = availableInputs
+                    .Where(commodity => industry.GetStock(commodity) > 0.0001f)
+                    .ToList();
+                if (Math.Abs(remainingAtPassStart - remainingConsumption) <= 0.0001f)
+                {
+                    break;
+                }
             }
+        }
+
+        private Dictionary<string, float> BuildElasticSinkDemandWeights(Industry industry, IReadOnlyList<string> commodities, float targetConsumption)
+        {
+            var weights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            if (industry == null || commodities == null || commodities.Count == 0)
+            {
+                return weights;
+            }
+
+            var expectedSlice = Math.Max(0.05f, targetConsumption / Math.Max(1, commodities.Count));
+            for (int i = 0; i < commodities.Count; i++)
+            {
+                var commodity = commodities[i];
+                var stock = industry.GetStock(commodity);
+                if (stock <= 0.0001f)
+                {
+                    continue;
+                }
+
+                var semantics = CommodityCatalog.GetEconomySemantics(commodity);
+                var sitePreference = industry.GetSinkPreferenceWeight(commodity);
+                var roleBias = ResolveSinkRoleBias(industry, semantics);
+                var marketDemand = _globalMarket != null
+                    ? _globalMarket.GetSinkDemandMultiplier(industry.DistrictName, commodity)
+                    : 1f;
+                var pricePressure = _globalMarket != null
+                    ? _globalMarket.GetPricePressure(commodity)
+                    : 0f;
+                var elasticity = Math.Max(0.05f, semantics.SinkElasticity * industry.SinkElasticityMultiplier);
+                var pricePenalty = 1f / (1f + (pricePressure * elasticity * 0.90f));
+                var availabilityFactor = 0.55f + Math.Min(1.25f, (float)Math.Sqrt(stock / expectedSlice));
+                var substitutePenalty = ResolveSinkSubstitutePenalty(commodities, commodity, pricePressure, elasticity);
+
+                weights[commodity] = Math.Max(
+                    0.05f,
+                    semantics.SinkPreferenceWeight
+                    * sitePreference
+                    * roleBias
+                    * marketDemand
+                    * pricePenalty
+                    * availabilityFactor
+                    * substitutePenalty);
+            }
+
+            return weights;
+        }
+
+        private static float ResolveSinkRoleBias(Industry industry, CommodityEconomySemantics semantics)
+        {
+            if (industry == null || semantics == null)
+            {
+                return 1f;
+            }
+
+            var bias = 1f;
+            if (industry.IsConstructionSink)
+            {
+                if (string.Equals(semantics.SubstituteFamily, "ConstructionMaterials", StringComparison.OrdinalIgnoreCase))
+                {
+                    bias += 0.35f;
+                }
+                else if (semantics.DemandClasses != null && semantics.DemandClasses.Contains("ConstructionRelief"))
+                {
+                    bias += 0.15f;
+                }
+            }
+            else if (industry.IsGasStation)
+            {
+                if (semantics.DemandClasses != null && semantics.DemandClasses.Contains("FuelRelief"))
+                {
+                    bias += 0.45f;
+                }
+            }
+            else if (industry.IsStore)
+            {
+                if (semantics.DemandClasses != null && semantics.DemandClasses.Contains("EmergencyRelief"))
+                {
+                    bias += 0.20f;
+                }
+
+                if (semantics.Perishability > 0.40f)
+                {
+                    bias += 0.05f;
+                }
+            }
+
+            return bias;
+        }
+
+        private float ResolveSinkSubstitutePenalty(IReadOnlyList<string> commodities, string commodity, float commodityPricePressure, float elasticity)
+        {
+            if (_globalMarket == null || commodities == null || commodities.Count <= 1)
+            {
+                return 1f;
+            }
+
+            var bestAlternativeAdvantage = 0f;
+            for (int i = 0; i < commodities.Count; i++)
+            {
+                var alternative = commodities[i];
+                if (string.Equals(alternative, commodity, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var affinity = CommodityCatalog.GetSubstituteAffinity(commodity, alternative);
+                if (affinity <= 0.15f)
+                {
+                    continue;
+                }
+
+                var alternativePressure = _globalMarket.GetPricePressure(alternative);
+                var alternativeAdvantage = affinity * Math.Max(0f, commodityPricePressure - alternativePressure + 0.05f);
+                if (alternativeAdvantage > bestAlternativeAdvantage)
+                {
+                    bestAlternativeAdvantage = alternativeAdvantage;
+                }
+            }
+
+            if (bestAlternativeAdvantage <= 0f)
+            {
+                return 1f;
+            }
+
+            return 1f / (1f + (bestAlternativeAdvantage * elasticity * 1.35f));
+        }
+
+        private float ComputeRecipeEconomicScore(Industry industry, ProductionRecipe recipe)
+        {
+            if (_globalMarket == null || industry == null || recipe == null)
+            {
+                return 0f;
+            }
+
+            float outputScore = 0f;
+            foreach (var pair in recipe.OutputsTons)
+            {
+                var semantics = CommodityCatalog.GetEconomySemantics(pair.Key);
+                var demandFactor = 1f + Math.Min(0.90f, _globalMarket.GetPricePressure(pair.Key) * (0.70f + (semantics.EventResponseAffinity * 0.20f)));
+                outputScore += pair.Value * _globalMarket.GetUnitPrice(pair.Key) * demandFactor;
+            }
+
+            float inputPenalty = 0f;
+            foreach (var pair in recipe.InputsTons)
+            {
+                var semantics = CommodityCatalog.GetEconomySemantics(pair.Key);
+                var stockCoverage = Math.Min(1.5f, industry.GetStock(pair.Key) / Math.Max(0.10f, pair.Value));
+                var substituteCoverage = ResolveIndustrySubstituteCoverage(industry, pair.Key);
+                var scarcityFactor = 1f + (_globalMarket.GetPricePressure(pair.Key) * (0.80f + (semantics.ScarcitySensitivity * 0.30f)));
+                scarcityFactor += Math.Max(0f, 0.75f - stockCoverage) * 0.30f;
+                scarcityFactor += Math.Max(0f, 0.40f - substituteCoverage) * 0.20f;
+                inputPenalty += pair.Value * _globalMarket.GetUnitPrice(pair.Key) * scarcityFactor;
+            }
+
+            return (outputScore / 35f) - (inputPenalty / 60f);
+        }
+
+        private static float ResolveIndustrySubstituteCoverage(Industry industry, string commodity)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return 0f;
+            }
+
+            var bestCoverage = 0f;
+            for (int i = 0; i < industry.SortedAcceptedInputs.Count; i++)
+            {
+                var candidate = industry.SortedAcceptedInputs[i];
+                if (string.Equals(candidate, commodity, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var stock = industry.GetStock(candidate);
+                if (stock <= 0.05f)
+                {
+                    continue;
+                }
+
+                var affinity = CommodityCatalog.GetSubstituteAffinity(commodity, candidate);
+                if (affinity <= 0.15f)
+                {
+                    continue;
+                }
+
+                bestCoverage = Math.Max(bestCoverage, affinity * Math.Min(1f, stock));
+            }
+
+            return Math.Max(0f, Math.Min(1f, bestCoverage));
         }
 
         private void ProcessWarehouseStoragePressure(Industry industry, int currentDayIndex)
@@ -1258,72 +1692,67 @@ namespace LSOL.Systems
             var storageCondition = ClampWarehouseStorageCondition(industry.StorageCondition);
             float totalLostTons = 0f;
             float totalLostValue = 0f;
+            float totalSpoilageValue = 0f;
+            float totalShrinkageValue = 0f;
 
             for (int day = 0; day < elapsedDays; day++)
             {
-                float totalStock = 0f;
-                foreach (var pair in industry.BufferStorage)
+                var simulatedDayIndex = industry.LastStoragePressureDayIndex + day + 1;
+                var dayResult = EvaluateWarehouseStoragePressureDay(industry, districtState, industry.BufferStorage, storageCondition);
+                storageCondition = dayResult.NextStorageCondition;
+
+                foreach (var pair in dayResult.CommodityLossTons)
                 {
-                    totalStock += Math.Max(0f, pair.Value);
+                    var currentTons = Math.Max(0f, industry.GetStock(pair.Key));
+                    industry.BufferStorage[pair.Key] = Math.Max(0f, currentTons - pair.Value);
                 }
 
-                var totalCapacity = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
-                var fillRatio = Math.Max(0f, Math.Min(1f, totalStock / totalCapacity));
-                var trackedCommodities = industry.BufferStorage.Keys
-                    .Select(CommodityCatalog.Normalize)
-                    .Where(commodity => IsTrackedStorageCommodity(commodity) && industry.GetStock(commodity) > 0.01f)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                var stabilityScore = GetWarehouseStabilityScore(industry, districtState);
-                var storagePressure = Math.Max(0f, fillRatio - 0.30f);
-                var degradation = trackedCommodities.Count > 0
-                    ? (0.015f + (storagePressure * 0.045f) + (districtState != null && districtState.LicenseStatus == DistrictLicenseStatus.Suspended ? 0.02f : 0f))
-                        * Math.Max(0.35f, 1f - stabilityScore)
-                    : 0f;
-                var recovery = trackedCommodities.Count == 0 || fillRatio < 0.12f
-                    ? 0.02f + Math.Min(0.04f, stabilityScore * 0.05f)
-                    : 0f;
-                storageCondition = ClampWarehouseStorageCondition(storageCondition - degradation + recovery);
-
-                for (int commodityIndex = 0; commodityIndex < trackedCommodities.Count; commodityIndex++)
-                {
-                    var commodity = trackedCommodities[commodityIndex];
-                    var currentTons = Math.Max(0f, industry.GetStock(commodity));
-                    if (currentTons <= 0.01f)
-                    {
-                        continue;
-                    }
-
-                    var lossRatio = ComputeWarehouseLossRatio(commodity, storagePressure, storageCondition, stabilityScore);
-                    var lostTons = Math.Min(currentTons, currentTons * lossRatio);
-                    if (lostTons <= 0.001f)
-                    {
-                        continue;
-                    }
-
-                    industry.BufferStorage[commodity] = Math.Max(0f, currentTons - lostTons);
-                    totalLostTons += lostTons;
-                    totalLostValue += lostTons * (_globalMarket != null ? _globalMarket.GetUnitPrice(commodity) : 0f);
-                }
+                totalLostTons += dayResult.SpoilageTons + dayResult.ShrinkageTons;
+                totalLostValue += dayResult.SpoilageValue + dayResult.ShrinkageValue;
+                totalSpoilageValue += dayResult.SpoilageValue;
+                totalShrinkageValue += dayResult.ShrinkageValue;
+                industry.RecordStorageLossDay(
+                    GetWeekIndexFromDay(simulatedDayIndex),
+                    dayResult.SpoilageTons,
+                    dayResult.SpoilageValue,
+                    dayResult.ShrinkageTons,
+                    dayResult.ShrinkageValue);
             }
 
             industry.RecordStoragePressure(currentDayIndex, storageCondition, totalLostTons, totalLostValue);
 
-            if (totalLostValue > 0.01f && _financeTracker != null)
+            if (totalSpoilageValue > 0.01f && _financeTracker != null)
             {
                 var currentMinute = _getCurrentInGameMinute != null
                     ? Math.Max(0, _getCurrentInGameMinute())
                     : currentDayIndex * 24 * 60;
                 _financeTracker.RecordExpense(
-                    CompanyFinanceCategory.InventoryLoss,
-                    totalLostValue,
+                    CompanyFinanceCategory.WarehouseSpoilage,
+                    totalSpoilageValue,
                     currentMinute,
-                    string.Format("Warehouse spoilage and shrinkage at {0}", industry.Name));
+                    string.Format("Warehouse spoilage at {0}", industry.Name));
+            }
+
+            if (totalShrinkageValue > 0.01f && _financeTracker != null)
+            {
+                var currentMinute = _getCurrentInGameMinute != null
+                    ? Math.Max(0, _getCurrentInGameMinute())
+                    : currentDayIndex * 24 * 60;
+                _financeTracker.RecordExpense(
+                    CompanyFinanceCategory.WarehouseShrinkage,
+                    totalShrinkageValue,
+                    currentMinute,
+                    string.Format("Warehouse shrinkage at {0}", industry.Name));
             }
 
             if (totalLostValue >= WarehouseLossStatusThreshold && _notifyStoragePressure != null)
             {
-                _notifyStoragePressure(string.Format("{0} lost {1} to warehouse spoilage and shrinkage.", industry.Name, ModFormatting.FormatMoney(totalLostValue)));
+                _notifyStoragePressure(string.Format(
+                    "{0} lost {1} to warehouse spoilage ({2}) and shrinkage ({3}).",
+                    industry.Name,
+                    ModFormatting.FormatMoney(totalLostValue),
+                    ModFormatting.FormatMoney(totalSpoilageValue),
+                    ModFormatting.FormatMoney(totalShrinkageValue)));
             }
         }
 
@@ -1336,28 +1765,30 @@ namespace LSOL.Systems
 
         private static bool IsTrackedStorageCommodity(string commodity)
         {
-            commodity = CommodityCatalog.Normalize(commodity);
-            return !string.IsNullOrWhiteSpace(commodity)
-                && (SpoilageSensitiveCommodities.Contains(commodity) || SecuritySensitiveCommodities.Contains(commodity));
+            return GetWarehouseLossClass(commodity) != WarehouseLossClass.None;
         }
 
         private static float ComputeWarehouseLossRatio(string commodity, float storagePressure, float storageCondition, float stabilityScore)
         {
-            commodity = CommodityCatalog.Normalize(commodity);
-            if (string.IsNullOrWhiteSpace(commodity))
+            return ComputeWarehouseLossRatio(GetWarehouseLossClass(commodity), storagePressure, storageCondition, stabilityScore);
+        }
+
+        private static float ComputeWarehouseLossRatio(WarehouseLossClass lossClass, float storagePressure, float storageCondition, float stabilityScore)
+        {
+            if (lossClass == WarehouseLossClass.None)
             {
                 return 0f;
             }
 
             var conditionPenalty = 1f + ((1f - storageCondition) * 1.8f);
-            if (SpoilageSensitiveCommodities.Contains(commodity))
+            if (lossClass == WarehouseLossClass.Spoilage)
             {
                 return (0.0008f + (storagePressure * 0.0035f))
                     * conditionPenalty
                     * Math.Max(0.35f, 1f - (stabilityScore * 0.60f));
             }
 
-            if (SecuritySensitiveCommodities.Contains(commodity))
+            if (lossClass == WarehouseLossClass.Shrinkage)
             {
                 return (0.00035f + (storagePressure * 0.0018f))
                     * conditionPenalty
@@ -1397,6 +1828,162 @@ namespace LSOL.Systems
             }
 
             return Math.Max(0f, Math.Min(0.60f, score));
+        }
+
+        private WarehouseStoragePressureDayResult EvaluateWarehouseStoragePressureDay(
+            Industry industry,
+            TerritoryDistrictState districtState,
+            IReadOnlyDictionary<string, float> storage,
+            float storageCondition)
+        {
+            var result = new WarehouseStoragePressureDayResult
+            {
+                CurrentStorageCondition = ClampWarehouseStorageCondition(storageCondition),
+            };
+
+            if (industry == null || storage == null)
+            {
+                result.NextStorageCondition = result.CurrentStorageCondition;
+                return result;
+            }
+
+            foreach (var pair in storage)
+            {
+                var tons = Math.Max(0f, pair.Value);
+                if (tons <= 0f)
+                {
+                    continue;
+                }
+
+                result.StorageTons += tons;
+                var normalizedCommodity = CommodityCatalog.Normalize(pair.Key);
+                var lossClass = GetWarehouseLossClass(normalizedCommodity);
+                if (lossClass == WarehouseLossClass.Spoilage)
+                {
+                    result.SpoilageSensitiveTons += tons;
+                }
+                else if (lossClass == WarehouseLossClass.Shrinkage)
+                {
+                    result.ShrinkageSensitiveTons += tons;
+                }
+
+                var unitPrice = GetCommodityUnitPrice(normalizedCommodity);
+                result.InventoryValue += tons * unitPrice;
+            }
+
+            result.TotalCapacityTons = Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
+            result.FillRatio = Math.Max(0f, Math.Min(1f, result.StorageTons / result.TotalCapacityTons));
+            result.StoragePressure = Math.Max(0f, result.FillRatio - 0.30f);
+            result.StabilityScore = GetWarehouseStabilityScore(industry, districtState);
+
+            var hasSensitiveExposure = (result.SpoilageSensitiveTons + result.ShrinkageSensitiveTons) > 0.01f;
+            var degradation = hasSensitiveExposure
+                ? (0.015f + (result.StoragePressure * 0.045f) + (districtState != null && districtState.LicenseStatus == DistrictLicenseStatus.Suspended ? 0.02f : 0f))
+                    * Math.Max(0.35f, 1f - result.StabilityScore)
+                : 0f;
+            var recovery = !hasSensitiveExposure || result.FillRatio < 0.12f
+                ? 0.02f + Math.Min(0.04f, result.StabilityScore * 0.05f)
+                : 0f;
+            result.NextStorageCondition = ClampWarehouseStorageCondition(result.CurrentStorageCondition - degradation + recovery);
+            result.AdjustedInventoryValue = result.InventoryValue * result.CurrentStorageCondition;
+
+            var highestLossValue = 0f;
+            foreach (var pair in storage)
+            {
+                var commodity = CommodityCatalog.Normalize(pair.Key);
+                var currentTons = Math.Max(0f, pair.Value);
+                if (currentTons <= 0.01f)
+                {
+                    continue;
+                }
+
+                var lossClass = GetWarehouseLossClass(commodity);
+                if (lossClass == WarehouseLossClass.None)
+                {
+                    continue;
+                }
+
+                var lossRatio = ComputeWarehouseLossRatio(lossClass, result.StoragePressure, result.NextStorageCondition, result.StabilityScore);
+                var lostTons = Math.Min(currentTons, currentTons * lossRatio);
+                if (lostTons <= 0.001f)
+                {
+                    continue;
+                }
+
+                var lostValue = lostTons * GetCommodityUnitPrice(commodity);
+                result.CommodityLossTons[commodity] = lostTons;
+                if (lossClass == WarehouseLossClass.Spoilage)
+                {
+                    result.SpoilageTons += lostTons;
+                    result.SpoilageValue += lostValue;
+                }
+                else if (lossClass == WarehouseLossClass.Shrinkage)
+                {
+                    result.ShrinkageTons += lostTons;
+                    result.ShrinkageValue += lostValue;
+                }
+
+                if (lostValue > highestLossValue)
+                {
+                    highestLossValue = lostValue;
+                    result.DominantLossClass = lossClass;
+                    result.DominantCommodity = commodity;
+                }
+            }
+
+            return result;
+        }
+
+        private float GetCommodityUnitPrice(string commodity)
+        {
+            return _globalMarket != null
+                ? Math.Max(0f, _globalMarket.GetUnitPrice(commodity))
+                : 0f;
+        }
+
+        private static WarehouseLossClass GetWarehouseLossClass(string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (string.IsNullOrWhiteSpace(commodity))
+            {
+                return WarehouseLossClass.None;
+            }
+
+            if (SpoilageSensitiveCommodities.Contains(commodity))
+            {
+                return WarehouseLossClass.Spoilage;
+            }
+
+            if (SecuritySensitiveCommodities.Contains(commodity))
+            {
+                return WarehouseLossClass.Shrinkage;
+            }
+
+            return WarehouseLossClass.None;
+        }
+
+        private static WarehouseLossClass ResolveDominantLossClass(Industry industry, WarehouseStoragePressureDayResult dayResult)
+        {
+            if (industry == null)
+            {
+                return dayResult != null ? dayResult.DominantLossClass : WarehouseLossClass.None;
+            }
+
+            var currentWeekSpoilage = Math.Max(0f, industry.CurrentWeekSpoilageValue);
+            var currentWeekShrinkage = Math.Max(0f, industry.CurrentWeekShrinkageValue);
+            if (currentWeekSpoilage > 0.01f || currentWeekShrinkage > 0.01f)
+            {
+                return currentWeekSpoilage >= currentWeekShrinkage
+                    ? WarehouseLossClass.Spoilage
+                    : WarehouseLossClass.Shrinkage;
+            }
+
+            return dayResult != null ? dayResult.DominantLossClass : WarehouseLossClass.None;
+        }
+
+        private static int GetWeekIndexFromDay(int dayIndex)
+        {
+            return dayIndex < 0 ? -1 : dayIndex / 7;
         }
 
         private static float ClampWarehouseStorageCondition(float storageCondition)

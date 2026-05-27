@@ -65,26 +65,31 @@ namespace LSOL.Systems
         public BankLoanPersistenceSnapshot()
         {
             OfferedRates = new List<BankOfferRateSnapshot>();
+            OfferHistory = new List<BankOfferRateSnapshot>();
         }
 
         public CompanyLoanState ActiveLoan { get; set; }
 
         public List<BankOfferRateSnapshot> OfferedRates { get; }
 
+        public List<BankOfferRateSnapshot> OfferHistory { get; }
+
         public bool HasData
         {
-            get { return ActiveLoan != null || OfferedRates.Count > 0; }
+            get { return ActiveLoan != null || OfferedRates.Count > 0 || OfferHistory.Count > 0; }
         }
     }
 
     public sealed class BankLoanManager
     {
         private const int MinutesPerWeek = 7 * 24 * 60;
+        private const int MaxOfferHistoryEntriesPerBank = 10;
         private static readonly int[] SupportedLoanTerms = { 4, 8, 12, 24 };
 
         private readonly List<BankDefinition> _banks;
         private readonly Dictionary<string, BankDefinition> _banksById;
         private readonly Dictionary<string, BankOfferRateSnapshot> _offeredRatesByBankId;
+        private readonly Dictionary<string, List<BankOfferRateSnapshot>> _offerHistoryByBankId;
         private readonly CompanyFinanceTracker _financeTracker;
         private CompanyLoanState _activeLoan;
 
@@ -98,6 +103,7 @@ namespace LSOL.Systems
                     .ToList();
             _banksById = _banks.ToDictionary(bank => bank.BankId, bank => bank, StringComparer.OrdinalIgnoreCase);
             _offeredRatesByBankId = new Dictionary<string, BankOfferRateSnapshot>(StringComparer.OrdinalIgnoreCase);
+            _offerHistoryByBankId = new Dictionary<string, List<BankOfferRateSnapshot>>(StringComparer.OrdinalIgnoreCase);
             _financeTracker = financeTracker;
         }
 
@@ -119,6 +125,33 @@ namespace LSOL.Systems
         public static IReadOnlyList<int> LoanTerms
         {
             get { return SupportedLoanTerms; }
+        }
+
+        public IReadOnlyList<BankOfferRateSnapshot> GetOfferHistory(string bankId)
+        {
+            if (string.IsNullOrWhiteSpace(bankId))
+            {
+                return Array.Empty<BankOfferRateSnapshot>();
+            }
+
+            List<BankOfferRateSnapshot> history;
+            if (!_offerHistoryByBankId.TryGetValue(bankId.Trim(), out history) || history == null || history.Count == 0)
+            {
+                return Array.Empty<BankOfferRateSnapshot>();
+            }
+
+            return history
+                .OrderByDescending(entry => entry.WeekIndex)
+                .Select(CloneOffer)
+                .ToArray();
+        }
+
+        internal CompanyCreditStanding GetCreditStanding(int currentInGameMinute)
+        {
+            return BankCreditStandingCalculator.Calculate(
+                _financeTracker != null ? _financeTracker.Transactions : Array.Empty<CompanyFinanceTransaction>(),
+                _activeLoan,
+                currentInGameMinute);
         }
 
         public BankDefinition GetBank(string bankId)
@@ -143,14 +176,17 @@ namespace LSOL.Systems
             BankOfferRateSnapshot offer;
             if (!_offeredRatesByBankId.TryGetValue(bank.BankId, out offer) || offer == null || offer.WeekIndex != currentWeekIndex)
             {
+                var standing = GetCreditStanding(currentInGameMinute);
                 offer = new BankOfferRateSnapshot
                 {
                     BankId = bank.BankId,
                     WeekIndex = currentWeekIndex,
-                    RatePercent = GenerateOfferRate(bank, currentWeekIndex),
+                    RatePercent = GenerateOfferRate(bank, currentWeekIndex, standing != null ? standing.RateAdjustmentPercent : 0f),
                 };
                 _offeredRatesByBankId[bank.BankId] = offer;
             }
+
+            RecordOfferHistory(offer);
 
             return offer.RatePercent;
         }
@@ -313,12 +349,17 @@ namespace LSOL.Systems
                 .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.BankId))
                 .OrderBy(entry => entry.BankId, StringComparer.OrdinalIgnoreCase))
             {
-                snapshot.OfferedRates.Add(new BankOfferRateSnapshot
-                {
-                    BankId = offer.BankId,
-                    WeekIndex = offer.WeekIndex,
-                    RatePercent = Math.Max(0f, offer.RatePercent),
-                });
+                snapshot.OfferedRates.Add(CloneOffer(offer));
+            }
+
+            foreach (var offer in _offerHistoryByBankId.Values
+                .Where(history => history != null)
+                .SelectMany(history => history)
+                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.BankId))
+                .OrderBy(entry => entry.BankId, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(entry => entry.WeekIndex))
+            {
+                snapshot.OfferHistory.Add(CloneOffer(offer));
             }
 
             return snapshot;
@@ -327,7 +368,16 @@ namespace LSOL.Systems
         public void ApplyPersistenceSnapshot(BankLoanPersistenceSnapshot snapshot, int currentInGameMinute)
         {
             _offeredRatesByBankId.Clear();
+            _offerHistoryByBankId.Clear();
             _activeLoan = null;
+
+            if (snapshot != null && snapshot.OfferHistory != null)
+            {
+                foreach (var offer in snapshot.OfferHistory)
+                {
+                    RecordOfferHistory(offer);
+                }
+            }
 
             if (snapshot != null && snapshot.OfferedRates != null)
             {
@@ -338,12 +388,9 @@ namespace LSOL.Systems
                         continue;
                     }
 
-                    _offeredRatesByBankId[offer.BankId] = new BankOfferRateSnapshot
-                    {
-                        BankId = offer.BankId,
-                        WeekIndex = offer.WeekIndex,
-                        RatePercent = offer.RatePercent,
-                    };
+                    var sanitizedOffer = CloneOffer(offer);
+                    _offeredRatesByBankId[sanitizedOffer.BankId] = sanitizedOffer;
+                    RecordOfferHistory(sanitizedOffer);
                 }
             }
 
@@ -439,7 +486,7 @@ namespace LSOL.Systems
             };
         }
 
-        private static float GenerateOfferRate(BankDefinition bank, int weekIndex)
+        private static float GenerateOfferRate(BankDefinition bank, int weekIndex, float standingRateAdjustmentPercent)
         {
             if (bank == null)
             {
@@ -465,8 +512,57 @@ namespace LSOL.Systems
                 seed = (seed * 397) ^ weekIndex;
                 var random = new Random(seed);
                 var value = random.NextDouble();
-                return (float)Math.Round(minimum + ((maximum - minimum) * value), 2);
+                var baseRate = minimum + ((maximum - minimum) * value);
+                var adjustedRate = baseRate + standingRateAdjustmentPercent;
+                return (float)Math.Round(Math.Max(minimum, Math.Min(maximum, adjustedRate)), 2);
             }
+        }
+
+        private void RecordOfferHistory(BankOfferRateSnapshot offer)
+        {
+            if (offer == null || string.IsNullOrWhiteSpace(offer.BankId) || offer.RatePercent < 0f)
+            {
+                return;
+            }
+
+            List<BankOfferRateSnapshot> history;
+            if (!_offerHistoryByBankId.TryGetValue(offer.BankId, out history) || history == null)
+            {
+                history = new List<BankOfferRateSnapshot>();
+                _offerHistoryByBankId[offer.BankId] = history;
+            }
+
+            var sanitizedOffer = CloneOffer(offer);
+            var existingIndex = history.FindIndex(entry => entry != null && entry.WeekIndex == sanitizedOffer.WeekIndex);
+            if (existingIndex >= 0)
+            {
+                history[existingIndex] = sanitizedOffer;
+            }
+            else
+            {
+                history.Add(sanitizedOffer);
+            }
+
+            history.Sort((left, right) => right.WeekIndex.CompareTo(left.WeekIndex));
+            if (history.Count > MaxOfferHistoryEntriesPerBank)
+            {
+                history.RemoveRange(MaxOfferHistoryEntriesPerBank, history.Count - MaxOfferHistoryEntriesPerBank);
+            }
+        }
+
+        private static BankOfferRateSnapshot CloneOffer(BankOfferRateSnapshot source)
+        {
+            if (source == null)
+            {
+                return null;
+            }
+
+            return new BankOfferRateSnapshot
+            {
+                BankId = source.BankId,
+                WeekIndex = source.WeekIndex,
+                RatePercent = Math.Max(0f, source.RatePercent),
+            };
         }
 
         private void RecordIncome(CompanyFinanceCategory category, float amount, int currentInGameMinute, string description)

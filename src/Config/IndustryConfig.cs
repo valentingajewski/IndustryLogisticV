@@ -34,8 +34,11 @@ namespace LSOL.Config
         public HashSet<string> Outputs { get; set; }
         public Dictionary<string, float> RecipeInputWeights { get; set; }
         public Dictionary<string, float> RecipeOutputWeights { get; set; }
+        public List<IndustryRecipeVariantConfig> RecipeVariants { get; set; }
         public Dictionary<string, float> InputCapacityWeights { get; set; }
         public Dictionary<string, float> OutputCapacityWeights { get; set; }
+        public Dictionary<string, float> SinkPreferenceWeights { get; set; }
+        public float SinkElasticityMultiplier { get; set; } = 1f;
         public float FactoryProductionRatio { get; set; }
         public float InputCapacityTons { get; set; }
         public float OutputCapacityTons { get; set; }
@@ -84,5 +87,32 @@ namespace LSOL.Config
                 PermitRequired = permitRequired,
             };
         }
+    }
+
+    public sealed class IndustryRecipeVariantConfig
+    {
+        public string Id { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public int SelectionPriority { get; set; }
+
+        public HashSet<string> Inputs { get; set; }
+
+        public HashSet<string> OptionalInputs { get; set; }
+
+        public HashSet<string> BoostInputs { get; set; }
+
+        public HashSet<string> Outputs { get; set; }
+
+        public Dictionary<string, float> RecipeInputWeights { get; set; }
+
+        public Dictionary<string, float> RecipeOutputWeights { get; set; }
+
+        public Dictionary<string, float> OptionalInputWeights { get; set; }
+
+        public Dictionary<string, float> InputCapacityWeights { get; set; }
+
+        public Dictionary<string, float> OutputCapacityWeights { get; set; }
     }
 }

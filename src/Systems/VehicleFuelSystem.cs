@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using GTA;
+using GTA.Math;
 using GTA.Native;
 using LSOL.Domain;
 
@@ -21,6 +22,12 @@ namespace LSOL.Systems
         public float FuelRatio { get; set; }
 
         public bool IsOutOfFuel { get; set; }
+
+        public bool HasRangeEstimate { get; set; }
+
+        public float EstimatedRangeMeters { get; set; }
+
+        public float SmoothedLitersPerMeter { get; set; }
 
         public bool UsesSeparatePoweredVehicle
         {
@@ -87,6 +94,7 @@ namespace LSOL.Systems
             state.CurrentFuelLiters = resolvedFuelLiters;
             state.OutOfFuelMessageShown = false;
             state.PowerCutApplied = false;
+            ResetRangeTracking(state, poweredVehicle);
             ApplyPropulsionState(poweredVehicle, state);
         }
 
@@ -102,6 +110,17 @@ namespace LSOL.Systems
             {
                 state.CurrentFuelLiters = Math.Max(0f, Math.Min(state.CapacityLiters, currentFuelLiters.Value));
                 state.OutOfFuelMessageShown = state.CurrentFuelLiters <= 0.001f;
+
+                if (poweredVehicle != null && poweredVehicle.Exists())
+                {
+                    state.LastObservedPosition = poweredVehicle.Position;
+                    state.HasLastObservedPosition = true;
+                }
+            }
+            else if (!state.HasLastObservedPosition && poweredVehicle != null && poweredVehicle.Exists())
+            {
+                state.LastObservedPosition = poweredVehicle.Position;
+                state.HasLastObservedPosition = true;
             }
 
             ApplyPropulsionState(poweredVehicle, state);
@@ -148,6 +167,8 @@ namespace LSOL.Systems
             }
 
             var changed = false;
+            var currentPosition = poweredVehicle.Position;
+            var distanceMeters = GetDistanceSinceLastObservation(state, currentPosition);
             if (player.CurrentVehicle != null
                 && player.CurrentVehicle.Exists()
                 && player.CurrentVehicle.Handle == poweredVehicle.Handle
@@ -161,7 +182,9 @@ namespace LSOL.Systems
                     if (burnLiters > 0f)
                     {
                         state.CurrentFuelLiters = Math.Max(0f, state.CurrentFuelLiters - burnLiters);
-                        changed = Math.Abs(before - state.CurrentFuelLiters) > 0.001f;
+                        var consumedLiters = Math.Max(0f, before - state.CurrentFuelLiters);
+                        state.RangeEstimator.AddObservation(distanceMeters, consumedLiters, Math.Max(0f, poweredVehicle.Speed));
+                        changed = consumedLiters > 0.001f;
                     }
                 }
             }
@@ -177,6 +200,8 @@ namespace LSOL.Systems
             }
 
             ApplyPropulsionState(poweredVehicle, state);
+            state.LastObservedPosition = currentPosition;
+            state.HasLastObservedPosition = true;
             return changed;
         }
 
@@ -188,6 +213,9 @@ namespace LSOL.Systems
                 return null;
             }
 
+            var isOutOfFuel = state.CurrentFuelLiters <= 0.001f;
+            var hasRangeEstimate = isOutOfFuel || state.RangeEstimator.HasEstimate;
+
             return new VehicleFuelTelemetry
             {
                 PoweredVehicle = poweredVehicle,
@@ -198,7 +226,12 @@ namespace LSOL.Systems
                 FuelRatio = state.CapacityLiters <= 0.001f
                     ? 0f
                     : ModMath.Clamp01(state.CurrentFuelLiters / state.CapacityLiters),
-                IsOutOfFuel = state.CurrentFuelLiters <= 0.001f,
+                IsOutOfFuel = isOutOfFuel,
+                HasRangeEstimate = hasRangeEstimate,
+                EstimatedRangeMeters = isOutOfFuel
+                    ? 0f
+                    : state.RangeEstimator.EstimateRemainingRangeMeters(state.CurrentFuelLiters),
+                SmoothedLitersPerMeter = state.RangeEstimator.SmoothedLitersPerMeter,
             };
         }
 
@@ -294,8 +327,47 @@ namespace LSOL.Systems
                 CurrentFuelLiters = Math.Max(0f, definition.FuelCapacityLiters),
             };
 
+            state.LastObservedPosition = poweredVehicle.Position;
+            state.HasLastObservedPosition = true;
+
             _fuelStates[poweredVehicle.Handle] = state;
             return state;
+        }
+
+        private static float GetDistanceSinceLastObservation(VehicleFuelState state, Vector3 currentPosition)
+        {
+            if (state == null)
+            {
+                return 0f;
+            }
+
+            if (!state.HasLastObservedPosition)
+            {
+                state.LastObservedPosition = currentPosition;
+                state.HasLastObservedPosition = true;
+                return 0f;
+            }
+
+            return state.LastObservedPosition.DistanceTo(currentPosition);
+        }
+
+        private static void ResetRangeTracking(VehicleFuelState state, Vehicle poweredVehicle)
+        {
+            if (state == null)
+            {
+                return;
+            }
+
+            state.RangeEstimator.Reset();
+            if (poweredVehicle != null && poweredVehicle.Exists())
+            {
+                state.LastObservedPosition = poweredVehicle.Position;
+                state.HasLastObservedPosition = true;
+                return;
+            }
+
+            state.LastObservedPosition = Vector3.Zero;
+            state.HasLastObservedPosition = false;
         }
 
         private VehicleFuelState GetState(Vehicle poweredVehicle)
@@ -446,6 +518,127 @@ namespace LSOL.Systems
             public bool OutOfFuelMessageShown { get; set; }
 
             public bool PowerCutApplied { get; set; }
+
+            public Vector3 LastObservedPosition { get; set; }
+
+            public bool HasLastObservedPosition { get; set; }
+
+            public VehicleFuelRangeEstimator RangeEstimator { get; } = new VehicleFuelRangeEstimator();
+        }
+    }
+
+    internal sealed class VehicleFuelRangeEstimator
+    {
+        private const int MaxCommittedObservationCount = 24;
+        internal const float MinimumObservationSpeedMetersPerSecond = 2.5f;
+        internal const float MinimumCommittedObservationDistanceMeters = 20f;
+        internal const float MinimumCommittedObservationFuelLiters = 0.02f;
+        internal const float MinimumCalibrationDistanceMeters = 100f;
+        internal const float MinimumCalibrationFuelLiters = 0.2f;
+        private const float MaximumObservationDistanceMeters = 250f;
+
+        private readonly Queue<RangeObservation> _observations = new Queue<RangeObservation>();
+
+        private float _windowDistanceMeters;
+        private float _windowFuelLiters;
+        private float _pendingDistanceMeters;
+        private float _pendingFuelLiters;
+
+        public bool HasEstimate
+        {
+            get
+            {
+                return _windowDistanceMeters >= MinimumCalibrationDistanceMeters
+                    && _windowFuelLiters >= MinimumCalibrationFuelLiters
+                    && SmoothedLitersPerMeter > 0.000001f;
+            }
+        }
+
+        public float SmoothedLitersPerMeter
+        {
+            get
+            {
+                return _windowDistanceMeters <= 0.001f
+                    ? 0f
+                    : _windowFuelLiters / _windowDistanceMeters;
+            }
+        }
+
+        public void Reset()
+        {
+            _observations.Clear();
+            _windowDistanceMeters = 0f;
+            _windowFuelLiters = 0f;
+            _pendingDistanceMeters = 0f;
+            _pendingFuelLiters = 0f;
+        }
+
+        public void AddObservation(float distanceMeters, float fuelLitersConsumed, float speedMetersPerSecond)
+        {
+            if (speedMetersPerSecond < MinimumObservationSpeedMetersPerSecond
+                || distanceMeters <= 0.001f
+                || fuelLitersConsumed <= 0.0001f)
+            {
+                return;
+            }
+
+            if (distanceMeters > MaximumObservationDistanceMeters)
+            {
+                ResetPending();
+                return;
+            }
+
+            _pendingDistanceMeters += distanceMeters;
+            _pendingFuelLiters += fuelLitersConsumed;
+            if (_pendingDistanceMeters < MinimumCommittedObservationDistanceMeters
+                || _pendingFuelLiters < MinimumCommittedObservationFuelLiters)
+            {
+                return;
+            }
+
+            var observation = new RangeObservation
+            {
+                DistanceMeters = _pendingDistanceMeters,
+                FuelLitersConsumed = _pendingFuelLiters,
+            };
+
+            _observations.Enqueue(observation);
+            _windowDistanceMeters += observation.DistanceMeters;
+            _windowFuelLiters += observation.FuelLitersConsumed;
+            ResetPending();
+
+            while (_observations.Count > MaxCommittedObservationCount)
+            {
+                var expired = _observations.Dequeue();
+                _windowDistanceMeters = Math.Max(0f, _windowDistanceMeters - expired.DistanceMeters);
+                _windowFuelLiters = Math.Max(0f, _windowFuelLiters - expired.FuelLitersConsumed);
+            }
+        }
+
+        public float EstimateRemainingRangeMeters(float currentFuelLiters)
+        {
+            if (currentFuelLiters <= 0.001f)
+            {
+                return 0f;
+            }
+
+            var litersPerMeter = SmoothedLitersPerMeter;
+            return !HasEstimate || litersPerMeter <= 0.000001f
+                ? 0f
+                : Math.Max(0f, currentFuelLiters / litersPerMeter);
+        }
+
+        private void ResetPending()
+        {
+            _pendingDistanceMeters = 0f;
+            _pendingFuelLiters = 0f;
+        }
+
+        private sealed class RangeObservation
+        {
+            public float DistanceMeters { get; set; }
+
+            public float FuelLitersConsumed { get; set; }
         }
     }
 }

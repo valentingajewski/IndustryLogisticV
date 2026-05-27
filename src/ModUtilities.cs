@@ -81,6 +81,33 @@ namespace LSOL
             return string.Format(PlayerFacingCulture, "{0} {1}", FormatNumber(value), unit ?? string.Empty);
         }
 
+        public static string FormatDistance(double meters, bool useMetric)
+        {
+            var distanceMeters = Math.Max(0d, meters);
+            if (useMetric)
+            {
+                if (distanceMeters < 1000d)
+                {
+                    return string.Format(PlayerFacingCulture, "{0:0} m", distanceMeters);
+                }
+
+                var distanceKilometers = distanceMeters / 1000d;
+                return distanceKilometers < 10d
+                    ? string.Format(PlayerFacingCulture, "{0:0.0} km", distanceKilometers)
+                    : string.Format(PlayerFacingCulture, "{0:0} km", distanceKilometers);
+            }
+
+            var distanceMiles = distanceMeters / 1609.344d;
+            if (distanceMiles < 0.05d)
+            {
+                return "0 mi";
+            }
+
+            return distanceMiles < 10d
+                ? string.Format(PlayerFacingCulture, "{0:0.0} mi", distanceMiles)
+                : string.Format(PlayerFacingCulture, "{0:0} mi", distanceMiles);
+        }
+
         public static string FormatRatio(double current, double capacity, string unitSuffix)
         {
             return string.Format(PlayerFacingCulture, "{0}/{1}{2}", FormatNumber(current), FormatNumber(capacity), unitSuffix ?? string.Empty);

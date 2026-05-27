@@ -6,6 +6,23 @@ using LSOL.Domain;
 
 namespace LSOL.Systems
 {
+    public sealed class CargoTransferProfitContext
+    {
+        public CompanyFinanceCategory Category { get; set; }
+
+        public string Description { get; set; }
+
+        public int RouteContractId { get; set; }
+
+        public string RouteLabel { get; set; }
+
+        public string PlayerContractId { get; set; }
+
+        public string ShipperKey { get; set; }
+
+        public string DistrictName { get; set; }
+    }
+
     public sealed class CargoTransferController
     {
         private readonly FleetManager _fleetManager;
@@ -230,7 +247,7 @@ namespace LSOL.Systems
             VehicleCargoState cargoState,
             bool omegaOnly,
             Action beforeStart,
-            Action<float> addProfit,
+            Action<float, CargoTransferProfitContext> addProfit,
             Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
         {
             if (cargoState.IsEmpty)
@@ -311,7 +328,19 @@ namespace LSOL.Systems
                         {
                             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                             var contractResult = _playerContractsManager.CommitContractUnload(contractContext, cargoVehicle, cargoState, accepted, Game.GameTime);
-                            addProfit(contractResult.Payout);
+                            addProfit(contractResult.Payout, new CargoTransferProfitContext
+                            {
+                                Category = CompanyFinanceCategory.PlayerContract,
+                                Description = string.Format(
+                                    "Contract delivery of {0} to {1}",
+                                    cargoState.Commodity ?? "cargo",
+                                    industry != null ? industry.Name : "destination"),
+                                RouteContractId = 0,
+                                RouteLabel = contractResult.RouteLabel,
+                                PlayerContractId = contractResult.PlayerContractId,
+                                ShipperKey = contractResult.ShipperKey,
+                                DistrictName = contractResult.DistrictName,
+                            });
 
                             if (contractResult.ContractCompleted)
                             {
@@ -334,7 +363,15 @@ namespace LSOL.Systems
                                 _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                             }
 
-                            addProfit(revenue);
+                            addProfit(revenue, new CargoTransferProfitContext
+                            {
+                                Category = CompanyFinanceCategory.PlayerDelivery,
+                                Description = industry != null && industry.IsWarehouse
+                                    ? string.Format("Stored {0} at {1}", commodity, industry.Name)
+                                    : string.Format("Player delivery of {0} to {1}", commodity, industry != null ? industry.Name : "destination"),
+                                RouteContractId = 0,
+                                RouteLabel = string.Empty,
+                            });
 
                             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                             var completedDelivery = cargoState.WeightTons <= 0.001f;
@@ -531,7 +568,7 @@ namespace LSOL.Systems
             Vehicle cargoVehicle,
             VehicleCargoState cargoState,
             Action beforeStart,
-            Action<float> addProfit,
+            Action<float, CargoTransferProfitContext> addProfit,
             Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
         {
             PlayerContractTransferContext contractContext = null;
@@ -595,7 +632,19 @@ namespace LSOL.Systems
                         {
                             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                             var contractResult = _playerContractsManager.CommitContractUnload(contractContext, cargoVehicle, cargoState, accepted, Game.GameTime);
-                            addProfit(contractResult.Payout);
+                            addProfit(contractResult.Payout, new CargoTransferProfitContext
+                            {
+                                Category = CompanyFinanceCategory.PlayerContract,
+                                Description = string.Format(
+                                    "Contract delivery of {0} to {1}",
+                                    cargoState.Commodity ?? "cargo",
+                                    industry != null ? industry.Name : "destination"),
+                                RouteContractId = 0,
+                                RouteLabel = contractResult.RouteLabel,
+                                PlayerContractId = contractResult.PlayerContractId,
+                                ShipperKey = contractResult.ShipperKey,
+                                DistrictName = contractResult.DistrictName,
+                            });
 
                             if (contractResult.ContractCompleted)
                             {
@@ -617,7 +666,13 @@ namespace LSOL.Systems
                                 _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                             }
 
-                            addProfit(revenue);
+                            addProfit(revenue, new CargoTransferProfitContext
+                            {
+                                Category = CompanyFinanceCategory.PlayerDelivery,
+                                Description = string.Format("Player delivery of {0} to {1}", commodity, industry != null ? industry.Name : "destination"),
+                                RouteContractId = 0,
+                                RouteLabel = string.Empty,
+                            });
 
                             cargoState.WeightTons = Math.Max(0f, cargoState.WeightTons - accepted);
                             var completedDelivery = cargoState.WeightTons <= 0.001f;

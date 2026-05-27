@@ -38,6 +38,10 @@ namespace LSOL
         private const int DefaultNpcRouteLimit = 5;
         private const int MinNpcRouteLimit = 0;
         private const int MaxNpcRouteLimit = 10;
+        private const int AlertRuleEvaluationIntervalMs = 15000;
+        private const int AlertRuleNotificationCooldownMs = 180000;
+        private const int AlertRuleGlobalCooldownMs = 45000;
+        private const int AlertRuleWarmupMs = 15000;
         private const string PhantomCommercialVehicleId = "20";
         private const string PhantomCommercialModelName = "phantom3";
         private const string PhantomRoadVeteranUnlockMessage = "Phantom unlocks after earning Road Veteran (100 deliveries).";
@@ -73,6 +77,7 @@ namespace LSOL
         private readonly ModConfig _config;
         private readonly LsolAddonCatalog _addonCatalog;
         private readonly string _configDirectory;
+        private readonly DifficultySettingsTemplateStore _difficultyTemplateStore;
         private readonly string _defaultIndustryStatePath;
         private readonly string _savegamesDirectoryPath;
         private readonly ControlBindings _controls;
@@ -98,6 +103,8 @@ namespace LSOL
         private readonly LemonMenu _saveSlotsMenu;
         private readonly LemonMenu _industryPurchaseMenu;
         private readonly LemonMenu _difficultyMenu;
+        private readonly LemonMenu _difficultyActionsMenu;
+        private readonly LemonMenu _difficultyTemplateMenu;
         private readonly LemonMenu _optionsMenu;
         private readonly LemonMenu _notificationsMenu;
         private readonly LemonMenu _debugMenu;
@@ -118,6 +125,7 @@ namespace LSOL
         private readonly WorkerSpawnController _workerSpawnController;
         private readonly Dictionary<string, Blip> _commercialVehicleBlips;
         private readonly Dictionary<string, Blip> _personalVehicleBlips;
+        private readonly Dictionary<string, int> _alertRuleLastShownByKey;
 
         private readonly Dictionary<WinForms.Keys, int> _keyCooldownUntil;
         private readonly HashSet<WinForms.Keys> _heldKeys;
@@ -141,6 +149,8 @@ namespace LSOL
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
         private int _lastBlipRefreshMs;
+        private int _lastAlertRuleEvaluationMs;
+        private int _nextAlertRuleAllowedAtMs;
         private int _statusMessageUntil;
 
         private string _pendingSaveName;
@@ -153,6 +163,7 @@ namespace LSOL
         private GameModMode _gameModMode;
         private IndustryPurchaseMenuReturnTarget _industryPurchaseMenuReturnTarget;
         private SaveSlotMenuAction _saveSlotMenuAction;
+        private DifficultyProfileTarget _activeDifficultyProfileTarget;
 
         private bool _modMechanicsEnabled;
         private bool _industryPersistenceEnabled;
@@ -189,6 +200,7 @@ namespace LSOL
         private float _cruiseControlTargetSpeedMps;
         private bool _isConstructing;
         private int _lastIndustryObjectDeletionSweepMs;
+        private AlertRulesPersistenceSnapshot _alertRules;
 
         private OwnedFleetPersistenceSnapshot _pendingOwnedFleetRestore;
         private PropertyOwnershipPersistenceSnapshot _pendingPropertyRestore;
@@ -201,6 +213,7 @@ namespace LSOL
             _defaultIndustryStatePath = ResolveIndustryStatePath();
             _savegamesDirectoryPath = ResolveSavegamesDirectoryPath();
             _industryStatePath = _defaultIndustryStatePath;
+            _difficultyTemplateStore = new DifficultySettingsTemplateStore(Path.Combine(_configDirectory, "DifficultyTemplates.xml"));
             _addonCatalog = LsolAddonCatalog.Load(_configDirectory);
             _config = ModConfig.Load(_configDirectory, _addonCatalog);
             _controls = _config.Controls ?? new ControlBindings();
@@ -282,7 +295,9 @@ namespace LSOL
                         _tabletStateStore.MarkNetworkDirty();
                         _tabletStateStore.MarkCargoDirty();
                     }
-                });
+                },
+                null,
+                _financeTracker);
             _cargoTransferController = new CargoTransferController(
                 _fleetManager,
                 _industryManager,
@@ -318,6 +333,7 @@ namespace LSOL
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
             _commercialVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
             _personalVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
+            _alertRuleLastShownByKey = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _npcLogisticsManager = new NpcLogisticsManager(
                 _configDirectory,
                 _industryManager,
@@ -431,6 +447,18 @@ namespace LSOL
                 AlignRight = true,
                 Theme = LemonMenuTheme.Default,
             };
+            _difficultyActionsMenu = new LemonMenu("Difficulty Actions")
+            {
+                Subtitle = "Templates",
+                AlignRight = true,
+                Theme = LemonMenuTheme.Default,
+            };
+            _difficultyTemplateMenu = new LemonMenu("Load Difficulty Template")
+            {
+                Subtitle = "Choose a saved difficulty profile",
+                AlignRight = true,
+                Theme = LemonMenuTheme.Default,
+            };
             _optionsMenu = new LemonMenu("Options")
             {
                 Subtitle = "Language and accessibility settings",
@@ -477,7 +505,8 @@ namespace LSOL
                 AssignSupportCrewFromOffice,
                 HireSupportStaffFromOffice,
                 SetDepotSpecializationFromOffice,
-                message => ShowStatus(message));
+                message => ShowStatus(message),
+                () => _tabletStateStore != null ? _tabletStateStore.GetRoutePlannerOverlaySnapshot() : new RoutePlannerOverlaySnapshot());
             _tabletStateStore = new TabletStateStore(
                 _industryManager,
                 _fleetManager,
@@ -514,14 +543,16 @@ namespace LSOL
                 ShowStatus);
             _territoryManager.ConfigureEndgameContext(
                 () => _playerSuccessTracker != null ? _playerSuccessTracker.GetEndgameSummary() : new CompanyEndgameSummary(),
-                () => _npcLogisticsManager != null ? _npcLogisticsManager.GetDistrictCompetitionSummaries() : Array.Empty<NpcDistrictCompetitionSummary>());
+                () => _npcLogisticsManager != null ? _npcLogisticsManager.GetDistrictCompetitionSummaries() : Array.Empty<NpcDistrictCompetitionSummary>(),
+                () => _npcLogisticsManager != null ? _npcLogisticsManager.GetCorridorCompetitionSummaries() : Array.Empty<NpcCorridorCompetitionSummary>());
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
             _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager, _playerSuccessTracker));
             _tabletShellController.RegisterApp(new BudgetTabletApp());
-            _tabletShellController.RegisterApp(new AnalyticsTabletApp());
+            _tabletShellController.RegisterApp(new PropertyPortfolioTabletApp(CreatePropertyPortfolioTabletActions()));
+            _tabletShellController.RegisterApp(new AnalyticsTabletApp(OpenAnalyticsRoutePlannerMapFromTablet, OpenNpcPlannerDraftFromTablet));
             _tabletShellController.RegisterApp(new SuccessesTabletApp(_playerSuccessTracker));
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
-            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested, ToggleServiceSiteOperatorFromTablet, message => ShowStatus(message)));
+            _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested, ToggleServiceSiteOperatorFromTablet, message => ShowStatus(message), OpenNetworkRoutePlannerMapFromTablet, OpenNpcPlannerDraftFromTablet));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
                 IndustryInteractionDistance,
                 HandleTabletLoadRequested,
@@ -535,6 +566,8 @@ namespace LSOL
 
             _keyCooldownUntil = new Dictionary<WinForms.Keys, int>();
             _heldKeys = new HashSet<WinForms.Keys>();
+            _alertRules = new AlertRulesPersistenceSnapshot();
+            ResetAlertRuleRuntimeState(Game.GameTime, true);
 
             _gameModMode = GameModMode.Fun;
             _vehicleCargoMenuContext = VehicleCargoMenuContext.Office;
@@ -543,33 +576,12 @@ namespace LSOL
             _modMechanicsEnabled = false;
             _industryPersistenceEnabled = true;
             _difficultySettingsLocked = false;
-            _cargoDamageDifficultyEnabled = true;
-            _industryPricingDifficultyEnabled = false;
-            _licensingDifficultyEnabled = false;
-            _corridorRestrictionDifficultyEnabled = true;
-            _reputationDifficultyEnabled = true;
-            _officeGarageLimitDifficultyEnabled = true;
-            _officeNpcLimitDifficultyEnabled = false;
             _language = ModLanguage.English;
-            _economyDifficultyPreset = EconomyDifficultyPreset.Standard;
             _colorblindMode = ColorblindMode.Off;
             _useMetricSpeedDisplay = false;
-            _npcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
-            _npcRouteLimit = DefaultNpcRouteLimit;
-            _vehicleFuelDifficultyEnabled = false;
-            _cargoWeightPowerDifficultyEnabled = false;
-            _pendingCargoDamageDifficultyEnabled = _cargoDamageDifficultyEnabled;
-            _pendingIndustryPricingDifficultyEnabled = _industryPricingDifficultyEnabled;
-            _pendingLicensingDifficultyEnabled = _licensingDifficultyEnabled;
-            _pendingCorridorRestrictionDifficultyEnabled = _corridorRestrictionDifficultyEnabled;
-            _pendingReputationDifficultyEnabled = _reputationDifficultyEnabled;
-            _pendingOfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled;
-            _pendingOfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled;
-            _pendingEconomyDifficultyPreset = _economyDifficultyPreset;
-            _pendingNpcWeeklyWageDifficulty = _npcWeeklyWageDifficulty;
-            _pendingNpcRouteLimit = _npcRouteLimit;
-            _pendingVehicleFuelDifficultyEnabled = _vehicleFuelDifficultyEnabled;
-            _pendingCargoWeightPowerDifficultyEnabled = _cargoWeightPowerDifficultyEnabled;
+            _activeDifficultyProfileTarget = DifficultyProfileTarget.Live;
+            SetLiveDifficultyProfile(DifficultySettingsProfile.CreateDefault());
+            SyncPendingDifficultyProfileFromLive();
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingSaveName = string.Empty;
             _industryPurchaseMenuReturnTarget = IndustryPurchaseMenuReturnTarget.None;
@@ -614,6 +626,8 @@ namespace LSOL
                     || _saveSlotsMenu.IsOpen
                     || _industryPurchaseMenu.IsOpen
                     || _difficultyMenu.IsOpen
+                    || _difficultyActionsMenu.IsOpen
+                    || _difficultyTemplateMenu.IsOpen
                     || _optionsMenu.IsOpen
                     || _notificationsMenu.IsOpen
                     || _debugMenu.IsOpen
@@ -704,6 +718,8 @@ namespace LSOL
                 _tabletStateStore.MarkCargoDirty();
             }
 
+            EvaluateAmbientAlertRules(gameTime);
+
             _vehicleLoadPowerService.Update(player);
             UpdateCruiseControl(player);
 
@@ -718,7 +734,12 @@ namespace LSOL
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
-            UpdateCargoOverviewAndIntegrity(player, gameTime);
+            var drewCargoOverview = UpdateCargoOverviewAndIntegrity(player, gameTime);
+            if (!drewCargoOverview)
+            {
+                DrawActiveVehicleFuelHud(player);
+            }
+
             DrawOpenMenus();
             DrawTabletShell();
         }
@@ -882,6 +903,30 @@ namespace LSOL
                 return true;
             }
 
+            if (_difficultyTemplateMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToDifficultyActionsMenu();
+                    return true;
+                }
+
+                _difficultyTemplateMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_difficultyActionsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    ReturnToDifficultySourceMenu();
+                    return true;
+                }
+
+                _difficultyActionsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_newSaveSetupMenu.IsOpen)
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
@@ -985,7 +1030,7 @@ namespace LSOL
 
             if (_bankMenu != null && _bankMenu.IsOpen)
             {
-                _bankMenu.HandleKey(key, _controls);
+                HandleBankMenuKey(key);
                 return true;
             }
 
@@ -1049,6 +1094,8 @@ namespace LSOL
             _saveSlotsMenu.Draw();
             _industryPurchaseMenu.Draw();
             _difficultyMenu.Draw();
+            _difficultyActionsMenu.Draw();
+            _difficultyTemplateMenu.Draw();
             _optionsMenu.Draw();
             _notificationsMenu.Draw();
             _officeMenu.Draw();
@@ -1060,7 +1107,7 @@ namespace LSOL
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1132,14 +1179,14 @@ namespace LSOL
             }
         }
 
-        private void UpdateCargoOverviewAndIntegrity(Ped player, int now)
+        private bool UpdateCargoOverviewAndIntegrity(Ped player, int now)
         {
             Vehicle cargoVehicle;
             Vehicle driverVehicle;
             VehicleCargoState cargoState;
             if (!TryGetActiveCargoContext(player, out cargoVehicle, out driverVehicle, out cargoState))
             {
-                return;
+                return false;
             }
 
             if (_cargoDamageDifficultyEnabled)
@@ -1155,6 +1202,7 @@ namespace LSOL
                 driverVehicle != null && driverVehicle.Exists() ? driverVehicle : cargoVehicle,
                 cargoVehicle);
             DrawCargoOverview(cargoState, fuelTelemetry);
+            return true;
         }
 
         private bool TryGetActiveCargoContext(Ped player, out Vehicle cargoVehicle, out Vehicle driverVehicle, out VehicleCargoState cargoState)
@@ -1297,24 +1345,19 @@ namespace LSOL
             }
 
             var resolution = Screen.MainWindowResolution;
+            var fuelDisplay = VehicleFuelHudFormatter.BuildDisplay(fuelTelemetry, _useMetricSpeedDisplay, _vehicleFuelDifficultyEnabled);
+            var hasFuelSecondaryLine = !string.IsNullOrWhiteSpace(fuelDisplay.SecondaryLabel);
             var x = resolution.Width * 0.18f;
             var y = resolution.Height * 0.812f;
             var width = resolution.Width * 0.1075f;
-            var height = resolution.Height * 0.112f;
+            var height = resolution.Height * (hasFuelSecondaryLine ? 0.128f : 0.112f);
             var isEmpty = cargoState.IsEmpty;
             var quantityRatio = cargoState.FillRatio;
             var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
-            var fuelRatio = fuelTelemetry != null ? fuelTelemetry.FuelRatio : 0f;
             var quantityColor = isEmpty
                 ? Color.FromArgb(186, 122, 140, 156)
                 : ResolveCargoOverviewAccent(cargoState.CargoType);
-            var fuelColor = fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f
-                ? Color.FromArgb(186, 122, 140, 156)
-                : (fuelRatio >= 0.5f
-                    ? Color.FromArgb(220, 116, 202, 138)
-                    : (fuelRatio >= 0.2f
-                        ? Color.FromArgb(224, 220, 180, 80)
-                        : Color.FromArgb(224, 214, 92, 78)));
+            var fuelColor = ResolveVehicleFuelColor(fuelDisplay.Severity);
             var conditionColor = isEmpty
                 ? Color.FromArgb(186, 122, 140, 156)
                 : ResolveCargoConditionColor(conditionRatio);
@@ -1322,14 +1365,6 @@ namespace LSOL
             var quantityLabel = isEmpty
                 ? "Qty 0% | Empty"
                 : string.Format("Qty {0:0}% | {1:0.0}t", quantityRatio * 100f, cargoState.WeightTons);
-            var fuelLabel = fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f
-                ? "Fuel n/a"
-                : string.Format(
-                    "Fuel {0:0}% | {1:0}/{2:0}L{3}",
-                    fuelRatio * 100f,
-                    fuelTelemetry.CurrentLiters,
-                    fuelTelemetry.CapacityLiters,
-                    fuelTelemetry.UsesSeparatePoweredVehicle ? " | Tractor" : string.Empty);
             var conditionLabel = isEmpty
                 ? "Cond n/a"
                 : string.Format("Cargo Condition {0} | {1:0}%", GetCargoConditionLabel(conditionRatio), conditionRatio * 100f);
@@ -1339,8 +1374,9 @@ namespace LSOL
             var quantityTextY = y + (height * 0.33f);
             var quantityBarY = y + (height * 0.44f);
             var fuelTextY = y + (height * 0.56f);
-            var fuelBarY = y + (height * 0.67f);
-            var conditionTextY = y + (height * 0.79f);
+            var fuelDetailY = y + (height * 0.64f);
+            var fuelBarY = y + (height * (hasFuelSecondaryLine ? 0.72f : 0.67f));
+            var conditionTextY = y + (height * (hasFuelSecondaryLine ? 0.80f : 0.79f));
             var conditionBarY = y + (height * 0.90f);
             var barWidth = width - 16f;
             var barHeight = Math.Max(4f, height * 0.055f);
@@ -1380,14 +1416,26 @@ namespace LSOL
 
             DrawHudText(
                 resolution,
-                fuelLabel,
+                fuelDisplay.PrimaryLabel,
                 contentX,
                 fuelTextY,
                 0.18f,
                 fuelColor,
                 GTA.UI.Font.ChaletLondon);
 
-            DrawCompactLoadingBar(resolution, contentX, fuelBarY, barWidth, barHeight, fuelRatio, fuelColor);
+            if (hasFuelSecondaryLine)
+            {
+                DrawHudText(
+                    resolution,
+                    fuelDisplay.SecondaryLabel,
+                    contentX,
+                    fuelDetailY,
+                    0.17f,
+                    Color.FromArgb(220, 214, 223, 233),
+                    GTA.UI.Font.ChaletLondon);
+            }
+
+            DrawCompactLoadingBar(resolution, contentX, fuelBarY, barWidth, barHeight, fuelDisplay.FuelRatio, fuelColor);
 
             DrawHudText(
                 resolution,
@@ -1400,6 +1448,86 @@ namespace LSOL
 
             DrawCompactLoadingBar(resolution, contentX, conditionBarY, barWidth, barHeight, conditionRatio, conditionColor);
 
+        }
+
+        private void DrawActiveVehicleFuelHud(Ped player)
+        {
+            if (!_vehicleFuelDifficultyEnabled || player == null || !player.Exists())
+            {
+                return;
+            }
+
+            var currentVehicle = player.CurrentVehicle;
+            if (currentVehicle == null || !currentVehicle.Exists())
+            {
+                return;
+            }
+
+            Vehicle poweredVehicle;
+            Vehicle cargoVehicle;
+            if (!_fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle))
+            {
+                return;
+            }
+
+            if (currentVehicle.Handle != poweredVehicle.Handle && currentVehicle.Handle != cargoVehicle.Handle)
+            {
+                return;
+            }
+
+            var fuelTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
+            if (fuelTelemetry == null || fuelTelemetry.CapacityLiters <= 0.001f)
+            {
+                return;
+            }
+
+            var fuelDisplay = VehicleFuelHudFormatter.BuildDisplay(fuelTelemetry, _useMetricSpeedDisplay, includeRangeEstimate: true);
+            var accentColor = ResolveVehicleFuelColor(fuelDisplay.Severity);
+            var resolution = Screen.MainWindowResolution;
+            var x = resolution.Width * 0.18f;
+            var y = resolution.Height * 0.852f;
+            var width = resolution.Width * 0.1075f;
+            var height = resolution.Height * 0.076f;
+            var contentX = x + 8f;
+            var titleY = y + 5f;
+            var primaryY = y + (height * 0.30f);
+            var secondaryY = y + (height * 0.52f);
+            var barY = y + (height * 0.76f);
+            var barWidth = width - 16f;
+            var barHeight = Math.Max(4f, height * 0.08f);
+
+            DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(92, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(204, 8, 12, 18));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, 4f, accentColor);
+
+            DrawHudText(
+                resolution,
+                "FUEL",
+                contentX,
+                titleY,
+                0.30f,
+                Color.FromArgb(248, 239, 247, 255),
+                GTA.UI.Font.ChaletComprimeCologne);
+
+            DrawHudText(
+                resolution,
+                fuelDisplay.PrimaryLabel,
+                contentX,
+                primaryY,
+                0.18f,
+                accentColor,
+                GTA.UI.Font.ChaletLondon);
+
+            DrawHudText(
+                resolution,
+                fuelDisplay.SecondaryLabel,
+                contentX,
+                secondaryY,
+                0.17f,
+                Color.FromArgb(220, 214, 223, 233),
+                GTA.UI.Font.ChaletLondon);
+
+            DrawCompactLoadingBar(resolution, contentX, barY, barWidth, barHeight, fuelDisplay.FuelRatio, accentColor);
         }
 
         private static void DrawCompactLoadingBar(Size resolution, float x, float y, float width, float height, float ratio, Color fillColor)
@@ -1599,6 +1727,22 @@ namespace LSOL
             return Color.FromArgb(228, 214, 92, 92);
         }
 
+        private static Color ResolveVehicleFuelColor(VehicleFuelHudSeverity severity)
+        {
+            switch (severity)
+            {
+                case VehicleFuelHudSeverity.Healthy:
+                    return Color.FromArgb(220, 116, 202, 138);
+                case VehicleFuelHudSeverity.Watch:
+                    return Color.FromArgb(224, 220, 180, 80);
+                case VehicleFuelHudSeverity.Urgent:
+                case VehicleFuelHudSeverity.Empty:
+                    return Color.FromArgb(224, 214, 92, 78);
+                default:
+                    return Color.FromArgb(186, 122, 140, 156);
+            }
+        }
+
         private static Color ResolveCargoOverviewAccent(VehicleCargoType cargoType)
         {
             switch (cargoType)
@@ -1667,6 +1811,8 @@ namespace LSOL
             _saveSlotsMenu.Close();
             _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
+            _difficultyActionsMenu.Close();
+            _difficultyTemplateMenu.Close();
             _debugMenu.Close();
             _debugMissionMenu.Close();
             CloseBankMenu();
@@ -1685,6 +1831,8 @@ namespace LSOL
             _saveSlotsMenu.Close();
             _industryPurchaseMenu.Close();
             _difficultyMenu.Close();
+            _difficultyActionsMenu.Close();
+            _difficultyTemplateMenu.Close();
             _optionsMenu.Close();
             _notificationsMenu.Close();
             _debugMenu.Close();
@@ -1970,114 +2118,21 @@ namespace LSOL
         {
             _newSaveSetupMenu.Title = Text(ModTextKey.MenuDifficultyTitle);
             _newSaveSetupMenu.Subtitle = Text(ModTextKey.MenuNewSaveSetupSubtitle, _pendingSaveName);
-            _newSaveSetupMenu.SetItems(new[]
+            var items = new List<OfficeMenuItem>();
+            items.AddRange(BuildDifficultyMenuRootItems(DifficultyProfileTarget.Pending));
+            items.AddRange(BuildDifficultyMenuCoreItems(DifficultyProfileTarget.Pending));
+            items.Add(new OfficeMenuItem
             {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentStartingBalanceCaption,
-                    DetailFactory = () => Text(ModTextKey.DetailNewSaveStartingBalance),
-                    OnLeft = () => ChangeStartingBalanceSelection(-1),
-                    OnRight = () => ChangeStartingBalanceSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentPendingEconomyDifficultyPresetCaption,
-                    DetailFactory = CurrentPendingEconomyDifficultyPresetDetail,
-                    OnLeft = () => ChangePendingEconomyDifficultyPreset(-1),
-                    OnRight = () => ChangePendingEconomyDifficultyPreset(1),
-                    OnActivate = () => ChangePendingEconomyDifficultyPreset(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentPendingNpcWeeklyWageDifficultyCaption,
-                    DetailFactory = CurrentPendingNpcWeeklyWageDifficultyDetail,
-                    OnLeft = () => ChangePendingNpcWeeklyWageDifficulty(-1),
-                    OnRight = () => ChangePendingNpcWeeklyWageDifficulty(1),
-                    OnActivate = () => ChangePendingNpcWeeklyWageDifficulty(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowVehicleFuel),
-                    DetailFactory = () => Text(ModTextKey.DetailVehicleFuel),
-                    CheckboxStateFactory = () => _pendingVehicleFuelDifficultyEnabled,
-                    OnActivate = TogglePendingVehicleFuelSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCargoWeightPower),
-                    DetailFactory = () => Text(ModTextKey.DetailCargoWeightPower),
-                    CheckboxStateFactory = () => _pendingCargoWeightPowerDifficultyEnabled,
-                    OnActivate = TogglePendingCargoWeightPowerSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCargoDamage),
-                    DetailFactory = () => Text(ModTextKey.DetailCargoDamage),
-                    CheckboxStateFactory = () => _pendingCargoDamageDifficultyEnabled,
-                    OnActivate = TogglePendingCargoDamageSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowIndustryPriceMechanic),
-                    DetailFactory = () => Text(ModTextKey.DetailIndustryPriceMechanic),
-                    CheckboxStateFactory = () => _pendingIndustryPricingDifficultyEnabled,
-                    OnActivate = TogglePendingIndustryPricingSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowLicensingSystem),
-                    DetailFactory = () => Text(ModTextKey.DetailLicensingSystem),
-                    CheckboxStateFactory = () => _pendingLicensingDifficultyEnabled,
-                    OnActivate = TogglePendingLicensingSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCorridorRestriction),
-                    DetailFactory = () => Text(ModTextKey.DetailCorridorRestriction),
-                    CheckboxStateFactory = () => _pendingCorridorRestrictionDifficultyEnabled,
-                    OnActivate = TogglePendingCorridorRestrictionSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowReputationSystem),
-                    DetailFactory = () => Text(ModTextKey.DetailReputationSystem),
-                    CheckboxStateFactory = () => _pendingReputationDifficultyEnabled,
-                    OnActivate = TogglePendingReputationSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowOfficeGarageLimit),
-                    DetailFactory = () => Text(ModTextKey.DetailOfficeGarageLimit),
-                    CheckboxStateFactory = () => _pendingOfficeGarageLimitDifficultyEnabled,
-                    OnActivate = TogglePendingOfficeGarageLimitSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "NPC limit at office",
-                    DetailFactory = CurrentPendingOfficeNpcLimitDetail,
-                    CheckboxStateFactory = () => _pendingOfficeNpcLimitDifficultyEnabled,
-                    OnActivate = TogglePendingOfficeNpcLimitSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentPendingNpcRouteLimitCaption,
-                    DetailFactory = CurrentNpcRouteLimitDetail,
-                    OnLeft = () => ChangePendingNpcRouteLimit(-1),
-                    OnRight = () => ChangePendingNpcRouteLimit(1),
-                    OnActivate = () => ChangePendingNpcRouteLimit(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCreateSave),
-                    DetailFactory = () => Text(ModTextKey.DetailCreateSave, _pendingSaveName),
-                    OnActivate = FinalizeNewSave,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.CommonBack),
-                    OnActivate = CancelNewSaveSetup,
-                },
+                CaptionFactory = () => Text(ModTextKey.RowCreateSave),
+                DetailFactory = () => Text(ModTextKey.DetailCreateSave, _pendingSaveName),
+                OnActivate = FinalizeNewSave,
             });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = CancelNewSaveSetup,
+            });
+            _newSaveSetupMenu.SetItems(items);
         }
 
         private void RebuildSaveSlotsMenuItems()
@@ -2167,9 +2222,41 @@ namespace LSOL
         private void RebuildNotificationsMenuItems()
         {
             _notificationsMenu.Title = "Notifications";
-            _notificationsMenu.Subtitle = "Control gameplay alerts";
+            _notificationsMenu.Subtitle = "Alert rules and route notices";
             _notificationsMenu.SetItems(new[]
             {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentRentAlertCaption,
+                    DetailFactory = CurrentRentAlertDetail,
+                    OnLeft = () => CycleRentAlertLeadTime(-1),
+                    OnRight = () => CycleRentAlertLeadTime(1),
+                    OnActivate = () => CycleRentAlertLeadTime(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentContractAlertCaption,
+                    DetailFactory = CurrentContractAlertDetail,
+                    OnLeft = () => CycleContractAlertLeadTime(-1),
+                    OnRight = () => CycleContractAlertLeadTime(1),
+                    OnActivate = () => CycleContractAlertLeadTime(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentFleetAlertCaption,
+                    DetailFactory = CurrentFleetAlertDetail,
+                    OnLeft = () => CycleFleetAlertMode(-1),
+                    OnRight = () => CycleFleetAlertMode(1),
+                    OnActivate = () => CycleFleetAlertMode(1),
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = CurrentTerritoryAlertCaption,
+                    DetailFactory = CurrentTerritoryAlertDetail,
+                    OnLeft = () => CycleTerritoryAlertMode(-1),
+                    OnRight = () => CycleTerritoryAlertMode(1),
+                    OnActivate = () => CycleTerritoryAlertMode(1),
+                },
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Office NPC deliveries",
@@ -2218,6 +2305,8 @@ namespace LSOL
         private void ReturnToModControlMenu()
         {
             _difficultyMenu.Close();
+            _difficultyActionsMenu.Close();
+            _difficultyTemplateMenu.Close();
             _savingOptionsMenu.Close();
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
@@ -2230,6 +2319,8 @@ namespace LSOL
         private void ReturnToSavingOptionsMenu()
         {
             _pendingDeleteSavePath = null;
+            _difficultyActionsMenu.Close();
+            _difficultyTemplateMenu.Close();
             _newSaveSetupMenu.Close();
             _saveSlotsMenu.Close();
             RebuildModControlMenuItems();
@@ -2416,101 +2507,15 @@ namespace LSOL
                 ? Text(ModTextKey.MenuDifficultyLockedSubtitle)
                 : Text(ModTextKey.MenuDifficultySubtitle);
 
-            _difficultyMenu.SetItems(new[]
+            var items = new List<OfficeMenuItem>();
+            items.AddRange(BuildDifficultyMenuRootItems(DifficultyProfileTarget.Live));
+            items.AddRange(BuildDifficultyMenuCoreItems(DifficultyProfileTarget.Live));
+            items.Add(new OfficeMenuItem
             {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentEconomyDifficultyPresetCaption,
-                    DetailFactory = CurrentEconomyDifficultyPresetDetail,
-                    OnLeft = () => ChangeEconomyDifficultyPreset(-1),
-                    OnRight = () => ChangeEconomyDifficultyPreset(1),
-                    OnActivate = () => ChangeEconomyDifficultyPreset(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentNpcWeeklyWageDifficultyCaption,
-                    DetailFactory = CurrentNpcWeeklyWageDifficultyDetail,
-                    OnLeft = () => ChangeNpcWeeklyWageDifficulty(-1),
-                    OnRight = () => ChangeNpcWeeklyWageDifficulty(1),
-                    OnActivate = () => ChangeNpcWeeklyWageDifficulty(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowVehicleFuel),
-                    DetailFactory = () => Text(ModTextKey.DetailVehicleFuel),
-                    CheckboxStateFactory = () => _vehicleFuelDifficultyEnabled,
-                    OnActivate = ToggleVehicleFuelSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCargoWeightPower),
-                    DetailFactory = () => Text(ModTextKey.DetailCargoWeightPower),
-                    CheckboxStateFactory = () => _cargoWeightPowerDifficultyEnabled,
-                    OnActivate = ToggleCargoWeightPowerSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCargoDamage),
-                    DetailFactory = () => Text(ModTextKey.DetailCargoDamage),
-                    CheckboxStateFactory = () => _cargoDamageDifficultyEnabled,
-                    OnActivate = ToggleCargoDamageSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowIndustryPriceMechanic),
-                    DetailFactory = () => Text(ModTextKey.DetailIndustryPriceMechanic),
-                    CheckboxStateFactory = () => _industryPricingDifficultyEnabled,
-                    OnActivate = ToggleIndustryPricingSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowLicensingSystem),
-                    DetailFactory = () => Text(ModTextKey.DetailLicensingSystem),
-                    CheckboxStateFactory = () => _licensingDifficultyEnabled,
-                    OnActivate = ToggleLicensingSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowCorridorRestriction),
-                    DetailFactory = () => Text(ModTextKey.DetailCorridorRestriction),
-                    CheckboxStateFactory = () => _corridorRestrictionDifficultyEnabled,
-                    OnActivate = ToggleCorridorRestrictionSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowReputationSystem),
-                    DetailFactory = () => Text(ModTextKey.DetailReputationSystem),
-                    CheckboxStateFactory = () => _reputationDifficultyEnabled,
-                    OnActivate = ToggleReputationSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.RowOfficeGarageLimit),
-                    DetailFactory = () => Text(ModTextKey.DetailOfficeGarageLimit),
-                    CheckboxStateFactory = () => _officeGarageLimitDifficultyEnabled,
-                    OnActivate = ToggleOfficeGarageLimitSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "NPC limit at office",
-                    DetailFactory = CurrentOfficeNpcLimitDetail,
-                    CheckboxStateFactory = () => _officeNpcLimitDifficultyEnabled,
-                    OnActivate = ToggleOfficeNpcLimitSetting,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentNpcRouteLimitCaption,
-                    DetailFactory = CurrentNpcRouteLimitDetail,
-                    OnLeft = () => ChangeNpcRouteLimit(-1),
-                    OnRight = () => ChangeNpcRouteLimit(1),
-                    OnActivate = () => ChangeNpcRouteLimit(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.CommonBack),
-                    OnActivate = ReturnToModControlMenu,
-                },
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = ReturnToModControlMenu,
             });
+            _difficultyMenu.SetItems(items);
         }
 
         private void OpenDifficultyMenu()
@@ -2612,15 +2617,20 @@ namespace LSOL
 
         private string CurrentDifficultySettingsDetail()
         {
+            var profile = CaptureLiveDifficultyProfile();
             return _difficultySettingsLocked
                 ? Text(
                     ModTextKey.DetailDifficultyLocked,
-                    FormatEconomyDifficultyPreset(_economyDifficultyPreset),
-                    FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty))
+                    FormatEconomyDifficultyPreset(profile.EconomyDifficultyPreset),
+                    FormatWeeklyWageDifficulty(profile.NpcWeeklyWageDifficulty),
+                    FormatNpcRouteLimitValue(profile.NpcRouteLimit),
+                    DifficultySettingsSummaryFormatter.BuildBooleanCount(profile))
                 : Text(
                     ModTextKey.DetailDifficultyUnlocked,
-                    FormatEconomyDifficultyPreset(_economyDifficultyPreset),
-                    FormatWeeklyWageDifficulty(_npcWeeklyWageDifficulty));
+                    FormatEconomyDifficultyPreset(profile.EconomyDifficultyPreset),
+                    FormatWeeklyWageDifficulty(profile.NpcWeeklyWageDifficulty),
+                    FormatNpcRouteLimitValue(profile.NpcRouteLimit),
+                    DifficultySettingsSummaryFormatter.BuildBooleanCount(profile));
         }
 
         private string CurrentOptionsDetail()
@@ -2630,8 +2640,13 @@ namespace LSOL
 
         private string CurrentNotificationsDetail()
         {
+            var alertRules = EnsureAlertRules();
             return string.Format(
-                "Office NPC deliveries: {0}",
+                "Rent {0} | Contracts {1} | Fleet {2} | Territory {3} | Office NPC deliveries {4}",
+                FormatAlertLeadTimeLabel(alertRules.RentLeadTime),
+                FormatAlertLeadTimeLabel(alertRules.ContractLeadTime),
+                FormatFleetAlertModeLabel(alertRules.FleetMode),
+                FormatTerritoryAlertModeLabel(alertRules.TerritoryMode),
                 _npcLogisticsManager.OfficeDeliveryNotificationsEnabled ? Text(ModTextKey.CommonOn) : Text(ModTextKey.CommonOff));
         }
 
@@ -2753,11 +2768,11 @@ namespace LSOL
             return BuildOfficeNpcLimitDetail(_pendingOfficeNpcLimitDifficultyEnabled);
         }
 
-        private static string BuildOfficeNpcLimitDetail(bool enabled)
+        private string BuildOfficeNpcLimitDetail(bool enabled)
         {
             return enabled
-                ? "Require Construction Site Cabin capacity before hiring additional NPCs."
-                : "Ignore Construction Site Cabin capacity when hiring NPCs.";
+            ? Text(ModTextKey.DetailOfficeNpcLimitEnabled)
+            : Text(ModTextKey.DetailOfficeNpcLimitDisabled);
         }
 
         private void ToggleMechanicsFromMenu()
@@ -3572,7 +3587,7 @@ namespace LSOL
             {
                 var capacity = GetActiveOfficeNpcCapacity();
                 return string.Format(
-                    "{0} hired NPC{1} active | Capacity {2}. Open the tablet-style NPC manager.",
+                    "{0} hired NPC{1} active | Capacity {2}. Open the tablet-style dispatch manager.",
                     routeCount,
                     routeCount == 1 ? string.Empty : "s",
                     Math.Max(0, capacity));
@@ -3605,13 +3620,13 @@ namespace LSOL
             var capacity = GetActiveOfficeNpcCapacity();
             if (capacity <= 0)
             {
-                return "Install a Construction Site Cabin at the active office to hire NPCs.";
+                return "Install an NPC operations module at the active office to hire NPCs.";
             }
 
             var hiredNpcCount = _npcLogisticsManager.Contracts.Count;
             if (hiredNpcCount >= capacity)
             {
-                return string.Format("Construction Site Cabin capacity reached: {0}/{1} hired NPCs.", hiredNpcCount, capacity);
+                return string.Format("NPC operations capacity reached: {0}/{1} hired NPCs.", hiredNpcCount, capacity);
             }
 
             return string.Empty;
@@ -3683,6 +3698,18 @@ namespace LSOL
             _companyMapController.OpenNetworkView(ReturnToTabletHomeFromCompanyMap);
         }
 
+        private void OpenNetworkRoutePlannerMapFromTablet()
+        {
+            CloseAllMenus();
+            _companyMapController.OpenNetworkView(() => ReturnToTabletRouteFromCompanyMap(TabletAppIds.Network, "planner"));
+        }
+
+        private void OpenAnalyticsRoutePlannerMapFromTablet()
+        {
+            CloseAllMenus();
+            _companyMapController.OpenNetworkView(() => ReturnToTabletRouteFromCompanyMap(TabletAppIds.Analytics, "route-planner"));
+        }
+
         private void OpenCompanyDistrictViewFromTablet()
         {
             CloseAllMenus();
@@ -3699,6 +3726,24 @@ namespace LSOL
         {
             _tabletStateStore.MarkAllDirty();
             _tabletShellController.OpenHome();
+        }
+
+        private void ReturnToTabletRouteFromCompanyMap(string appId, string pageId, object payload = null)
+        {
+            _tabletStateStore.MarkAllDirty();
+            _tabletShellController.Navigate(appId, pageId, payload);
+        }
+
+        private void OpenNpcPlannerDraftFromTablet(NpcLogisticsRouteDefinition routeDefinition)
+        {
+            if (routeDefinition == null)
+            {
+                ShowStatus("Planner lane unavailable.");
+                return;
+            }
+
+            CloseAllMenus();
+            _npcLogisticsController.OpenPlannerDraft(routeDefinition);
         }
 
         private int GetSecuredSupportSiteCount()
@@ -3720,7 +3765,15 @@ namespace LSOL
             AddProfit(CompanyFinanceCategory.OtherIncome, amount, string.Empty);
         }
 
-        private void AddProfit(CompanyFinanceCategory category, float amount, string description, int routeContractId = 0, string routeLabel = null)
+        private void AddProfit(
+            CompanyFinanceCategory category,
+            float amount,
+            string description,
+            int routeContractId = 0,
+            string routeLabel = null,
+            string playerContractId = null,
+            string shipperKey = null,
+            string districtName = null)
         {
             if (amount <= 0f)
             {
@@ -3728,7 +3781,7 @@ namespace LSOL
             }
 
             _profit += amount;
-            _financeTracker.RecordIncome(category, amount, GetCurrentInGameWeekMinute(), description, routeContractId, routeLabel);
+            _financeTracker.RecordIncome(category, amount, GetCurrentInGameWeekMinute(), description, routeContractId, routeLabel, playerContractId, shipperKey, districtName);
             SyncPlayerSuccessBalance();
             if (_tabletStateStore != null)
             {
@@ -5073,17 +5126,24 @@ namespace LSOL
                 {
                     CloseIndustryTablet();
                 },
-                amount => AddProfit(
-                    cargoState != null && !string.IsNullOrWhiteSpace(cargoState.PlayerContractId)
+                (amount, payoutContext) => AddProfit(
+                    payoutContext != null ? payoutContext.Category : (cargoState != null && !string.IsNullOrWhiteSpace(cargoState.PlayerContractId)
                         ? CompanyFinanceCategory.PlayerContract
-                        : CompanyFinanceCategory.PlayerDelivery,
+                        : CompanyFinanceCategory.PlayerDelivery),
                     amount,
-                    cargoState != null && !string.IsNullOrWhiteSpace(cargoState.PlayerContractId)
-                        ? string.Format(
-                            "Contract delivery of {0} to {1}",
-                            cargoState.Commodity ?? "cargo",
-                            industry != null ? industry.Name : "destination")
-                        : deliveryDescription),
+                    payoutContext != null && !string.IsNullOrWhiteSpace(payoutContext.Description)
+                        ? payoutContext.Description
+                        : (cargoState != null && !string.IsNullOrWhiteSpace(cargoState.PlayerContractId)
+                            ? string.Format(
+                                "Contract delivery of {0} to {1}",
+                                cargoState.Commodity ?? "cargo",
+                                industry != null ? industry.Name : "destination")
+                            : deliveryDescription),
+                    payoutContext != null ? payoutContext.RouteContractId : 0,
+                    payoutContext != null ? payoutContext.RouteLabel : null,
+                    payoutContext != null ? payoutContext.PlayerContractId : null,
+                    payoutContext != null ? payoutContext.ShipperKey : null,
+                    payoutContext != null ? payoutContext.DistrictName : null),
                 RecordPlayerSuccessDeliveryProgress);
         }
 

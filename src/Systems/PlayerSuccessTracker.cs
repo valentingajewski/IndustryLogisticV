@@ -953,7 +953,23 @@ namespace LSOL.Systems
                 : Enumerable.Empty<TerritoryDistrictState>();
         }
 
+        private sealed class DoctrineEvaluationResult
+        {
+            public IReadOnlyList<CompanyDoctrineStatus> Statuses { get; set; }
+
+            public CompanyDoctrineStatus ActiveStatus { get; set; }
+
+            public CompanyDoctrineLeadSummary LeadSummary { get; set; }
+
+            public bool HasLandmarkHeadquarters { get; set; }
+        }
+
         private IReadOnlyList<CompanyDoctrineStatus> BuildDoctrineStatuses()
+        {
+            return BuildDoctrineEvaluation().Statuses;
+        }
+
+        private DoctrineEvaluationResult BuildDoctrineEvaluation()
         {
             var statuses = new[]
             {
@@ -964,6 +980,7 @@ namespace LSOL.Systems
 
             var activeDoctrine = DetermineActiveDoctrine(statuses);
             var hasLandmarkHeadquarters = HasLandmarkHeadquarters();
+            CompanyDoctrineStatus activeStatus = null;
             for (int i = 0; i < statuses.Length; i++)
             {
                 var status = statuses[i];
@@ -974,33 +991,68 @@ namespace LSOL.Systems
 
                 status.IsActive = status.Tier > 0 && status.Doctrine == activeDoctrine;
                 status.EffectiveTier = CompanyDoctrineSystem.GetEffectiveTier(status.Tier, hasLandmarkHeadquarters, status.IsActive);
+                status.HasHeadquartersBoost = status.EffectiveTier > status.Tier;
                 status.BonusSummary = CompanyDoctrineSystem.BuildBonusSummary(status.Doctrine, status.EffectiveTier);
                 status.TradeoffSummary = CompanyDoctrineSystem.BuildTradeoffSummary(status.Doctrine, status.EffectiveTier);
+                if (status.IsActive)
+                {
+                    activeStatus = status;
+                }
             }
 
-            return statuses;
+            var leadSummary = BuildDoctrineLeadSummary(statuses, activeStatus);
+            for (int i = 0; i < statuses.Length; i++)
+            {
+                PopulateDoctrineContext(statuses[i], leadSummary, hasLandmarkHeadquarters);
+            }
+
+            return new DoctrineEvaluationResult
+            {
+                Statuses = statuses,
+                ActiveStatus = activeStatus,
+                LeadSummary = leadSummary,
+                HasLandmarkHeadquarters = hasLandmarkHeadquarters,
+            };
         }
 
         private CompanyEndgameSummary BuildEndgameSummary()
         {
-            var doctrines = BuildDoctrineStatuses().ToArray();
-            var activeDoctrine = doctrines.FirstOrDefault(status => status != null && status.IsActive);
-            var hasLandmarkHeadquarters = HasLandmarkHeadquarters();
+            var doctrineEvaluation = BuildDoctrineEvaluation();
+            var doctrines = doctrineEvaluation.Statuses.ToArray();
+            var activeDoctrine = doctrineEvaluation.ActiveStatus;
+            var hasLandmarkHeadquarters = doctrineEvaluation.HasLandmarkHeadquarters;
             var dominantDistricts = GetDominantDistrictCount();
             var competitiveWins = GetCompetitiveWinCount();
-            var prestige = 0f;
-
-            if (activeDoctrine != null)
-            {
-                prestige += activeDoctrine.EffectiveTier * 12f;
-            }
-
-            prestige += hasLandmarkHeadquarters ? 24f : 0f;
-            prestige += Math.Min(24f, dominantDistricts * 6f);
-            prestige += Math.Min(14f, GetOwnedActualIndustryCount() * 1.2f);
-            prestige += Math.Min(12f, competitiveWins * 1.5f);
-            prestige += Math.Min(14f, _snapshot.TotalSpecialMissionsCompleted * 1.2f);
+            var ownedIndustries = GetOwnedActualIndustryCount();
+            var doctrinePrestige = activeDoctrine != null ? activeDoctrine.EffectiveTier * 12f : 0f;
+            var headquartersPrestige = hasLandmarkHeadquarters ? 24f : 0f;
+            var districtPrestige = Math.Min(24f, dominantDistricts * 6f);
+            var industryPrestige = Math.Min(14f, ownedIndustries * 1.2f);
+            var competitionPrestige = Math.Min(12f, competitiveWins * 1.5f);
+            var missionPrestige = Math.Min(14f, _snapshot.TotalSpecialMissionsCompleted * 1.2f);
+            var prestige = doctrinePrestige
+                + headquartersPrestige
+                + districtPrestige
+                + industryPrestige
+                + competitionPrestige
+                + missionPrestige;
             prestige = Math.Max(0f, Math.Min(100f, prestige));
+            var prestigeBreakdown = BuildPrestigeBreakdown(
+                activeDoctrine,
+                doctrineEvaluation.LeadSummary,
+                hasLandmarkHeadquarters,
+                dominantDistricts,
+                ownedIndustries,
+                competitiveWins,
+                _snapshot.TotalSpecialMissionsCompleted,
+                prestige,
+                doctrinePrestige,
+                headquartersPrestige,
+                districtPrestige,
+                industryPrestige,
+                competitionPrestige,
+                missionPrestige);
+            var primaryOpportunity = BuildPrimaryOpportunitySummary(doctrines, activeDoctrine, doctrineEvaluation.LeadSummary, hasLandmarkHeadquarters, prestigeBreakdown);
 
             var activeDoctrineName = activeDoctrine != null
                 ? activeDoctrine.Name ?? CompanyDoctrineSystem.GetName(activeDoctrine.Doctrine)
@@ -1028,6 +1080,9 @@ namespace LSOL.Systems
                 CompetitiveWinCount = competitiveWins,
                 Headline = headline,
                 Detail = detail,
+                DoctrineLead = doctrineEvaluation.LeadSummary,
+                PrestigeBreakdown = prestigeBreakdown,
+                PrimaryOpportunitySummary = primaryOpportunity,
             };
         }
 
@@ -1067,15 +1122,48 @@ namespace LSOL.Systems
             var activeCorridors = GetActiveCorridorCount();
             var securedSupportSites = GetSecuredSupportSiteCount();
             var licensedDistricts = GetLicensedDistrictCount();
+            var components = new[]
+            {
+                BuildDoctrineProgressComponent(
+                    "dominant-districts",
+                    "Dominant districts",
+                    dominantDistricts,
+                    districtTarget,
+                    0.35f,
+                    string.Format("{0}/{1} dominant districts", dominantDistricts, districtTarget),
+                    "Secure 1 more dominant district"),
+                BuildDoctrineProgressComponent(
+                    "active-corridors",
+                    "Active corridors",
+                    activeCorridors,
+                    corridorTarget,
+                    0.25f,
+                    string.Format("{0}/{1} active corridors", activeCorridors, corridorTarget),
+                    "Open 1 more active corridor"),
+                BuildDoctrineProgressComponent(
+                    "secured-depots",
+                    "Secured depots",
+                    securedSupportSites,
+                    supportTarget,
+                    0.20f,
+                    string.Format("{0}/{1} secured depots", securedSupportSites, supportTarget),
+                    "Crew 1 more support depot"),
+                BuildDoctrineProgressComponent(
+                    "district-charters",
+                    "District charters",
+                    licensedDistricts,
+                    charterTarget,
+                    0.20f,
+                    string.Format("{0}/{1} district charters", licensedDistricts, charterTarget),
+                    "Stabilize 1 more district charter"),
+            };
             var progressRatio = Clamp01(
-                (BuildRatio(dominantDistricts, districtTarget) * 0.35f)
-                + (BuildRatio(activeCorridors, corridorTarget) * 0.25f)
-                + (BuildRatio(securedSupportSites, supportTarget) * 0.20f)
-                + (BuildRatio(licensedDistricts, charterTarget) * 0.20f));
+                components.Sum(component => component != null ? component.ContributionRatio : 0f));
 
             return BuildDoctrineStatus(
                 CompanyDoctrine.Territorial,
                 progressRatio,
+                components,
                 string.Format(
                     "{0}/{1} dominant | {2}/{3} corridors | {4}/{5} depots | {6}/{7} charters",
                     dominantDistricts,
@@ -1097,15 +1185,48 @@ namespace LSOL.Systems
             var ownedWarehouses = GetOwnedWarehouseCount();
             var deliveredCommodities = GetDistinctDeliveredCommodityCount();
             var hasSupplyChain = HasOwnedProducerConsumerMatch();
+            var components = new[]
+            {
+                BuildDoctrineProgressComponent(
+                    "owned-industries",
+                    "Owned industries",
+                    ownedIndustries,
+                    industryTarget,
+                    0.30f,
+                    string.Format("{0}/{1} owned industries", ownedIndustries, industryTarget),
+                    "Buy 1 more production site"),
+                BuildDoctrineProgressComponent(
+                    "warehouses",
+                    "Warehouses",
+                    ownedWarehouses,
+                    warehouseTarget,
+                    0.20f,
+                    string.Format("{0}/{1} owned warehouses", ownedWarehouses, warehouseTarget),
+                    "Buy 1 more warehouse"),
+                BuildDoctrineProgressComponent(
+                    "owned-chain",
+                    "Owned chain",
+                    hasSupplyChain ? 1f : 0f,
+                    1f,
+                    0.30f,
+                    string.Format("Owned producer-consumer chain {0}", hasSupplyChain ? "online" : "offline"),
+                    "Connect one owned producer to one owned consumer"),
+                BuildDoctrineProgressComponent(
+                    "delivered-commodities",
+                    "Delivered commodities",
+                    deliveredCommodities,
+                    commodityTarget,
+                    0.20f,
+                    string.Format("{0}/{1} delivered commodities", deliveredCommodities, commodityTarget),
+                    "Deliver 1 new commodity type"),
+            };
             var progressRatio = Clamp01(
-                (BuildRatio(ownedIndustries, industryTarget) * 0.30f)
-                + (BuildRatio(ownedWarehouses, warehouseTarget) * 0.20f)
-                + ((hasSupplyChain ? 1f : 0f) * 0.30f)
-                + (BuildRatio(deliveredCommodities, commodityTarget) * 0.20f));
+                components.Sum(component => component != null ? component.ContributionRatio : 0f));
 
             return BuildDoctrineStatus(
                 CompanyDoctrine.Industrial,
                 progressRatio,
+                components,
                 string.Format(
                     "{0}/{1} industries | {2}/{3} warehouses | Chain {4} | {5}/{6} commodities",
                     ownedIndustries,
@@ -1127,15 +1248,48 @@ namespace LSOL.Systems
             var franchiseSites = GetTotalFranchiseSiteCount();
             var activeRoutes = GetCurrentNpcRouteCount();
             var missions = _snapshot.TotalSpecialMissionsCompleted;
+            var components = new[]
+            {
+                BuildDoctrineProgressComponent(
+                    "service-sites",
+                    "Service sites",
+                    serviceSites,
+                    serviceSiteTarget,
+                    0.30f,
+                    string.Format("{0}/{1} owned service sites", serviceSites, serviceSiteTarget),
+                    "Acquire 1 more service site"),
+                BuildDoctrineProgressComponent(
+                    "franchise-sites",
+                    "Franchise sites",
+                    franchiseSites,
+                    franchiseTarget,
+                    0.20f,
+                    string.Format("{0}/{1} franchise sites", franchiseSites, franchiseTarget),
+                    "Expand into 1 more franchise site"),
+                BuildDoctrineProgressComponent(
+                    "active-routes",
+                    "Active routes",
+                    activeRoutes,
+                    routeTarget,
+                    0.25f,
+                    string.Format("{0}/{1} active NPC routes", activeRoutes, routeTarget),
+                    "Run 1 more NPC route"),
+                BuildDoctrineProgressComponent(
+                    "special-missions",
+                    "Special missions",
+                    missions,
+                    missionTarget,
+                    0.25f,
+                    string.Format("{0}/{1} special missions", missions, missionTarget),
+                    "Complete 1 more special mission"),
+            };
             var progressRatio = Clamp01(
-                (BuildRatio(serviceSites, serviceSiteTarget) * 0.30f)
-                + (BuildRatio(franchiseSites, franchiseTarget) * 0.20f)
-                + (BuildRatio(activeRoutes, routeTarget) * 0.25f)
-                + (BuildRatio(missions, missionTarget) * 0.25f));
+                components.Sum(component => component != null ? component.ContributionRatio : 0f));
 
             return BuildDoctrineStatus(
                 CompanyDoctrine.Service,
                 progressRatio,
+                components,
                 string.Format(
                     "{0}/{1} service sites | {2}/{3} franchises | {4}/{5} routes | {6}/{7} missions",
                     serviceSites,
@@ -1174,7 +1328,11 @@ namespace LSOL.Systems
             }
         }
 
-        private static CompanyDoctrineStatus BuildDoctrineStatus(CompanyDoctrine doctrine, float progressRatio, string progressText)
+        private static CompanyDoctrineStatus BuildDoctrineStatus(
+            CompanyDoctrine doctrine,
+            float progressRatio,
+            IReadOnlyList<CompanyDoctrineProgressComponent> components,
+            string progressText)
         {
             return new CompanyDoctrineStatus
             {
@@ -1188,7 +1346,494 @@ namespace LSOL.Systems
                 BonusSummary = string.Empty,
                 TradeoffSummary = string.Empty,
                 IsActive = false,
+                HasHeadquartersBoost = false,
+                LeadingDoctrine = CompanyDoctrine.Balanced,
+                LeadReasonType = CompanyDoctrineLeadReasonType.None,
+                ProgressComponents = components ?? Array.Empty<CompanyDoctrineProgressComponent>(),
+                NextTier = 0,
+                NextTierTargetProgressRatio = 0f,
+                NextTierGapProgressRatio = 0f,
+                NextTierSummary = string.Empty,
+                LeadSummary = string.Empty,
+                SteeringSummary = string.Empty,
             };
+        }
+
+        private static CompanyDoctrineProgressComponent BuildDoctrineProgressComponent(
+            string key,
+            string label,
+            float currentValue,
+            float targetValue,
+            float weight,
+            string statusText,
+            string nextStepText)
+        {
+            var completionRatio = BuildRatio(currentValue, targetValue);
+            var missingValue = Math.Max(0f, targetValue - currentValue);
+            var currentContribution = completionRatio * weight;
+            float nextContribution;
+            if (targetValue <= 1f)
+            {
+                nextContribution = currentValue >= 1f ? currentContribution : weight;
+            }
+            else
+            {
+                nextContribution = BuildRatio(currentValue + Math.Min(1f, missingValue), targetValue) * weight;
+            }
+
+            return new CompanyDoctrineProgressComponent
+            {
+                Key = key ?? string.Empty,
+                Label = label ?? string.Empty,
+                CurrentValue = Math.Max(0f, currentValue),
+                TargetValue = Math.Max(0f, targetValue),
+                MissingValue = missingValue,
+                CompletionRatio = completionRatio,
+                Weight = Math.Max(0f, weight),
+                ContributionRatio = currentContribution,
+                PotentialStepProgressRatio = Math.Max(0f, nextContribution - currentContribution),
+                StatusText = statusText ?? string.Empty,
+                NextStepText = nextStepText ?? string.Empty,
+            };
+        }
+
+        private static CompanyDoctrineLeadSummary BuildDoctrineLeadSummary(IReadOnlyList<CompanyDoctrineStatus> statuses, CompanyDoctrineStatus activeStatus)
+        {
+            var allStatuses = (statuses ?? Array.Empty<CompanyDoctrineStatus>())
+                .Where(status => status != null)
+                .ToArray();
+            var activeCandidates = allStatuses
+                .Where(status => status.Tier > 0)
+                .OrderByDescending(status => status.Tier)
+                .ThenByDescending(status => status.ProgressRatio)
+                .ThenByDescending(status => GetDoctrinePriority(status.Doctrine))
+                .ToArray();
+            var inactiveCandidates = allStatuses
+                .OrderByDescending(status => status.ProgressRatio)
+                .ThenByDescending(status => GetDoctrinePriority(status.Doctrine))
+                .ToArray();
+            var leader = activeStatus ?? activeCandidates.FirstOrDefault() ?? inactiveCandidates.FirstOrDefault();
+            var runnerUp = activeStatus != null
+                ? activeCandidates.Skip(1).FirstOrDefault()
+                : inactiveCandidates.Skip(1).FirstOrDefault();
+            var tieBreakSummary = "Lead order: tier, then progress, then Industrial > Territorial > Service.";
+            if (leader == null)
+            {
+                return new CompanyDoctrineLeadSummary
+                {
+                    LeadingDoctrine = CompanyDoctrine.Balanced,
+                    LeadingDoctrineName = CompanyDoctrineSystem.GetName(CompanyDoctrine.Balanced),
+                    ReasonType = CompanyDoctrineLeadReasonType.None,
+                    ReasonSummary = "No doctrine data available.",
+                    TieBreakSummary = tieBreakSummary,
+                };
+            }
+
+            var summary = new CompanyDoctrineLeadSummary
+            {
+                LeadingDoctrine = leader.Doctrine,
+                LeadingDoctrineName = leader.Name ?? CompanyDoctrineSystem.GetName(leader.Doctrine),
+                LeadingTier = Math.Max(0, leader.Tier),
+                LeadingProgressRatio = Clamp01(leader.ProgressRatio),
+                RunnerUpDoctrine = runnerUp != null ? runnerUp.Doctrine : CompanyDoctrine.Balanced,
+                RunnerUpDoctrineName = runnerUp != null ? runnerUp.Name ?? CompanyDoctrineSystem.GetName(runnerUp.Doctrine) : string.Empty,
+                RunnerUpTier = runnerUp != null ? Math.Max(0, runnerUp.Tier) : 0,
+                RunnerUpProgressRatio = runnerUp != null ? Clamp01(runnerUp.ProgressRatio) : 0f,
+                TierGap = runnerUp != null ? Math.Max(0, leader.Tier - runnerUp.Tier) : Math.Max(0, leader.Tier),
+                ProgressGapRatio = runnerUp != null ? Math.Max(0f, leader.ProgressRatio - runnerUp.ProgressRatio) : Clamp01(leader.ProgressRatio),
+                TieBreakSummary = tieBreakSummary,
+            };
+
+            if (activeStatus == null)
+            {
+                if (leader.ProgressRatio <= 0.001f)
+                {
+                    summary.ReasonType = CompanyDoctrineLeadReasonType.None;
+                    summary.ReasonSummary = "No doctrine has any progress yet.";
+                    return summary;
+                }
+
+                if (runnerUp != null && leader.ProgressRatio > runnerUp.ProgressRatio + 0.0005f)
+                {
+                    summary.ReasonType = CompanyDoctrineLeadReasonType.ProgressRatio;
+                    summary.ReasonSummary = string.Format(
+                        "No doctrine has reached Tier I yet. {0} is closest at {1:0}%.",
+                        summary.LeadingDoctrineName,
+                        summary.LeadingProgressRatio * 100f);
+                    return summary;
+                }
+
+                if (runnerUp != null && GetDoctrinePriority(leader.Doctrine) > GetDoctrinePriority(runnerUp.Doctrine))
+                {
+                    summary.ReasonType = CompanyDoctrineLeadReasonType.DoctrinePriority;
+                    summary.ReasonSummary = string.Format(
+                        "No doctrine has reached Tier I yet. {0} currently wins the tie-break over {1}.",
+                        summary.LeadingDoctrineName,
+                        summary.RunnerUpDoctrineName);
+                    return summary;
+                }
+
+                summary.ReasonType = CompanyDoctrineLeadReasonType.None;
+                summary.ReasonSummary = string.Format(
+                    "No doctrine has reached Tier I yet. {0} is closest at {1:0}%.",
+                    summary.LeadingDoctrineName,
+                    summary.LeadingProgressRatio * 100f);
+                return summary;
+            }
+
+            if (runnerUp == null)
+            {
+                summary.ReasonType = CompanyDoctrineLeadReasonType.None;
+                summary.ReasonSummary = string.Format("{0} is the only doctrine at Tier I or above.", summary.LeadingDoctrineName);
+                return summary;
+            }
+
+            if (leader.Tier > runnerUp.Tier)
+            {
+                summary.ReasonType = CompanyDoctrineLeadReasonType.Tier;
+                summary.ReasonSummary = string.Format("{0} leads on tier over {1}.", summary.LeadingDoctrineName, summary.RunnerUpDoctrineName);
+                return summary;
+            }
+
+            if (leader.ProgressRatio > runnerUp.ProgressRatio + 0.0005f)
+            {
+                summary.ReasonType = CompanyDoctrineLeadReasonType.ProgressRatio;
+                summary.ReasonSummary = string.Format(
+                    "{0} leads on progress at Tier {1}, ahead of {2} by {3:0}%.",
+                    summary.LeadingDoctrineName,
+                    CompanyDoctrineSystem.BuildTierLabel(summary.LeadingTier),
+                    summary.RunnerUpDoctrineName,
+                    summary.ProgressGapRatio * 100f);
+                return summary;
+            }
+
+            summary.ReasonType = CompanyDoctrineLeadReasonType.DoctrinePriority;
+            summary.ReasonSummary = string.Format(
+                "{0} wins the tie-break over {1} on doctrine priority.",
+                summary.LeadingDoctrineName,
+                summary.RunnerUpDoctrineName);
+            return summary;
+        }
+
+        private static void PopulateDoctrineContext(CompanyDoctrineStatus status, CompanyDoctrineLeadSummary leadSummary, bool hasLandmarkHeadquarters)
+        {
+            if (status == null)
+            {
+                return;
+            }
+
+            status.LeadingDoctrine = leadSummary != null ? leadSummary.LeadingDoctrine : CompanyDoctrine.Balanced;
+            status.LeadReasonType = leadSummary != null ? leadSummary.ReasonType : CompanyDoctrineLeadReasonType.None;
+            status.NextTier = ResolveNextTier(status.Tier);
+            status.NextTierTargetProgressRatio = CompanyDoctrineSystem.GetNextTierThreshold(status.Tier);
+            status.NextTierGapProgressRatio = status.NextTierTargetProgressRatio > 0f
+                ? Math.Max(0f, status.NextTierTargetProgressRatio - status.ProgressRatio)
+                : 0f;
+            status.NextTierSummary = BuildDoctrineNextTierSummary(status, hasLandmarkHeadquarters);
+            status.LeadSummary = BuildDoctrineLeadSummaryForStatus(status, leadSummary);
+            status.SteeringSummary = BuildDoctrineSteeringSummary(status, hasLandmarkHeadquarters);
+        }
+
+        private static int ResolveNextTier(int tier)
+        {
+            switch (Math.Max(0, tier))
+            {
+                case 0:
+                    return 1;
+                case 1:
+                    return 2;
+                case 2:
+                    return 3;
+                default:
+                    return 0;
+            }
+        }
+
+        private static string BuildDoctrineNextTierSummary(CompanyDoctrineStatus status, bool hasLandmarkHeadquarters)
+        {
+            if (status == null)
+            {
+                return string.Empty;
+            }
+
+            if (status.NextTier > 0 && status.NextTierGapProgressRatio > 0.0005f)
+            {
+                return string.Format(
+                    "Needs +{0:0}% doctrine progress to reach Tier {1}.",
+                    status.NextTierGapProgressRatio * 100f,
+                    CompanyDoctrineSystem.BuildTierLabel(status.NextTier));
+            }
+
+            if (status.IsActive && status.Tier > 0 && !hasLandmarkHeadquarters && !status.HasHeadquartersBoost)
+            {
+                return string.Format(
+                    "Landmark HQ would raise the live doctrine from Tier {0} to {1}.",
+                    CompanyDoctrineSystem.BuildTierLabel(status.Tier),
+                    CompanyDoctrineSystem.BuildTierLabel(Math.Min(4, status.Tier + 1)));
+            }
+
+            if (status.IsActive && status.HasHeadquartersBoost)
+            {
+                return string.Format(
+                    "Landmark HQ is already boosting the live doctrine to Tier {0}.",
+                    CompanyDoctrineSystem.BuildTierLabel(status.EffectiveTier));
+            }
+
+            if (status.Tier >= 3)
+            {
+                return status.IsActive
+                    ? "Raw doctrine cap reached."
+                    : "Raw doctrine cap reached, but the doctrine is not live while another track leads.";
+            }
+
+            return status.Tier <= 0
+                ? "Needs Tier I before the doctrine can go live."
+                : string.Empty;
+        }
+
+        private static string BuildDoctrineLeadSummaryForStatus(CompanyDoctrineStatus status, CompanyDoctrineLeadSummary leadSummary)
+        {
+            if (status == null)
+            {
+                return string.Empty;
+            }
+
+            if (status.IsActive)
+            {
+                return leadSummary != null ? leadSummary.ReasonSummary ?? string.Empty : "Doctrine bonus live.";
+            }
+
+            if (leadSummary == null || leadSummary.LeadingDoctrine == CompanyDoctrine.Balanced)
+            {
+                return status.Tier <= 0
+                    ? "Needs Tier I before the doctrine can go live."
+                    : "Bonus not live while another doctrine lead is unresolved.";
+            }
+
+            if (status.Doctrine == leadSummary.LeadingDoctrine && leadSummary.LeadingTier <= 0)
+            {
+                return status.ProgressRatio > 0.001f
+                    ? string.Format("Closest to Tier I at {0:0}% progress.", status.ProgressRatio * 100f)
+                    : "No doctrine progress recorded yet.";
+            }
+
+            switch (leadSummary.ReasonType)
+            {
+                case CompanyDoctrineLeadReasonType.Tier:
+                    return string.Format("Behind {0} on tier.", leadSummary.LeadingDoctrineName);
+                case CompanyDoctrineLeadReasonType.ProgressRatio:
+                    return string.Format("Behind {0} on progress.", leadSummary.LeadingDoctrineName);
+                case CompanyDoctrineLeadReasonType.DoctrinePriority:
+                    return string.Format("Behind {0} on doctrine priority tie-break.", leadSummary.LeadingDoctrineName);
+                default:
+                    return status.Tier <= 0
+                        ? "Needs Tier I before the doctrine can go live."
+                        : string.Format("Behind {0}.", leadSummary.LeadingDoctrineName);
+            }
+        }
+
+        private static string BuildDoctrineSteeringSummary(CompanyDoctrineStatus status, bool hasLandmarkHeadquarters)
+        {
+            if (status == null)
+            {
+                return string.Empty;
+            }
+
+            var bestComponent = (status.ProgressComponents ?? Array.Empty<CompanyDoctrineProgressComponent>())
+                .Where(component => component != null
+                    && component.MissingValue > 0.0005f
+                    && component.PotentialStepProgressRatio > 0.0005f)
+                .OrderByDescending(component => component.PotentialStepProgressRatio)
+                .ThenByDescending(component => component.Weight)
+                .FirstOrDefault();
+            if (bestComponent != null)
+            {
+                return string.Format(
+                    "Best push: {0} (+{1:0}% progress).",
+                    bestComponent.NextStepText,
+                    bestComponent.PotentialStepProgressRatio * 100f);
+            }
+
+            if (status.IsActive && status.Tier > 0 && !hasLandmarkHeadquarters && !status.HasHeadquartersBoost)
+            {
+                return "Best push: install a Landmark HQ for +24 prestige and a live capstone tier.";
+            }
+
+            if (status.IsActive && status.HasHeadquartersBoost)
+            {
+                return "Raw doctrine progress is capped; prestige now grows through districts, wins, industries, and missions.";
+            }
+
+            return status.Tier <= 0
+                ? "Best push: reach Tier I to activate the doctrine bonus."
+                : "Doctrine progress is capped until this track takes the lead.";
+        }
+
+        private CompanyPrestigeBreakdown BuildPrestigeBreakdown(
+            CompanyDoctrineStatus activeDoctrine,
+            CompanyDoctrineLeadSummary leadSummary,
+            bool hasLandmarkHeadquarters,
+            int dominantDistricts,
+            int ownedIndustries,
+            int competitiveWins,
+            int completedMissions,
+            float prestige,
+            float doctrinePrestige,
+            float headquartersPrestige,
+            float districtPrestige,
+            float industryPrestige,
+            float competitionPrestige,
+            float missionPrestige)
+        {
+            var leadingDoctrineName = leadSummary != null && !string.IsNullOrWhiteSpace(leadSummary.LeadingDoctrineName)
+                ? leadSummary.LeadingDoctrineName
+                : CompanyDoctrineSystem.GetName(CompanyDoctrine.Balanced);
+            var doctrineOpportunity = string.Empty;
+            var doctrineImmediateGain = 0f;
+            if (activeDoctrine != null)
+            {
+                if (!hasLandmarkHeadquarters && activeDoctrine.EffectiveTier == activeDoctrine.Tier)
+                {
+                    doctrineOpportunity = string.Format(
+                        "Install a Landmark HQ to lift {0} from live Tier {1} to {2} for +12 doctrine prestige.",
+                        activeDoctrine.Name,
+                        CompanyDoctrineSystem.BuildTierLabel(activeDoctrine.Tier),
+                        CompanyDoctrineSystem.BuildTierLabel(Math.Min(4, activeDoctrine.Tier + 1)));
+                    doctrineImmediateGain = 12f;
+                }
+                else if (activeDoctrine.NextTier > 0)
+                {
+                    doctrineOpportunity = string.Format(
+                        "Push {0} to Tier {1} for +12 doctrine prestige.",
+                        activeDoctrine.Name,
+                        CompanyDoctrineSystem.BuildTierLabel(activeDoctrine.NextTier));
+                    doctrineImmediateGain = 12f;
+                }
+            }
+            else
+            {
+                doctrineOpportunity = string.Format("Reach Tier I in {0} to turn on +12 doctrine prestige.", leadingDoctrineName);
+                doctrineImmediateGain = 12f;
+            }
+
+            var components = new[]
+            {
+                BuildPrestigeComponent(
+                    "doctrine",
+                    "Doctrine",
+                    doctrinePrestige,
+                    48f,
+                    doctrineImmediateGain,
+                    activeDoctrine != null
+                        ? string.Format("{0} live Tier {1} = +{2:0.#}/48", activeDoctrine.Name, CompanyDoctrineSystem.BuildTierLabel(activeDoctrine.EffectiveTier), doctrinePrestige)
+                        : "No live doctrine = +0/48",
+                    doctrineOpportunity),
+                BuildPrestigeComponent(
+                    "headquarters",
+                    "Landmark HQ",
+                    headquartersPrestige,
+                    24f,
+                    hasLandmarkHeadquarters ? 0f : 24f,
+                    hasLandmarkHeadquarters ? "Landmark HQ online = +24/24" : "Landmark HQ offline = +0/24",
+                    hasLandmarkHeadquarters ? string.Empty : "Install a Landmark HQ for +24 prestige and a live doctrine boost."),
+                BuildPrestigeComponent(
+                    "dominant-districts",
+                    "Dominant districts",
+                    districtPrestige,
+                    24f,
+                    districtPrestige < 24f ? Math.Min(6f, 24f - districtPrestige) : 0f,
+                    string.Format("{0} dominant districts = +{1:0.#}/24", dominantDistricts, districtPrestige),
+                    districtPrestige < 24f ? "Secure 1 more dominant district for +6 prestige." : string.Empty),
+                BuildPrestigeComponent(
+                    "owned-industries",
+                    "Owned industries",
+                    industryPrestige,
+                    14f,
+                    industryPrestige < 14f ? Math.Min(1.2f, 14f - industryPrestige) : 0f,
+                    string.Format("{0} owned industries = +{1:0.#}/14", ownedIndustries, industryPrestige),
+                    industryPrestige < 14f ? "Buy 1 more production site for +1.2 prestige." : string.Empty),
+                BuildPrestigeComponent(
+                    "competition-wins",
+                    "Competition wins",
+                    competitionPrestige,
+                    12f,
+                    competitionPrestige < 12f ? Math.Min(1.5f, 12f - competitionPrestige) : 0f,
+                    string.Format("{0} competition wins = +{1:0.#}/12", competitiveWins, competitionPrestige),
+                    competitionPrestige < 12f ? "Convert 1 more district competition into a win for +1.5 prestige." : string.Empty),
+                BuildPrestigeComponent(
+                    "special-missions",
+                    "Special missions",
+                    missionPrestige,
+                    14f,
+                    missionPrestige < 14f ? Math.Min(1.2f, 14f - missionPrestige) : 0f,
+                    string.Format("{0} completed special missions = +{1:0.#}/14", completedMissions, missionPrestige),
+                    missionPrestige < 14f ? "Finish 1 more special mission for +1.2 prestige." : string.Empty),
+            };
+            var primaryOpportunity = components
+                .Where(component => component != null
+                    && component.ImmediateGain > 0.0005f
+                    && !string.IsNullOrWhiteSpace(component.OpportunityText))
+                .OrderByDescending(component => component.ImmediateGain)
+                .ThenByDescending(component => component.RemainingScore)
+                .Select(component => component.OpportunityText)
+                .FirstOrDefault() ?? string.Empty;
+
+            return new CompanyPrestigeBreakdown
+            {
+                Components = components,
+                MissingScore = Math.Max(0f, 100f - prestige),
+                PrimaryOpportunity = primaryOpportunity,
+            };
+        }
+
+        private static CompanyPrestigeComponent BuildPrestigeComponent(
+            string key,
+            string label,
+            float score,
+            float maxScore,
+            float immediateGain,
+            string statusText,
+            string opportunityText)
+        {
+            return new CompanyPrestigeComponent
+            {
+                Key = key ?? string.Empty,
+                Label = label ?? string.Empty,
+                Score = Math.Max(0f, score),
+                MaxScore = Math.Max(0f, maxScore),
+                RemainingScore = Math.Max(0f, maxScore - score),
+                ImmediateGain = Math.Max(0f, immediateGain),
+                StatusText = statusText ?? string.Empty,
+                OpportunityText = opportunityText ?? string.Empty,
+            };
+        }
+
+        private static string BuildPrimaryOpportunitySummary(
+            IReadOnlyList<CompanyDoctrineStatus> doctrines,
+            CompanyDoctrineStatus activeDoctrine,
+            CompanyDoctrineLeadSummary leadSummary,
+            bool hasLandmarkHeadquarters,
+            CompanyPrestigeBreakdown prestigeBreakdown)
+        {
+            if (activeDoctrine != null && activeDoctrine.Tier > 0 && !hasLandmarkHeadquarters)
+            {
+                return "Next push: install a Landmark HQ (+24 prestige, +1 live tier).";
+            }
+
+            if (activeDoctrine != null && !string.IsNullOrWhiteSpace(activeDoctrine.SteeringSummary))
+            {
+                return activeDoctrine.SteeringSummary;
+            }
+
+            var leadingDoctrine = leadSummary != null ? leadSummary.LeadingDoctrine : CompanyDoctrine.Balanced;
+            var leadingStatus = (doctrines ?? Array.Empty<CompanyDoctrineStatus>())
+                .FirstOrDefault(status => status != null && status.Doctrine == leadingDoctrine);
+            if (leadingStatus != null && !string.IsNullOrWhiteSpace(leadingStatus.SteeringSummary))
+            {
+                return leadingStatus.SteeringSummary;
+            }
+
+            return prestigeBreakdown != null ? prestigeBreakdown.PrimaryOpportunity ?? string.Empty : string.Empty;
         }
 
         private static PlayerStatisticsPersistenceSnapshot CloneSnapshot(PlayerStatisticsPersistenceSnapshot snapshot)

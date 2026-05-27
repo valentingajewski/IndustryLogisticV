@@ -80,6 +80,8 @@ namespace LSOL.Systems
 
         public Vector3 Rotation { get; set; }
 
+        public string AssignedFacilityAnchorId { get; set; }
+
         public float StoredResourceAmount { get; set; }
     }
 

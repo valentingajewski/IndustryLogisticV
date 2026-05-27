@@ -130,6 +130,86 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void GetMissionListings_WithLiveDistrictEvent_GeneratesCrisisContractFromMatchingRoute()
+        {
+            var configDirectory = Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config");
+            var config = ModConfig.Load(configDirectory);
+            var industryManager = new IndustryManager(config);
+            var source = CreateTestIndustry(
+                "__crisis_source__",
+                "Crisis Source",
+                "Port",
+                Array.Empty<string>(),
+                new[] { "Steel" });
+            source.AddOutput("Steel", 18f);
+            var destination = CreateTestIndustry(
+                "__crisis_destination__",
+                "Crisis Destination",
+                "Port",
+                new[] { "Steel" },
+                Array.Empty<string>());
+            InjectIndustry(industryManager, source);
+            InjectIndustry(industryManager, destination);
+
+            var territoryManager = new TerritoryManager(config, industryManager);
+            territoryManager.ApplySnapshot(new TerritoryPersistenceSnapshot
+            {
+                Districts =
+                {
+                    new TerritoryDistrictSnapshot
+                    {
+                        DistrictName = "Port",
+                        LicenseStatus = DistrictLicenseStatus.Active,
+                        ActiveEvent = new TerritoryDistrictEventSnapshot
+                        {
+                            EventId = "district_event_port_steel",
+                            DistrictName = "Port",
+                            CrisisType = DistrictCrisisType.ConstructionSurge,
+                            PreferredCommodity = "Steel",
+                            Severity = 0.61f,
+                            MarketPressureBonus = 0.16f,
+                            ResponseTargetTons = 14f,
+                            DeliveredReliefTons = 3f,
+                            ReliefDeliveryCount = 1,
+                            StartedWeekIndex = 1,
+                            EndsAtWeekIndex = 2,
+                            TriggerSummary = "Construction load 46% | Permit sites 1 | At-risk yards 1",
+                            ImpactSummary = "Build sites are pulling extra tonnage.",
+                        },
+                    },
+                },
+            });
+
+            var manager = new SpecialMissionManager(
+                configDirectory,
+                industryManager,
+                territoryManager,
+                new FleetManager(config),
+                new GlobalMarketManager(0),
+                () => Array.Empty<OwnedCommercialVehiclePersistenceEntry>(),
+                _ => { },
+                (message, durationMs) => { },
+                () => { },
+                () => 120);
+
+            var crisisListing = manager.GetMissionListings()
+                .FirstOrDefault(listing => listing != null
+                    && listing.IsGenerated
+                    && listing.ContractFamily == GeneratedContractFamily.CrisisRelief
+                    && string.Equals(listing.CrisisDistrictName, "Port", StringComparison.OrdinalIgnoreCase));
+
+            Assert.IsNotNull(crisisListing, "Expected a generated crisis-relief listing for the live Port district event.");
+            Assert.AreEqual("Steel", crisisListing.Commodity);
+            StringAssert.Contains(crisisListing.Description, "Relief");
+
+            var definition = manager.GetDefinition(crisisListing.MissionId);
+
+            Assert.IsNotNull(definition);
+            Assert.AreEqual("district_event_port_steel", definition.CrisisEventId);
+            Assert.AreEqual(DistrictCrisisType.ConstructionSurge, definition.CrisisType);
+        }
+
+        [TestMethod]
         public void ApplyHandlerContainerRestoreCheckpointPolicy_MidLiftSnapshot_RollsBackToLoadingCheckpoint()
         {
             var snapshot = new ActiveSpecialMissionPersistenceSnapshot

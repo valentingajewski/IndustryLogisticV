@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using LSOL.Domain;
 
 namespace LSOL.Systems
 {
@@ -8,8 +9,11 @@ namespace LSOL.Systems
     {
         private const string DefaultCommodityKey = "__default__";
         private const float DefaultPriceMultiplier = 1f;
+        private const float MaxPriceMultiplier = 4.5f;
         private const float ScarcityIncreaseStep = 0.05f;
         private const float DeliveryPressureStep = 0.10f;
+        private const float DemandPressurePerTon = 0.008f;
+        private const float DeliveryPressurePerTon = 0.020f;
         private const int ScarcityIncreaseIntervalMs = 600000;
         private const int MinutesPerDay = 24 * 60;
         private const int MinutesPerWeek = 7 * MinutesPerDay;
@@ -26,6 +30,7 @@ namespace LSOL.Systems
             { "Livestock", 420f },
             { "Recyclable", 180f },
             { "Fuel", 700f },
+            { "Asphalt", 400f },
             { "Cement", 450f },
             { "Lumber", 520f },
             { "Paper", 550f },
@@ -70,6 +75,7 @@ namespace LSOL.Systems
         private readonly List<ScheduledMarketShockState> _activeScheduledShocks;
         private int _lastUpdatedGameTimeMs;
         private int _lastScheduledShockWeekIndex;
+        private long _lastDistrictEventSignature;
         private Func<int> _getCurrentInGameMinute;
         private Func<IEnumerable<TerritoryDistrictState>> _getDistrictStates;
         private string _pendingShockAnnouncement;
@@ -95,6 +101,7 @@ namespace LSOL.Systems
             _temporaryDemandShocks = new Dictionary<string, TemporaryCommodityDemandShock>(StringComparer.OrdinalIgnoreCase);
             _activeScheduledShocks = new List<ScheduledMarketShockState>();
             _lastScheduledShockWeekIndex = -1;
+            _lastDistrictEventSignature = 0L;
             _pendingShockAnnouncement = string.Empty;
             Reset(startGameTimeMs);
         }
@@ -139,7 +146,7 @@ namespace LSOL.Systems
 
             foreach (var pair in _commodityStates)
             {
-                UpdateCommodityState(pair.Value, gameTimeMs);
+                UpdateCommodityState(pair.Key, pair.Value, gameTimeMs);
             }
 
             _lastUpdatedGameTimeMs = gameTimeMs;
@@ -152,6 +159,7 @@ namespace LSOL.Systems
             _activeScheduledShocks.Clear();
             _lastUpdatedGameTimeMs = currentGameTimeMs;
             _lastScheduledShockWeekIndex = -1;
+            _lastDistrictEventSignature = 0L;
             _pendingShockAnnouncement = string.Empty;
             InitializeKnownCommodityStates();
         }
@@ -204,7 +212,7 @@ namespace LSOL.Systems
         {
             foreach (var pair in _commodityStates)
             {
-                ApplyDeliveryPressure(pair.Value, gameTimeMs);
+                ApplyDeliveryPressure(pair.Key, pair.Value, 4f, gameTimeMs);
             }
 
             _lastUpdatedGameTimeMs = gameTimeMs;
@@ -212,14 +220,35 @@ namespace LSOL.Systems
 
         public void RegisterDelivery(string commodity, int gameTimeMs)
         {
-            ApplyDeliveryPressure(EnsureCommodityState(commodity), gameTimeMs);
+            RegisterDelivery(commodity, 4f, gameTimeMs);
+        }
+
+        public void RegisterDelivery(string commodity, float tons, int gameTimeMs)
+        {
+            ApplyDeliveryPressure(commodity, EnsureCommodityState(commodity), tons, gameTimeMs);
             _lastUpdatedGameTimeMs = gameTimeMs;
+        }
+
+        public void RegisterSinkDemand(string commodity, float tons)
+        {
+            if (tons <= 0.0001f)
+            {
+                return;
+            }
+
+            var state = EnsureCommodityState(commodity);
+            state.PendingSinkDemandTons += Math.Max(0f, tons);
         }
 
         public float GetPriceMultiplier(string commodity)
         {
             var baseMultiplier = EnsureCommodityState(commodity).PriceMultiplier;
             return Math.Max(DefaultPriceMultiplier, baseMultiplier + GetTemporaryDemandShockBonus(commodity));
+        }
+
+        public float GetPricePressure(string commodity)
+        {
+            return Math.Max(0f, GetPriceMultiplier(commodity) - DefaultPriceMultiplier);
         }
 
         public void SetTemporaryDemandShock(string sourceId, string commodity, float bonusMultiplier)
@@ -264,6 +293,12 @@ namespace LSOL.Systems
             }
 
             return basePrice * GetPriceMultiplier(commodity);
+        }
+
+        internal bool TryGetExplicitBasePrice(string commodity, out float basePrice)
+        {
+            commodity = Domain.CommodityCatalog.Normalize(commodity);
+            return _basePrices.TryGetValue(commodity ?? string.Empty, out basePrice);
         }
 
         public float GetSinkDemandMultiplier(string districtName, string commodity)
@@ -384,29 +419,51 @@ namespace LSOL.Systems
             }
         }
 
-        private static void ApplyDeliveryPressure(CommodityMarketState state, int gameTimeMs)
+        private static void ApplyDeliveryPressure(string commodity, CommodityMarketState state, float tons, int gameTimeMs)
         {
             if (state == null)
             {
                 return;
             }
 
-            state.PriceMultiplier = Math.Max(DefaultPriceMultiplier, state.PriceMultiplier - DeliveryPressureStep);
+            var semantics = Domain.CommodityCatalog.GetEconomySemantics(commodity);
+            var normalizedTons = Math.Max(0.25f, Math.Min(1.75f, Math.Max(0f, tons) / 4f));
+            var immediateRelief = DeliveryPressureStep
+                * Math.Max(0.65f, semantics.ScarcitySensitivity)
+                * normalizedTons;
+            state.PendingDeliveryTons += Math.Max(0f, tons);
+            state.PriceMultiplier = ClampPriceMultiplier(state.PriceMultiplier - immediateRelief);
             state.NextScarcityIncreaseAtMs = gameTimeMs + ScarcityIncreaseIntervalMs;
         }
 
-        private static void UpdateCommodityState(CommodityMarketState state, int gameTimeMs)
+        private static void UpdateCommodityState(string commodity, CommodityMarketState state, int gameTimeMs)
         {
             if (state == null)
             {
                 return;
             }
 
+            var semantics = Domain.CommodityCatalog.GetEconomySemantics(commodity);
+
             while (gameTimeMs >= state.NextScarcityIncreaseAtMs)
             {
-                state.PriceMultiplier += ScarcityIncreaseStep;
+                state.PriceMultiplier = ClampPriceMultiplier(state.PriceMultiplier + ResolveScarcityStep(semantics));
                 state.NextScarcityIncreaseAtMs += ScarcityIncreaseIntervalMs;
             }
+
+            state.DemandMomentum = (state.DemandMomentum * 0.88f) + Math.Max(0f, state.PendingSinkDemandTons);
+            state.DeliveryMomentum = (state.DeliveryMomentum * 0.72f) + Math.Max(0f, state.PendingDeliveryTons);
+
+            var supplyResponsiveness = Math.Max(0.72f, 1.14f - (Math.Max(0.01f, semantics.SinkElasticity) * 0.18f));
+            var flowPressure = (state.DemandMomentum * DemandPressurePerTon * Math.Max(0.01f, semantics.ScarcitySensitivity))
+                - (state.DeliveryMomentum * DeliveryPressurePerTon * supplyResponsiveness);
+            if (Math.Abs(flowPressure) > 0.0001f)
+            {
+                state.PriceMultiplier = ClampPriceMultiplier(state.PriceMultiplier + (flowPressure * ResolveVolatilityFactor(semantics)));
+            }
+
+            state.PendingSinkDemandTons = 0f;
+            state.PendingDeliveryTons = 0f;
         }
 
         private static string NormalizeCommodityKey(string commodity)
@@ -446,17 +503,22 @@ namespace LSOL.Systems
                 return;
             }
 
+            var districtStates = _getDistrictStates != null
+                ? (_getDistrictStates() ?? Enumerable.Empty<TerritoryDistrictState>()).Where(state => state != null && !string.IsNullOrWhiteSpace(state.DistrictName)).ToList()
+                : new List<TerritoryDistrictState>();
             var currentWeekIndex = GetWeekIndex(_getCurrentInGameMinute());
-            if (currentWeekIndex == _lastScheduledShockWeekIndex)
+            var districtEventSignature = BuildDistrictEventSignature(districtStates);
+            if (currentWeekIndex == _lastScheduledShockWeekIndex && districtEventSignature == _lastDistrictEventSignature)
             {
                 return;
             }
 
-            var shouldAnnounce = _lastScheduledShockWeekIndex >= 0;
+            var shouldAnnounce = _lastScheduledShockWeekIndex >= 0 || _lastDistrictEventSignature != 0L;
             _lastScheduledShockWeekIndex = currentWeekIndex;
+            _lastDistrictEventSignature = districtEventSignature;
             ClearScheduledShocks();
 
-            var newShocks = BuildScheduledShocks(currentWeekIndex);
+            var newShocks = BuildScheduledShocks(currentWeekIndex, districtStates);
             for (int i = 0; i < newShocks.Count; i++)
             {
                 var shock = newShocks[i];
@@ -499,17 +561,20 @@ namespace LSOL.Systems
             _activeScheduledShocks.Clear();
         }
 
-        private List<ScheduledMarketShockState> BuildScheduledShocks(int currentWeekIndex)
+        private List<ScheduledMarketShockState> BuildScheduledShocks(int currentWeekIndex, IReadOnlyList<TerritoryDistrictState> districtStates)
         {
+            var districtEventShocks = BuildDistrictEventShocks(districtStates);
+            if (districtEventShocks.Count > 0)
+            {
+                return districtEventShocks;
+            }
+
             var shocks = new List<ScheduledMarketShockState>();
             if (ScheduledShockTemplates.Length == 0)
             {
                 return shocks;
             }
 
-            var districtStates = _getDistrictStates != null
-                ? (_getDistrictStates() ?? Enumerable.Empty<TerritoryDistrictState>()).Where(state => state != null && !string.IsNullOrWhiteSpace(state.DistrictName)).ToList()
-                : new List<TerritoryDistrictState>();
             var activeDistrictStates = districtStates
                 .Where(state => state.LicenseStatus == DistrictLicenseStatus.Active || state.LicenseStatus == DistrictLicenseStatus.Probation)
                 .ToList();
@@ -551,6 +616,90 @@ namespace LSOL.Systems
             return shocks;
         }
 
+        private static List<ScheduledMarketShockState> BuildDistrictEventShocks(IReadOnlyList<TerritoryDistrictState> districtStates)
+        {
+            if (districtStates == null || districtStates.Count <= 0)
+            {
+                return new List<ScheduledMarketShockState>();
+            }
+
+            return districtStates
+                .Where(state => state != null && state.ActiveEvent != null && state.ActiveEvent.HasData)
+                .Select(state => state.ActiveEvent)
+                .Where(activeEvent => !string.IsNullOrWhiteSpace(activeEvent.PreferredCommodity) && activeEvent.MarketPressureBonus > 0.001f)
+                .OrderByDescending(activeEvent => activeEvent.Severity)
+                .ThenBy(activeEvent => activeEvent.DistrictName, StringComparer.OrdinalIgnoreCase)
+                .Take(3)
+                .SelectMany(activeEvent =>
+                {
+                    var sourceId = string.IsNullOrWhiteSpace(activeEvent.EventId)
+                        ? string.Format("district-event:{0}:{1}", activeEvent.DistrictName ?? string.Empty, activeEvent.CrisisType)
+                        : activeEvent.EventId;
+                    var title = ResolveDistrictEventShockTitle(activeEvent.CrisisType);
+                    var baseDistrictBonus = Math.Min(0.36f, activeEvent.MarketPressureBonus + 0.10f + (Math.Max(0f, activeEvent.Severity) * 0.08f));
+                    var preferredCommodity = Domain.CommodityCatalog.Normalize(activeEvent.PreferredCommodity);
+
+                    return Domain.CommodityCatalog.GetEventResponseCommodityCandidates(preferredCommodity, 4)
+                        .Where(candidate => candidate != null && !string.IsNullOrWhiteSpace(candidate.Commodity))
+                        .Select(candidate => new ScheduledMarketShockState(
+                            string.Format("{0}:{1}", sourceId, candidate.Commodity),
+                            title,
+                            activeEvent.DistrictName,
+                            new[] { candidate.Commodity },
+                            Math.Max(0.02f, Math.Max(0f, activeEvent.MarketPressureBonus) * (0.40f + (candidate.Affinity * 0.60f))),
+                            Math.Max(0.02f, baseDistrictBonus * (0.45f + (candidate.Affinity * 0.55f)))));
+                })
+                .ToList();
+        }
+
+        private static long BuildDistrictEventSignature(IEnumerable<TerritoryDistrictState> districtStates)
+        {
+            if (districtStates == null)
+            {
+                return 0L;
+            }
+
+            long hash = 17L;
+            foreach (var activeEvent in districtStates
+                .Where(state => state != null && state.ActiveEvent != null && state.ActiveEvent.HasData)
+                .Select(state => state.ActiveEvent)
+                .OrderBy(state => state.EventId ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(state => state.DistrictName ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                unchecked
+                {
+                    hash = (hash * 31L) + StringComparer.OrdinalIgnoreCase.GetHashCode(activeEvent.EventId ?? string.Empty);
+                    hash = (hash * 31L) + StringComparer.OrdinalIgnoreCase.GetHashCode(activeEvent.DistrictName ?? string.Empty);
+                    hash = (hash * 31L) + activeEvent.CrisisType.GetHashCode();
+                    hash = (hash * 31L) + StringComparer.OrdinalIgnoreCase.GetHashCode(activeEvent.PreferredCommodity ?? string.Empty);
+                    hash = (hash * 31L) + activeEvent.Severity.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.MarketPressureBonus.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.DeliveredReliefTons.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.ResponseTargetTons.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.EndsAtWeekIndex;
+                }
+            }
+
+            return hash;
+        }
+
+        private static string ResolveDistrictEventShockTitle(DistrictCrisisType crisisType)
+        {
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return "Fuel Shortage";
+                case DistrictCrisisType.ConstructionSurge:
+                    return "Construction Surge";
+                case DistrictCrisisType.SupplyDisruption:
+                    return "Supply Disruption";
+                case DistrictCrisisType.EmergencyRestock:
+                    return "Emergency Restock";
+                default:
+                    return "District Event";
+            }
+        }
+
         private static ScheduledMarketShockTemplate ResolveShockTemplate(int currentWeekIndex, int offset, ISet<string> usedTemplateIds)
         {
             if (ScheduledShockTemplates.Length == 0)
@@ -585,6 +734,7 @@ namespace LSOL.Systems
                 .Select(shock => string.IsNullOrWhiteSpace(shock.DistrictName)
                     ? shock.Title
                     : string.Format("{0} in {1}", shock.Title, shock.DistrictName))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray();
             if (summaries.Length == 0)
             {
@@ -617,11 +767,46 @@ namespace LSOL.Systems
             return result < 0 ? result + divisor : result;
         }
 
+        private static float ResolveScarcityStep(CommodityEconomySemantics semantics)
+        {
+            if (semantics == null)
+            {
+                return ScarcityIncreaseStep;
+            }
+
+            return ScarcityIncreaseStep
+                * Math.Max(0.40f, semantics.ScarcitySensitivity)
+                * Math.Max(0.65f, (semantics.Volatility * 0.85f) + (semantics.Perishability * 0.15f));
+        }
+
+        private static float ResolveVolatilityFactor(CommodityEconomySemantics semantics)
+        {
+            if (semantics == null)
+            {
+                return 1f;
+            }
+
+            return Math.Max(0.65f, semantics.Volatility + (semantics.Perishability * 0.10f));
+        }
+
+        private static float ClampPriceMultiplier(float multiplier)
+        {
+            return Math.Max(DefaultPriceMultiplier, Math.Min(MaxPriceMultiplier, multiplier));
+        }
+
         private sealed class CommodityMarketState
         {
             public float PriceMultiplier { get; set; }
 
             public int NextScarcityIncreaseAtMs { get; set; }
+
+            public float PendingSinkDemandTons { get; set; }
+
+            public float PendingDeliveryTons { get; set; }
+
+            public float DemandMomentum { get; set; }
+
+            public float DeliveryMomentum { get; set; }
         }
 
         private sealed class TemporaryCommodityDemandShock

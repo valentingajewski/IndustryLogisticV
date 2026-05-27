@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <OfficeObjects>
-  <Object id="1" model="prop_gas_tank_01a" hash="2165440626" name="Dieseltank" size="Small" function="Refuel" resource="Fuel" capacity="15000" limit="1" price="15000" />
-  <Object id="2" model="prop_portacabin01" hash="3196461136" name="Construction Site Cabin" size="Big" function="Npc" capacity="3" limit="4" price="25000" />
-  <Object id="3" model="prop_toolchest_02" hash="2968855998" name="Maintenance Bay" size="Medium" function="Repair" limit="1" price="8000" />
+  <Object id="1" model="prop_gas_tank_01a" hash="2165440626" name="Dieseltank" size="Small" function="Refuel" resource="Fuel" capacity="15000" interaction="FuelManagement" limit="1" price="15000" />
+  <Object id="2" model="prop_portacabin01" hash="3196461136" name="Construction Site Cabin" size="Big" function="Npc" capacity="3" interaction="HireNpc" ambientRole="SupportWorker" staffCount="1" scenario="WORLD_HUMAN_CLIPBOARD" limit="4" price="25000" />
+  <Object id="3" model="prop_toolchest_02" hash="2968855998" name="Maintenance Bay" size="Medium" function="Repair" placement="Either" anchor="MaintenanceDesk" interaction="RepairVehicle" ambientRole="Mechanic" staffCount="1" scenario="WORLD_HUMAN_CLIPBOARD" limit="1" price="8000" />
   <Object id="4" model="prop_mp_cone_02" hash="1245865676" name="Cone" size="Small" function="Decorative" limit="20" price="250" />
   <Object id="5" model="prop_pallettruck_01" hash="2400924923" name="Pallet truck" size="Small" function="Decorative" limit="5" price="250" />
   <Object id="6" model="prop_wheelbarrow02a" hash="1133730678" name="Wheel Barrow" size="Small" function="Decorative" limit="5" price="250" />
@@ -10,4 +10,9 @@
   <Object id="8" model="v_ret_fh_shelf_01" hash="2994868227" name="Shelf" size="Medium" function="Decorative" limit="5" price="250" />
   <Object id="9" model="prop_barrier_work01a" hash="1072616162" name="Barrier 01" size="Small" function="Decorative" limit="10" price="250" />
   <Object id="10" model="prop_barrier_work02a" hash="2310399891" name="Barrier 02" size="Small" function="Decorative" limit="10" price="250" />
+  <Object id="11" model="v_res_d_desk" hash="2775192346" name="Reception Desk Cluster" size="Medium" function="Decorative" placement="Either" anchor="ReceptionDesk" interaction="OfficeSummary" ambientRole="Receptionist" staffCount="1" scenario="WORLD_HUMAN_CLIPBOARD" limit="1" price="4500" />
+  <Object id="12" model="v_corp_deskseta" hash="3373913304" name="Dispatch Console" size="Medium" function="Npc" capacity="2" placement="Either" anchor="DispatchDesk" interaction="HireNpc" ambientRole="Dispatcher" staffCount="1" scenario="WORLD_HUMAN_CLIPBOARD" limit="1" price="18000" />
+  <Object id="13" model="v_res_d_desk" hash="2775192346" name="Fuel Service Counter" size="Medium" function="Decorative" placement="Either" anchor="FuelDesk" interaction="FuelManagement" ambientRole="AdminClerk" staffCount="1" scenario="WORLD_HUMAN_CLIPBOARD" limit="1" price="5500" />
+  <Object id="14" model="v_ret_fh_shelf_01" hash="2994868227" name="Operations Break Nook" size="Medium" function="Decorative" placement="Either" anchor="BreakRoom" interaction="OfficeSummary" ambientRole="SupportWorker" staffCount="1" scenario="WORLD_HUMAN_STAND_IMPATIENT" limit="1" price="3500" />
+  <Object id="15" model="v_corp_servercln" hash="1190106820" name="Landmark HQ Annex" size="Medium" function="Headquarters" placement="Room" anchor="Boardroom" interaction="HeadquartersStatus" ambientRole="Manager" staffCount="2" requiresOwned="true" scenario="WORLD_HUMAN_CLIPBOARD" limit="1" price="65000" />
 </OfficeObjects>

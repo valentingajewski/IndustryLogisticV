@@ -4,11 +4,21 @@ using System.Drawing;
 using System.Linq;
 using LSOL;
 using LSOL.Domain;
+using LSOL.Systems;
 
 namespace LSOL.UI
 {
     internal sealed class AnalyticsTabletApp : ITabletApp
     {
+        private readonly Action _openRoutePlannerMap;
+        private readonly Action<NpcLogisticsRouteDefinition> _openNpcPlannerDraft;
+
+        public AnalyticsTabletApp(Action openRoutePlannerMap = null, Action<NpcLogisticsRouteDefinition> openNpcPlannerDraft = null)
+        {
+            _openRoutePlannerMap = openRoutePlannerMap;
+            _openNpcPlannerDraft = openNpcPlannerDraft;
+        }
+
         public string AppId
         {
             get { return TabletAppIds.Analytics; }
@@ -36,6 +46,15 @@ namespace LSOL.UI
                     break;
                 case "routes":
                     page = BuildRoutesPage(context);
+                    break;
+                case "route-detail":
+                    page = BuildRouteDetailPage(context, route != null ? route.Payload : null);
+                    break;
+                case "route-planner":
+                    page = BuildRoutePlannerPage(context);
+                    break;
+                case "route-planner-detail":
+                    page = BuildRoutePlannerDetailPage(context, route != null ? route.Payload as string : null);
                     break;
                 default:
                     page = BuildRootPage(context);
@@ -89,9 +108,14 @@ namespace LSOL.UI
                     iconLabel: "DST"),
                 TabletUiHelpers.CreateActionItem(
                     "NPC Routes",
-                    "Delivered tons, loss ratio, and average payout.",
+                    "Delivered tons, loss ratio, average payout, and contract drill-down.",
                     () => context.Push(TabletAppIds.Analytics, "routes"),
                     iconLabel: "NPC"),
+                TabletUiHelpers.CreateActionItem(
+                    "Route Planner",
+                    "Projected versus actual lane value, blockers, and optimizer ranking.",
+                    () => context.Push(TabletAppIds.Analytics, "route-planner"),
+                    iconLabel: "OPT"),
                 TabletUiHelpers.CreateNavigationItem(
                     "Back",
                     "Return to the company hub.",
@@ -325,7 +349,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Storage Fill",
-                Subtitle = "Select a warehouse or industry to review fill history",
+                Subtitle = "Select a warehouse or industry to review fill, condition, and loss risk",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Up/Down Navigate | Left/Right Change Timeframe | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.94f,
@@ -365,7 +389,7 @@ namespace LSOL.UI
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     district.DistrictName,
                     string.Format(
-                        "{0} influence | {1} | Charter {2}{3}{4}{5} | Comp {6} / Opp {7}",
+                        "{0} influence | {1} | Charter {2}{3}{4}{5} | Comp {6} / Opp {7} | Lanes {8}{9}{10}",
                         ModFormatting.FormatPercent(district.InfluencePercent),
                         district.ReputationLabel,
                         district.LicenseStatus,
@@ -379,7 +403,14 @@ namespace LSOL.UI
                             ? string.Format(" | Risk C{0}/S{1}", district.CorridorRiskCount, district.ServiceRiskCount)
                             : string.Empty,
                         ModFormatting.FormatPercent(district.CompetitivePressurePercent),
-                        ModFormatting.FormatPercent(district.CompetitiveOpportunityPercent))));
+                        ModFormatting.FormatPercent(district.CompetitiveOpportunityPercent),
+                        district.ContestedCorridorCount,
+                        !string.IsNullOrWhiteSpace(district.HottestCorridorName)
+                            ? string.Format(" | Hot lane {0} {1}", district.HottestCorridorName, ModFormatting.FormatPercent(district.HottestCorridorPressurePercent))
+                            : string.Empty,
+                        !string.IsNullOrWhiteSpace(district.DistrictEventHeadline)
+                            ? string.Format(" | Event {0}", district.DistrictEventHeadline)
+                            : string.Empty)));
             }
 
             if (items.Count == 0)
@@ -422,7 +453,7 @@ namespace LSOL.UI
                         panel,
                         "District Influence Comparison",
                         string.Format(
-                            "{0} | {1} rep | Charter {2} | {3} controlled sites | {4}{5} | Comp {6} / Opp {7} | Wins {8}",
+                            "{0} | {1} rep | Charter {2} | {3} controlled sites | {4}{5} | Comp {6} / Opp {7} | Wins {8} | Lanes {9} / Holds {10}{11}{12}",
                             selectedDistrict.DistrictName,
                             selectedDistrict.ReputationLabel,
                             selectedDistrict.LicenseStatus,
@@ -435,7 +466,15 @@ namespace LSOL.UI
                                 : string.Empty,
                             ModFormatting.FormatPercent(selectedDistrict.CompetitivePressurePercent),
                             ModFormatting.FormatPercent(selectedDistrict.CompetitiveOpportunityPercent),
-                            selectedDistrict.CompetitiveWinCount),
+                            selectedDistrict.CompetitiveWinCount,
+                            selectedDistrict.ContestedCorridorCount,
+                            selectedDistrict.CorridorHoldCount,
+                            !string.IsNullOrWhiteSpace(selectedDistrict.HottestCorridorName)
+                                ? string.Format(" | Hot lane {0} {1}", selectedDistrict.HottestCorridorName, ModFormatting.FormatPercent(selectedDistrict.HottestCorridorPressurePercent))
+                                : string.Empty,
+                            !string.IsNullOrWhiteSpace(selectedDistrict.DistrictEventHeadline)
+                                ? string.Format(" | Event {0}", selectedDistrict.DistrictEventHeadline)
+                                : string.Empty),
                         entries,
                         selectedIndex);
                 },
@@ -452,13 +491,17 @@ namespace LSOL.UI
             for (int i = 0; i < routes.Count; i++)
             {
                 var route = routes[i];
-                items.Add(TabletUiHelpers.CreateInfoItem(
+                var contractId = route.ContractId;
+                items.Add(TabletUiHelpers.CreateActionItem(
                     route.Label,
                     string.Format(
-                        "{0} delivered | {1} loss | Avg {2}",
+                        "{0} | {1} delivered | {2} loss | Avg {3}",
+                        string.IsNullOrWhiteSpace(route.FamilyLabel) ? "Route" : route.FamilyLabel,
                         ModFormatting.FormatTons(route.DeliveredTons),
                         ModFormatting.FormatPercent(route.LossRatioPercent),
-                        ModFormatting.FormatMoney(route.AveragePayout))));
+                        ModFormatting.FormatMoney(route.AveragePayout)),
+                    () => context.Push(TabletAppIds.Analytics, "route-detail", contractId),
+                    iconLabel: "NPC"));
             }
 
             if (items.Count == 0)
@@ -471,7 +514,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "NPC Route Performance",
-                Subtitle = "Select a route to inspect delivered tons, loss ratio, and payout",
+                Subtitle = "Select a route to inspect contract metrics, family rollup, and chain detail",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.94f,
                 MaxVisibleItems = 6,
@@ -524,6 +567,276 @@ namespace LSOL.UI
             };
         }
 
+        private static TabletShellPage BuildRouteDetailPage(TabletShellContext context, object payload)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var detail = context.StateStore.GetNpcRouteDrilldown(ResolveRouteContractId(payload));
+            if (detail == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "NPC Route Detail",
+                    Subtitle = "Selected NPC contract was not found",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    WidthScale = 0.94f,
+                    MaxVisibleItems = 6,
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("Route unavailable", "The selected NPC contract no longer exists or has not been recorded yet."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to NPC Routes.", () => context.GoBack(), "BACK"),
+                    },
+                };
+            }
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    "Route State",
+                    NpcRouteProfitabilityFormatter.BuildRouteStateDetail(detail)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Performance",
+                    string.Format(
+                        "{0} delivered | {1} loss | Avg {2} | {3} deliveries",
+                        ModFormatting.FormatTons(detail.DeliveredTons),
+                        ModFormatting.FormatPercent(detail.LossRatioPercent),
+                        ModFormatting.FormatMoney(detail.AveragePayout),
+                        Math.Max(0, detail.CompletedDeliveries))),
+                TabletUiHelpers.CreateInfoItem(
+                    "Budget Impact",
+                    string.Format(
+                        "Net {0} | Revenue {1} | Cost {2}",
+                        detail.NetProfit >= 0f
+                            ? "+" + ModFormatting.FormatMoney(detail.NetProfit)
+                            : "-" + ModFormatting.FormatMoney(Math.Abs(detail.NetProfit)),
+                        ModFormatting.FormatMoney(detail.Revenue),
+                        ModFormatting.FormatMoney(detail.OperatingCost))),
+                TabletUiHelpers.CreateInfoItem(
+                    detail.RouteFamily != null && !string.IsNullOrWhiteSpace(detail.RouteFamily.Label)
+                        ? detail.RouteFamily.Label
+                        : "Contract Family",
+                    NpcRouteProfitabilityFormatter.BuildFamilyDetail(detail.RouteFamily)),
+            };
+
+            if (detail.RouteLegs != null && detail.RouteLegs.Count > 0)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem("Route Chain", "Current and queued legs in this NPC contract."));
+                for (int i = 0; i < detail.RouteLegs.Count; i++)
+                {
+                    var leg = detail.RouteLegs[i];
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        NpcRouteProfitabilityFormatter.BuildLegCaption(leg),
+                        NpcRouteProfitabilityFormatter.BuildLegDetail(leg)));
+                }
+            }
+
+            if (detail.RecentFinanceEntries != null && detail.RecentFinanceEntries.Count > 0)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem("Recent Route Finance", "Latest route-specific income and payroll entries from the company ledger."));
+                for (int i = 0; i < detail.RecentFinanceEntries.Count; i++)
+                {
+                    var entry = detail.RecentFinanceEntries[i];
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        NpcRouteProfitabilityFormatter.BuildFinanceCaption(entry),
+                        NpcRouteProfitabilityFormatter.BuildFinanceDetail(entry)));
+                }
+            }
+            else
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "No recent finance history",
+                    "This contract has no route-specific delivery or payroll entries recorded yet."));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to NPC Routes.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "NPC Route Detail",
+                Subtitle = detail.Label,
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.94f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildRoutePlannerPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var candidates = context.StateStore.GetRoutePlannerCandidates().ToList();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateRoutePlannerSortSelectorItem(context, "Left/right changes how route candidates are ranked."),
+                TabletUiHelpers.CreateRoutePlannerAvailabilitySelectorItem(context, "Left/right narrows the planner by lane state."),
+                TabletUiHelpers.CreateRoutePlannerCommoditySelectorItem(context, "Left/right narrows the planner by commodity family."),
+                TabletUiHelpers.CreateRoutePlannerDistrictSelectorItem(context, "Left/right narrows the planner by districts touched by the lane."),
+            };
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                var candidateId = candidate.CandidateId;
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    TabletUiHelpers.BuildRoutePlannerCandidateCaption(candidate),
+                    TabletUiHelpers.BuildRoutePlannerAnalyticsDetail(candidate),
+                    () =>
+                    {
+                        context.StateStore.SetSelectedRoutePlannerCandidate(candidateId);
+                        context.Push(TabletAppIds.Analytics, "route-planner-detail", candidateId);
+                    },
+                    iconLabel: "OPT"));
+            }
+
+            if (candidates.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "No planner lanes match",
+                    "Change the sort or filters, unlock more districts, or grow a commodity surplus to surface lane candidates."));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the analytics hub.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Route Planner",
+                Subtitle = "Projected versus actual lane value, blockers, and optimizer ranking",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Filters | Enter Inspect Lane | Backspace/Esc Back",
+                WidthScale = 0.96f,
+                MaxVisibleItems = 6,
+                BottomPanelHeight = 144f,
+                BottomPanelRenderer = panel => DrawRoutePlannerPanel(panel, context),
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildRoutePlannerDetailPage(TabletShellContext context, string candidateId)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var candidate = context.StateStore.GetRoutePlannerCandidate(candidateId);
+            if (candidate == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "Route Planner",
+                    Subtitle = "Lane unavailable",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("Lane unavailable", "Return to Route Planner and choose a lane that still exists in the current network state."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to Route Planner.", () => context.GoBack(), "BACK"),
+                    },
+                };
+            }
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    "Planner state",
+                    string.Format(
+                        "{0} | {1} | Corridor {2}",
+                        candidate.AvailabilityLabel,
+                        string.IsNullOrWhiteSpace(candidate.DistrictPairLabel) ? "District unknown" : candidate.DistrictPairLabel,
+                        string.IsNullOrWhiteSpace(candidate.CorridorId) ? "n/a" : candidate.CorridorId)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Projection",
+                    TabletUiHelpers.BuildRoutePlannerProjectionDetail(candidate)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Live comparison",
+                    TabletUiHelpers.BuildRoutePlannerPerformanceDetail(candidate)),
+            };
+
+            if (candidate.IsUnderperformingActiveLane)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem(
+                    "Underperforming live lane",
+                    "This contract is running behind the planner estimate or is currently losing money."));
+            }
+
+            items.Add(TabletUiHelpers.CreateInfoItem(
+                candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked ? "Blocker" : "Planner status",
+                TabletUiHelpers.BuildRoutePlannerBlockerDetail(candidate)));
+
+            items.Add(TabletUiHelpers.CreateInfoItem(
+                candidate.RouteFamily != null && !string.IsNullOrWhiteSpace(candidate.RouteFamily.Label)
+                    ? candidate.RouteFamily.Label
+                    : "Route family",
+                candidate.RouteFamily != null && !string.IsNullOrWhiteSpace(candidate.RouteFamily.Label)
+                    ? NpcRouteProfitabilityFormatter.BuildFamilyDetail(candidate.RouteFamily)
+                    : "No route-family history is recorded for this commodity pattern yet."));
+
+            if (candidate.MatchingContractId > 0)
+            {
+                var contractId = candidate.MatchingContractId;
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Open Active NPC Contract",
+                    string.IsNullOrWhiteSpace(candidate.MatchingContractLabel)
+                        ? "Inspect the current NPC lane using the contract drill-down."
+                        : candidate.MatchingContractLabel,
+                    () => context.Push(TabletAppIds.Analytics, "route-detail", contractId),
+                    iconLabel: "NPC"));
+            }
+
+            if (_openRoutePlannerMap != null)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Show on Company Map",
+                    "Open the company map with this planner lane highlighted in the overlay.",
+                    () =>
+                    {
+                        context.StateStore.SetSelectedRoutePlannerCandidate(candidate.CandidateId);
+                        context.Refresh();
+                        _openRoutePlannerMap();
+                    },
+                    iconLabel: "MAP"));
+            }
+
+            if (_openNpcPlannerDraft != null)
+            {
+                if (candidate.CanDraftNpcRoute)
+                {
+                    var draftDefinition = TabletUiHelpers.BuildRoutePlannerDraftDefinition(candidate);
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        "Draft NPC Lane",
+                        "Seed the Hire NPC flow from this analytics-backed lane recommendation.",
+                        () => _openNpcPlannerDraft(draftDefinition),
+                        iconLabel: "NPC"));
+                }
+                else
+                {
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        "NPC draft locked",
+                        TabletUiHelpers.BuildRoutePlannerBlockerDetail(candidate)));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to Route Planner.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Route Planner",
+                Subtitle = TabletUiHelpers.BuildRoutePlannerCandidateCaption(candidate),
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.96f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private static int ResolveRouteContractId(object payload)
+        {
+            if (payload is int)
+            {
+                return (int)payload;
+            }
+
+            var raw = payload as string;
+            int parsed;
+            return !string.IsNullOrWhiteSpace(raw) && int.TryParse(raw, out parsed)
+                ? parsed
+                : 0;
+        }
+
         private static void DrawRootPreviewPanel(SimpleMenuTabletPanelContext panel, TabletShellContext context, TabletStateSnapshot snapshot)
         {
             switch (panel.SelectedIndex)
@@ -551,6 +864,9 @@ namespace LSOL.UI
                     return;
                 case 5:
                     DrawRoutesPreview(panel, context);
+                    return;
+                case 6:
+                    DrawRoutePlannerPreview(panel, context);
                     return;
                 default:
                     TabletChartRenderer.DrawMessagePanel(panel, "Analytics", "Select a tile to preview its chart.", "Press Enter on a drill-down tile to browse its dedicated page.");
@@ -661,9 +977,29 @@ namespace LSOL.UI
                 ModFormatting.FormatRatio(summary.StorageTons, summary.TotalCapacityTons, "t"),
                 ModFormatting.FormatPercent(summary.FillRatio * 100f),
                 summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry");
-            return summary.Industry.SiteRole == SiteRole.Warehouse
-                ? string.Format("{0} | Condition {1:0}%", baseDetail, Math.Max(0f, Math.Min(100f, summary.Industry.StorageCondition * 100f)))
-                : baseDetail;
+            if (summary.Industry.SiteRole != SiteRole.Warehouse)
+            {
+                return baseDetail;
+            }
+
+            var warehouseRisk = summary.WarehouseRisk;
+            var detail = string.Format("{0} | Condition {1:0}%", baseDetail, Math.Max(0f, Math.Min(100f, summary.Industry.StorageCondition * 100f)));
+            if (warehouseRisk == null)
+            {
+                return detail;
+            }
+
+            detail += string.Format(
+                " | Risk {0} | Week {1} | Next {2}",
+                TabletUiHelpers.BuildWarehouseRiskLevel(warehouseRisk),
+                ModFormatting.FormatMoney(warehouseRisk.CurrentWeekTotalLossValue),
+                ModFormatting.FormatMoney(warehouseRisk.ProjectedNextDayLossValue));
+            if (!string.IsNullOrWhiteSpace(warehouseRisk.DominantCommodity))
+            {
+                detail += string.Format(" | {0}", TabletUiHelpers.BuildWarehouseFocusLabel(warehouseRisk));
+            }
+
+            return detail;
         }
 
         private static string BuildStorageTrendSubtitle(TabletShellContext context, TabletLocationSummary summary)
@@ -678,9 +1014,23 @@ namespace LSOL.UI
                 ModFormatting.FormatPercent(summary.FillRatio * 100f),
                 summary.Industry.SiteRole == SiteRole.Warehouse ? "Warehouse" : "Industry",
                 context.StateStore.SelectedGraphTimeframe.ToDisplayLabel());
-            return summary.Industry.SiteRole == SiteRole.Warehouse
-                ? string.Format("{0} | Condition {1:0}%", baseSubtitle, Math.Max(0f, Math.Min(100f, summary.Industry.StorageCondition * 100f)))
-                : baseSubtitle;
+            if (summary.Industry.SiteRole != SiteRole.Warehouse)
+            {
+                return baseSubtitle;
+            }
+
+            var subtitle = string.Format("{0} | Condition {1:0}%", baseSubtitle, Math.Max(0f, Math.Min(100f, summary.Industry.StorageCondition * 100f)));
+            var warehouseRisk = summary.WarehouseRisk;
+            if (warehouseRisk == null)
+            {
+                return subtitle;
+            }
+
+            subtitle += string.Format(
+                " | Risk {0} | Next {1}",
+                TabletUiHelpers.BuildWarehouseRiskLevel(warehouseRisk),
+                ModFormatting.FormatMoney(warehouseRisk.ProjectedNextDayLossValue));
+            return subtitle;
         }
 
         private static void DrawUtilizationPreview(SimpleMenuTabletPanelContext panel, TabletShellContext context, TabletStateSnapshot snapshot)
@@ -772,6 +1122,97 @@ namespace LSOL.UI
                     .ToArray());
         }
 
+        private static void DrawRoutePlannerPreview(SimpleMenuTabletPanelContext panel, TabletShellContext context)
+        {
+            var candidate = context.StateStore.GetSelectedRoutePlannerCandidate();
+            if (candidate == null)
+            {
+                TabletChartRenderer.DrawMessagePanel(panel, "Route Planner", "No planner lanes available.", "Press Enter after route-planning data is available to compare projected and actual lane performance.");
+                return;
+            }
+
+            var entries = new[]
+            {
+                new TabletMetricBarEntry
+                {
+                    Label = "Projected Payout",
+                    Ratio = 1f,
+                    ValueText = ModFormatting.FormatMoney(candidate.ProjectedPayout),
+                    FillColor = GetRoutePayoutAccent(214),
+                },
+                new TabletMetricBarEntry
+                {
+                    Label = "Actual Avg",
+                    Ratio = candidate.ProjectedPayout > 0.001f ? Math.Min(1f, candidate.RealizedAveragePayout / candidate.ProjectedPayout) : 0f,
+                    ValueText = candidate.HasActiveNpcRoute || candidate.HasRouteFamilyHistory
+                        ? ModFormatting.FormatMoney(candidate.RealizedAveragePayout)
+                        : "n/a",
+                    FillColor = GetRouteDeliveredAccent(214),
+                },
+                new TabletMetricBarEntry
+                {
+                    Label = "Optimizer",
+                    Ratio = Math.Max(0f, Math.Min(1f, candidate.OptimizerScore / 100f)),
+                    ValueText = candidate.OptimizerScore.ToString("0.0"),
+                    FillColor = GetRoutePlannerAccent(214),
+                },
+            };
+
+            TabletChartRenderer.DrawMetricBarsPanel(
+                panel,
+                TabletUiHelpers.BuildRoutePlannerCandidateCaption(candidate),
+                TabletUiHelpers.BuildRoutePlannerAnalyticsDetail(candidate),
+                entries);
+        }
+
+        private static void DrawRoutePlannerPanel(SimpleMenuTabletPanelContext panel, TabletShellContext context)
+        {
+            var candidates = context.StateStore.GetRoutePlannerCandidates().ToList();
+            if (candidates.Count == 0)
+            {
+                TabletChartRenderer.DrawMessagePanel(panel, "Route Planner", "No planner lanes match the current filters.", "Relax the planner filters or unlock more route endpoints.");
+                return;
+            }
+
+            var selectedIndex = GetGraphListSelectionIndex(panel.SelectedIndex, 4, candidates.Count);
+            var candidate = candidates[selectedIndex];
+            var maxProjected = Math.Max(1f, candidates.Max(entry => entry.ProjectedPayout));
+            var maxActual = Math.Max(1f, candidates.Max(entry => entry.RealizedAveragePayout));
+            var maxScore = Math.Max(1f, candidates.Max(entry => entry.OptimizerScore));
+            var entries = new[]
+            {
+                new TabletMetricBarEntry
+                {
+                    Label = "Projected Payout",
+                    Ratio = candidate.ProjectedPayout / maxProjected,
+                    ValueText = ModFormatting.FormatMoney(candidate.ProjectedPayout),
+                    FillColor = GetRoutePayoutAccent(214),
+                },
+                new TabletMetricBarEntry
+                {
+                    Label = "Actual Avg",
+                    Ratio = candidate.HasActiveNpcRoute || candidate.HasRouteFamilyHistory ? (candidate.RealizedAveragePayout / maxActual) : 0f,
+                    ValueText = candidate.HasActiveNpcRoute || candidate.HasRouteFamilyHistory
+                        ? ModFormatting.FormatMoney(candidate.RealizedAveragePayout)
+                        : "n/a",
+                    FillColor = GetRouteDeliveredAccent(214),
+                },
+                new TabletMetricBarEntry
+                {
+                    Label = "Optimizer",
+                    Ratio = candidate.OptimizerScore / maxScore,
+                    ValueText = candidate.OptimizerScore.ToString("0.0"),
+                    FillColor = GetRoutePlannerAccent(214),
+                },
+            };
+
+            TabletChartRenderer.DrawMetricBarsPanel(
+                panel,
+                TabletUiHelpers.BuildRoutePlannerCandidateCaption(candidate),
+                TabletUiHelpers.BuildRoutePlannerAnalyticsDetail(candidate),
+                entries);
+        }
+
         private static Color GetProfitAccent(int alpha)
         {
             return AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentGreen, alpha);
@@ -800,6 +1241,11 @@ namespace LSOL.UI
         private static Color GetRouteDeliveredAccent(int alpha)
         {
             return AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentTeal, alpha);
+        }
+
+        private static Color GetRoutePlannerAccent(int alpha)
+        {
+            return AccessibilityTheme.Service.Palette.Get(ModColorRole.AccentBlue, alpha);
         }
 
         private static Color GetRouteLossAccent(int alpha)

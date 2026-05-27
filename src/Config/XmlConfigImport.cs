@@ -175,6 +175,22 @@ namespace LSOL.Config
                         {
                             commodityBasePrices[commodity] = basePrice;
                         }
+
+                        var economySemantics = ParseCommodityEconomySemantics(commodityElement, catalog.ValidationMessages, sourceName, groupName + " -> " + commodity);
+                        if (economySemantics != null && economySemantics.HasConfiguredValues)
+                        {
+                            if (!catalog.ResourcesByCommodity.ContainsKey(commodity))
+                            {
+                                catalog.ResourcesByCommodity[commodity] = new ExternalResourceConfig
+                                {
+                                    Commodity = commodity,
+                                    GroupName = groupName,
+                                    CargoType = cargoType,
+                                };
+                            }
+
+                            catalog.ResourcesByCommodity[commodity].EconomySemantics = economySemantics;
+                        }
                     }
                 }
                 else
@@ -226,6 +242,9 @@ namespace LSOL.Config
                         GroupName = groupName,
                         CargoType = cargoType,
                         BasePrice = Math.Max(0f, basePrice),
+                        EconomySemantics = catalog.ResourcesByCommodity.ContainsKey(commodities[i])
+                            ? catalog.ResourcesByCommodity[commodities[i]].EconomySemantics
+                            : null,
                     };
 
                     if (basePrice > 0f)
@@ -807,9 +826,12 @@ namespace LSOL.Config
                 location.Outputs = ParseCommoditySet(ReadAttribute(inputsElement, "outputs"), catalog.ValidationMessages, sourceName, legacyKey);
                 location.RecipeInputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeInputs"), catalog.ValidationMessages, sourceName, legacyKey);
                 location.RecipeOutputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeOutputs"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.RecipeVariants = ParseRecipeVariants(element, catalog.ValidationMessages, sourceName, legacyKey);
                 location.InputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "inputCapacityWeights"), catalog.ValidationMessages, sourceName, legacyKey);
                 location.OutputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "outputCapacityWeights"), catalog.ValidationMessages, sourceName, legacyKey);
+                location.SinkPreferenceWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "sinkPreferenceWeights"), catalog.ValidationMessages, sourceName, legacyKey);
                 location.Kind = ResolveLocationKind(location.SiteRole, location.Inputs, location.Outputs);
+                location.SinkElasticityMultiplier = Math.Max(0.05f, ReadFloatAttribute(element, "sinkElasticityMultiplier", 1f));
 
                 if (!TryReadFloatAttribute(element, "emptyingRate", out var emptyingRate))
                 {
@@ -1037,6 +1059,7 @@ namespace LSOL.Config
                     GatePosition = ReadOptionalVector3(element.Element("Gate")),
                     BarrierModelHash = ReadOptionalIntAttribute(element.Element("Gate"), "barrierModelHash"),
                     WorkerPosition = ReadOptionalVector3(element.Element("Worker")),
+                    FacilityAnchors = ParseOfficeFacilityAnchors(element, catalog.ValidationMessages, officeId),
                     OfficePrice = Math.Max(0f, ReadFloatAttribute(element, "price", 0f)),
                     WeeklyOfficeRent = Math.Max(0f, ReadFloatAttribute(element, "weeklyRent", 0f)),
                     MaxCommercialVehicles = Math.Max(0, ReadIntAttribute(element, "maxCommercialVehicles", 0)),
@@ -1142,6 +1165,7 @@ namespace LSOL.Config
                 var hasModelHash = TryReadHashAttribute(element, "hash", out modelHash);
                 var size = ParseOfficeObjectSize(ReadAttribute(element, "size"));
                 var function = ParseOfficeObjectFunction(ReadAttribute(element, "function"));
+                var anchorType = ParseOfficeFacilityAnchorType(ReadAttribute(element, "anchor"));
                 var resourceType = CommodityCatalog.Normalize(ReadAttribute(element, "resource"));
                 if (resourceType.Equals("None", StringComparison.OrdinalIgnoreCase))
                 {
@@ -1170,6 +1194,13 @@ namespace LSOL.Config
                     Function = function,
                     ResourceType = resourceType,
                     Capacity = Math.Max(0f, ReadFloatAttribute(element, "capacity", 0f)),
+                    PlacementContext = ParseOfficeObjectPlacementContext(ReadAttribute(element, "placement"), anchorType),
+                    AnchorType = anchorType,
+                    InteractionType = ParseOfficeFacilityInteractionType(ReadAttribute(element, "interaction")),
+                    AmbientStaffRole = ParseOfficeAmbientStaffRole(ReadAttribute(element, "ambientRole")),
+                    AmbientStaffCount = Math.Max(0, ReadIntAttribute(element, "staffCount", 0)),
+                    RequiresOwnedOffice = ReadBoolAttribute(element, "requiresOwned", function == OfficeObjectFunction.Headquarters),
+                    AmbientScenarioName = ReadAttribute(element, "scenario"),
                     PerOfficeLimit = Math.Max(0, ReadIntAttribute(element, "limit", 0)),
                     Price = Math.Max(0f, ReadFloatAttribute(element, "price", 0f)),
                 });
@@ -1490,6 +1521,11 @@ namespace LSOL.Config
 
         private static Dictionary<string, float> ParseCommodityWeightMap(string raw, ICollection<string> validationMessages, string sourceName, string context)
         {
+            return ParseCommodityWeightMap(raw, validationMessages, sourceName, context, true);
+        }
+
+        private static Dictionary<string, float> ParseCommodityWeightMap(string raw, ICollection<string> validationMessages, string sourceName, string context, bool validateKnownCommodity)
+        {
             var result = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             foreach (var part in SplitCsv(raw))
             {
@@ -1512,7 +1548,7 @@ namespace LSOL.Config
                     continue;
                 }
 
-                if (!CommodityCatalog.IsKnownCommodity(commodity))
+                if (validateKnownCommodity && !CommodityCatalog.IsKnownCommodity(commodity))
                 {
                     validationMessages?.Add(string.Format("{0} '{1}' references unknown commodity '{2}'.", sourceName, context, split[0].Trim()));
                 }
@@ -1534,6 +1570,63 @@ namespace LSOL.Config
             }
 
             return result;
+        }
+
+        private static CommodityEconomySemantics ParseCommodityEconomySemantics(XElement element, ICollection<string> validationMessages, string sourceName, string context)
+        {
+            if (element == null)
+            {
+                return null;
+            }
+
+            var semantics = new CommodityEconomySemantics
+            {
+                SubstituteFamily = ReadAttribute(element, "substituteFamily"),
+                DemandClasses = ParseSemanticClassSet(ReadAttribute(element, "demandClasses")),
+                Substitutes = ParseCommodityWeightMap(ReadAttribute(element, "substitutes"), validationMessages, sourceName, context, false),
+            };
+
+            float value;
+            if (TryReadFloatAttribute(element, "sinkElasticity", out value))
+            {
+                semantics.SinkElasticity = Math.Max(0f, value);
+            }
+
+            if (TryReadFloatAttribute(element, "scarcitySensitivity", out value))
+            {
+                semantics.ScarcitySensitivity = Math.Max(0f, value);
+            }
+
+            if (TryReadFloatAttribute(element, "sinkPreference", out value))
+            {
+                semantics.SinkPreferenceWeight = Math.Max(0f, value);
+            }
+
+            if (TryReadFloatAttribute(element, "eventAffinity", out value))
+            {
+                semantics.EventResponseAffinity = Math.Max(0f, value);
+            }
+
+            if (TryReadFloatAttribute(element, "volatility", out value))
+            {
+                semantics.Volatility = Math.Max(0f, value);
+            }
+
+            if (TryReadFloatAttribute(element, "perishability", out value))
+            {
+                semantics.Perishability = Math.Max(0f, value);
+            }
+
+            return semantics.HasConfiguredValues ? semantics : null;
+        }
+
+        private static HashSet<string> ParseSemanticClassSet(string raw)
+        {
+            return new HashSet<string>(
+                SplitCsv(raw)
+                    .Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Select(value => value.Trim()),
+                StringComparer.OrdinalIgnoreCase);
         }
 
         private static IEnumerable<string> SplitCsv(string raw)
@@ -1774,6 +1867,166 @@ namespace LSOL.Config
             return OfficeObjectSize.Small;
         }
 
+        private static OfficeObjectPlacementContext ParseOfficeObjectPlacementContext(string raw, OfficeFacilityAnchorType anchorType)
+        {
+            var normalized = (raw ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+            if (normalized.Equals("Room", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Interior", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectPlacementContext.Room;
+            }
+
+            if (normalized.Equals("Either", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Both", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("RoomOrYard", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeObjectPlacementContext.Either;
+            }
+
+            return anchorType != OfficeFacilityAnchorType.None
+                ? OfficeObjectPlacementContext.Either
+                : OfficeObjectPlacementContext.Yard;
+        }
+
+        private static OfficeFacilityAnchorType ParseOfficeFacilityAnchorType(string raw)
+        {
+            var normalized = (raw ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+            if (normalized.Equals("Reception", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("ReceptionDesk", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.ReceptionDesk;
+            }
+
+            if (normalized.Equals("Dispatch", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("DispatchDesk", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.DispatchDesk;
+            }
+
+            if (normalized.Equals("Boardroom", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("MeetingRoom", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.Boardroom;
+            }
+
+            if (normalized.Equals("Maintenance", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("MaintenanceDesk", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("MaintenanceOffice", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.MaintenanceDesk;
+            }
+
+            if (normalized.Equals("Fuel", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("FuelDesk", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("FuelCounter", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("ServiceCounter", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.FuelDesk;
+            }
+
+            if (normalized.Equals("BreakRoom", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("AdminNook", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.BreakRoom;
+            }
+
+            if (normalized.Equals("Worker", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("WorkerFallback", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityAnchorType.WorkerFallback;
+            }
+
+            return OfficeFacilityAnchorType.None;
+        }
+
+        private static OfficeFacilityInteractionType ParseOfficeFacilityInteractionType(string raw)
+        {
+            var normalized = (raw ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+            if (normalized.Equals("OfficeSummary", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Reception", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Admin", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityInteractionType.OfficeSummary;
+            }
+
+            if (normalized.Equals("HireNpc", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Npc", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Dispatch", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityInteractionType.HireNpc;
+            }
+
+            if (normalized.Equals("Repair", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("RepairVehicle", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityInteractionType.RepairVehicle;
+            }
+
+            if (normalized.Equals("Fuel", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("FuelManagement", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityInteractionType.FuelManagement;
+            }
+
+            if (normalized.Equals("Headquarters", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Doctrine", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("CompanyStatus", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("HeadquartersStatus", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeFacilityInteractionType.HeadquartersStatus;
+            }
+
+            return OfficeFacilityInteractionType.None;
+        }
+
+        private static OfficeAmbientStaffRole ParseOfficeAmbientStaffRole(string raw)
+        {
+            var normalized = (raw ?? string.Empty).Trim().Replace("-", string.Empty).Replace("_", string.Empty).Replace(" ", string.Empty);
+            if (normalized.Equals("Receptionist", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.Receptionist;
+            }
+
+            if (normalized.Equals("Dispatcher", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.Dispatcher;
+            }
+
+            if (normalized.Equals("Mechanic", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("YardTech", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.Mechanic;
+            }
+
+            if (normalized.Equals("Loader", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("SupportWorker", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Worker", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.SupportWorker;
+            }
+
+            if (normalized.Equals("Security", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Guard", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.Security;
+            }
+
+            if (normalized.Equals("Manager", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("FloorManager", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.Manager;
+            }
+
+            if (normalized.Equals("Admin", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("AdminClerk", StringComparison.OrdinalIgnoreCase)
+                || normalized.Equals("Clerk", StringComparison.OrdinalIgnoreCase))
+            {
+                return OfficeAmbientStaffRole.AdminClerk;
+            }
+
+            return OfficeAmbientStaffRole.None;
+        }
+
         private static OfficeObjectFunction ParseOfficeObjectFunction(string raw)
         {
             var normalized = (raw ?? string.Empty).Trim().Replace(" ", string.Empty);
@@ -1799,6 +2052,51 @@ namespace LSOL.Config
             }
 
             return OfficeObjectFunction.Decorative;
+        }
+
+        private static List<OfficeFacilityAnchorDefinition> ParseOfficeFacilityAnchors(XElement officeElement, IList<string> validationMessages, string officeId)
+        {
+            var anchors = new List<OfficeFacilityAnchorDefinition>();
+            if (officeElement == null)
+            {
+                return anchors;
+            }
+
+            foreach (var anchorElement in officeElement.Elements("FacilityAnchor"))
+            {
+                var position = ReadOptionalVector3(anchorElement);
+                if (!position.HasValue)
+                {
+                    validationMessages.Add(string.Format("Office '{0}' contains a facility anchor with missing coordinates.", officeId ?? string.Empty));
+                    continue;
+                }
+
+                var anchorType = ParseOfficeFacilityAnchorType(ReadAttribute(anchorElement, "type"));
+                if (anchorType == OfficeFacilityAnchorType.None)
+                {
+                    validationMessages.Add(string.Format("Office '{0}' contains a facility anchor with an unknown type.", officeId ?? string.Empty));
+                    continue;
+                }
+
+                var anchorId = ReadAttribute(anchorElement, "id");
+                if (string.IsNullOrWhiteSpace(anchorId))
+                {
+                    anchorId = string.Format("{0}_{1}_{2}", officeId ?? "office", anchorType, anchors.Count + 1);
+                }
+
+                anchors.Add(new OfficeFacilityAnchorDefinition
+                {
+                    AnchorId = anchorId,
+                    AnchorType = anchorType,
+                    Label = ReadAttribute(anchorElement, "label", anchorType.ToString()),
+                    Position = position.Value,
+                    Heading = ReadFloatAttribute(anchorElement, "heading", 0f),
+                    InteractionRadius = Math.Max(1.25f, ReadFloatAttribute(anchorElement, "radius", 2.2f)),
+                    ScenarioName = ReadAttribute(anchorElement, "scenario"),
+                });
+            }
+
+            return anchors;
         }
 
         private static ExternalLocationKind ResolveLocationKind(SiteRole role, HashSet<string> inputs, HashSet<string> outputs)
@@ -1859,6 +2157,61 @@ namespace LSOL.Config
             }
 
             return VehicleCargoType.CraftedGoods;
+        }
+
+        private static List<IndustryRecipeVariantConfig> ParseRecipeVariants(XElement siteElement, ICollection<string> validationMessages, string sourceName, string context)
+        {
+            var result = new List<IndustryRecipeVariantConfig>();
+            if (siteElement == null)
+            {
+                return result;
+            }
+
+            var recipeElements = siteElement.Element("Recipes") != null
+                ? siteElement.Element("Recipes").Elements("Recipe")
+                : Enumerable.Empty<XElement>();
+
+            recipeElements = recipeElements.Concat(siteElement.Elements("Recipe"));
+
+            foreach (var recipeElement in recipeElements)
+            {
+                var variantId = ReadAttribute(recipeElement, "id", ReadAttribute(recipeElement, "name"));
+                var displayName = ReadAttribute(recipeElement, "name", variantId);
+                var inputsElement = recipeElement.Element("Inputs") ?? recipeElement;
+                var inputs = ParseCommoditySet(ReadAttribute(inputsElement, "primary"), validationMessages, sourceName, context + " recipe " + variantId);
+                var optionalInputs = ParseCommoditySet(ReadAttribute(inputsElement, "optional"), validationMessages, sourceName, context + " recipe " + variantId);
+                var boostInputs = ParseCommoditySet(ReadAttribute(inputsElement, "boost"), validationMessages, sourceName, context + " recipe " + variantId);
+                var outputs = ParseCommoditySet(ReadAttribute(inputsElement, "outputs"), validationMessages, sourceName, context + " recipe " + variantId);
+                var recipeInputs = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeInputs"), validationMessages, sourceName, context + " recipe " + variantId);
+                var recipeOutputs = ParseCommodityWeightMap(ReadAttribute(inputsElement, "recipeOutputs"), validationMessages, sourceName, context + " recipe " + variantId);
+                var optionalInputWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "optionalInputWeights"), validationMessages, sourceName, context + " recipe " + variantId);
+                var inputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "inputCapacityWeights"), validationMessages, sourceName, context + " recipe " + variantId);
+                var outputCapacityWeights = ParseCommodityWeightMap(ReadAttribute(inputsElement, "outputCapacityWeights"), validationMessages, sourceName, context + " recipe " + variantId);
+
+                if (string.IsNullOrWhiteSpace(variantId) || outputs.Count == 0)
+                {
+                    validationMessages?.Add(string.Format("{0} site '{1}' contains a recipe variant with missing id or outputs.", sourceName, context));
+                    continue;
+                }
+
+                result.Add(new IndustryRecipeVariantConfig
+                {
+                    Id = variantId,
+                    DisplayName = displayName,
+                    SelectionPriority = Math.Max(0, ReadIntAttribute(recipeElement, "priority", ReadIntAttribute(recipeElement, "selectionPriority", 0))),
+                    Inputs = inputs,
+                    OptionalInputs = optionalInputs,
+                    BoostInputs = boostInputs,
+                    Outputs = outputs,
+                    RecipeInputWeights = recipeInputs,
+                    RecipeOutputWeights = recipeOutputs,
+                    OptionalInputWeights = optionalInputWeights,
+                    InputCapacityWeights = inputCapacityWeights,
+                    OutputCapacityWeights = outputCapacityWeights,
+                });
+            }
+
+            return result;
         }
 
         private static float ResolveDefaultFuelCapacityLiters(string vehicleType, float capacityTons, bool isTractor, bool isTrailer)

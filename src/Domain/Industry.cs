@@ -12,11 +12,13 @@ namespace LSOL.Domain
         private readonly bool _supportsOmegaBoost;
         private readonly Dictionary<string, float> _inputCapacityWeights;
         private readonly Dictionary<string, float> _outputCapacityWeights;
+        private readonly Dictionary<string, float> _sinkPreferenceWeights;
         private readonly List<string> _sortedInputs;
         private readonly List<string> _sortedOptionalInputs;
         private readonly List<string> _sortedBoostInputs;
         private readonly List<string> _sortedAcceptedInputs;
         private readonly List<string> _sortedOutputs;
+        private Func<Industry, ProductionRecipe, float> _recipeEconomicScoreResolver;
 
         public Industry(IndustryConfig config, List<ProductionRecipe> recipes, bool supportsOmegaBoost, float omegaCapacityMultiplier)
         {
@@ -59,6 +61,7 @@ namespace LSOL.Domain
             IndustryLicencePrice = Math.Max(0f, config.IndustryLicencePrice);
             IndustryOwnerCut = Math.Max(0f, Math.Min(1f, config.IndustryOwnerCut));
             DeliveryPayoutMultiplier = Math.Max(0f, config.DeliveryPayoutMultiplier <= 0f ? 1f : config.DeliveryPayoutMultiplier);
+            SinkElasticityMultiplier = Math.Max(0.05f, config.SinkElasticityMultiplier <= 0f ? 1f : config.SinkElasticityMultiplier);
             IsOwned = config.IsOwned || HasStarterOwnership;
             HasContractorPermit = config.HasContractorPermit || IndustryLicencePrice <= 0f || HasStarterPermitAccess;
 
@@ -66,6 +69,7 @@ namespace LSOL.Domain
             _supportsOmegaBoost = supportsOmegaBoost;
             _inputCapacityWeights = CloneCommodityWeightMap(config.InputCapacityWeights);
             _outputCapacityWeights = CloneCommodityWeightMap(config.OutputCapacityWeights);
+            _sinkPreferenceWeights = CloneCommodityWeightMap(config.SinkPreferenceWeights);
             _sortedInputs = Inputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
             _sortedOptionalInputs = OptionalInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
             _sortedBoostInputs = BoostInputs.Count > 0
@@ -173,6 +177,7 @@ namespace LSOL.Domain
         public float IndustryLicencePrice { get; private set; }
         public float IndustryOwnerCut { get; private set; }
         public float DeliveryPayoutMultiplier { get; private set; }
+        public float SinkElasticityMultiplier { get; private set; }
         public bool IsOwned { get; private set; }
         public bool HasContractorPermit { get; private set; }
         public float LastUtilizationPercent { get; private set; }
@@ -185,6 +190,15 @@ namespace LSOL.Domain
         public int LastStoragePressureDayIndex { get; private set; } = -1;
         public float LifetimeStorageLossTons { get; private set; }
         public float LifetimeStorageLossValue { get; private set; }
+        public int StorageTelemetryWeekIndex { get; private set; } = -1;
+        public float LastDaySpoilageTons { get; private set; }
+        public float LastDaySpoilageValue { get; private set; }
+        public float LastDayShrinkageTons { get; private set; }
+        public float LastDayShrinkageValue { get; private set; }
+        public float CurrentWeekSpoilageTons { get; private set; }
+        public float CurrentWeekSpoilageValue { get; private set; }
+        public float CurrentWeekShrinkageTons { get; private set; }
+        public float CurrentWeekShrinkageValue { get; private set; }
 
         public int UpgradeLevel
         {
@@ -481,7 +495,15 @@ namespace LSOL.Domain
                 return;
             }
 
-            var optionalBoostMultiplier = ResolveOptionalInputBoostMultiplier();
+            var selectedRecipe = SelectBestRecipe();
+            if (selectedRecipe == null)
+            {
+                LastUtilizationPercent = 0f;
+                CurrentOutputPerHourTons = 0f;
+                return;
+            }
+
+            var optionalBoostMultiplier = ResolveOptionalInputBoostMultiplier(selectedRecipe);
 
             var isBoosted = _supportsOmegaBoost && OmegaStorage > 0.0001f;
             HasOmegaBoost = isBoosted;
@@ -491,30 +513,19 @@ namespace LSOL.Domain
             float outputProducedTons = 0f;
             float remainingBudget = effectiveCyclesBudget;
 
-            for (int i = 0; i < _recipes.Count; i++)
+            var maxCyclesByInput = selectedRecipe.GetMaxCyclesFromInputs(BufferStorage);
+            var maxCyclesByOutput = GetMaxCyclesFromOutputCapacity(selectedRecipe);
+
+            var cycles = Math.Min(remainingBudget, Math.Min(maxCyclesByInput, maxCyclesByOutput));
+            if (cycles > 0f)
             {
-                if (remainingBudget <= 0f)
-                {
-                    break;
-                }
-
-                var recipe = _recipes[i];
-                var maxCyclesByInput = recipe.GetMaxCyclesFromInputs(BufferStorage);
-                var maxCyclesByOutput = GetMaxCyclesFromOutputCapacity(recipe);
-
-                var cycles = Math.Min(remainingBudget, Math.Min(maxCyclesByInput, maxCyclesByOutput));
-                if (cycles <= 0f)
-                {
-                    continue;
-                }
-
-                foreach (var input in recipe.InputsTons)
+                foreach (var input in selectedRecipe.InputsTons)
                 {
                     var current = GetStock(input.Key);
                     BufferStorage[input.Key] = Math.Max(0f, current - (input.Value * cycles));
                 }
 
-                foreach (var output in recipe.OutputsTons)
+                foreach (var output in selectedRecipe.OutputsTons)
                 {
                     var current = GetStock(output.Key);
                     BufferStorage[output.Key] = current + (output.Value * cycles);
@@ -532,7 +543,7 @@ namespace LSOL.Domain
                 HasOmegaBoost = OmegaStorage > 0.0001f;
             }
 
-            ConsumeOptionalInputs(cyclesUsed);
+            ConsumeOptionalInputs(selectedRecipe, cyclesUsed);
 
             LastUtilizationPercent = baseCyclesBudget <= 0f ? 0f : (cyclesUsed / baseCyclesBudget) * 100f;
             CurrentOutputPerHourTons = outputProducedTons <= 0f ? 0f : outputProducedTons * (60f / deltaMinutes);
@@ -542,6 +553,16 @@ namespace LSOL.Domain
         {
             if (IsWarehouse)
             {
+                if (module == IndustryUpgradeModule.InputStorage)
+                {
+                    return 3500f * (InputStorageModuleLevel + 1);
+                }
+
+                if (module == IndustryUpgradeModule.OutputStorage)
+                {
+                    return 3500f * (OutputStorageModuleLevel + 1);
+                }
+
                 return -1f;
             }
 
@@ -753,6 +774,28 @@ namespace LSOL.Domain
             ProductionRate = NormalizeProductionRate(productionRate);
         }
 
+        public void ConfigureRecipeSelectionEconomics(Func<Industry, ProductionRecipe, float> recipeEconomicScoreResolver)
+        {
+            _recipeEconomicScoreResolver = recipeEconomicScoreResolver;
+        }
+
+        public float GetSinkPreferenceWeight(string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (string.IsNullOrWhiteSpace(commodity))
+            {
+                return 1f;
+            }
+
+            float weight;
+            if (_sinkPreferenceWeights.TryGetValue(commodity, out weight) && weight > 0f)
+            {
+                return weight;
+            }
+
+            return 1f;
+        }
+
         public float GetMaxTransferTonsForCommodity(string commodity)
         {
             commodity = CommodityCatalog.Normalize(commodity);
@@ -812,9 +855,16 @@ namespace LSOL.Domain
                 return "No production recipe.";
             }
 
-            var recipe = _recipes[0];
+            var recipe = SelectBestRecipe() ?? _recipes[0];
+            var label = string.IsNullOrWhiteSpace(recipe.DisplayName) ? recipe.Id : recipe.DisplayName;
+            if (string.IsNullOrWhiteSpace(label) && _recipes.Count == 1)
+            {
+                label = "Primary recipe";
+            }
+
             return string.Format(
-                "{0} -> {1} | {2}",
+                "{0}{1} -> {2} | {3}",
+                string.IsNullOrWhiteSpace(label) ? string.Empty : label + ": ",
                 FormatCommodityFlow(recipe.InputsTons, "Passive source"),
                 FormatCommodityFlow(recipe.OutputsTons, "No output"),
                 ModFormatting.FormatRatePerHour(ProductionRate, "cyc"));
@@ -834,6 +884,7 @@ namespace LSOL.Domain
 
             ProductionRecipe blockingRecipe = null;
             List<string> blockingInputs = null;
+            float bestScore = float.MinValue;
 
             for (int i = 0; i < _recipes.Count; i++)
             {
@@ -851,13 +902,15 @@ namespace LSOL.Domain
 
                 if (missingInputs.Count == 0)
                 {
-                    return string.Empty;
+                    continue;
                 }
 
-                if (blockingRecipe == null || blockingInputs == null || missingInputs.Count < blockingInputs.Count)
+                var score = GetRecipeSelectionScore(recipe);
+                if (blockingRecipe == null || blockingInputs == null || score > bestScore || (Math.Abs(score - bestScore) < 0.0001f && missingInputs.Count < blockingInputs.Count))
                 {
                     blockingRecipe = recipe;
                     blockingInputs = missingInputs;
+                    bestScore = score;
                 }
             }
 
@@ -967,12 +1020,60 @@ namespace LSOL.Domain
             LifetimeStorageLossValue = Math.Max(0f, lifetimeStorageLossValue);
         }
 
+        public void ApplyStorageLossTelemetryState(
+            int storageTelemetryWeekIndex,
+            float lastDaySpoilageTons,
+            float lastDaySpoilageValue,
+            float lastDayShrinkageTons,
+            float lastDayShrinkageValue,
+            float currentWeekSpoilageTons,
+            float currentWeekSpoilageValue,
+            float currentWeekShrinkageTons,
+            float currentWeekShrinkageValue)
+        {
+            StorageTelemetryWeekIndex = Math.Max(-1, storageTelemetryWeekIndex);
+            LastDaySpoilageTons = Math.Max(0f, lastDaySpoilageTons);
+            LastDaySpoilageValue = Math.Max(0f, lastDaySpoilageValue);
+            LastDayShrinkageTons = Math.Max(0f, lastDayShrinkageTons);
+            LastDayShrinkageValue = Math.Max(0f, lastDayShrinkageValue);
+            CurrentWeekSpoilageTons = Math.Max(0f, currentWeekSpoilageTons);
+            CurrentWeekSpoilageValue = Math.Max(0f, currentWeekSpoilageValue);
+            CurrentWeekShrinkageTons = Math.Max(0f, currentWeekShrinkageTons);
+            CurrentWeekShrinkageValue = Math.Max(0f, currentWeekShrinkageValue);
+        }
+
         public void RecordStoragePressure(int currentDayIndex, float storageCondition, float lostTons, float lostValue)
         {
             StorageCondition = NormalizeStorageCondition(storageCondition);
             LastStoragePressureDayIndex = Math.Max(-1, currentDayIndex);
             LifetimeStorageLossTons += Math.Max(0f, lostTons);
             LifetimeStorageLossValue += Math.Max(0f, lostValue);
+        }
+
+        public void RecordStorageLossDay(
+            int currentWeekIndex,
+            float spoilageTons,
+            float spoilageValue,
+            float shrinkageTons,
+            float shrinkageValue)
+        {
+            if (StorageTelemetryWeekIndex != currentWeekIndex)
+            {
+                CurrentWeekSpoilageTons = 0f;
+                CurrentWeekSpoilageValue = 0f;
+                CurrentWeekShrinkageTons = 0f;
+                CurrentWeekShrinkageValue = 0f;
+                StorageTelemetryWeekIndex = Math.Max(-1, currentWeekIndex);
+            }
+
+            LastDaySpoilageTons = Math.Max(0f, spoilageTons);
+            LastDaySpoilageValue = Math.Max(0f, spoilageValue);
+            LastDayShrinkageTons = Math.Max(0f, shrinkageTons);
+            LastDayShrinkageValue = Math.Max(0f, shrinkageValue);
+            CurrentWeekSpoilageTons += LastDaySpoilageTons;
+            CurrentWeekSpoilageValue += LastDaySpoilageValue;
+            CurrentWeekShrinkageTons += LastDayShrinkageTons;
+            CurrentWeekShrinkageValue += LastDayShrinkageValue;
         }
 
         private float NormalizeProductionRate(float productionRate)
@@ -992,17 +1093,18 @@ namespace LSOL.Domain
             return Math.Max(0.55f, Math.Min(1f, storageCondition));
         }
 
-        private float ResolveOptionalInputBoostMultiplier()
+        private float ResolveOptionalInputBoostMultiplier(ProductionRecipe recipe)
         {
-            if (_sortedBoostInputs.Count == 0)
+            var boostInputs = GetRecipeBoostInputs(recipe);
+            if (boostInputs.Count == 0)
             {
                 return 1f;
             }
 
             var multiplier = 1f;
-            for (int i = 0; i < _sortedBoostInputs.Count; i++)
+            for (int i = 0; i < boostInputs.Count; i++)
             {
-                var boostInput = _sortedBoostInputs[i];
+                var boostInput = boostInputs[i];
                 var stock = _supportsOmegaBoost && boostInput.Equals("Omega", StringComparison.OrdinalIgnoreCase)
                     ? OmegaStorage
                     : GetStock(boostInput);
@@ -1015,9 +1117,10 @@ namespace LSOL.Domain
             return multiplier;
         }
 
-        private void ConsumeOptionalInputs(float cyclesUsed)
+        private void ConsumeOptionalInputs(ProductionRecipe recipe, float cyclesUsed)
         {
-            if (cyclesUsed <= 0f || _sortedBoostInputs.Count == 0)
+            var boostInputs = GetRecipeBoostInputs(recipe);
+            if (cyclesUsed <= 0f || boostInputs.Count == 0)
             {
                 return;
             }
@@ -1028,11 +1131,118 @@ namespace LSOL.Domain
                 return;
             }
 
-            for (int i = 0; i < _sortedBoostInputs.Count; i++)
+            for (int i = 0; i < boostInputs.Count; i++)
             {
-                var boostInput = _sortedBoostInputs[i];
+                var boostInput = boostInputs[i];
                 RemoveInput(boostInput, perInputConsumption);
             }
+        }
+
+        private ProductionRecipe SelectBestRecipe()
+        {
+            ProductionRecipe bestRecipe = null;
+            float bestScore = float.MinValue;
+
+            for (int i = 0; i < _recipes.Count; i++)
+            {
+                var recipe = _recipes[i];
+                if (recipe == null)
+                {
+                    continue;
+                }
+
+                if (recipe.GetMaxCyclesFromInputs(BufferStorage) <= 0.0001f || GetMaxCyclesFromOutputCapacity(recipe) <= 0.0001f)
+                {
+                    continue;
+                }
+
+                var score = GetRecipeSelectionScore(recipe);
+                if (bestRecipe == null || score > bestScore || (Math.Abs(score - bestScore) < 0.0001f && CompareRecipes(recipe, bestRecipe) < 0))
+                {
+                    bestRecipe = recipe;
+                    bestScore = score;
+                }
+            }
+
+            return bestRecipe;
+        }
+
+        private float GetRecipeSelectionScore(ProductionRecipe recipe)
+        {
+            if (recipe == null)
+            {
+                return float.MinValue;
+            }
+
+            var score = recipe.SelectionPriority * 60f;
+            var optionalInputs = GetRecipeOptionalInputs(recipe);
+            for (int i = 0; i < optionalInputs.Count; i++)
+            {
+                var optionalInput = optionalInputs[i];
+                if (GetStock(optionalInput) <= 0.05f)
+                {
+                    continue;
+                }
+
+                float weight;
+                if (!recipe.OptionalInputWeights.TryGetValue(optionalInput, out weight) || weight <= 0f)
+                {
+                    weight = 1f;
+                }
+
+                score += weight * 6f;
+            }
+
+            if (_recipeEconomicScoreResolver != null)
+            {
+                score += _recipeEconomicScoreResolver(this, recipe);
+            }
+
+            return score;
+        }
+
+        private List<string> GetRecipeOptionalInputs(ProductionRecipe recipe)
+        {
+            if (recipe != null && recipe.OptionalInputs != null && recipe.OptionalInputs.Count > 0)
+            {
+                return recipe.OptionalInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            }
+
+            return new List<string>(_sortedOptionalInputs);
+        }
+
+        private List<string> GetRecipeBoostInputs(ProductionRecipe recipe)
+        {
+            if (recipe != null && recipe.BoostInputs != null && recipe.BoostInputs.Count > 0)
+            {
+                return recipe.BoostInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            }
+
+            if (recipe != null && recipe.OptionalInputs != null && recipe.OptionalInputs.Count > 0)
+            {
+                return recipe.OptionalInputs.OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToList();
+            }
+
+            return new List<string>(_sortedBoostInputs);
+        }
+
+        private static int CompareRecipes(ProductionRecipe left, ProductionRecipe right)
+        {
+            var leftLabel = BuildRecipeLabel(left);
+            var rightLabel = BuildRecipeLabel(right);
+            return string.Compare(leftLabel, rightLabel, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildRecipeLabel(ProductionRecipe recipe)
+        {
+            if (recipe == null)
+            {
+                return string.Empty;
+            }
+
+            return string.IsNullOrWhiteSpace(recipe.DisplayName)
+                ? (string.IsNullOrWhiteSpace(recipe.Id) ? string.Join("/", recipe.OutputsTons.Keys.OrderBy(x => x, StringComparer.OrdinalIgnoreCase)) : recipe.Id)
+                : recipe.DisplayName;
         }
 
         private float GetMaxCyclesFromOutputCapacity(ProductionRecipe recipe)

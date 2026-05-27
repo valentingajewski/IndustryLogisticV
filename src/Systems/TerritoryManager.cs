@@ -69,6 +69,7 @@ namespace LSOL.Systems
         private readonly Dictionary<string, float> _districtReputationDebugOffsets;
         private Func<CompanyEndgameSummary> _getEndgameSummary;
         private Func<IEnumerable<NpcDistrictCompetitionSummary>> _getDistrictCompetitionSummaries;
+        private Func<IEnumerable<NpcCorridorCompetitionSummary>> _getCorridorCompetitionSummaries;
 
         private int _lastRepossessionEvaluationMs;
         private int _lastOperationsChargeWeekIndex;
@@ -124,6 +125,38 @@ namespace LSOL.Systems
             get { return _corridorsById.Values; }
         }
 
+        public IReadOnlyList<TerritoryDistrictEventState> GetActiveDistrictEvents()
+        {
+            return _districtsByName.Values
+                .Where(state => state != null && state.ActiveEvent != null && state.ActiveEvent.HasData)
+                .Select(state => state.ActiveEvent)
+                .OrderByDescending(state => state.Severity)
+                .ThenBy(state => state.DistrictName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        public TerritoryDistrictEventState GetDistrictEvent(string districtName)
+        {
+            var districtState = GetDistrictState(districtName);
+            return districtState != null && districtState.ActiveEvent != null && districtState.ActiveEvent.HasData
+                ? districtState.ActiveEvent
+                : null;
+        }
+
+        public TerritoryDistrictEventState GetDistrictEventById(string eventId)
+        {
+            if (string.IsNullOrWhiteSpace(eventId))
+            {
+                return null;
+            }
+
+            var normalized = eventId.Trim();
+            return _districtsByName.Values
+                .Where(state => state != null && state.ActiveEvent != null)
+                .Select(state => state.ActiveEvent)
+                .FirstOrDefault(state => string.Equals(state.EventId, normalized, StringComparison.OrdinalIgnoreCase));
+        }
+
         public void RefreshState()
         {
             RefreshComputedState();
@@ -141,10 +174,12 @@ namespace LSOL.Systems
 
         internal void ConfigureEndgameContext(
             Func<CompanyEndgameSummary> getEndgameSummary,
-            Func<IEnumerable<NpcDistrictCompetitionSummary>> getDistrictCompetitionSummaries)
+            Func<IEnumerable<NpcDistrictCompetitionSummary>> getDistrictCompetitionSummaries,
+            Func<IEnumerable<NpcCorridorCompetitionSummary>> getCorridorCompetitionSummaries)
         {
             _getEndgameSummary = getEndgameSummary;
             _getDistrictCompetitionSummaries = getDistrictCompetitionSummaries;
+            _getCorridorCompetitionSummaries = getCorridorCompetitionSummaries;
         }
 
         public void Reset()
@@ -660,9 +695,11 @@ namespace LSOL.Systems
             var result = new TerritoryWeeklyMaintenanceResult();
             for (int weekIndex = _lastMaintenanceWeekIndex + 1; weekIndex <= currentWeekIndex; weekIndex++)
             {
+                ProcessCompetitionPressure(result, weekIndex);
                 ProcessDistrictLicenseMaintenance(result, weekIndex);
                 ProcessServiceFranchiseMaintenance(result, weekIndex);
                 ProcessCorridorMaintenance(result, weekIndex);
+                ProcessDistrictEvents(result, weekIndex);
                 ResetWeeklyTracking();
                 result.ProcessedWeekCount += 1;
             }
@@ -777,6 +814,19 @@ namespace LSOL.Systems
 
             var districtState = GetDistrictState(districtName);
             return districtState != null && GetReputationTier(districtState.ReputationLabel) >= 2;
+        }
+
+        public int GetDistrictReputationTier(string districtName)
+        {
+            if (!_reputationEnabled)
+            {
+                return 4;
+            }
+
+            var districtState = GetDistrictState(districtName);
+            return districtState != null
+                ? GetReputationTier(districtState.ReputationLabel)
+                : 0;
         }
 
         public string GetNpcDistrictRequirementSummary(string districtName)
@@ -1199,12 +1249,21 @@ namespace LSOL.Systems
                 siteState.CurrentWeekServiceTons += deliveredTons;
             }
 
+            ApplyDistrictEventDeliveryProgress(districtState, destinationIndustry, commodity, deliveredTons, viaNpc);
+
             var resolvedOriginDistrict = ResolveOriginDistrict(originIndustryId, originDistrictName);
             if (!string.IsNullOrWhiteSpace(resolvedOriginDistrict)
                 && !string.IsNullOrWhiteSpace(destinationIndustry.DistrictName)
                 && !string.Equals(resolvedOriginDistrict, destinationIndustry.DistrictName, StringComparison.OrdinalIgnoreCase))
             {
                 var corridorState = GetOrCreateCorridorState(resolvedOriginDistrict, destinationIndustry.DistrictName);
+                if (corridorState.CompetitivePressure > 0.001f)
+                {
+                    var responseRelief = Math.Min(0.10f, deliveredTons * 0.005f);
+                    corridorState.CompetitivePressure = Math.Max(0f, corridorState.CompetitivePressure - responseRelief);
+                    corridorState.CompetitiveOpportunity = Math.Max(0f, corridorState.CompetitiveOpportunity - (responseRelief * 0.3f));
+                }
+
                 corridorState.DeliveryCount += 1;
                 corridorState.TotalDeliveredTons += deliveredTons;
                 corridorState.CurrentWeekDeliveryCount += 1;
@@ -1547,10 +1606,14 @@ namespace LSOL.Systems
                     || districtState.CompetitivePressure > 0.001f
                     || districtState.CompetitiveOpportunity > 0.001f
                     || districtState.ActiveCompetitionJobs > 0
+                    || districtState.ActiveCarrierCount > 0
+                    || !string.IsNullOrWhiteSpace(districtState.DominantCarrierId)
+                    || !string.IsNullOrWhiteSpace(districtState.DominantCarrierName)
                     || districtState.VisibleCompetitionCount > 0
                     || districtState.LastCompetitiveTons > 0.001f
                     || districtState.CompetitiveResponseCount > 0
-                    || districtState.CompetitiveWinCount > 0;
+                    || districtState.CompetitiveWinCount > 0
+                    || (districtState.ActiveEvent != null && districtState.ActiveEvent.HasData);
                 if (!hasState)
                 {
                     continue;
@@ -1566,10 +1629,32 @@ namespace LSOL.Systems
                     CompetitivePressure = districtState.CompetitivePressure,
                     CompetitiveOpportunity = districtState.CompetitiveOpportunity,
                     ActiveCompetitionJobs = districtState.ActiveCompetitionJobs,
+                    ActiveCarrierCount = districtState.ActiveCarrierCount,
+                    DominantCarrierId = districtState.DominantCarrierId,
+                    DominantCarrierName = districtState.DominantCarrierName,
                     VisibleCompetitionCount = districtState.VisibleCompetitionCount,
                     CompetitiveTons = districtState.LastCompetitiveTons,
                     CompetitiveResponseCount = districtState.CompetitiveResponseCount,
                     CompetitiveWinCount = districtState.CompetitiveWinCount,
+                    ActiveEvent = districtState.ActiveEvent != null && districtState.ActiveEvent.HasData
+                        ? new TerritoryDistrictEventSnapshot
+                        {
+                            EventId = districtState.ActiveEvent.EventId,
+                            DistrictName = districtState.ActiveEvent.DistrictName,
+                            CrisisType = districtState.ActiveEvent.CrisisType,
+                            PreferredCommodity = districtState.ActiveEvent.PreferredCommodity,
+                            Severity = districtState.ActiveEvent.Severity,
+                            MarketPressureBonus = districtState.ActiveEvent.MarketPressureBonus,
+                            ResponseTargetTons = districtState.ActiveEvent.ResponseTargetTons,
+                            DeliveredReliefTons = districtState.ActiveEvent.DeliveredReliefTons,
+                            ReliefDeliveryCount = districtState.ActiveEvent.ReliefDeliveryCount,
+                            StartedWeekIndex = districtState.ActiveEvent.StartedWeekIndex,
+                            EndsAtWeekIndex = districtState.ActiveEvent.EndsAtWeekIndex,
+                            LastEscalatedWeekIndex = districtState.ActiveEvent.LastEscalatedWeekIndex,
+                            TriggerSummary = districtState.ActiveEvent.TriggerSummary,
+                            ImpactSummary = districtState.ActiveEvent.ImpactSummary,
+                        }
+                        : null,
                 });
             }
 
@@ -1584,7 +1669,17 @@ namespace LSOL.Systems
                     || corridorState.RightLevel != CorridorRightLevel.None
                     || corridorState.CurrentWeekDeliveryCount > 0
                     || corridorState.CurrentWeekDeliveredTons > 0.001f
-                    || corridorState.DecayPressure > 0.001f;
+                    || corridorState.DecayPressure > 0.001f
+                    || corridorState.CompetitivePressure > 0.001f
+                    || corridorState.CompetitiveOpportunity > 0.001f
+                    || corridorState.ActiveCompetitionJobs > 0
+                    || corridorState.ActiveCarrierCount > 0
+                    || !string.IsNullOrWhiteSpace(corridorState.DominantCarrierId)
+                    || !string.IsNullOrWhiteSpace(corridorState.DominantCarrierName)
+                    || corridorState.VisibleCompetitionCount > 0
+                    || corridorState.LastCompetitiveTons > 0.001f
+                    || corridorState.CompetitiveWinCount > 0
+                    || corridorState.ContestedWeekStreak > 0;
                 if (!hasState)
                 {
                     continue;
@@ -1600,6 +1695,16 @@ namespace LSOL.Systems
                     CurrentWeekDeliveryCount = corridorState.CurrentWeekDeliveryCount,
                     CurrentWeekDeliveredTons = corridorState.CurrentWeekDeliveredTons,
                     DecayPressure = corridorState.DecayPressure,
+                    CompetitivePressure = corridorState.CompetitivePressure,
+                    CompetitiveOpportunity = corridorState.CompetitiveOpportunity,
+                    ActiveCompetitionJobs = corridorState.ActiveCompetitionJobs,
+                    ActiveCarrierCount = corridorState.ActiveCarrierCount,
+                    DominantCarrierId = corridorState.DominantCarrierId,
+                    DominantCarrierName = corridorState.DominantCarrierName,
+                    VisibleCompetitionCount = corridorState.VisibleCompetitionCount,
+                    CompetitiveTons = corridorState.LastCompetitiveTons,
+                    CompetitiveWinCount = corridorState.CompetitiveWinCount,
+                    ContestedWeekStreak = corridorState.ContestedWeekStreak,
                 });
             }
 
@@ -1689,10 +1794,33 @@ namespace LSOL.Systems
                 districtState.CompetitivePressure = Math.Max(0f, source.CompetitivePressure);
                 districtState.CompetitiveOpportunity = Math.Max(0f, source.CompetitiveOpportunity);
                 districtState.ActiveCompetitionJobs = Math.Max(0, source.ActiveCompetitionJobs);
+                districtState.ActiveCarrierCount = Math.Max(0, source.ActiveCarrierCount);
+                districtState.DominantCarrierId = source.DominantCarrierId ?? string.Empty;
+                districtState.DominantCarrierName = source.DominantCarrierName ?? string.Empty;
                 districtState.VisibleCompetitionCount = Math.Max(0, source.VisibleCompetitionCount);
                 districtState.LastCompetitiveTons = Math.Max(0f, source.CompetitiveTons);
                 districtState.CompetitiveResponseCount = Math.Max(0, source.CompetitiveResponseCount);
                 districtState.CompetitiveWinCount = Math.Max(0, source.CompetitiveWinCount);
+                if (source.ActiveEvent != null && source.ActiveEvent.HasData)
+                {
+                    districtState.ActiveEvent = new TerritoryDistrictEventState
+                    {
+                        EventId = source.ActiveEvent.EventId ?? string.Empty,
+                        DistrictName = string.IsNullOrWhiteSpace(source.ActiveEvent.DistrictName) ? source.DistrictName : source.ActiveEvent.DistrictName,
+                        CrisisType = source.ActiveEvent.CrisisType,
+                        PreferredCommodity = CommodityCatalog.Normalize(source.ActiveEvent.PreferredCommodity),
+                        Severity = Clamp01(source.ActiveEvent.Severity),
+                        MarketPressureBonus = Math.Max(0f, source.ActiveEvent.MarketPressureBonus),
+                        ResponseTargetTons = Math.Max(0f, source.ActiveEvent.ResponseTargetTons),
+                        DeliveredReliefTons = Math.Max(0f, source.ActiveEvent.DeliveredReliefTons),
+                        ReliefDeliveryCount = Math.Max(0, source.ActiveEvent.ReliefDeliveryCount),
+                        StartedWeekIndex = source.ActiveEvent.StartedWeekIndex,
+                        EndsAtWeekIndex = source.ActiveEvent.EndsAtWeekIndex,
+                        LastEscalatedWeekIndex = source.ActiveEvent.LastEscalatedWeekIndex,
+                        TriggerSummary = source.ActiveEvent.TriggerSummary ?? string.Empty,
+                        ImpactSummary = source.ActiveEvent.ImpactSummary ?? string.Empty,
+                    };
+                }
             }
 
             for (int i = 0; i < snapshot.Corridors.Count; i++)
@@ -1710,6 +1838,16 @@ namespace LSOL.Systems
                 corridorState.CurrentWeekDeliveryCount = Math.Max(0, source.CurrentWeekDeliveryCount);
                 corridorState.CurrentWeekDeliveredTons = Math.Max(0f, source.CurrentWeekDeliveredTons);
                 corridorState.DecayPressure = Math.Max(0f, source.DecayPressure);
+                corridorState.CompetitivePressure = Math.Max(0f, source.CompetitivePressure);
+                corridorState.CompetitiveOpportunity = Math.Max(0f, source.CompetitiveOpportunity);
+                corridorState.ActiveCompetitionJobs = Math.Max(0, source.ActiveCompetitionJobs);
+                corridorState.ActiveCarrierCount = Math.Max(0, source.ActiveCarrierCount);
+                corridorState.DominantCarrierId = source.DominantCarrierId ?? string.Empty;
+                corridorState.DominantCarrierName = source.DominantCarrierName ?? string.Empty;
+                corridorState.VisibleCompetitionCount = Math.Max(0, source.VisibleCompetitionCount);
+                corridorState.LastCompetitiveTons = Math.Max(0f, source.CompetitiveTons);
+                corridorState.CompetitiveWinCount = Math.Max(0, source.CompetitiveWinCount);
+                corridorState.ContestedWeekStreak = Math.Max(0, source.ContestedWeekStreak);
             }
 
             for (int i = 0; i < snapshot.DistrictReputationOffsets.Count; i++)
@@ -1791,10 +1929,16 @@ namespace LSOL.Systems
                 districtState.ReputationScore += ComputeSiteReputation(industry, siteState);
             }
 
+            var competitionByDistrict = GetCompetitionSummariesByDistrict();
+            var competitionByCorridor = GetCompetitionSummariesByCorridor();
+            SyncDistrictCompetitionTelemetry(competitionByDistrict);
+            SyncCorridorCompetitionTelemetry(competitionByCorridor);
+
             foreach (var corridorState in _corridorsById.Values)
             {
                 corridorState.RequiredWeeklyDeliveredTons = GetCorridorWeeklyTargetTons(corridorState);
                 corridorState.UpkeepStatus = BuildCorridorStatus(corridorState);
+                corridorState.CompetitionStatus = BuildCorridorCompetitionStatus(corridorState);
 
                 var districtA = EnsureDistrictState(corridorState.DistrictA);
                 var districtB = EnsureDistrictState(corridorState.DistrictB);
@@ -1808,11 +1952,10 @@ namespace LSOL.Systems
                 districtB.ReputationScore += routeValue * 2.5f;
             }
 
-            var competitionByDistrict = GetCompetitionSummariesByDistrict();
-            SyncDistrictCompetitionTelemetry(competitionByDistrict);
-
             foreach (var districtState in _districtsByName.Values)
             {
+                ApplyDistrictCorridorCompetitionContext(districtState);
+
                 var target = GetDistrictInfluenceTarget(districtState.DistrictName, districtState.SiteCount);
                 districtState.InfluenceRatio = target <= 0.001f
                     ? 0f
@@ -1835,31 +1978,234 @@ namespace LSOL.Systems
                 districtState.RequiredWeeklyActivityTons = GetDistrictLicenseTargetTons(districtState);
                 districtState.WeeklyLicenseCost = GetDistrictAdministrationCost(districtState, DistrictHasStarterHeadquarters(districtState.DistrictName));
                 districtState.CompetitionStatus = BuildDistrictCompetitionStatus(districtState);
+                RefreshDistrictEventPresentation(districtState);
             }
         }
 
         private Dictionary<string, NpcDistrictCompetitionSummary> GetCompetitionSummariesByDistrict()
         {
-            return (_getDistrictCompetitionSummaries != null
-                    ? _getDistrictCompetitionSummaries()
-                    : Enumerable.Empty<NpcDistrictCompetitionSummary>())
+            if (_getDistrictCompetitionSummaries == null)
+            {
+                return null;
+            }
+
+            return _getDistrictCompetitionSummaries()
                 .Where(summary => summary != null && !string.IsNullOrWhiteSpace(summary.DistrictName))
                 .GroupBy(summary => summary.DistrictName, StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(
                     group => group.Key,
-                    group => new NpcDistrictCompetitionSummary
+                    group =>
                     {
-                        DistrictName = group.Key,
-                        ActiveJobCount = group.Sum(entry => Math.Max(0, entry.ActiveJobCount)),
-                        VisibleConvoyCount = group.Sum(entry => Math.Max(0, entry.VisibleConvoyCount)),
-                        CompetitiveTons = group.Sum(entry => Math.Max(0f, entry.CompetitiveTons)),
-                        PressureScore = group.Sum(entry => Math.Max(0f, entry.PressureScore)),
+                        AggregateCarrierCompetitionMetadata(group, out var activeCarrierCount, out var dominantCarrierId, out var dominantCarrierName);
+                        return new NpcDistrictCompetitionSummary
+                        {
+                            DistrictName = group.Key,
+                            ActiveJobCount = group.Sum(entry => Math.Max(0, entry.ActiveJobCount)),
+                            ActiveCarrierCount = activeCarrierCount,
+                            DominantCarrierId = dominantCarrierId,
+                            DominantCarrierName = dominantCarrierName,
+                            VisibleConvoyCount = group.Sum(entry => Math.Max(0, entry.VisibleConvoyCount)),
+                            CompetitiveTons = group.Sum(entry => Math.Max(0f, entry.CompetitiveTons)),
+                            PressureScore = group.Sum(entry => Math.Max(0f, entry.PressureScore)),
+                        };
                     },
                     StringComparer.OrdinalIgnoreCase);
         }
 
+        private Dictionary<string, NpcCorridorCompetitionSummary> GetCompetitionSummariesByCorridor()
+        {
+            if (_getCorridorCompetitionSummaries == null)
+            {
+                return null;
+            }
+
+            return _getCorridorCompetitionSummaries()
+                .Where(summary => summary != null
+                    && (!string.IsNullOrWhiteSpace(summary.CorridorId)
+                        || (!string.IsNullOrWhiteSpace(summary.DistrictA)
+                            && !string.IsNullOrWhiteSpace(summary.DistrictB)
+                            && !string.Equals(summary.DistrictA, summary.DistrictB, StringComparison.OrdinalIgnoreCase))))
+                .GroupBy(summary => !string.IsNullOrWhiteSpace(summary.CorridorId)
+                        ? summary.CorridorId.Trim()
+                        : BuildCorridorId(summary.DistrictA, summary.DistrictB),
+                    StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group =>
+                    {
+                        var first = group.First();
+                        var ordered = OrderDistrictPair(first != null ? first.DistrictA : string.Empty, first != null ? first.DistrictB : string.Empty);
+                        AggregateCarrierCompetitionMetadata(group, out var activeCarrierCount, out var dominantCarrierId, out var dominantCarrierName);
+                        return new NpcCorridorCompetitionSummary
+                        {
+                            CorridorId = group.Key,
+                            DistrictA = ordered.Item1,
+                            DistrictB = ordered.Item2,
+                            ActiveJobCount = group.Sum(entry => Math.Max(0, entry.ActiveJobCount)),
+                            ActiveCarrierCount = activeCarrierCount,
+                            DominantCarrierId = dominantCarrierId,
+                            DominantCarrierName = dominantCarrierName,
+                            VisibleConvoyCount = group.Sum(entry => Math.Max(0, entry.VisibleConvoyCount)),
+                            CompetitiveTons = group.Sum(entry => Math.Max(0f, entry.CompetitiveTons)),
+                            PressureScore = group.Sum(entry => Math.Max(0f, entry.PressureScore)),
+                        };
+                    },
+                    StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static void AggregateCarrierCompetitionMetadata(
+            IEnumerable<NpcDistrictCompetitionSummary> summaries,
+            out int activeCarrierCount,
+            out string dominantCarrierId,
+            out string dominantCarrierName)
+        {
+            var carrierPressureById = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var carrierNamesById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            activeCarrierCount = 0;
+            dominantCarrierId = string.Empty;
+            dominantCarrierName = string.Empty;
+            if (summaries == null)
+            {
+                return;
+            }
+
+            foreach (var summary in summaries)
+            {
+                if (summary == null)
+                {
+                    continue;
+                }
+
+                if (summary.CarrierPressureById != null)
+                {
+                    foreach (var pair in summary.CarrierPressureById)
+                    {
+                        if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value <= 0.001f)
+                        {
+                            continue;
+                        }
+
+                        float current;
+                        carrierPressureById.TryGetValue(pair.Key, out current);
+                        carrierPressureById[pair.Key] = current + pair.Value;
+                    }
+                }
+
+                if (summary.CarrierNamesById != null)
+                {
+                    foreach (var pair in summary.CarrierNamesById)
+                    {
+                        if (string.IsNullOrWhiteSpace(pair.Key) || carrierNamesById.ContainsKey(pair.Key))
+                        {
+                            continue;
+                        }
+
+                        carrierNamesById[pair.Key] = pair.Value ?? string.Empty;
+                    }
+                }
+
+                if (carrierPressureById.Count == 0 && summary.ActiveCarrierCount > activeCarrierCount)
+                {
+                    activeCarrierCount = Math.Max(0, summary.ActiveCarrierCount);
+                    dominantCarrierId = summary.DominantCarrierId ?? string.Empty;
+                    dominantCarrierName = summary.DominantCarrierName ?? string.Empty;
+                }
+            }
+
+            if (carrierPressureById.Count > 0)
+            {
+                activeCarrierCount = carrierPressureById.Count;
+                var dominant = carrierPressureById
+                    .OrderByDescending(entry => entry.Value)
+                    .ThenBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+                    .First();
+                dominantCarrierId = dominant.Key ?? string.Empty;
+                dominantCarrierName = carrierNamesById.ContainsKey(dominantCarrierId)
+                    ? (carrierNamesById[dominantCarrierId] ?? string.Empty)
+                    : dominantCarrierId;
+            }
+        }
+
+        private static void AggregateCarrierCompetitionMetadata(
+            IEnumerable<NpcCorridorCompetitionSummary> summaries,
+            out int activeCarrierCount,
+            out string dominantCarrierId,
+            out string dominantCarrierName)
+        {
+            var carrierPressureById = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            var carrierNamesById = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            activeCarrierCount = 0;
+            dominantCarrierId = string.Empty;
+            dominantCarrierName = string.Empty;
+            if (summaries == null)
+            {
+                return;
+            }
+
+            foreach (var summary in summaries)
+            {
+                if (summary == null)
+                {
+                    continue;
+                }
+
+                if (summary.CarrierPressureById != null)
+                {
+                    foreach (var pair in summary.CarrierPressureById)
+                    {
+                        if (string.IsNullOrWhiteSpace(pair.Key) || pair.Value <= 0.001f)
+                        {
+                            continue;
+                        }
+
+                        float current;
+                        carrierPressureById.TryGetValue(pair.Key, out current);
+                        carrierPressureById[pair.Key] = current + pair.Value;
+                    }
+                }
+
+                if (summary.CarrierNamesById != null)
+                {
+                    foreach (var pair in summary.CarrierNamesById)
+                    {
+                        if (string.IsNullOrWhiteSpace(pair.Key) || carrierNamesById.ContainsKey(pair.Key))
+                        {
+                            continue;
+                        }
+
+                        carrierNamesById[pair.Key] = pair.Value ?? string.Empty;
+                    }
+                }
+
+                if (carrierPressureById.Count == 0 && summary.ActiveCarrierCount > activeCarrierCount)
+                {
+                    activeCarrierCount = Math.Max(0, summary.ActiveCarrierCount);
+                    dominantCarrierId = summary.DominantCarrierId ?? string.Empty;
+                    dominantCarrierName = summary.DominantCarrierName ?? string.Empty;
+                }
+            }
+
+            if (carrierPressureById.Count > 0)
+            {
+                activeCarrierCount = carrierPressureById.Count;
+                var dominant = carrierPressureById
+                    .OrderByDescending(entry => entry.Value)
+                    .ThenBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+                    .First();
+                dominantCarrierId = dominant.Key ?? string.Empty;
+                dominantCarrierName = carrierNamesById.ContainsKey(dominantCarrierId)
+                    ? (carrierNamesById[dominantCarrierId] ?? string.Empty)
+                    : dominantCarrierId;
+            }
+        }
+
         private void SyncDistrictCompetitionTelemetry(IDictionary<string, NpcDistrictCompetitionSummary> competitionByDistrict)
         {
+            if (competitionByDistrict == null)
+            {
+                return;
+            }
+
             foreach (var districtState in _districtsByName.Values)
             {
                 if (districtState == null)
@@ -1876,8 +2222,90 @@ namespace LSOL.Systems
                 }
 
                 districtState.ActiveCompetitionJobs = competition != null ? Math.Max(0, competition.ActiveJobCount) : 0;
+                districtState.ActiveCarrierCount = competition != null ? Math.Max(0, competition.ActiveCarrierCount) : 0;
+                districtState.DominantCarrierId = competition != null ? (competition.DominantCarrierId ?? string.Empty) : string.Empty;
+                districtState.DominantCarrierName = competition != null ? (competition.DominantCarrierName ?? string.Empty) : string.Empty;
                 districtState.VisibleCompetitionCount = competition != null ? Math.Max(0, competition.VisibleConvoyCount) : 0;
                 districtState.LastCompetitiveTons = competition != null ? Math.Max(0f, competition.CompetitiveTons) : 0f;
+            }
+        }
+
+        private void SyncCorridorCompetitionTelemetry(IDictionary<string, NpcCorridorCompetitionSummary> competitionByCorridor)
+        {
+            if (competitionByCorridor == null)
+            {
+                return;
+            }
+
+            foreach (var corridorState in _corridorsById.Values)
+            {
+                if (corridorState == null)
+                {
+                    continue;
+                }
+
+                corridorState.ActiveCompetitionJobs = 0;
+                corridorState.ActiveCarrierCount = 0;
+                corridorState.DominantCarrierId = string.Empty;
+                corridorState.DominantCarrierName = string.Empty;
+                corridorState.VisibleCompetitionCount = 0;
+                corridorState.LastCompetitiveTons = 0f;
+            }
+
+            foreach (var pair in competitionByCorridor)
+            {
+                var competition = pair.Value;
+                if (competition == null || string.IsNullOrWhiteSpace(pair.Key))
+                {
+                    continue;
+                }
+
+                var corridorState = GetOrCreateCorridorState(competition.DistrictA, competition.DistrictB);
+                corridorState.ActiveCompetitionJobs = Math.Max(0, competition.ActiveJobCount);
+                corridorState.ActiveCarrierCount = Math.Max(0, competition.ActiveCarrierCount);
+                corridorState.DominantCarrierId = competition.DominantCarrierId ?? string.Empty;
+                corridorState.DominantCarrierName = competition.DominantCarrierName ?? string.Empty;
+                corridorState.VisibleCompetitionCount = Math.Max(0, competition.VisibleConvoyCount);
+                corridorState.LastCompetitiveTons = Math.Max(0f, competition.CompetitiveTons);
+            }
+        }
+
+        private void ApplyDistrictCorridorCompetitionContext(TerritoryDistrictState districtState)
+        {
+            if (districtState == null)
+            {
+                return;
+            }
+
+            districtState.ContestedCorridorCount = 0;
+            districtState.CorridorHoldCount = 0;
+            districtState.HottestCorridorPressure = 0f;
+            districtState.HottestCorridorName = string.Empty;
+
+            foreach (var corridorState in _corridorsById.Values)
+            {
+                if (corridorState == null
+                    || (!string.Equals(corridorState.DistrictA, districtState.DistrictName, StringComparison.OrdinalIgnoreCase)
+                        && !string.Equals(corridorState.DistrictB, districtState.DistrictName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    continue;
+                }
+
+                if (corridorState.CompetitivePressure >= 0.18f
+                    || corridorState.ActiveCompetitionJobs > 0
+                    || corridorState.ContestedWeekStreak > 0)
+                {
+                    districtState.ContestedCorridorCount += 1;
+                }
+
+                districtState.CorridorHoldCount += Math.Max(0, corridorState.CompetitiveWinCount);
+                if (corridorState.CompetitivePressure > districtState.HottestCorridorPressure)
+                {
+                    districtState.HottestCorridorPressure = corridorState.CompetitivePressure;
+                    districtState.HottestCorridorName = string.Equals(corridorState.DistrictA, districtState.DistrictName, StringComparison.OrdinalIgnoreCase)
+                        ? corridorState.DistrictB
+                        : corridorState.DistrictA;
+                }
             }
         }
 
@@ -2428,6 +2856,17 @@ namespace LSOL.Systems
 
         private float GetDistrictLicenseTargetTons(TerritoryDistrictState districtState)
         {
+            var baseTarget = GetBaseDistrictLicenseTargetTons(districtState);
+            if (baseTarget <= 0.01f)
+            {
+                return 0f;
+            }
+
+            return Math.Max(18f, baseTarget * (1f + GetDistrictEventActivityTargetModifier(districtState)));
+        }
+
+        private float GetBaseDistrictLicenseTargetTons(TerritoryDistrictState districtState)
+        {
             if (districtState == null || DistrictHasStarterHeadquarters(districtState.DistrictName))
             {
                 return 0f;
@@ -2467,6 +2906,17 @@ namespace LSOL.Systems
         }
 
         private float GetServiceContractTargetTons(Industry industry)
+        {
+            var baseTarget = GetBaseServiceContractTargetTons(industry);
+            if (baseTarget <= 0.01f)
+            {
+                return 0f;
+            }
+
+            return Math.Max(8f, baseTarget * (1f + GetDistrictEventServiceTargetModifier(industry)));
+        }
+
+        private float GetBaseServiceContractTargetTons(Industry industry)
         {
             if (industry == null || !IsServiceSink(industry))
             {
@@ -2512,6 +2962,15 @@ namespace LSOL.Systems
         private void ProcessCompetitionPressure(TerritoryWeeklyMaintenanceResult result, int weekIndex)
         {
             var competitionByDistrict = GetCompetitionSummariesByDistrict();
+            var competitionByCorridor = GetCompetitionSummariesByCorridor();
+            SyncDistrictCompetitionTelemetry(competitionByDistrict);
+            SyncCorridorCompetitionTelemetry(competitionByCorridor);
+            ProcessCorridorCompetitionPressure(result, weekIndex, competitionByCorridor);
+
+            foreach (var districtState in _districtsByName.Values)
+            {
+                ApplyDistrictCorridorCompetitionContext(districtState);
+            }
 
             var endgame = GetEndgameSummary();
             foreach (var districtState in _districtsByName.Values)
@@ -2522,12 +2981,24 @@ namespace LSOL.Systems
                 }
 
                 NpcDistrictCompetitionSummary competition;
-                competitionByDistrict.TryGetValue(districtState.DistrictName ?? string.Empty, out competition);
+                if (competitionByDistrict != null)
+                {
+                    competitionByDistrict.TryGetValue(districtState.DistrictName ?? string.Empty, out competition);
+                }
+                else
+                {
+                    competition = null;
+                }
 
                 var previousPressure = districtState.CompetitivePressure;
                 var ambientPressure = competition != null
                     ? Math.Min(0.45f, Math.Max(0f, competition.PressureScore))
                     : 0f;
+                var corridorPressure = Math.Min(
+                    0.24f,
+                    (districtState.ContestedCorridorCount * 0.035f)
+                        + (districtState.HottestCorridorPressure * 0.18f)
+                        + Math.Min(0.08f, districtState.CorridorHoldCount * 0.01f));
                 var footprintPressure = 0f;
                 if (districtState.LicenseStatus == DistrictLicenseStatus.Active || districtState.LicenseStatus == DistrictLicenseStatus.Probation)
                 {
@@ -2566,30 +3037,36 @@ namespace LSOL.Systems
                     ? Math.Min(1.5f, districtState.CurrentWeekActivityTons / activityTarget)
                     : 0f;
                 var defensePressure = Math.Min(0.22f, activityRatio * 0.16f);
+                defensePressure += Math.Min(0.10f, districtState.CorridorHoldCount * 0.025f);
                 defensePressure += Math.Min(0.10f, GetDistrictSecurityBonus(districtState.DistrictName) + (GetDistrictSupportFactor(districtState.DistrictName) * 0.35f));
                 if (endgame.HasLandmarkHeadquarters)
                 {
                     defensePressure += 0.06f;
                 }
 
-                var nextPressure = Clamp01(previousPressure + ambientPressure + footprintPressure + doctrinePressure - defensePressure);
-                if (competition == null)
+                var nextPressure = Clamp01(previousPressure + ambientPressure + corridorPressure + footprintPressure + doctrinePressure - defensePressure);
+                if (competition == null && districtState.ContestedCorridorCount <= 0)
                 {
                     nextPressure = Math.Max(0f, nextPressure - 0.04f);
                 }
 
-                var nextOpportunity = Clamp01((ambientPressure * 0.65f) + (Math.Max(0f, nextPressure - 0.22f) * 0.35f));
+                var nextOpportunity = Clamp01(
+                    (ambientPressure * 0.55f)
+                    + Math.Min(0.18f, districtState.ContestedCorridorCount * 0.025f)
+                    + Math.Min(0.12f, districtState.HottestCorridorPressure * 0.12f)
+                    + (Math.Max(0f, nextPressure - 0.22f) * 0.35f));
                 if (endgame.ActiveDoctrine == CompanyDoctrine.Service)
                 {
                     nextOpportunity = Clamp01(nextOpportunity + CompanyDoctrineSystem.GetServiceOpportunityBonus(endgame.ActiveDoctrineEffectiveTier));
                 }
 
-                if (ambientPressure >= 0.14f && districtState.CurrentWeekActivityTons > 0.001f)
+                if ((ambientPressure >= 0.14f || districtState.ContestedCorridorCount > 0) && districtState.CurrentWeekActivityTons > 0.001f)
                 {
                     districtState.CompetitiveResponseCount += 1;
                 }
 
-                var heldGround = ambientPressure >= 0.18f && districtState.CurrentWeekActivityTons >= Math.Max(18f, activityTarget * 0.75f);
+                var heldGround = (ambientPressure + corridorPressure) >= 0.18f
+                    && districtState.CurrentWeekActivityTons >= Math.Max(18f, activityTarget * 0.75f);
                 if (heldGround)
                 {
                     districtState.CompetitiveWinCount += 1;
@@ -2617,6 +3094,131 @@ namespace LSOL.Systems
                 {
                     result.HighCompetitionDistrictCount += 1;
                 }
+            }
+
+            foreach (var corridorState in _corridorsById.Values)
+            {
+                if (corridorState == null)
+                {
+                    continue;
+                }
+
+                corridorState.RequiredWeeklyDeliveredTons = GetCorridorWeeklyTargetTons(corridorState);
+                corridorState.UpkeepStatus = BuildCorridorStatus(corridorState);
+                corridorState.CompetitionStatus = BuildCorridorCompetitionStatus(corridorState);
+            }
+        }
+
+        private void ProcessCorridorCompetitionPressure(
+            TerritoryWeeklyMaintenanceResult result,
+            int weekIndex,
+            IDictionary<string, NpcCorridorCompetitionSummary> competitionByCorridor)
+        {
+            foreach (var corridorState in _corridorsById.Values)
+            {
+                if (corridorState == null)
+                {
+                    continue;
+                }
+
+                NpcCorridorCompetitionSummary competition = null;
+                var hasCompetition = competitionByCorridor != null
+                    && competitionByCorridor.TryGetValue(corridorState.CorridorId ?? string.Empty, out competition);
+                if (!hasCompetition)
+                {
+                    competition = null;
+                }
+
+                var previousPressure = corridorState.CompetitivePressure;
+                var ambientPressure = competition != null
+                    ? Math.Min(0.55f, Math.Max(0f, competition.PressureScore))
+                    : 0f;
+                var flowTarget = corridorState.RightLevel != CorridorRightLevel.None
+                    ? (corridorState.RequiredWeeklyDeliveredTons > 0.01f
+                        ? corridorState.RequiredWeeklyDeliveredTons
+                        : GetCorridorWeeklyTargetTons(corridorState))
+                    : Math.Max(16f, Math.Min(60f, (Math.Max(0f, corridorState.LastCompetitiveTons) * 1.2f) + 12f));
+                var flowRatio = flowTarget > 0.01f
+                    ? Math.Min(1.5f, corridorState.CurrentWeekDeliveredTons / flowTarget)
+                    : 0f;
+
+                var routePressure = corridorState.RightLevel != CorridorRightLevel.None
+                    ? Math.Min(0.10f, (int)corridorState.RightLevel * 0.025f)
+                    : 0f;
+                var neglectPressure = 0f;
+                if (corridorState.RightLevel != CorridorRightLevel.None)
+                {
+                    neglectPressure += Math.Min(0.18f, Math.Max(0f, 1f - flowRatio) * 0.16f);
+                    neglectPressure += Math.Min(0.08f, corridorState.DecayPressure * 0.06f);
+                }
+                else if (ambientPressure > 0.001f)
+                {
+                    neglectPressure += 0.04f;
+                }
+
+                var defensePressure = 0f;
+                if (corridorState.RightLevel != CorridorRightLevel.None)
+                {
+                    defensePressure += Math.Min(0.24f, flowRatio * 0.18f);
+                }
+
+                defensePressure += Math.Min(0.08f, GetDistrictSecurityBonus(corridorState.DistrictA) + GetDistrictSecurityBonus(corridorState.DistrictB));
+                defensePressure += Math.Min(0.06f, (GetDistrictSupportFactor(corridorState.DistrictA) + GetDistrictSupportFactor(corridorState.DistrictB)) * 0.18f);
+
+                var nextPressure = Clamp01(previousPressure + ambientPressure + routePressure + neglectPressure - defensePressure);
+                if (competition == null)
+                {
+                    nextPressure = Math.Max(0f, nextPressure - 0.05f);
+                }
+
+                var nextOpportunity = Clamp01((ambientPressure * 0.45f) + (Math.Max(0f, nextPressure - 0.28f) * 0.45f));
+                var meaningfulPressure = ambientPressure >= 0.16f
+                    || nextPressure >= 0.35f
+                    || corridorState.ActiveCompetitionJobs > 0;
+                var heldGround = corridorState.RightLevel != CorridorRightLevel.None
+                    && meaningfulPressure
+                    && corridorState.CurrentWeekDeliveredTons >= Math.Max(14f, flowTarget * 0.7f);
+
+                if (heldGround)
+                {
+                    corridorState.CompetitiveWinCount += 1;
+                    corridorState.ContestedWeekStreak = Math.Min(8, corridorState.ContestedWeekStreak + 1);
+                    nextPressure = Math.Max(0f, nextPressure - (0.12f + Math.Min(0.08f, flowRatio * 0.08f)));
+                    nextOpportunity = Clamp01(nextOpportunity + 0.12f);
+                    result.Messages.Add(string.Format(
+                        "Week {0}: {1} / {2} held its lane against outside carriers.",
+                        weekIndex,
+                        corridorState.DistrictA,
+                        corridorState.DistrictB));
+                }
+                else if (meaningfulPressure)
+                {
+                    corridorState.ContestedWeekStreak = Math.Min(8, corridorState.ContestedWeekStreak + 1);
+                    if (corridorState.RightLevel != CorridorRightLevel.None && flowRatio < 0.6f)
+                    {
+                        corridorState.DecayPressure += flowRatio >= 0.35f ? 0.35f : 0.65f;
+                    }
+
+                    if (nextPressure >= 0.68f && corridorState.RightLevel != CorridorRightLevel.None)
+                    {
+                        result.Messages.Add(string.Format(
+                            "Week {0}: outside carriers are contesting {1} / {2}.",
+                            weekIndex,
+                            corridorState.DistrictA,
+                            corridorState.DistrictB));
+                    }
+                }
+                else
+                {
+                    corridorState.ContestedWeekStreak = Math.Max(0, corridorState.ContestedWeekStreak - 1);
+                }
+
+                corridorState.CompetitivePressure = nextPressure;
+                corridorState.CompetitiveOpportunity = nextOpportunity;
+                corridorState.ActiveCompetitionJobs = competition != null ? Math.Max(0, competition.ActiveJobCount) : 0;
+                corridorState.VisibleCompetitionCount = competition != null ? Math.Max(0, competition.VisibleConvoyCount) : 0;
+                corridorState.LastCompetitiveTons = competition != null ? Math.Max(0f, competition.CompetitiveTons) : 0f;
+                corridorState.CompetitionStatus = BuildCorridorCompetitionStatus(corridorState);
             }
         }
 
@@ -2646,7 +3248,10 @@ namespace LSOL.Systems
         {
             return corridorState != null
                 && corridorState.RightLevel != CorridorRightLevel.None
-                && corridorState.DecayPressure >= GetCorridorDecayThreshold(corridorState) * 0.75f;
+                && (corridorState.DecayPressure >= GetCorridorDecayThreshold(corridorState) * 0.75f
+                    || corridorState.CompetitivePressure >= 0.55f
+                    || (corridorState.CompetitivePressure >= 0.35f
+                        && corridorState.CurrentWeekDeliveredTons + 0.25f < Math.Max(12f, corridorState.RequiredWeeklyDeliveredTons * 0.6f)));
         }
 
         private void ProcessDistrictLicenseMaintenance(TerritoryWeeklyMaintenanceResult result, int weekIndex)
@@ -2809,6 +3414,650 @@ namespace LSOL.Systems
             }
         }
 
+        private void ProcessDistrictEvents(TerritoryWeeklyMaintenanceResult result, int weekIndex)
+        {
+            var triggers = _districtsByName.Values
+                .Where(district => district != null && !string.IsNullOrWhiteSpace(district.DistrictName))
+                .Select(ResolveDistrictEventTrigger)
+                .Where(trigger => trigger != null)
+                .OrderByDescending(trigger => trigger.Score)
+                .ThenBy(trigger => trigger.DistrictState != null ? trigger.DistrictState.DistrictName : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            for (int i = 0; i < triggers.Count; i++)
+            {
+                var trigger = triggers[i];
+                if (trigger == null || trigger.DistrictState == null || trigger.DistrictState.ActiveEvent == null)
+                {
+                    continue;
+                }
+
+                RefreshDistrictEvent(trigger.DistrictState, trigger, result, weekIndex);
+            }
+
+            var activeCount = _districtsByName.Values.Count(district => district != null && district.ActiveEvent != null && district.ActiveEvent.HasData);
+            for (int i = 0; i < triggers.Count && activeCount < 3; i++)
+            {
+                var trigger = triggers[i];
+                if (trigger == null
+                    || trigger.DistrictState == null
+                    || trigger.DistrictState.ActiveEvent != null
+                    || trigger.Type == DistrictCrisisType.None
+                    || trigger.Score < 0.34f)
+                {
+                    continue;
+                }
+
+                StartDistrictEvent(trigger.DistrictState, trigger, result, weekIndex);
+                activeCount += 1;
+            }
+
+            result.ActiveDistrictEventCount = _districtsByName.Values.Count(district => district != null && district.ActiveEvent != null && district.ActiveEvent.HasData);
+        }
+
+        private void ApplyDistrictEventDeliveryProgress(TerritoryDistrictState districtState, Industry destinationIndustry, string commodity, float deliveredTons, bool viaNpc)
+        {
+            var activeEvent = districtState != null ? districtState.ActiveEvent : null;
+            if (activeEvent == null || deliveredTons <= 0.001f)
+            {
+                return;
+            }
+
+            var reliefFactor = GetDistrictEventCommodityReliefFactor(activeEvent, commodity);
+            if (reliefFactor <= 0f && destinationIndustry != null)
+            {
+                if (activeEvent.CrisisType == DistrictCrisisType.ConstructionSurge && destinationIndustry.IsConstructionSink)
+                {
+                    reliefFactor = 0.40f;
+                }
+                else if (activeEvent.CrisisType == DistrictCrisisType.EmergencyRestock && IsServiceSink(destinationIndustry))
+                {
+                    reliefFactor = 0.25f;
+                }
+            }
+
+            if (reliefFactor <= 0f)
+            {
+                return;
+            }
+
+            var reliefTons = deliveredTons * reliefFactor * (viaNpc ? 0.65f : 1f);
+            if (reliefTons <= 0.01f)
+            {
+                return;
+            }
+
+            activeEvent.DeliveredReliefTons = Math.Min(activeEvent.ResponseTargetTons + 25f, activeEvent.DeliveredReliefTons + reliefTons);
+            activeEvent.ReliefDeliveryCount += 1;
+            activeEvent.Severity = Clamp01(activeEvent.Severity - Math.Min(0.18f, reliefTons * 0.005f));
+            activeEvent.MarketPressureBonus = ResolveDistrictEventMarketPressureBonus(activeEvent.CrisisType, activeEvent.Severity);
+
+            if (activeEvent.DeliveredReliefTons + 0.25f >= activeEvent.ResponseTargetTons)
+            {
+                districtState.ActiveEvent = null;
+                return;
+            }
+
+            RefreshDistrictEventPresentation(districtState);
+        }
+
+        private DistrictEventTriggerDescriptor ResolveDistrictEventTrigger(TerritoryDistrictState districtState)
+        {
+            var descriptor = new DistrictEventTriggerDescriptor
+            {
+                DistrictState = districtState,
+                Type = DistrictCrisisType.None,
+                PreferredCommodity = string.Empty,
+                TriggerSummary = string.Empty,
+                ImpactSummary = string.Empty,
+                ResponseTargetTons = 0f,
+                Score = 0f,
+            };
+
+            if (districtState == null || string.IsNullOrWhiteSpace(districtState.DistrictName) || districtState.SiteCount <= 0)
+            {
+                return descriptor;
+            }
+
+            var serviceSiteCount = 0;
+            var atRiskServiceSiteCount = 0;
+            var gasStationCount = 0;
+            var storeCount = 0;
+            var constructionSiteCount = 0;
+            var servicePenaltySteps = 0;
+
+            foreach (var siteState in _sitesById.Values)
+            {
+                if (siteState == null || !string.Equals(siteState.DistrictName, districtState.DistrictName, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var industry = ResolveIndustry(siteState.SiteId);
+                if (industry == null)
+                {
+                    continue;
+                }
+
+                if (IsServiceSink(industry))
+                {
+                    serviceSiteCount += 1;
+                    servicePenaltySteps += Math.Max(0, siteState.ServicePenaltySteps);
+                    if (IsServiceContractAtRisk(siteState))
+                    {
+                        atRiskServiceSiteCount += 1;
+                    }
+                }
+
+                if (industry.IsGasStation)
+                {
+                    gasStationCount += 1;
+                }
+
+                if (industry.IsStore)
+                {
+                    storeCount += 1;
+                }
+
+                if (industry.IsConstructionSink)
+                {
+                    constructionSiteCount += 1;
+                }
+            }
+
+            var baseActivityTarget = GetBaseDistrictLicenseTargetTons(districtState);
+            var activityRatio = baseActivityTarget > 0.01f
+                ? Math.Min(1.5f, districtState.CurrentWeekActivityTons / baseActivityTarget)
+                : 1f;
+            var activityShortfall = Clamp01(1f - activityRatio);
+            var operationalGapRatio = districtState.SiteCount > 0
+                ? Clamp01((districtState.SiteCount - districtState.OperationalSites) / (float)districtState.SiteCount)
+                : 0f;
+            var licenseStress = districtState.LicenseStatus == DistrictLicenseStatus.Suspended
+                ? 0.32f
+                : (districtState.LicenseStatus == DistrictLicenseStatus.Probation ? 0.18f : 0f);
+            var serviceRisk = Clamp01((servicePenaltySteps * 0.22f) + (atRiskServiceSiteCount * 0.10f));
+            var competitionPressure = Clamp01(districtState.CompetitivePressure);
+            var corridorPressure = Clamp01((districtState.ContestedCorridorCount * 0.10f) + (districtState.HottestCorridorPressure * 0.55f));
+            var growthPressure = Clamp01(
+                (constructionSiteCount * 0.18f)
+                + (districtState.CompetitiveOpportunity * 0.45f)
+                + (Math.Max(0f, activityRatio - 1f) * 0.30f)
+                + Math.Min(0.12f, districtState.RouteRights * 0.02f));
+
+            var fuelScore = Clamp01(
+                (gasStationCount * 0.18f)
+                + (serviceSiteCount * 0.06f)
+                + (serviceRisk * 0.55f)
+                + (activityShortfall * 0.14f));
+            var constructionScore = Clamp01(
+                (constructionSiteCount * 0.22f)
+                + (growthPressure * 0.70f)
+                + Math.Min(0.10f, districtState.ControlledDepots * 0.03f));
+            var supplyScore = Clamp01(
+                (competitionPressure * 0.58f)
+                + (corridorPressure * 0.32f)
+                + (operationalGapRatio * 0.24f)
+                + Math.Min(0.12f, districtState.ActiveCompetitionJobs * 0.02f));
+            var restockScore = Clamp01(
+                (storeCount * 0.11f)
+                + (serviceSiteCount * 0.05f)
+                + (activityShortfall * 0.52f)
+                + licenseStress
+                + Math.Min(0.10f, operationalGapRatio * 0.18f));
+
+            descriptor.Type = DistrictCrisisType.EmergencyRestock;
+            descriptor.Score = restockScore;
+            descriptor.TriggerSummary = string.Format(
+                "Activity gap {0:0}% | Retail/service {1} | Charter {2}",
+                activityShortfall * 100f,
+                storeCount + serviceSiteCount,
+                districtState.LicenseStatus);
+
+            if (fuelScore > descriptor.Score)
+            {
+                descriptor.Type = DistrictCrisisType.FuelShortage;
+                descriptor.Score = fuelScore;
+                descriptor.TriggerSummary = string.Format(
+                    "Fuel pressure {0:0}% | Gas sites {1} | At-risk stops {2}",
+                    serviceRisk * 100f,
+                    gasStationCount,
+                    atRiskServiceSiteCount);
+            }
+
+            if (constructionScore > descriptor.Score)
+            {
+                descriptor.Type = DistrictCrisisType.ConstructionSurge;
+                descriptor.Score = constructionScore;
+                descriptor.TriggerSummary = string.Format(
+                    "Build pressure {0:0}% | Construction sites {1} | Corridor rights {2}",
+                    growthPressure * 100f,
+                    constructionSiteCount,
+                    districtState.RouteRights);
+            }
+
+            if (supplyScore > descriptor.Score)
+            {
+                descriptor.Type = DistrictCrisisType.SupplyDisruption;
+                descriptor.Score = supplyScore;
+                descriptor.TriggerSummary = string.Format(
+                    "Competition {0:0}% | Contested lanes {1} | Operational gap {2:0}%",
+                    competitionPressure * 100f,
+                    districtState.ContestedCorridorCount,
+                    operationalGapRatio * 100f);
+            }
+
+            descriptor.PreferredCommodity = ResolveDistrictEventPreferredCommodity(
+                descriptor.Type,
+                gasStationCount,
+                storeCount,
+                constructionSiteCount,
+                serviceSiteCount);
+            descriptor.ResponseTargetTons = ResolveDistrictEventResponseTargetTons(
+                districtState,
+                descriptor.Type,
+                descriptor.Score,
+                serviceSiteCount,
+                storeCount,
+                constructionSiteCount);
+            descriptor.ImpactSummary = BuildDistrictEventImpactSummary(descriptor.Type);
+            return descriptor;
+        }
+
+        private void StartDistrictEvent(TerritoryDistrictState districtState, DistrictEventTriggerDescriptor trigger, TerritoryWeeklyMaintenanceResult result, int weekIndex)
+        {
+            if (districtState == null || trigger == null || trigger.Type == DistrictCrisisType.None || trigger.Score < 0.01f)
+            {
+                return;
+            }
+
+            districtState.ActiveEvent = new TerritoryDistrictEventState
+            {
+                EventId = BuildDistrictEventId(districtState.DistrictName, weekIndex),
+                DistrictName = districtState.DistrictName ?? string.Empty,
+                CrisisType = trigger.Type,
+                PreferredCommodity = CommodityCatalog.Normalize(trigger.PreferredCommodity),
+                Severity = Clamp01(Math.Max(0.24f, trigger.Score)),
+                MarketPressureBonus = ResolveDistrictEventMarketPressureBonus(trigger.Type, trigger.Score),
+                ResponseTargetTons = Math.Max(8f, trigger.ResponseTargetTons),
+                DeliveredReliefTons = 0f,
+                ReliefDeliveryCount = 0,
+                StartedWeekIndex = weekIndex,
+                EndsAtWeekIndex = weekIndex + 1,
+                LastEscalatedWeekIndex = -1,
+                TriggerSummary = trigger.TriggerSummary ?? string.Empty,
+                ImpactSummary = trigger.ImpactSummary ?? string.Empty,
+            };
+            RefreshDistrictEventPresentation(districtState);
+
+            result.CreatedDistrictEventCount += 1;
+            result.Messages.Add(string.Format(
+                "Week {0}: {1} is active. {2}",
+                weekIndex,
+                districtState.ActiveEvent.Headline,
+                districtState.ActiveEvent.ImpactSummary));
+        }
+
+        private void RefreshDistrictEvent(TerritoryDistrictState districtState, DistrictEventTriggerDescriptor trigger, TerritoryWeeklyMaintenanceResult result, int weekIndex)
+        {
+            var activeEvent = districtState != null ? districtState.ActiveEvent : null;
+            if (activeEvent == null)
+            {
+                return;
+            }
+
+            if (activeEvent.DeliveredReliefTons + 0.25f >= activeEvent.ResponseTargetTons)
+            {
+                var headline = BuildDistrictEventHeadline(districtState != null ? districtState.DistrictName : string.Empty, activeEvent.CrisisType);
+                if (districtState != null)
+                {
+                    districtState.ActiveEvent = null;
+                }
+
+                result.ResolvedDistrictEventCount += 1;
+                result.Messages.Add(string.Format(
+                    "Week {0}: {1} stabilized after {2:0} t of relief cargo.",
+                    weekIndex,
+                    headline,
+                    Math.Max(0f, activeEvent.DeliveredReliefTons)));
+                return;
+            }
+
+            var triggerScore = trigger != null ? trigger.Score : 0f;
+            if (triggerScore < 0.14f && weekIndex >= activeEvent.EndsAtWeekIndex)
+            {
+                var headline = BuildDistrictEventHeadline(districtState != null ? districtState.DistrictName : string.Empty, activeEvent.CrisisType);
+                if (districtState != null)
+                {
+                    districtState.ActiveEvent = null;
+                }
+
+                result.ResolvedDistrictEventCount += 1;
+                result.Messages.Add(string.Format("Week {0}: {1} stabilized before it rolled over again.", weekIndex, headline));
+                return;
+            }
+
+            if (trigger != null && trigger.Type != DistrictCrisisType.None && (trigger.Score >= activeEvent.Severity || weekIndex >= activeEvent.EndsAtWeekIndex))
+            {
+                activeEvent.CrisisType = trigger.Type;
+                if (!string.IsNullOrWhiteSpace(trigger.PreferredCommodity))
+                {
+                    activeEvent.PreferredCommodity = CommodityCatalog.Normalize(trigger.PreferredCommodity);
+                }
+            }
+
+            if (trigger != null)
+            {
+                activeEvent.TriggerSummary = trigger.TriggerSummary ?? string.Empty;
+                activeEvent.ImpactSummary = trigger.ImpactSummary ?? string.Empty;
+                activeEvent.ResponseTargetTons = Math.Max(activeEvent.ResponseTargetTons, trigger.ResponseTargetTons);
+            }
+
+            activeEvent.Severity = Clamp01(Math.Max(activeEvent.Severity * 0.72f, triggerScore));
+            activeEvent.MarketPressureBonus = ResolveDistrictEventMarketPressureBonus(activeEvent.CrisisType, activeEvent.Severity);
+
+            if (weekIndex >= activeEvent.EndsAtWeekIndex)
+            {
+                activeEvent.LastEscalatedWeekIndex = weekIndex;
+                activeEvent.EndsAtWeekIndex = weekIndex + 1;
+                activeEvent.ResponseTargetTons += Math.Max(6f, (trigger != null ? trigger.ResponseTargetTons : activeEvent.ResponseTargetTons) * 0.25f);
+                activeEvent.Severity = Clamp01(Math.Max(activeEvent.Severity + 0.08f, triggerScore + 0.06f));
+                activeEvent.MarketPressureBonus = ResolveDistrictEventMarketPressureBonus(activeEvent.CrisisType, activeEvent.Severity);
+                result.EscalatedDistrictEventCount += 1;
+                result.Messages.Add(string.Format(
+                    "Week {0}: {1} rolled into another week. Relief {2:0}/{3:0} t.",
+                    weekIndex,
+                    BuildDistrictEventHeadline(districtState != null ? districtState.DistrictName : string.Empty, activeEvent.CrisisType),
+                    Math.Max(0f, activeEvent.DeliveredReliefTons),
+                    Math.Max(0f, activeEvent.ResponseTargetTons)));
+            }
+
+            RefreshDistrictEventPresentation(districtState);
+        }
+
+        private void RefreshDistrictEventPresentation(TerritoryDistrictState districtState)
+        {
+            var activeEvent = districtState != null ? districtState.ActiveEvent : null;
+            if (activeEvent == null)
+            {
+                return;
+            }
+
+            activeEvent.DistrictName = districtState != null ? districtState.DistrictName ?? string.Empty : activeEvent.DistrictName ?? string.Empty;
+            activeEvent.PreferredCommodity = CommodityCatalog.Normalize(activeEvent.PreferredCommodity);
+            activeEvent.Headline = BuildDistrictEventHeadline(activeEvent.DistrictName, activeEvent.CrisisType);
+            activeEvent.SeverityLabel = ResolveDistrictEventSeverityLabel(activeEvent.Severity);
+            activeEvent.StatusText = string.Format(
+                "{0} | Relief {1:0}/{2:0} t | Closes week {3}",
+                activeEvent.SeverityLabel,
+                Math.Max(0f, activeEvent.DeliveredReliefTons),
+                Math.Max(0f, activeEvent.ResponseTargetTons),
+                Math.Max(0, activeEvent.EndsAtWeekIndex + 1));
+            if (string.IsNullOrWhiteSpace(activeEvent.ImpactSummary))
+            {
+                activeEvent.ImpactSummary = BuildDistrictEventImpactSummary(activeEvent.CrisisType);
+            }
+        }
+
+        private float GetDistrictEventActivityTargetModifier(TerritoryDistrictState districtState)
+        {
+            var activeEvent = districtState != null ? districtState.ActiveEvent : null;
+            if (activeEvent == null || activeEvent.CrisisType == DistrictCrisisType.None)
+            {
+                return 0f;
+            }
+
+            var severity = Clamp01(activeEvent.Severity);
+            switch (activeEvent.CrisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return 0.10f + (severity * 0.10f);
+                case DistrictCrisisType.ConstructionSurge:
+                    return 0.12f + (severity * 0.14f);
+                case DistrictCrisisType.SupplyDisruption:
+                    return 0.08f + (severity * 0.10f);
+                case DistrictCrisisType.EmergencyRestock:
+                    return 0.12f + (severity * 0.12f);
+                default:
+                    return 0f;
+            }
+        }
+
+        private float GetDistrictEventServiceTargetModifier(Industry industry)
+        {
+            if (industry == null || string.IsNullOrWhiteSpace(industry.DistrictName))
+            {
+                return 0f;
+            }
+
+            var activeEvent = GetDistrictEvent(industry.DistrictName);
+            if (activeEvent == null || activeEvent.CrisisType == DistrictCrisisType.None)
+            {
+                return 0f;
+            }
+
+            var severity = Clamp01(activeEvent.Severity);
+            switch (activeEvent.CrisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return industry.IsGasStation
+                        ? 0.18f + (severity * 0.12f)
+                        : 0.10f + (severity * 0.08f);
+                case DistrictCrisisType.ConstructionSurge:
+                    return industry.IsConstructionSink
+                        ? 0.18f + (severity * 0.10f)
+                        : 0f;
+                case DistrictCrisisType.SupplyDisruption:
+                    return 0.06f + (severity * 0.08f);
+                case DistrictCrisisType.EmergencyRestock:
+                    return industry.IsStore || industry.IsGasStation
+                        ? 0.14f + (severity * 0.10f)
+                        : 0.08f + (severity * 0.08f);
+                default:
+                    return 0f;
+            }
+        }
+
+        private float GetDistrictEventCorridorTargetModifier(TerritoryCorridorState corridorState)
+        {
+            if (corridorState == null)
+            {
+                return 0f;
+            }
+
+            return Math.Min(
+                0.32f,
+                GetDistrictEventCorridorTargetModifier(corridorState.DistrictA)
+                + GetDistrictEventCorridorTargetModifier(corridorState.DistrictB));
+        }
+
+        private float GetDistrictEventCorridorTargetModifier(string districtName)
+        {
+            var activeEvent = GetDistrictEvent(districtName);
+            if (activeEvent == null || activeEvent.CrisisType == DistrictCrisisType.None)
+            {
+                return 0f;
+            }
+
+            var severity = Clamp01(activeEvent.Severity);
+            switch (activeEvent.CrisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return 0.05f + (severity * 0.05f);
+                case DistrictCrisisType.ConstructionSurge:
+                    return 0.08f + (severity * 0.08f);
+                case DistrictCrisisType.SupplyDisruption:
+                    return 0.06f + (severity * 0.10f);
+                case DistrictCrisisType.EmergencyRestock:
+                    return 0.06f + (severity * 0.07f);
+                default:
+                    return 0f;
+            }
+        }
+
+        private static string BuildDistrictEventId(string districtName, int weekIndex)
+        {
+            return string.Format("district_event_{0}_{1}", SanitizeEventIdPart(districtName), Math.Max(0, weekIndex));
+        }
+
+        private static string SanitizeEventIdPart(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "district";
+            }
+
+            var characters = value.Trim()
+                .ToLowerInvariant()
+                .Where(character => char.IsLetterOrDigit(character))
+                .ToArray();
+            return characters.Length > 0 ? new string(characters) : "district";
+        }
+
+        private static string BuildDistrictEventHeadline(string districtName, DistrictCrisisType crisisType)
+        {
+            var label = string.IsNullOrWhiteSpace(districtName) ? "District" : districtName.Trim();
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return string.Format("{0} fuel shortage", label);
+                case DistrictCrisisType.ConstructionSurge:
+                    return string.Format("{0} construction surge", label);
+                case DistrictCrisisType.SupplyDisruption:
+                    return string.Format("{0} supply disruption", label);
+                case DistrictCrisisType.EmergencyRestock:
+                    return string.Format("{0} emergency restock", label);
+                default:
+                    return string.Format("{0} live district event", label);
+            }
+        }
+
+        private static string ResolveDistrictEventSeverityLabel(float severity)
+        {
+            severity = Clamp01(severity);
+            if (severity >= 0.72f)
+            {
+                return "Critical";
+            }
+
+            if (severity >= 0.44f)
+            {
+                return "Active";
+            }
+
+            return "Watch";
+        }
+
+        private static string BuildDistrictEventImpactSummary(DistrictCrisisType crisisType)
+        {
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return "Fuel stops and service lanes need relief cargo. Service demand stays elevated until coverage stabilizes.";
+                case DistrictCrisisType.ConstructionSurge:
+                    return "Build sites are pulling extra tonnage. Charter activity and corridor upkeep targets rise while the surge lasts.";
+                case DistrictCrisisType.SupplyDisruption:
+                    return "Competition and site outages are choking throughput. Corridor upkeep and district pressure stay elevated.";
+                case DistrictCrisisType.EmergencyRestock:
+                    return "Retail and service sinks are understocked. Dispatch demand stays elevated until relief cargo lands.";
+                default:
+                    return "District demand has turned volatile and needs operational relief.";
+            }
+        }
+
+        private static float ResolveDistrictEventMarketPressureBonus(DistrictCrisisType crisisType, float severity)
+        {
+            severity = Clamp01(severity);
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return 0.14f + (severity * 0.24f);
+                case DistrictCrisisType.ConstructionSurge:
+                    return 0.10f + (severity * 0.18f);
+                case DistrictCrisisType.SupplyDisruption:
+                    return 0.08f + (severity * 0.16f);
+                case DistrictCrisisType.EmergencyRestock:
+                    return 0.12f + (severity * 0.20f);
+                default:
+                    return 0f;
+            }
+        }
+
+        private static string ResolveDistrictEventPreferredCommodity(DistrictCrisisType crisisType, int gasStationCount, int storeCount, int constructionSiteCount, int serviceSiteCount)
+        {
+            switch (crisisType)
+            {
+                case DistrictCrisisType.FuelShortage:
+                    return gasStationCount > 0 ? "Fuel" : (serviceSiteCount > 0 ? "Oil" : "Chemicals");
+                case DistrictCrisisType.ConstructionSurge:
+                    return constructionSiteCount > 0 ? "Concrete" : "Steel";
+                case DistrictCrisisType.SupplyDisruption:
+                    return constructionSiteCount > 0 ? "MechanicalParts" : "ProcessedFood";
+                case DistrictCrisisType.EmergencyRestock:
+                    return storeCount > 0 ? "ProcessedFood" : (gasStationCount > 0 ? "Fuel" : "Medicine");
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private static float ResolveDistrictEventResponseTargetTons(
+            TerritoryDistrictState districtState,
+            DistrictCrisisType crisisType,
+            float score,
+            int serviceSiteCount,
+            int storeCount,
+            int constructionSiteCount)
+        {
+            if (districtState == null)
+            {
+                return 0f;
+            }
+
+            var baseTarget = 10f
+                + (serviceSiteCount * 4f)
+                + (storeCount * 3f)
+                + (constructionSiteCount * 5f)
+                + Math.Min(10f, districtState.RouteRights * 1.8f)
+                + Math.Min(8f, districtState.ControlledSites * 1.5f);
+
+            switch (crisisType)
+            {
+                case DistrictCrisisType.ConstructionSurge:
+                    baseTarget += 8f;
+                    break;
+                case DistrictCrisisType.SupplyDisruption:
+                    baseTarget += 6f;
+                    break;
+                case DistrictCrisisType.FuelShortage:
+                    baseTarget += 4f;
+                    break;
+            }
+
+            return Math.Max(8f, baseTarget * (0.75f + Math.Min(0.70f, Clamp01(score))));
+        }
+
+        private static float GetDistrictEventCommodityReliefFactor(TerritoryDistrictEventState activeEvent, string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (activeEvent == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return 0f;
+            }
+
+            if (string.Equals(activeEvent.PreferredCommodity, commodity, StringComparison.OrdinalIgnoreCase))
+            {
+                return 1f;
+            }
+
+            var affinity = CommodityCatalog.GetEventResponseAffinity(activeEvent.PreferredCommodity, commodity);
+            if (affinity <= 0f)
+            {
+                return 0f;
+            }
+
+            return Math.Max(0.22f, affinity * 0.90f);
+        }
+
         private void ResetWeeklyTracking()
         {
             foreach (var districtState in _districtsByName.Values)
@@ -2847,6 +4096,17 @@ namespace LSOL.Systems
 
         private float GetCorridorWeeklyTargetTons(TerritoryCorridorState corridorState)
         {
+            var baseTarget = GetBaseCorridorWeeklyTargetTons(corridorState);
+            if (baseTarget <= 0.01f)
+            {
+                return 0f;
+            }
+
+            return Math.Max(14f, baseTarget * (1f + GetDistrictEventCorridorTargetModifier(corridorState)));
+        }
+
+        private float GetBaseCorridorWeeklyTargetTons(TerritoryCorridorState corridorState)
+        {
             if (corridorState == null || corridorState.RightLevel == CorridorRightLevel.None)
             {
                 return 0f;
@@ -2869,6 +4129,9 @@ namespace LSOL.Systems
             var modifier = 1f;
             modifier -= Math.Min(0.16f, GetDistrictDispatchBonus(corridorState.DistrictA) + GetDistrictDispatchBonus(corridorState.DistrictB));
             modifier += Math.Min(0.18f, (GetDistrictCompetitionPressureValue(corridorState.DistrictA) + GetDistrictCompetitionPressureValue(corridorState.DistrictB)) * 0.09f);
+            modifier += Math.Min(0.20f, corridorState.CompetitivePressure * 0.18f);
+            modifier += Math.Min(0.08f, corridorState.ActiveCompetitionJobs * 0.015f);
+            modifier -= Math.Min(0.05f, corridorState.CompetitiveOpportunity * 0.08f);
 
             var districtA = GetDistrictState(corridorState.DistrictA);
             var districtB = GetDistrictState(corridorState.DistrictB);
@@ -2937,7 +4200,9 @@ namespace LSOL.Systems
                 threshold += 0.15f;
             }
 
-            return threshold;
+            threshold -= Math.Min(0.45f, corridorState.CompetitivePressure * 0.35f);
+            threshold += Math.Min(0.16f, corridorState.CompetitiveOpportunity * 0.12f);
+            return Math.Max(0.85f, threshold);
         }
 
         private float GetDistrictCompetitionPressureValue(string districtName)
@@ -2955,12 +4220,69 @@ namespace LSOL.Systems
                 return string.Empty;
             }
 
+            var carrierSummary = districtState.ActiveCarrierCount > 0
+                ? string.Format(
+                    " | Carriers {0}{1}",
+                    Math.Max(0, districtState.ActiveCarrierCount),
+                    !string.IsNullOrWhiteSpace(districtState.DominantCarrierName)
+                        ? string.Format(" | Lead {0}", districtState.DominantCarrierName)
+                        : string.Empty)
+                : string.Empty;
             return string.Format(
-                "Competition {0:0}% | Opportunity {1:0}% | Traffic {2} | Wins {3}",
+                "Competition {0:0}% | Opportunity {1:0}% | Traffic {2} | Lanes {3} | Wins {4}{5}",
                 Clamp01(districtState.CompetitivePressure) * 100f,
                 Clamp01(districtState.CompetitiveOpportunity) * 100f,
                 Math.Max(0, districtState.ActiveCompetitionJobs),
-                Math.Max(0, districtState.CompetitiveWinCount));
+                Math.Max(0, districtState.ContestedCorridorCount),
+                Math.Max(0, districtState.CompetitiveWinCount),
+                carrierSummary);
+        }
+
+        private string BuildCorridorCompetitionStatus(TerritoryCorridorState corridorState)
+        {
+            if (corridorState == null)
+            {
+                return string.Empty;
+            }
+
+            string posture;
+            if (corridorState.CompetitivePressure >= 0.65f)
+            {
+                posture = "Threatened";
+            }
+            else if (corridorState.CompetitivePressure >= 0.35f)
+            {
+                posture = "Contested";
+            }
+            else if (corridorState.CompetitiveOpportunity >= 0.28f && corridorState.CompetitiveWinCount > 0)
+            {
+                posture = "Holding";
+            }
+            else if (corridorState.ActiveCompetitionJobs > 0 || corridorState.ContestedWeekStreak > 0)
+            {
+                posture = corridorState.RightLevel == CorridorRightLevel.None ? "Open" : "Active";
+            }
+            else
+            {
+                posture = corridorState.RightLevel == CorridorRightLevel.None ? "Open" : "Calm";
+            }
+
+            var carrierSummary = corridorState.ActiveCarrierCount > 0
+                ? string.Format(
+                    " | Carriers {0}{1}",
+                    Math.Max(0, corridorState.ActiveCarrierCount),
+                    !string.IsNullOrWhiteSpace(corridorState.DominantCarrierName)
+                        ? string.Format(" | Lead {0}", corridorState.DominantCarrierName)
+                        : string.Empty)
+                : string.Empty;
+            return string.Format(
+                "{0} | Competition {1:0}% | Opportunity {2:0}% | Traffic {3} | Holds {4}{5}",
+                posture,
+                Clamp01(corridorState.CompetitivePressure) * 100f,
+                Clamp01(corridorState.CompetitiveOpportunity) * 100f,
+                Math.Max(0, corridorState.ActiveCompetitionJobs),
+                Math.Max(0, corridorState.CompetitiveWinCount),
+                carrierSummary);
         }
 
         private CompanyEndgameSummary GetEndgameSummary()
@@ -3087,23 +4409,42 @@ namespace LSOL.Systems
 
         private string BuildCorridorStatus(TerritoryCorridorState corridorState)
         {
-            if (corridorState == null || corridorState.RightLevel == CorridorRightLevel.None)
+            if (corridorState == null)
             {
                 return "Dormant";
+            }
+
+            if (corridorState.RightLevel == CorridorRightLevel.None)
+            {
+                return corridorState.ActiveCompetitionJobs > 0 || corridorState.CompetitivePressure >= 0.18f
+                    ? "Open | Competition active"
+                    : "Dormant";
             }
 
             var threshold = GetCorridorDecayThreshold(corridorState);
             if (corridorState.DecayPressure >= threshold * 0.75f)
             {
-                return string.Format("At risk ({0:0}/{1:0} t)", corridorState.CurrentWeekDeliveredTons, corridorState.RequiredWeeklyDeliveredTons);
+                return string.Format(
+                    "At risk ({0:0}/{1:0} t){2}",
+                    corridorState.CurrentWeekDeliveredTons,
+                    corridorState.RequiredWeeklyDeliveredTons,
+                    corridorState.CompetitivePressure >= 0.35f ? " | Contested" : string.Empty);
             }
 
             if (corridorState.DecayPressure > 0.01f)
             {
-                return string.Format("Watch ({0:0}/{1:0} t)", corridorState.CurrentWeekDeliveredTons, corridorState.RequiredWeeklyDeliveredTons);
+                return string.Format(
+                    "Watch ({0:0}/{1:0} t){2}",
+                    corridorState.CurrentWeekDeliveredTons,
+                    corridorState.RequiredWeeklyDeliveredTons,
+                    corridorState.ActiveCompetitionJobs > 0 ? " | Competition active" : string.Empty);
             }
 
-            return string.Format("Stable ({0:0}/{1:0} t)", corridorState.CurrentWeekDeliveredTons, corridorState.RequiredWeeklyDeliveredTons);
+            return string.Format(
+                "Stable ({0:0}/{1:0} t){2}",
+                corridorState.CurrentWeekDeliveredTons,
+                corridorState.RequiredWeeklyDeliveredTons,
+                corridorState.CompetitivePressure >= 0.35f ? " | Contested" : string.Empty);
         }
 
         private static float GetFranchiseOperationsCost(TerritoryFranchiseLevel franchiseLevel)
@@ -3571,6 +4912,10 @@ namespace LSOL.Systems
         public int MissedServiceContractCount { get; set; }
         public int HighCompetitionDistrictCount { get; set; }
         public int CompetitiveWinCount { get; set; }
+        public int ActiveDistrictEventCount { get; set; }
+        public int CreatedDistrictEventCount { get; set; }
+        public int ResolvedDistrictEventCount { get; set; }
+        public int EscalatedDistrictEventCount { get; set; }
         public float ServiceSinkPassiveIncome { get; set; }
         public float ServiceSinkStaffingExpense { get; set; }
         public List<string> Messages { get; private set; }
@@ -3639,11 +4984,19 @@ namespace LSOL.Systems
         public float CompetitivePressure { get; set; }
         public float CompetitiveOpportunity { get; set; }
         public int ActiveCompetitionJobs { get; set; }
+        public int ActiveCarrierCount { get; set; }
+        public string DominantCarrierId { get; set; }
+        public string DominantCarrierName { get; set; }
         public int VisibleCompetitionCount { get; set; }
         public float LastCompetitiveTons { get; set; }
         public int CompetitiveResponseCount { get; set; }
         public int CompetitiveWinCount { get; set; }
+        public int ContestedCorridorCount { get; set; }
+        public int CorridorHoldCount { get; set; }
+        public string HottestCorridorName { get; set; }
+        public float HottestCorridorPressure { get; set; }
         public string CompetitionStatus { get; set; }
+        public TerritoryDistrictEventState ActiveEvent { get; set; }
 
         public void Reset()
         {
@@ -3659,6 +5012,42 @@ namespace LSOL.Systems
             ReputationLabel = string.Empty;
             RequiredWeeklyActivityTons = 0f;
             WeeklyLicenseCost = 0f;
+            ContestedCorridorCount = 0;
+            CorridorHoldCount = 0;
+            HottestCorridorName = string.Empty;
+            HottestCorridorPressure = 0f;
+        }
+    }
+
+    public sealed class TerritoryDistrictEventState
+    {
+        public string EventId { get; set; }
+        public string DistrictName { get; set; }
+        public DistrictCrisisType CrisisType { get; set; }
+        public string PreferredCommodity { get; set; }
+        public float Severity { get; set; }
+        public float MarketPressureBonus { get; set; }
+        public float ResponseTargetTons { get; set; }
+        public float DeliveredReliefTons { get; set; }
+        public int ReliefDeliveryCount { get; set; }
+        public int StartedWeekIndex { get; set; } = -1;
+        public int EndsAtWeekIndex { get; set; } = -1;
+        public int LastEscalatedWeekIndex { get; set; } = -1;
+        public string TriggerSummary { get; set; }
+        public string ImpactSummary { get; set; }
+        public string Headline { get; set; }
+        public string SeverityLabel { get; set; }
+        public string StatusText { get; set; }
+
+        public bool HasData
+        {
+            get
+            {
+                return !string.IsNullOrWhiteSpace(EventId)
+                    || CrisisType != DistrictCrisisType.None
+                    || !string.IsNullOrWhiteSpace(PreferredCommodity)
+                    || ResponseTargetTons > 0.001f;
+            }
         }
     }
 
@@ -3675,6 +5064,17 @@ namespace LSOL.Systems
         public float RequiredWeeklyDeliveredTons { get; set; }
         public float DecayPressure { get; set; }
         public string UpkeepStatus { get; set; }
+        public float CompetitivePressure { get; set; }
+        public float CompetitiveOpportunity { get; set; }
+        public int ActiveCompetitionJobs { get; set; }
+        public int ActiveCarrierCount { get; set; }
+        public string DominantCarrierId { get; set; }
+        public string DominantCarrierName { get; set; }
+        public int VisibleCompetitionCount { get; set; }
+        public float LastCompetitiveTons { get; set; }
+        public int CompetitiveWinCount { get; set; }
+        public int ContestedWeekStreak { get; set; }
+        public string CompetitionStatus { get; set; }
     }
 
     public sealed class TerritoryPersistenceSnapshot
@@ -3736,10 +5136,43 @@ namespace LSOL.Systems
         public float CompetitivePressure { get; set; }
         public float CompetitiveOpportunity { get; set; }
         public int ActiveCompetitionJobs { get; set; }
+        public int ActiveCarrierCount { get; set; }
+        public string DominantCarrierId { get; set; }
+        public string DominantCarrierName { get; set; }
         public int VisibleCompetitionCount { get; set; }
         public float CompetitiveTons { get; set; }
         public int CompetitiveResponseCount { get; set; }
         public int CompetitiveWinCount { get; set; }
+        public TerritoryDistrictEventSnapshot ActiveEvent { get; set; }
+    }
+
+    public sealed class TerritoryDistrictEventSnapshot
+    {
+        public string EventId { get; set; }
+        public string DistrictName { get; set; }
+        public DistrictCrisisType CrisisType { get; set; }
+        public string PreferredCommodity { get; set; }
+        public float Severity { get; set; }
+        public float MarketPressureBonus { get; set; }
+        public float ResponseTargetTons { get; set; }
+        public float DeliveredReliefTons { get; set; }
+        public int ReliefDeliveryCount { get; set; }
+        public int StartedWeekIndex { get; set; } = -1;
+        public int EndsAtWeekIndex { get; set; } = -1;
+        public int LastEscalatedWeekIndex { get; set; } = -1;
+        public string TriggerSummary { get; set; }
+        public string ImpactSummary { get; set; }
+
+        public bool HasData
+        {
+            get
+            {
+                return !string.IsNullOrWhiteSpace(EventId)
+                    || CrisisType != DistrictCrisisType.None
+                    || !string.IsNullOrWhiteSpace(PreferredCommodity)
+                    || ResponseTargetTons > 0.001f;
+            }
+        }
     }
 
     public sealed class TerritoryCorridorSnapshot
@@ -3752,11 +5185,32 @@ namespace LSOL.Systems
         public int CurrentWeekDeliveryCount { get; set; }
         public float CurrentWeekDeliveredTons { get; set; }
         public float DecayPressure { get; set; }
+        public float CompetitivePressure { get; set; }
+        public float CompetitiveOpportunity { get; set; }
+        public int ActiveCompetitionJobs { get; set; }
+        public int ActiveCarrierCount { get; set; }
+        public string DominantCarrierId { get; set; }
+        public string DominantCarrierName { get; set; }
+        public int VisibleCompetitionCount { get; set; }
+        public float CompetitiveTons { get; set; }
+        public int CompetitiveWinCount { get; set; }
+        public int ContestedWeekStreak { get; set; }
     }
 
     public sealed class TerritoryDistrictReputationOffsetSnapshot
     {
         public string DistrictName { get; set; }
         public float Offset { get; set; }
+    }
+
+    internal sealed class DistrictEventTriggerDescriptor
+    {
+        public TerritoryDistrictState DistrictState { get; set; }
+        public DistrictCrisisType Type { get; set; }
+        public string PreferredCommodity { get; set; }
+        public string TriggerSummary { get; set; }
+        public string ImpactSummary { get; set; }
+        public float ResponseTargetTons { get; set; }
+        public float Score { get; set; }
     }
 }

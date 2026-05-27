@@ -24,6 +24,30 @@ namespace LSOL.Systems
         Expired = 5,
     }
 
+    public enum PlayerContractBoardSortMode
+    {
+        Board = 0,
+        ExpirySoonest = 1,
+        BestPayoutDensity = 2,
+        HighestGrossPayout = 3,
+    }
+
+    public enum PlayerContractBoardExpiryFilter
+    {
+        Any = 0,
+        Within60Minutes = 1,
+        Within120Minutes = 2,
+        Over120Minutes = 3,
+    }
+
+    public enum PlayerContractBoardPayoutDensityFilter
+    {
+        Any = 0,
+        AtLeast500PerKm = 1,
+        AtLeast1000PerKm = 2,
+        Below500PerKm = 3,
+    }
+
     internal enum PlayerContractTransferResolution
     {
         None = 0,
@@ -41,6 +65,16 @@ namespace LSOL.Systems
 
         public string SelectedCommodityFilter { get; set; }
 
+        public string SelectedDistrictFilter { get; set; }
+
+        public string SelectedRigClassFilter { get; set; }
+
+        public string SelectedExpiryFilter { get; set; }
+
+        public string SelectedPayoutDensityFilter { get; set; }
+
+        public string SelectedSortMode { get; set; }
+
         public string BoardHeadline { get; set; }
 
         public string BoardDetail { get; set; }
@@ -48,6 +82,10 @@ namespace LSOL.Systems
         public string AcceptedHeadline { get; set; }
 
         public string AcceptedDetail { get; set; }
+
+        public string ReputationHeadline { get; set; }
+
+        public string ReputationDetail { get; set; }
     }
 
     public sealed class PlayerContractListingSummary
@@ -64,9 +102,25 @@ namespace LSOL.Systems
 
         public string OriginName { get; set; }
 
+        public string OriginDistrictName { get; set; }
+
         public string DestinationIndustryId { get; set; }
 
         public string DestinationName { get; set; }
+
+        public string DestinationDistrictName { get; set; }
+
+        public string RouteDistrictLabel { get; set; }
+
+        public string DistrictStandingLabel { get; set; }
+
+        public string ShipperDisplayName { get; set; }
+
+        public string ShipperTrustLabel { get; set; }
+
+        public string UnlockHint { get; set; }
+
+        public bool IsPremiumOpportunity { get; set; }
 
         public float ListedTons { get; set; }
 
@@ -87,6 +141,14 @@ namespace LSOL.Systems
         public float CurrentImbalanceScore { get; set; }
 
         public int ExpiryInGameMinute { get; set; }
+
+        public int RemainingExpiryMinutes { get; set; }
+
+        public float PayoutDensityValue { get; set; }
+
+        public string PayoutDensityLabel { get; set; }
+
+        public string RigClassLabel { get; set; }
 
         public string VehicleRequirementLabel { get; set; }
 
@@ -127,6 +189,14 @@ namespace LSOL.Systems
         public bool ShouldCleanupQuickJobVehicle { get; set; }
 
         public string Message { get; set; }
+
+        public string PlayerContractId { get; set; }
+
+        public string RouteLabel { get; set; }
+
+        public string ShipperKey { get; set; }
+
+        public string DistrictName { get; set; }
     }
 
     public sealed class PlayerContractsPersistenceSnapshot
@@ -135,6 +205,7 @@ namespace LSOL.Systems
         {
             Contracts = new List<PlayerContractSnapshot>();
             Cooldowns = new List<PlayerContractCooldownSnapshot>();
+            ShipperReputations = new List<PlayerContractShipperReputationSnapshot>();
         }
 
         public int NextContractId { get; set; } = 1;
@@ -143,9 +214,21 @@ namespace LSOL.Systems
 
         public string SelectedCommodityFilter { get; set; }
 
+        public string SelectedDistrictFilter { get; set; }
+
+        public string SelectedRigClassFilter { get; set; }
+
+        public PlayerContractBoardSortMode SelectedSortMode { get; set; }
+
+        public PlayerContractBoardExpiryFilter SelectedExpiryFilter { get; set; }
+
+        public PlayerContractBoardPayoutDensityFilter SelectedPayoutDensityFilter { get; set; }
+
         public List<PlayerContractSnapshot> Contracts { get; }
 
         public List<PlayerContractCooldownSnapshot> Cooldowns { get; }
+
+        public List<PlayerContractShipperReputationSnapshot> ShipperReputations { get; }
 
         public bool HasData
         {
@@ -155,9 +238,36 @@ namespace LSOL.Systems
                     || Cooldowns.Count > 0
                     || NextContractId > 1
                     || LastBoardRefreshMinute >= 0
-                    || !string.IsNullOrWhiteSpace(SelectedCommodityFilter);
+                    || !string.IsNullOrWhiteSpace(SelectedCommodityFilter)
+                    || !string.IsNullOrWhiteSpace(SelectedDistrictFilter)
+                    || !string.IsNullOrWhiteSpace(SelectedRigClassFilter)
+                    || SelectedSortMode != PlayerContractBoardSortMode.Board
+                    || SelectedExpiryFilter != PlayerContractBoardExpiryFilter.Any
+                    || SelectedPayoutDensityFilter != PlayerContractBoardPayoutDensityFilter.Any
+                    || ShipperReputations.Count > 0;
             }
         }
+    }
+
+    public sealed class PlayerContractShipperReputationSnapshot
+    {
+        public string ShipperKey { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public float TrustScore { get; set; }
+
+        public float DeliveredTons { get; set; }
+
+        public int CompletedContracts { get; set; }
+
+        public int CleanCompletions { get; set; }
+
+        public int FailedContracts { get; set; }
+
+        public int CleanStreak { get; set; }
+
+        public int LastTierAwarded { get; set; }
     }
 
     public sealed class PlayerContractSnapshot
@@ -223,6 +333,14 @@ namespace LSOL.Systems
         public string SourceDistrictName { get; set; }
 
         public string StatusMessage { get; set; }
+
+        public bool ReputationOutcomeApplied { get; set; }
+
+        public string ShipperKey { get; set; }
+
+        public string ShipperDisplayName { get; set; }
+
+        public bool IsPremiumOpportunity { get; set; }
     }
 
     public sealed class PlayerContractCooldownSnapshot
@@ -302,6 +420,14 @@ namespace LSOL.Systems
 
         public string StatusMessage { get; set; }
 
+        public bool ReputationOutcomeApplied { get; set; }
+
+        public string ShipperKey { get; set; }
+
+        public string ShipperDisplayName { get; set; }
+
+        public bool IsPremiumOpportunity { get; set; }
+
         public PlayerContractEntry CloneAccepted(int currentMinute, int acceptedLifetimeMinutes)
         {
             return new PlayerContractEntry
@@ -340,6 +466,10 @@ namespace LSOL.Systems
                 TotalLostTons = 0f,
                 SourceDistrictName = string.Empty,
                 StatusMessage = string.Empty,
+                ReputationOutcomeApplied = false,
+                ShipperKey = ShipperKey,
+                ShipperDisplayName = ShipperDisplayName,
+                IsPremiumOpportunity = IsPremiumOpportunity,
             };
         }
 
@@ -378,6 +508,10 @@ namespace LSOL.Systems
                 TotalLostTons = TotalLostTons,
                 SourceDistrictName = SourceDistrictName,
                 StatusMessage = StatusMessage,
+                ReputationOutcomeApplied = ReputationOutcomeApplied,
+                ShipperKey = ShipperKey,
+                ShipperDisplayName = ShipperDisplayName,
+                IsPremiumOpportunity = IsPremiumOpportunity,
             };
         }
 
@@ -421,6 +555,68 @@ namespace LSOL.Systems
                 TotalLostTons = Math.Max(0f, snapshot.TotalLostTons),
                 SourceDistrictName = snapshot.SourceDistrictName ?? string.Empty,
                 StatusMessage = snapshot.StatusMessage ?? string.Empty,
+                ReputationOutcomeApplied = snapshot.ReputationOutcomeApplied,
+                ShipperKey = snapshot.ShipperKey ?? string.Empty,
+                ShipperDisplayName = snapshot.ShipperDisplayName ?? string.Empty,
+                IsPremiumOpportunity = snapshot.IsPremiumOpportunity,
+            };
+        }
+    }
+
+    internal sealed class PlayerContractShipperReputation
+    {
+        public string ShipperKey { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public float TrustScore { get; set; }
+
+        public float DeliveredTons { get; set; }
+
+        public int CompletedContracts { get; set; }
+
+        public int CleanCompletions { get; set; }
+
+        public int FailedContracts { get; set; }
+
+        public int CleanStreak { get; set; }
+
+        public int LastTierAwarded { get; set; }
+
+        public PlayerContractShipperReputationSnapshot ToSnapshot()
+        {
+            return new PlayerContractShipperReputationSnapshot
+            {
+                ShipperKey = ShipperKey ?? string.Empty,
+                DisplayName = DisplayName ?? string.Empty,
+                TrustScore = Math.Max(0f, TrustScore),
+                DeliveredTons = Math.Max(0f, DeliveredTons),
+                CompletedContracts = Math.Max(0, CompletedContracts),
+                CleanCompletions = Math.Max(0, CleanCompletions),
+                FailedContracts = Math.Max(0, FailedContracts),
+                CleanStreak = Math.Max(0, CleanStreak),
+                LastTierAwarded = Math.Max(0, LastTierAwarded),
+            };
+        }
+
+        public static PlayerContractShipperReputation FromSnapshot(PlayerContractShipperReputationSnapshot snapshot)
+        {
+            if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.ShipperKey))
+            {
+                return null;
+            }
+
+            return new PlayerContractShipperReputation
+            {
+                ShipperKey = snapshot.ShipperKey.Trim(),
+                DisplayName = snapshot.DisplayName ?? string.Empty,
+                TrustScore = Math.Max(0f, snapshot.TrustScore),
+                DeliveredTons = Math.Max(0f, snapshot.DeliveredTons),
+                CompletedContracts = Math.Max(0, snapshot.CompletedContracts),
+                CleanCompletions = Math.Max(0, snapshot.CleanCompletions),
+                FailedContracts = Math.Max(0, snapshot.FailedContracts),
+                CleanStreak = Math.Max(0, snapshot.CleanStreak),
+                LastTierAwarded = Math.Max(0, snapshot.LastTierAwarded),
             };
         }
     }
@@ -506,12 +702,21 @@ namespace LSOL.Systems
         private const float FreightMaxTons = 12f;
         private const float QuickJobMaxDistanceMeters = 6500f;
         private const float FreightMaxDistanceMeters = 18000f;
+        private const float MediumPayoutDensityThresholdPerKilometer = 500f;
+        private const float HighPayoutDensityThresholdPerKilometer = 1000f;
+        private const float PremiumOpportunityThreshold = 0.62f;
+        private const float EliteOpportunityThreshold = 0.80f;
+        private const float TrustTierReliableThreshold = 22f;
+        private const float TrustTierPreferredThreshold = 48f;
+        private const float TrustTierTrustedThreshold = 86f;
+        private const float TrustTierPartnerThreshold = 130f;
 
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
         private readonly PropertyManager _propertyManager;
         private readonly GlobalMarketManager _globalMarket;
         private readonly TerritoryManager _territoryManager;
+        private readonly CompanyFinanceTracker _financeTracker;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Func<Ped> _getPlayer;
         private readonly Func<int> _getCurrentInGameMinute;
@@ -521,11 +726,18 @@ namespace LSOL.Systems
         private readonly Dictionary<string, int> _routeCooldownUntilMinute;
         private readonly Dictionary<string, Industry> _industriesById;
         private readonly List<PlayerContractEntry> _listedContracts;
+        private readonly Dictionary<string, PlayerContractShipperReputation> _shipperReputationByKey;
 
         private PlayerContractEntry _acceptedContract;
         private int _nextContractId;
         private int _lastBoardRefreshMinute;
         private string _selectedCommodityFilter;
+        private string _selectedDistrictFilter;
+        private string _selectedRigClassFilter;
+        private PlayerContractBoardSortMode _selectedSortMode;
+        private PlayerContractBoardExpiryFilter _selectedExpiryFilter;
+        private PlayerContractBoardPayoutDensityFilter _selectedPayoutDensityFilter;
+        private string _latestReputationStatus;
 
         public PlayerContractsManager(
             IndustryManager industryManager,
@@ -538,13 +750,15 @@ namespace LSOL.Systems
             Action<string> showStatus,
             TerritoryManager territoryManager = null,
             Action onContractsChanged = null,
-            Random random = null)
+            Random random = null,
+            CompanyFinanceTracker financeTracker = null)
         {
             _industryManager = industryManager;
             _fleetManager = fleetManager;
             _propertyManager = propertyManager;
             _globalMarket = globalMarket;
             _territoryManager = territoryManager;
+            _financeTracker = financeTracker;
             _getGroundPosition = getGroundPosition;
             _getPlayer = getPlayer;
             _getCurrentInGameMinute = getCurrentInGameMinute;
@@ -553,6 +767,7 @@ namespace LSOL.Systems
             _random = random ?? new Random();
             _routeCooldownUntilMinute = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
             _listedContracts = new List<PlayerContractEntry>();
+            _shipperReputationByKey = new Dictionary<string, PlayerContractShipperReputation>(StringComparer.OrdinalIgnoreCase);
             _industriesById = industryManager != null && industryManager.Industries != null
                 ? industryManager.Industries
                     .Where(industry => industry != null && !string.IsNullOrWhiteSpace(industry.Id))
@@ -561,17 +776,21 @@ namespace LSOL.Systems
             _nextContractId = 1;
             _lastBoardRefreshMinute = -1;
             _selectedCommodityFilter = string.Empty;
+            _selectedDistrictFilter = string.Empty;
+            _selectedRigClassFilter = string.Empty;
+            _selectedSortMode = PlayerContractBoardSortMode.Board;
+            _selectedExpiryFilter = PlayerContractBoardExpiryFilter.Any;
+            _selectedPayoutDensityFilter = PlayerContractBoardPayoutDensityFilter.Any;
+            _latestReputationStatus = string.Empty;
         }
 
         public IReadOnlyList<PlayerContractListingSummary> GetListings(PlayerContractType type)
         {
             var currentMinute = GetCurrentInGameMinute();
-            return _listedContracts
-                .Where(contract => contract != null && contract.Type == type)
-                .Where(ShouldIncludeForSelectedCommodity)
-                .OrderByDescending(contract => contract.QuotedImbalanceScore)
-                .ThenBy(contract => contract.ExpiryMinute)
-                .Select(contract => BuildSummary(contract, currentMinute))
+            return ApplySelectedBoardSort(
+                    GetLiveListedSummaries(currentMinute)
+                        .Where(summary => summary != null && summary.Type == type)
+                        .Where(MatchesSelectedBoardFilters))
                 .ToArray();
         }
 
@@ -610,30 +829,46 @@ namespace LSOL.Systems
         public PlayerContractsOverview GetOverview()
         {
             var currentMinute = GetCurrentInGameMinute();
-            var filteredQuick = _listedContracts.Count(contract => contract != null && contract.Type == PlayerContractType.QuickJob && ShouldIncludeForSelectedCommodity(contract));
-            var filteredFreight = _listedContracts.Count(contract => contract != null && contract.Type == PlayerContractType.FreightMarket && ShouldIncludeForSelectedCommodity(contract));
+            var filteredListings = GetLiveListedSummaries(currentMinute)
+                .Where(MatchesSelectedBoardFilters)
+                .ToList();
+            var filteredQuick = filteredListings.Count(summary => summary.Type == PlayerContractType.QuickJob);
+            var filteredFreight = filteredListings.Count(summary => summary.Type == PlayerContractType.FreightMarket);
             var acceptedSummary = _acceptedContract != null && !IsTerminal(_acceptedContract.Status)
                 ? BuildSummary(_acceptedContract, currentMinute)
                 : null;
+            var hasActiveBoardQuery = HasActiveBoardQuery();
+            var reputationSummary = BuildReputationOverviewSummary(currentMinute);
 
             return new PlayerContractsOverview
             {
                 QuickJobCount = filteredQuick,
                 FreightMarketCount = filteredFreight,
                 AcceptedCount = acceptedSummary != null ? 1 : 0,
-                SelectedCommodityFilter = string.IsNullOrWhiteSpace(_selectedCommodityFilter) ? "Any" : _selectedCommodityFilter,
+                SelectedCommodityFilter = GetCommodityFilterLabel(_selectedCommodityFilter),
+                SelectedDistrictFilter = GetDistrictFilterLabel(_selectedDistrictFilter),
+                SelectedRigClassFilter = GetRigClassFilterLabel(_selectedRigClassFilter),
+                SelectedExpiryFilter = GetExpiryFilterLabel(_selectedExpiryFilter),
+                SelectedPayoutDensityFilter = GetPayoutDensityFilterLabel(_selectedPayoutDensityFilter),
+                SelectedSortMode = GetSortModeLabel(_selectedSortMode),
                 BoardHeadline = filteredQuick + filteredFreight > 0
                     ? string.Format(CultureInfo.InvariantCulture, "{0} Quick | {1} Freight", filteredQuick, filteredFreight)
                     : "Dispatch board cooling down",
                 BoardDetail = filteredQuick + filteredFreight > 0
-                    ? "Permit-free side contracts generated from live stock imbalances."
-                    : "New offers appear when real source surplus and destination demand reopen a lane.",
+                    ? hasActiveBoardQuery
+                        ? BuildBoardQuerySummary()
+                        : "Permit-free side contracts generated from live stock imbalances."
+                    : hasActiveBoardQuery
+                        ? string.Format(CultureInfo.InvariantCulture, "No live offers match {0}.", BuildBoardQuerySummary())
+                        : "New offers appear when real source surplus and destination demand reopen a lane.",
                 AcceptedHeadline = acceptedSummary != null
                     ? string.Format(CultureInfo.InvariantCulture, "{0} {1}", acceptedSummary.Type == PlayerContractType.QuickJob ? "Quick Job" : "Freight Market", acceptedSummary.StageLabel)
                     : "No accepted contract",
                 AcceptedDetail = acceptedSummary != null
                     ? string.Format(CultureInfo.InvariantCulture, "{0} -> {1} | {2}", acceptedSummary.OriginName, acceptedSummary.DestinationName, acceptedSummary.StatusDetail)
                     : "Accept a dispatch-board contract to open a permit-free side lane.",
+                ReputationHeadline = reputationSummary.Item1,
+                ReputationDetail = reputationSummary.Item2,
             };
         }
 
@@ -641,7 +876,7 @@ namespace LSOL.Systems
         {
             var values = _listedContracts
                 .Where(contract => contract != null && !string.IsNullOrWhiteSpace(contract.Commodity))
-                .Select(contract => contract.Commodity)
+                .Select(contract => CommodityCatalog.Normalize(contract.Commodity))
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -680,6 +915,63 @@ namespace LSOL.Systems
             NotifyContractsChanged();
         }
 
+        public void CycleDistrictFilter(int delta)
+        {
+            _selectedDistrictFilter = CycleStringSelection(_selectedDistrictFilter, GetDistrictFilterOptions(), delta);
+            NotifyContractsChanged();
+        }
+
+        public void CycleRigClassFilter(int delta)
+        {
+            _selectedRigClassFilter = CycleStringSelection(_selectedRigClassFilter, GetRigClassFilterOptions(), delta);
+            NotifyContractsChanged();
+        }
+
+        public void CycleExpiryFilter(int delta)
+        {
+            _selectedExpiryFilter = CycleEnumSelection(
+                _selectedExpiryFilter,
+                new[]
+                {
+                    PlayerContractBoardExpiryFilter.Any,
+                    PlayerContractBoardExpiryFilter.Within60Minutes,
+                    PlayerContractBoardExpiryFilter.Within120Minutes,
+                    PlayerContractBoardExpiryFilter.Over120Minutes,
+                },
+                delta);
+            NotifyContractsChanged();
+        }
+
+        public void CyclePayoutDensityFilter(int delta)
+        {
+            _selectedPayoutDensityFilter = CycleEnumSelection(
+                _selectedPayoutDensityFilter,
+                new[]
+                {
+                    PlayerContractBoardPayoutDensityFilter.Any,
+                    PlayerContractBoardPayoutDensityFilter.AtLeast500PerKm,
+                    PlayerContractBoardPayoutDensityFilter.AtLeast1000PerKm,
+                    PlayerContractBoardPayoutDensityFilter.Below500PerKm,
+                },
+                delta);
+            NotifyContractsChanged();
+        }
+
+        public void CycleSortMode(int delta)
+        {
+            _selectedSortMode = CycleEnumSelection(
+                _selectedSortMode,
+                new[]
+                {
+                    PlayerContractBoardSortMode.Board,
+                    PlayerContractBoardSortMode.ExpirySoonest,
+                    PlayerContractBoardSortMode.BestPayoutDensity,
+                    PlayerContractBoardSortMode.HighestGrossPayout,
+                },
+                delta);
+            NotifyContractsChanged();
+        }
+
         public void Update(int gameTimeMs, int currentInGameMinute)
         {
             ExpireListedContracts(currentInGameMinute);
@@ -701,6 +993,7 @@ namespace LSOL.Systems
             AddListingsForType(PlayerContractType.QuickJob, MaxQuickJobListings, currentInGameMinute, usedRoutes);
             AddListingsForType(PlayerContractType.FreightMarket, MaxFreightListings, currentInGameMinute, usedRoutes);
 
+            NormalizeDynamicBoardFilters();
             _lastBoardRefreshMinute = currentInGameMinute;
             NotifyContractsChanged();
         }
@@ -786,6 +1079,7 @@ namespace LSOL.Systems
 
             _acceptedContract.Status = PlayerContractStatus.Cancelled;
             _acceptedContract.StatusMessage = "Cancelled";
+            ApplyContractOutcome(_acceptedContract, PlayerContractStatus.Cancelled);
             RegisterCooldown(_acceptedContract, GetCurrentInGameMinute());
             if (_acceptedContract.Type == PlayerContractType.QuickJob)
             {
@@ -874,6 +1168,11 @@ namespace LSOL.Systems
                 NextContractId = Math.Max(1, _nextContractId),
                 LastBoardRefreshMinute = _lastBoardRefreshMinute,
                 SelectedCommodityFilter = _selectedCommodityFilter ?? string.Empty,
+                SelectedDistrictFilter = _selectedDistrictFilter ?? string.Empty,
+                SelectedRigClassFilter = _selectedRigClassFilter ?? string.Empty,
+                SelectedSortMode = _selectedSortMode,
+                SelectedExpiryFilter = _selectedExpiryFilter,
+                SelectedPayoutDensityFilter = _selectedPayoutDensityFilter,
             };
 
             if (_acceptedContract != null && !IsTerminal(_acceptedContract.Status))
@@ -896,6 +1195,13 @@ namespace LSOL.Systems
                 });
             }
 
+            foreach (var reputation in _shipperReputationByKey.Values
+                .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.ShipperKey))
+                .OrderBy(entry => entry.ShipperKey, StringComparer.OrdinalIgnoreCase))
+            {
+                snapshot.ShipperReputations.Add(reputation.ToSnapshot());
+            }
+
             return snapshot.HasData ? snapshot : null;
         }
 
@@ -904,9 +1210,16 @@ namespace LSOL.Systems
             _listedContracts.Clear();
             _acceptedContract = null;
             _routeCooldownUntilMinute.Clear();
+            _shipperReputationByKey.Clear();
             _nextContractId = 1;
             _lastBoardRefreshMinute = -1;
             _selectedCommodityFilter = string.Empty;
+            _selectedDistrictFilter = string.Empty;
+            _selectedRigClassFilter = string.Empty;
+            _selectedSortMode = PlayerContractBoardSortMode.Board;
+            _selectedExpiryFilter = PlayerContractBoardExpiryFilter.Any;
+            _selectedPayoutDensityFilter = PlayerContractBoardPayoutDensityFilter.Any;
+            _latestReputationStatus = string.Empty;
 
             if (snapshot == null)
             {
@@ -915,7 +1228,18 @@ namespace LSOL.Systems
 
             _nextContractId = Math.Max(1, snapshot.NextContractId);
             _lastBoardRefreshMinute = snapshot.LastBoardRefreshMinute;
-            _selectedCommodityFilter = snapshot.SelectedCommodityFilter ?? string.Empty;
+            _selectedCommodityFilter = CommodityCatalog.Normalize(snapshot.SelectedCommodityFilter);
+            _selectedDistrictFilter = snapshot.SelectedDistrictFilter ?? string.Empty;
+            _selectedRigClassFilter = snapshot.SelectedRigClassFilter ?? string.Empty;
+            _selectedSortMode = Enum.IsDefined(typeof(PlayerContractBoardSortMode), snapshot.SelectedSortMode)
+                ? snapshot.SelectedSortMode
+                : PlayerContractBoardSortMode.Board;
+            _selectedExpiryFilter = Enum.IsDefined(typeof(PlayerContractBoardExpiryFilter), snapshot.SelectedExpiryFilter)
+                ? snapshot.SelectedExpiryFilter
+                : PlayerContractBoardExpiryFilter.Any;
+            _selectedPayoutDensityFilter = Enum.IsDefined(typeof(PlayerContractBoardPayoutDensityFilter), snapshot.SelectedPayoutDensityFilter)
+                ? snapshot.SelectedPayoutDensityFilter
+                : PlayerContractBoardPayoutDensityFilter.Any;
 
             if (snapshot.Cooldowns != null)
             {
@@ -928,6 +1252,20 @@ namespace LSOL.Systems
                     }
 
                     _routeCooldownUntilMinute[cooldown.RouteKey] = cooldown.AvailableAgainMinute;
+                }
+            }
+
+            if (snapshot.ShipperReputations != null)
+            {
+                for (int i = 0; i < snapshot.ShipperReputations.Count; i++)
+                {
+                    var reputation = PlayerContractShipperReputation.FromSnapshot(snapshot.ShipperReputations[i]);
+                    if (reputation == null || string.IsNullOrWhiteSpace(reputation.ShipperKey))
+                    {
+                        continue;
+                    }
+
+                    _shipperReputationByKey[reputation.ShipperKey] = reputation;
                 }
             }
 
@@ -1157,20 +1495,46 @@ namespace LSOL.Systems
             var contract = context.Contract;
             var conditionRatio = ModMath.Clamp01(cargoState.CargoCondition);
             var liveImbalance = ComputeCurrentImbalanceScore(contract);
+            var sinkDemandMultiplier = _globalMarket != null
+                ? _globalMarket.GetSinkDemandMultiplier(GetIndustryDistrictName(context.Destination, string.Empty), contract.Commodity)
+                : 1f;
             var unitPrice = ComputeContractUnitPrice(
                 contract.Type,
-                _globalMarket != null ? _globalMarket.GetUnitPrice(contract.Commodity) : 0f,
+                _globalMarket != null ? _globalMarket.GetUnitPrice(contract.Commodity) * sinkDemandMultiplier : 0f,
                 liveImbalance,
                 contract.RouteDistanceMeters);
             var payout = Math.Max(0f, acceptedTons * unitPrice * conditionRatio);
+            var shipperKey = ResolveShipperKey(context.Origin, contract.OriginIndustryId);
+            var shipperDisplayName = ResolveShipperDisplayName(context.Origin, contract.OriginIndustryId);
+            var destinationDistrictName = GetIndustryDistrictName(context.Destination, contract.SourceDistrictName);
             contract.DeliveredTons += acceptedTons;
             contract.LoadedTons = Math.Max(0f, contract.LoadedTons - acceptedTons);
             contract.CargoCondition = conditionRatio;
             contract.TotalLostTons = Math.Max(0f, cargoState.TotalLostTons);
+            if (string.IsNullOrWhiteSpace(contract.ShipperKey))
+            {
+                contract.ShipperKey = shipperKey;
+            }
+
+            if (string.IsNullOrWhiteSpace(contract.ShipperDisplayName))
+            {
+                contract.ShipperDisplayName = shipperDisplayName;
+            }
 
             if (_globalMarket != null && context.Destination != null && !context.Destination.IsWarehouse)
             {
-                _globalMarket.RegisterDelivery(contract.Commodity, gameTimeMs);
+                _globalMarket.RegisterDelivery(contract.Commodity, acceptedTons, gameTimeMs);
+            }
+
+            if (_territoryManager != null && context.Destination != null)
+            {
+                _territoryManager.RegisterDelivery(
+                    context.Destination,
+                    contract.Commodity,
+                    acceptedTons,
+                    false,
+                    contract.OriginIndustryId,
+                    contract.SourceDistrictName);
             }
 
             var completed = cargoState.WeightTons <= 0.001f || contract.LoadedTons <= 0.001f;
@@ -1178,10 +1542,15 @@ namespace LSOL.Systems
             {
                 contract.Status = PlayerContractStatus.Completed;
                 contract.StatusMessage = string.Format(CultureInfo.InvariantCulture, "Completed {0} contract", contract.Type == PlayerContractType.QuickJob ? "Quick Job" : "Freight Market");
+                var outcomeMessage = ApplyContractOutcome(contract, PlayerContractStatus.Completed);
                 RegisterCooldown(contract, GetCurrentInGameMinute());
                 result.ContractCompleted = true;
                 result.ShouldCleanupQuickJobVehicle = contract.Type == PlayerContractType.QuickJob;
                 result.Message = string.Format(CultureInfo.InvariantCulture, "Delivered {0} {1}. Contract payout {2}.", ModFormatting.FormatTons(acceptedTons), contract.Commodity, ModFormatting.FormatMoney(payout));
+                if (!string.IsNullOrWhiteSpace(outcomeMessage))
+                {
+                    result.Message += " " + outcomeMessage;
+                }
             }
             else
             {
@@ -1189,6 +1558,10 @@ namespace LSOL.Systems
             }
 
             result.Payout = payout;
+            result.PlayerContractId = contract.Id;
+            result.RouteLabel = BuildFinanceRouteLabel(contract, context.Origin, context.Destination);
+            result.ShipperKey = shipperKey;
+            result.DistrictName = destinationDistrictName;
             if (result.ShouldCleanupQuickJobVehicle)
             {
                 contract.QuickJobCleanupPending = true;
@@ -1365,14 +1738,48 @@ namespace LSOL.Systems
                             continue;
                         }
 
-                        var anchorUnitPrice = _globalMarket != null ? _globalMarket.GetUnitPrice(commodity) : 0f;
+                        var sinkDemandMultiplier = _globalMarket != null
+                            ? _globalMarket.GetSinkDemandMultiplier(destination.DistrictName, commodity)
+                            : 1f;
+                        var anchorUnitPrice = _globalMarket != null
+                            ? _globalMarket.GetUnitPrice(commodity) * sinkDemandMultiplier
+                            : 0f;
                         var quotedUnitPrice = ComputeContractUnitPrice(type, anchorUnitPrice, imbalanceScore, distanceMeters);
+                        var quotedGrossPayout = quotedUnitPrice * listedTons;
+                        var payoutDensityValue = BuildPayoutDensityValue(quotedGrossPayout, distanceMeters);
+                        var premiumOpportunityScore = ResolvePremiumOpportunityScore(type, quotedGrossPayout, payoutDensityValue, distanceMeters, listedTons, imbalanceScore);
+                        var isPremiumOpportunity = premiumOpportunityScore >= PremiumOpportunityThreshold;
+
+                        var shipperKey = ResolveShipperKey(origin, origin.Id);
+                        var shipperDisplayName = ResolveShipperDisplayName(origin, origin.Id);
+                        var shipperReputation = GetOrCreateShipperReputation(shipperKey, shipperDisplayName);
+                        var shipperTrustTier = GetShipperTrustTier(shipperReputation != null ? shipperReputation.TrustScore : 0f);
+                        var districtStandingTier = Math.Max(GetDistrictStandingTier(origin.DistrictName), GetDistrictStandingTier(destination.DistrictName));
+
+                        if (isPremiumOpportunity)
+                        {
+                            var requiredDistrictTier = premiumOpportunityScore >= EliteOpportunityThreshold ? 3 : 2;
+                            var requiredTrustTier = premiumOpportunityScore >= EliteOpportunityThreshold ? 2 : 1;
+                            if (districtStandingTier < requiredDistrictTier || shipperTrustTier < requiredTrustTier)
+                            {
+                                continue;
+                            }
+                        }
+
                         var score = (imbalanceScore * 100f)
                             + Math.Min(18f, availableTons)
                             + Math.Min(16f, destinationFreeTons)
                             + (type == PlayerContractType.QuickJob
                                 ? Math.Max(0f, 16f - (distanceMeters / 450f))
                                 : Math.Min(12f, distanceMeters / 1500f));
+
+                        score += (shipperTrustTier * 2f) + (districtStandingTier * 1.5f);
+                        if (isPremiumOpportunity)
+                        {
+                            score += 9f + (premiumOpportunityScore * 8f);
+                        }
+
+                        score += ResolveDistrictEventContractBias(destination, commodity);
 
                         results.Add(new PlayerContractCandidate
                         {
@@ -1389,6 +1796,12 @@ namespace LSOL.Systems
                             VehicleSelection = vehicleSelection,
                             Score = score,
                             RouteKey = BuildRouteKey(type, origin.Id, destination.Id, commodity),
+                            ShipperKey = shipperKey,
+                            ShipperDisplayName = shipperDisplayName,
+                            ShipperTrustTier = shipperTrustTier,
+                            DistrictStandingTier = districtStandingTier,
+                            IsPremiumOpportunity = isPremiumOpportunity,
+                            PremiumOpportunityScore = premiumOpportunityScore,
                         });
                     }
                 }
@@ -1438,6 +1851,9 @@ namespace LSOL.Systems
                 QuickJobCapacityTons = candidate.VehicleSelection != null ? candidate.VehicleSelection.CapacityTons : 0f,
                 QuickJobNeedsDeploy = false,
                 CargoCondition = 1f,
+                ShipperKey = candidate.ShipperKey ?? string.Empty,
+                ShipperDisplayName = candidate.ShipperDisplayName ?? string.Empty,
+                IsPremiumOpportunity = candidate.IsPremiumOpportunity,
                 StatusMessage = string.Empty,
             };
         }
@@ -1720,6 +2136,7 @@ namespace LSOL.Systems
 
                 _acceptedContract.Status = PlayerContractStatus.Expired;
                 _acceptedContract.StatusMessage = "Expired";
+                ApplyContractOutcome(_acceptedContract, PlayerContractStatus.Expired);
                 _acceptedContract.QuickJobCleanupPending = _acceptedContract.Type == PlayerContractType.QuickJob;
                 RegisterCooldown(_acceptedContract, currentMinute);
                 NotifyContractsChanged();
@@ -1908,9 +2325,13 @@ namespace LSOL.Systems
             }
 
             var liveImbalance = ComputeCurrentImbalanceScore(contract);
+            var destination = FindIndustry(contract.DestinationIndustryId);
+            var sinkDemandMultiplier = _globalMarket != null
+                ? _globalMarket.GetSinkDemandMultiplier(GetIndustryDistrictName(destination, string.Empty), contract.Commodity)
+                : 1f;
             var unitPrice = ComputeContractUnitPrice(
                 contract.Type,
-                _globalMarket != null ? _globalMarket.GetUnitPrice(contract.Commodity) : 0f,
+                _globalMarket != null ? _globalMarket.GetUnitPrice(contract.Commodity) * sinkDemandMultiplier : 0f,
                 liveImbalance,
                 contract.RouteDistanceMeters);
 
@@ -1930,6 +2351,29 @@ namespace LSOL.Systems
             var origin = FindIndustry(contract.OriginIndustryId);
             var destination = FindIndustry(contract.DestinationIndustryId);
             var currentImbalance = ComputeCurrentImbalanceScore(contract);
+            var currentEstimatedGrossPayout = ComputeCurrentEstimatedPayout(contract);
+            var displayPayout = currentEstimatedGrossPayout > 0.001f
+                ? currentEstimatedGrossPayout
+                : contract.QuotedGrossPayout;
+            var expiryMinute = contract.Status == PlayerContractStatus.Listed ? contract.ExpiryMinute : contract.AcceptedExpiryMinute;
+            var originDistrictName = GetIndustryDistrictName(origin, contract.SourceDistrictName);
+            var destinationDistrictName = GetIndustryDistrictName(destination, string.Empty);
+            var payoutDensityValue = BuildPayoutDensityValue(displayPayout, contract.RouteDistanceMeters);
+            var shipperKey = ResolveShipperKey(origin, contract.OriginIndustryId, contract.ShipperKey);
+            var shipperDisplayName = ResolveShipperDisplayName(origin, contract.OriginIndustryId, contract.ShipperDisplayName);
+            var shipperReputation = GetOrCreateShipperReputation(shipperKey, shipperDisplayName);
+            var shipperTrustTier = GetShipperTrustTier(shipperReputation != null ? shipperReputation.TrustScore : 0f);
+            var districtStandingTier = Math.Max(GetDistrictStandingTier(originDistrictName), GetDistrictStandingTier(destinationDistrictName));
+            var districtStandingLabel = ResolveDistrictStandingLabel(originDistrictName, destinationDistrictName, districtStandingTier);
+            var unlockHint = BuildUnlockHint(contract.IsPremiumOpportunity, districtStandingTier, shipperTrustTier, shipperDisplayName);
+            var statusDetail = BuildStatusDetail(contract, currentMinute);
+            var districtEventDetail = BuildDistrictEventListingDetail(destinationDistrictName, contract.Commodity);
+            if (!string.IsNullOrWhiteSpace(districtEventDetail))
+            {
+                statusDetail = string.IsNullOrWhiteSpace(statusDetail)
+                    ? districtEventDetail
+                    : statusDetail + " | " + districtEventDetail;
+            }
             return new PlayerContractListingSummary
             {
                 Id = contract.Id,
@@ -1938,18 +2382,30 @@ namespace LSOL.Systems
                 Commodity = contract.Commodity,
                 OriginIndustryId = contract.OriginIndustryId,
                 OriginName = origin != null ? origin.Name : contract.OriginIndustryId,
+                OriginDistrictName = originDistrictName,
                 DestinationIndustryId = contract.DestinationIndustryId,
                 DestinationName = destination != null ? destination.Name : contract.DestinationIndustryId,
+                DestinationDistrictName = destinationDistrictName,
+                RouteDistrictLabel = BuildRouteDistrictLabel(originDistrictName, destinationDistrictName),
+                DistrictStandingLabel = districtStandingLabel,
+                ShipperDisplayName = shipperDisplayName,
+                ShipperTrustLabel = BuildShipperTrustLabel(shipperReputation),
+                UnlockHint = unlockHint,
+                IsPremiumOpportunity = contract.IsPremiumOpportunity,
                 ListedTons = contract.ListedTons,
                 LoadedTons = contract.LoadedTons,
                 DeliveredTons = contract.DeliveredTons,
                 RouteDistanceMeters = contract.RouteDistanceMeters,
                 QuotedUnitPrice = contract.QuotedUnitPrice,
                 QuotedGrossPayout = contract.QuotedGrossPayout,
-                CurrentEstimatedGrossPayout = ComputeCurrentEstimatedPayout(contract),
+                CurrentEstimatedGrossPayout = currentEstimatedGrossPayout,
                 QuotedImbalanceScore = contract.QuotedImbalanceScore,
                 CurrentImbalanceScore = currentImbalance,
-                ExpiryInGameMinute = contract.Status == PlayerContractStatus.Listed ? contract.ExpiryMinute : contract.AcceptedExpiryMinute,
+                ExpiryInGameMinute = expiryMinute,
+                RemainingExpiryMinutes = expiryMinute >= 0 ? Math.Max(0, expiryMinute - currentMinute) : int.MaxValue,
+                PayoutDensityValue = payoutDensityValue,
+                PayoutDensityLabel = BuildPayoutDensityLabel(payoutDensityValue),
+                RigClassLabel = BuildRigClassLabel(contract.Commodity),
                 VehicleRequirementLabel = contract.VehicleRequirementLabel,
                 SuppliesVehicle = contract.SuppliesVehicle,
                 RequiresOwnedVehicle = contract.RequiresOwnedVehicle,
@@ -1957,15 +2413,895 @@ namespace LSOL.Systems
                 NeedsQuickJobVehicleDeploy = contract.Type == PlayerContractType.QuickJob && contract.QuickJobNeedsDeploy,
                 AssignedVehicleDisplayName = contract.AssignedCommercialVehicleDisplayName,
                 StageLabel = BuildStageLabel(contract),
-                StatusDetail = BuildStatusDetail(contract, currentMinute),
+                StatusDetail = statusDetail,
             };
         }
 
-        private bool ShouldIncludeForSelectedCommodity(PlayerContractEntry contract)
+        private IReadOnlyList<PlayerContractListingSummary> GetLiveListedSummaries(int currentMinute)
         {
-            return contract != null
-                && (string.IsNullOrWhiteSpace(_selectedCommodityFilter)
-                    || CommodityCatalog.IsSameCommodity(_selectedCommodityFilter, contract.Commodity));
+            return _listedContracts
+                .Where(contract => contract != null)
+                .Select(contract => BuildSummary(contract, currentMinute))
+                .Where(summary => summary != null)
+                .ToArray();
+        }
+
+        private bool MatchesSelectedBoardFilters(PlayerContractListingSummary summary)
+        {
+            return summary != null
+                && MatchesSelectedCommodityFilter(summary.Commodity)
+                && MatchesSelectedDistrictFilter(summary)
+                && MatchesSelectedRigClassFilter(summary)
+                && MatchesSelectedExpiryFilter(summary)
+                && MatchesSelectedPayoutDensityFilter(summary);
+        }
+
+        private bool MatchesSelectedCommodityFilter(string commodity)
+        {
+            return string.IsNullOrWhiteSpace(_selectedCommodityFilter)
+                || CommodityCatalog.IsSameCommodity(_selectedCommodityFilter, commodity);
+        }
+
+        private bool MatchesSelectedDistrictFilter(PlayerContractListingSummary summary)
+        {
+            return string.IsNullOrWhiteSpace(_selectedDistrictFilter)
+                || string.Equals(summary.OriginDistrictName, _selectedDistrictFilter, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(summary.DestinationDistrictName, _selectedDistrictFilter, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool MatchesSelectedRigClassFilter(PlayerContractListingSummary summary)
+        {
+            return string.IsNullOrWhiteSpace(_selectedRigClassFilter)
+                || string.Equals(summary.RigClassLabel, _selectedRigClassFilter, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool MatchesSelectedExpiryFilter(PlayerContractListingSummary summary)
+        {
+            if (summary == null)
+            {
+                return false;
+            }
+
+            switch (_selectedExpiryFilter)
+            {
+                case PlayerContractBoardExpiryFilter.Within60Minutes:
+                    return summary.RemainingExpiryMinutes <= 60;
+                case PlayerContractBoardExpiryFilter.Within120Minutes:
+                    return summary.RemainingExpiryMinutes <= 120;
+                case PlayerContractBoardExpiryFilter.Over120Minutes:
+                    return summary.RemainingExpiryMinutes > 120;
+                default:
+                    return true;
+            }
+        }
+
+        private bool MatchesSelectedPayoutDensityFilter(PlayerContractListingSummary summary)
+        {
+            if (summary == null)
+            {
+                return false;
+            }
+
+            switch (_selectedPayoutDensityFilter)
+            {
+                case PlayerContractBoardPayoutDensityFilter.AtLeast500PerKm:
+                    return summary.PayoutDensityValue >= MediumPayoutDensityThresholdPerKilometer;
+                case PlayerContractBoardPayoutDensityFilter.AtLeast1000PerKm:
+                    return summary.PayoutDensityValue >= HighPayoutDensityThresholdPerKilometer;
+                case PlayerContractBoardPayoutDensityFilter.Below500PerKm:
+                    return summary.PayoutDensityValue < MediumPayoutDensityThresholdPerKilometer;
+                default:
+                    return true;
+            }
+        }
+
+        private IEnumerable<PlayerContractListingSummary> ApplySelectedBoardSort(IEnumerable<PlayerContractListingSummary> summaries)
+        {
+            switch (_selectedSortMode)
+            {
+                case PlayerContractBoardSortMode.ExpirySoonest:
+                    return summaries
+                        .OrderBy(summary => summary.RemainingExpiryMinutes)
+                        .ThenByDescending(summary => summary.PayoutDensityValue)
+                        .ThenByDescending(GetDisplayPayout);
+                case PlayerContractBoardSortMode.BestPayoutDensity:
+                    return summaries
+                        .OrderByDescending(summary => summary.PayoutDensityValue)
+                        .ThenBy(summary => summary.RemainingExpiryMinutes)
+                        .ThenByDescending(GetDisplayPayout);
+                case PlayerContractBoardSortMode.HighestGrossPayout:
+                    return summaries
+                        .OrderByDescending(GetDisplayPayout)
+                        .ThenByDescending(summary => summary.PayoutDensityValue)
+                        .ThenBy(summary => summary.RemainingExpiryMinutes);
+                default:
+                    return summaries
+                        .OrderByDescending(summary => summary.QuotedImbalanceScore)
+                        .ThenBy(summary => summary.ExpiryInGameMinute);
+            }
+        }
+
+        private IReadOnlyList<string> GetDistrictFilterOptions()
+        {
+            var values = _listedContracts
+                .Where(contract => contract != null)
+                .SelectMany(GetContractDistrictOptions)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            values.Insert(0, string.Empty);
+            return values;
+        }
+
+        private IReadOnlyList<string> GetRigClassFilterOptions()
+        {
+            var values = _listedContracts
+                .Where(contract => contract != null)
+                .Select(contract => BuildRigClassLabel(contract.Commodity))
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            values.Insert(0, string.Empty);
+            return values;
+        }
+
+        private IEnumerable<string> GetContractDistrictOptions(PlayerContractEntry contract)
+        {
+            if (contract == null)
+            {
+                yield break;
+            }
+
+            var originDistrict = GetIndustryDistrictName(FindIndustry(contract.OriginIndustryId), contract.SourceDistrictName);
+            if (!string.IsNullOrWhiteSpace(originDistrict))
+            {
+                yield return originDistrict;
+            }
+
+            var destinationDistrict = GetIndustryDistrictName(FindIndustry(contract.DestinationIndustryId), string.Empty);
+            if (!string.IsNullOrWhiteSpace(destinationDistrict)
+                && !string.Equals(destinationDistrict, originDistrict, StringComparison.OrdinalIgnoreCase))
+            {
+                yield return destinationDistrict;
+            }
+        }
+
+        private void NormalizeDynamicBoardFilters()
+        {
+            _selectedCommodityFilter = CoerceStringSelection(_selectedCommodityFilter, GetCommodityFilterOptions());
+            _selectedDistrictFilter = CoerceStringSelection(_selectedDistrictFilter, GetDistrictFilterOptions());
+            _selectedRigClassFilter = CoerceStringSelection(_selectedRigClassFilter, GetRigClassFilterOptions());
+        }
+
+        private bool HasActiveBoardQuery()
+        {
+            return _selectedSortMode != PlayerContractBoardSortMode.Board
+                || _selectedExpiryFilter != PlayerContractBoardExpiryFilter.Any
+                || _selectedPayoutDensityFilter != PlayerContractBoardPayoutDensityFilter.Any
+                || !string.IsNullOrWhiteSpace(_selectedRigClassFilter)
+                || !string.IsNullOrWhiteSpace(_selectedDistrictFilter)
+                || !string.IsNullOrWhiteSpace(_selectedCommodityFilter);
+        }
+
+        private string BuildBoardQuerySummary()
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "Sort {0} | Expiry {1} | Density {2} | Rig {3} | District {4} | Commodity {5}",
+                GetSortModeLabel(_selectedSortMode),
+                GetExpiryFilterLabel(_selectedExpiryFilter),
+                GetPayoutDensityFilterLabel(_selectedPayoutDensityFilter),
+                GetRigClassFilterLabel(_selectedRigClassFilter),
+                GetDistrictFilterLabel(_selectedDistrictFilter),
+                GetCommodityFilterLabel(_selectedCommodityFilter));
+        }
+
+        private static float GetDisplayPayout(PlayerContractListingSummary summary)
+        {
+            if (summary == null)
+            {
+                return 0f;
+            }
+
+            return summary.CurrentEstimatedGrossPayout > 0.001f
+                ? summary.CurrentEstimatedGrossPayout
+                : summary.QuotedGrossPayout;
+        }
+
+        private static string GetCommodityFilterLabel(string selectedCommodityFilter)
+        {
+            return string.IsNullOrWhiteSpace(selectedCommodityFilter)
+                ? "Any"
+                : selectedCommodityFilter;
+        }
+
+        private static string GetDistrictFilterLabel(string selectedDistrictFilter)
+        {
+            return string.IsNullOrWhiteSpace(selectedDistrictFilter)
+                ? "Any"
+                : selectedDistrictFilter;
+        }
+
+        private static string GetRigClassFilterLabel(string selectedRigClassFilter)
+        {
+            return string.IsNullOrWhiteSpace(selectedRigClassFilter)
+                ? "Any"
+                : selectedRigClassFilter;
+        }
+
+        private static string GetExpiryFilterLabel(PlayerContractBoardExpiryFilter filter)
+        {
+            switch (filter)
+            {
+                case PlayerContractBoardExpiryFilter.Within60Minutes:
+                    return "<= 60m";
+                case PlayerContractBoardExpiryFilter.Within120Minutes:
+                    return "<= 120m";
+                case PlayerContractBoardExpiryFilter.Over120Minutes:
+                    return "> 120m";
+                default:
+                    return "Any";
+            }
+        }
+
+        private static string GetPayoutDensityFilterLabel(PlayerContractBoardPayoutDensityFilter filter)
+        {
+            switch (filter)
+            {
+                case PlayerContractBoardPayoutDensityFilter.AtLeast500PerKm:
+                    return ">= $500/km";
+                case PlayerContractBoardPayoutDensityFilter.AtLeast1000PerKm:
+                    return ">= $1,000/km";
+                case PlayerContractBoardPayoutDensityFilter.Below500PerKm:
+                    return "< $500/km";
+                default:
+                    return "Any";
+            }
+        }
+
+        private static string GetSortModeLabel(PlayerContractBoardSortMode mode)
+        {
+            switch (mode)
+            {
+                case PlayerContractBoardSortMode.ExpirySoonest:
+                    return "Expiry";
+                case PlayerContractBoardSortMode.BestPayoutDensity:
+                    return "Best $/km";
+                case PlayerContractBoardSortMode.HighestGrossPayout:
+                    return "Highest payout";
+                default:
+                    return "Board";
+            }
+        }
+
+        private Tuple<string, string> BuildReputationOverviewSummary(int currentMinute)
+        {
+            var strongest = _shipperReputationByKey.Values
+                .Where(entry => entry != null)
+                .OrderByDescending(entry => entry.TrustScore)
+                .ThenByDescending(entry => entry.CompletedContracts)
+                .FirstOrDefault();
+
+            var districtUnlockPosture = ResolveDistrictUnlockPosture();
+            var headline = strongest != null && strongest.TrustScore > 0.01f
+                ? string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Strongest: {0} ({1})",
+                    string.IsNullOrWhiteSpace(strongest.DisplayName) ? strongest.ShipperKey : strongest.DisplayName,
+                    BuildShipperTrustLabel(strongest))
+                : "Strongest: no trusted shipper yet";
+
+            var detail = districtUnlockPosture;
+            var nextHint = strongest != null
+                ? BuildNextTrustTierHint(strongest)
+                : "Complete clean repeat contracts with the same shipper to unlock premium lanes.";
+            if (!string.IsNullOrWhiteSpace(nextHint))
+            {
+                detail += " | " + nextHint;
+            }
+
+            var recentContractSummary = BuildRecentFinanceContractSummary(currentMinute);
+            if (!string.IsNullOrWhiteSpace(recentContractSummary))
+            {
+                detail += " | " + recentContractSummary;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_latestReputationStatus))
+            {
+                detail += " | " + _latestReputationStatus;
+            }
+
+            return Tuple.Create(headline, detail);
+        }
+
+        private string ResolveDistrictUnlockPosture()
+        {
+            if (_territoryManager == null || _industryManager == null || _industryManager.Industries == null)
+            {
+                return "District unlock: baseline side work only";
+            }
+
+            var bestTier = 0;
+            for (int i = 0; i < _industryManager.Industries.Count; i++)
+            {
+                var industry = _industryManager.Industries[i];
+                if (industry == null)
+                {
+                    continue;
+                }
+
+                var tier = GetDistrictStandingTier(industry.DistrictName);
+                if (tier > bestTier)
+                {
+                    bestTier = tier;
+                }
+            }
+
+            if (bestTier >= 3)
+            {
+                return "District unlock: Dominant or Anchored districts can surface elite premium lanes";
+            }
+
+            if (bestTier >= 2)
+            {
+                return "District unlock: Established districts can surface premium lanes";
+            }
+
+            return "District unlock: raise district standing to Established for premium work";
+        }
+
+        private string BuildRecentFinanceContractSummary(int currentMinute)
+        {
+            if (_financeTracker == null)
+            {
+                return string.Empty;
+            }
+
+            var transactions = _financeTracker
+                .GetTransactionsInWindow(currentMinute, 7 * 24 * 60, CompanyFinanceFlow.Income, CompanyFinanceCategory.PlayerContract)
+                .Where(entry => entry != null)
+                .ToList();
+            if (transactions.Count == 0)
+            {
+                return "Recent contracts: no payouts logged this week";
+            }
+
+            var shipperCount = transactions
+                .Select(entry => entry.ShipperKey)
+                .Where(key => !string.IsNullOrWhiteSpace(key))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+            var districtCount = transactions
+                .Select(entry => entry.DistrictName)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Count();
+
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "Recent contracts: {0} payout{1}, {2} shipper{3}, {4} district{5}",
+                transactions.Count,
+                transactions.Count == 1 ? string.Empty : "s",
+                shipperCount,
+                shipperCount == 1 ? string.Empty : "s",
+                districtCount,
+                districtCount == 1 ? string.Empty : "s");
+        }
+
+        private static string BuildShipperTrustLabel(PlayerContractShipperReputation reputation)
+        {
+            if (reputation == null)
+            {
+                return "New";
+            }
+
+            switch (GetShipperTrustTier(reputation.TrustScore))
+            {
+                case 4:
+                    return "Partner";
+                case 3:
+                    return "Trusted";
+                case 2:
+                    return "Preferred";
+                case 1:
+                    return "Reliable";
+                default:
+                    return "New";
+            }
+        }
+
+        private static string BuildNextTrustTierHint(PlayerContractShipperReputation reputation)
+        {
+            if (reputation == null)
+            {
+                return "";
+            }
+
+            var score = Math.Max(0f, reputation.TrustScore);
+            if (score < TrustTierReliableThreshold)
+            {
+                return string.Format(CultureInfo.InvariantCulture, "Next unlock: reach Reliable ({0:0}/{1:0})", score, TrustTierReliableThreshold);
+            }
+
+            if (score < TrustTierPreferredThreshold)
+            {
+                return string.Format(CultureInfo.InvariantCulture, "Next unlock: reach Preferred ({0:0}/{1:0})", score, TrustTierPreferredThreshold);
+            }
+
+            if (score < TrustTierTrustedThreshold)
+            {
+                return string.Format(CultureInfo.InvariantCulture, "Next unlock: reach Trusted ({0:0}/{1:0})", score, TrustTierTrustedThreshold);
+            }
+
+            if (score < TrustTierPartnerThreshold)
+            {
+                return string.Format(CultureInfo.InvariantCulture, "Next unlock: reach Partner ({0:0}/{1:0})", score, TrustTierPartnerThreshold);
+            }
+
+            return "Top trust tier reached";
+        }
+
+        private static int GetShipperTrustTier(float trustScore)
+        {
+            var score = Math.Max(0f, trustScore);
+            if (score >= TrustTierPartnerThreshold)
+            {
+                return 4;
+            }
+
+            if (score >= TrustTierTrustedThreshold)
+            {
+                return 3;
+            }
+
+            if (score >= TrustTierPreferredThreshold)
+            {
+                return 2;
+            }
+
+            if (score >= TrustTierReliableThreshold)
+            {
+                return 1;
+            }
+
+            return 0;
+        }
+
+        private int GetDistrictStandingTier(string districtName)
+        {
+            if (_territoryManager == null || string.IsNullOrWhiteSpace(districtName))
+            {
+                return 0;
+            }
+
+            return _territoryManager.GetDistrictReputationTier(districtName);
+        }
+
+        private static string ResolveDistrictStandingLabel(string originDistrictName, string destinationDistrictName, int routeTier)
+        {
+            var routeLabel = BuildRouteDistrictLabel(originDistrictName, destinationDistrictName);
+            string tierLabel;
+            switch (Math.Max(0, routeTier))
+            {
+                case 4:
+                    tierLabel = "Dominant";
+                    break;
+                case 3:
+                    tierLabel = "Anchored";
+                    break;
+                case 2:
+                    tierLabel = "Established";
+                    break;
+                case 1:
+                    tierLabel = "Emerging";
+                    break;
+                default:
+                    tierLabel = "Unknown";
+                    break;
+            }
+
+            return string.Format(CultureInfo.InvariantCulture, "{0} ({1})", routeLabel, tierLabel);
+        }
+
+        private static string BuildUnlockHint(bool isPremiumOpportunity, int districtTier, int shipperTrustTier, string shipperDisplayName)
+        {
+            if (isPremiumOpportunity)
+            {
+                return "Premium lane unlocked by district standing and shipper trust.";
+            }
+
+            if (districtTier < 2)
+            {
+                return "Reach Established district standing to unlock premium routes.";
+            }
+
+            if (shipperTrustTier < 1)
+            {
+                return string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Run repeat clean hauls for {0} to unlock premium offers.",
+                    string.IsNullOrWhiteSpace(shipperDisplayName) ? "this shipper" : shipperDisplayName);
+            }
+
+            return "Maintain clean repeat performance to unlock larger premium offers.";
+        }
+
+        private static float ResolvePremiumOpportunityScore(
+            PlayerContractType type,
+            float grossPayout,
+            float payoutDensity,
+            float routeDistanceMeters,
+            float listedTons,
+            float imbalanceScore)
+        {
+            var grossBaseline = type == PlayerContractType.QuickJob ? 4200f : 11000f;
+            var densityBaseline = type == PlayerContractType.QuickJob ? 850f : 650f;
+            var tonsBaseline = type == PlayerContractType.QuickJob ? QuickJobMaxTons : FreightMaxTons;
+            var distanceBaseline = type == PlayerContractType.QuickJob ? QuickJobMaxDistanceMeters : FreightMaxDistanceMeters;
+
+            var grossFactor = ModMath.Clamp01(grossPayout / Math.Max(1f, grossBaseline));
+            var densityFactor = ModMath.Clamp01(payoutDensity / Math.Max(1f, densityBaseline));
+            var distanceFactor = ModMath.Clamp01(routeDistanceMeters / Math.Max(1f, distanceBaseline));
+            var tonsFactor = ModMath.Clamp01(listedTons / Math.Max(1f, tonsBaseline));
+            var imbalanceFactor = ModMath.Clamp01(imbalanceScore);
+
+            return (grossFactor * 0.30f)
+                + (densityFactor * 0.22f)
+                + (distanceFactor * 0.15f)
+                + (tonsFactor * 0.15f)
+                + (imbalanceFactor * 0.18f);
+        }
+
+        private PlayerContractShipperReputation GetOrCreateShipperReputation(string shipperKey, string displayName)
+        {
+            if (string.IsNullOrWhiteSpace(shipperKey))
+            {
+                return null;
+            }
+
+            PlayerContractShipperReputation reputation;
+            if (!_shipperReputationByKey.TryGetValue(shipperKey, out reputation) || reputation == null)
+            {
+                reputation = new PlayerContractShipperReputation
+                {
+                    ShipperKey = shipperKey,
+                    DisplayName = displayName ?? shipperKey,
+                };
+                _shipperReputationByKey[shipperKey] = reputation;
+            }
+            else if (!string.IsNullOrWhiteSpace(displayName))
+            {
+                reputation.DisplayName = displayName;
+            }
+
+            return reputation;
+        }
+
+        private string ApplyContractOutcome(PlayerContractEntry contract, PlayerContractStatus terminalStatus)
+        {
+            if (contract == null || contract.ReputationOutcomeApplied)
+            {
+                return string.Empty;
+            }
+
+            if (terminalStatus != PlayerContractStatus.Completed
+                && terminalStatus != PlayerContractStatus.Cancelled
+                && terminalStatus != PlayerContractStatus.Expired)
+            {
+                return string.Empty;
+            }
+
+            var origin = FindIndustry(contract.OriginIndustryId);
+            var shipperKey = ResolveShipperKey(origin, contract.OriginIndustryId, contract.ShipperKey);
+            var shipperDisplay = ResolveShipperDisplayName(origin, contract.OriginIndustryId, contract.ShipperDisplayName);
+            var reputation = GetOrCreateShipperReputation(shipperKey, shipperDisplay);
+            if (reputation == null)
+            {
+                return string.Empty;
+            }
+
+            var previousTier = GetShipperTrustTier(reputation.TrustScore);
+            var delta = 0f;
+            var completedCleanly = false;
+
+            if (terminalStatus == PlayerContractStatus.Completed)
+            {
+                var delivered = Math.Max(0f, contract.DeliveredTons);
+                var listed = Math.Max(0.001f, contract.ListedTons);
+                var deliveredRatio = delivered / listed;
+                var lostRatio = contract.TotalLostTons <= 0.001f
+                    ? 0f
+                    : contract.TotalLostTons / Math.Max(0.001f, delivered + contract.TotalLostTons);
+                completedCleanly = contract.CargoCondition >= 0.95f && lostRatio <= 0.03f;
+
+                delta += 6f;
+                delta += Math.Min(10f, delivered * 0.70f);
+                if (deliveredRatio >= 0.95f)
+                {
+                    delta += 6f;
+                }
+
+                if (completedCleanly)
+                {
+                    delta += 4f;
+                    reputation.CleanStreak += 1;
+                    if (reputation.CleanStreak >= 3)
+                    {
+                        delta += 2f;
+                    }
+                }
+                else
+                {
+                    reputation.CleanStreak = 0;
+                }
+
+                if (contract.CargoCondition <= 0.70f || lostRatio >= 0.18f)
+                {
+                    delta -= 6f;
+                }
+
+                reputation.CompletedContracts += 1;
+                reputation.DeliveredTons += delivered;
+                if (completedCleanly)
+                {
+                    reputation.CleanCompletions += 1;
+                }
+            }
+            else
+            {
+                delta -= terminalStatus == PlayerContractStatus.Expired ? 10f : 8f;
+                reputation.FailedContracts += 1;
+                reputation.CleanStreak = 0;
+            }
+
+            reputation.TrustScore = Math.Max(0f, reputation.TrustScore + delta);
+            contract.ReputationOutcomeApplied = true;
+
+            var updatedTier = GetShipperTrustTier(reputation.TrustScore);
+            if (updatedTier > previousTier)
+            {
+                reputation.LastTierAwarded = updatedTier;
+                var message = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Shipper trust up: {0} reached {1}.",
+                    string.IsNullOrWhiteSpace(reputation.DisplayName) ? reputation.ShipperKey : reputation.DisplayName,
+                    BuildShipperTrustLabel(reputation));
+                _latestReputationStatus = message;
+                if (_showStatus != null)
+                {
+                    _showStatus(message);
+                }
+
+                return message;
+            }
+
+            if (terminalStatus != PlayerContractStatus.Completed)
+            {
+                _latestReputationStatus = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Reliability setback with {0}: trust {1}.",
+                    string.IsNullOrWhiteSpace(reputation.DisplayName) ? reputation.ShipperKey : reputation.DisplayName,
+                    BuildShipperTrustLabel(reputation));
+            }
+
+            return string.Empty;
+        }
+
+        private static string NormalizeShipperToken(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return string.Empty;
+            }
+
+            var normalized = new char[raw.Length];
+            var index = 0;
+            var writeDash = false;
+            for (int i = 0; i < raw.Length; i++)
+            {
+                var value = char.ToLowerInvariant(raw[i]);
+                if (char.IsLetterOrDigit(value))
+                {
+                    if (writeDash && index > 0)
+                    {
+                        normalized[index++] = '-';
+                        writeDash = false;
+                    }
+
+                    normalized[index++] = value;
+                    continue;
+                }
+
+                writeDash = index > 0;
+            }
+
+            return index <= 0 ? string.Empty : new string(normalized, 0, index);
+        }
+
+        private static string ResolveShipperKey(Industry origin, string fallbackOriginKey, string existing = null)
+        {
+            if (!string.IsNullOrWhiteSpace(existing))
+            {
+                return existing.Trim();
+            }
+
+            var company = origin != null ? origin.Company : string.Empty;
+            var normalizedCompany = NormalizeShipperToken(company);
+            if (!string.IsNullOrWhiteSpace(normalizedCompany))
+            {
+                return "company:" + normalizedCompany;
+            }
+
+            var fallback = !string.IsNullOrWhiteSpace(fallbackOriginKey)
+                ? fallbackOriginKey
+                : (origin != null ? (origin.Id ?? origin.Name) : string.Empty);
+            var normalizedFallback = NormalizeShipperToken(fallback);
+            return string.IsNullOrWhiteSpace(normalizedFallback)
+                ? "site:unknown"
+                : "site:" + normalizedFallback;
+        }
+
+        private static string ResolveShipperDisplayName(Industry origin, string fallbackOriginKey, string existing = null)
+        {
+            if (!string.IsNullOrWhiteSpace(existing))
+            {
+                return existing.Trim();
+            }
+
+            var company = origin != null ? (origin.Company ?? string.Empty).Trim() : string.Empty;
+            if (!string.IsNullOrWhiteSpace(company))
+            {
+                return company;
+            }
+
+            if (origin != null && !string.IsNullOrWhiteSpace(origin.Name))
+            {
+                return origin.Name;
+            }
+
+            return string.IsNullOrWhiteSpace(fallbackOriginKey) ? "Origin site" : fallbackOriginKey.Trim();
+        }
+
+        private static string BuildFinanceRouteLabel(PlayerContractEntry contract, Industry origin, Industry destination)
+        {
+            if (contract == null)
+            {
+                return string.Empty;
+            }
+
+            var shipperLabel = ResolveShipperDisplayName(origin, contract.OriginIndustryId, contract.ShipperDisplayName);
+            var originLabel = origin != null && !string.IsNullOrWhiteSpace(origin.Name) ? origin.Name : contract.OriginIndustryId;
+            var destinationLabel = destination != null && !string.IsNullOrWhiteSpace(destination.Name) ? destination.Name : contract.DestinationIndustryId;
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} | {1} {2} | {3} -> {4}",
+                shipperLabel,
+                ModFormatting.FormatTons(Math.Max(0f, contract.DeliveredTons)),
+                contract.Commodity,
+                originLabel,
+                destinationLabel);
+        }
+
+        private static string GetIndustryDistrictName(Industry industry, string fallback)
+        {
+            var districtName = industry != null ? industry.DistrictName : string.Empty;
+            return string.IsNullOrWhiteSpace(districtName)
+                ? (fallback ?? string.Empty).Trim()
+                : districtName.Trim();
+        }
+
+        private static string BuildRouteDistrictLabel(string originDistrictName, string destinationDistrictName)
+        {
+            if (string.IsNullOrWhiteSpace(originDistrictName) && string.IsNullOrWhiteSpace(destinationDistrictName))
+            {
+                return "Unknown district";
+            }
+
+            if (string.IsNullOrWhiteSpace(originDistrictName))
+            {
+                return destinationDistrictName;
+            }
+
+            if (string.IsNullOrWhiteSpace(destinationDistrictName)
+                || string.Equals(originDistrictName, destinationDistrictName, StringComparison.OrdinalIgnoreCase))
+            {
+                return originDistrictName;
+            }
+
+            return string.Format(CultureInfo.InvariantCulture, "{0} -> {1}", originDistrictName, destinationDistrictName);
+        }
+
+        private static string BuildRigClassLabel(string commodity)
+        {
+            return CommodityCatalog.GetCargoTypeForCommodity(commodity).ToDisplayName();
+        }
+
+        private static float BuildPayoutDensityValue(float payout, float routeDistanceMeters)
+        {
+            if (payout <= 0.001f || routeDistanceMeters <= 1f)
+            {
+                return 0f;
+            }
+
+            return payout / (routeDistanceMeters / 1000f);
+        }
+
+        private static string BuildPayoutDensityLabel(float payoutDensityValue)
+        {
+            return payoutDensityValue > 0.001f
+                ? string.Format(CultureInfo.InvariantCulture, "{0}/km", ModFormatting.FormatMoney(payoutDensityValue))
+                : "n/a/km";
+        }
+
+        private static string CycleStringSelection(string current, IReadOnlyList<string> options, int delta)
+        {
+            if (options == null || options.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            var currentIndex = 0;
+            for (int i = 0; i < options.Count; i++)
+            {
+                if (!string.Equals(options[i], current, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                currentIndex = i;
+                break;
+            }
+
+            return options[WrapSelectionIndex(currentIndex, delta, options.Count)] ?? string.Empty;
+        }
+
+        private static string CoerceStringSelection(string current, IReadOnlyList<string> options)
+        {
+            if (string.IsNullOrWhiteSpace(current) || options == null || options.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            for (int i = 0; i < options.Count; i++)
+            {
+                if (string.Equals(options[i], current, StringComparison.OrdinalIgnoreCase))
+                {
+                    return options[i] ?? string.Empty;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static T CycleEnumSelection<T>(T current, IReadOnlyList<T> options, int delta)
+        {
+            if (options == null || options.Count == 0)
+            {
+                return current;
+            }
+
+            var comparer = EqualityComparer<T>.Default;
+            var currentIndex = 0;
+            for (int i = 0; i < options.Count; i++)
+            {
+                if (!comparer.Equals(options[i], current))
+                {
+                    continue;
+                }
+
+                currentIndex = i;
+                break;
+            }
+
+            return options[WrapSelectionIndex(currentIndex, delta, options.Count)];
+        }
+
+        private static int WrapSelectionIndex(int currentIndex, int delta, int count)
+        {
+            return (currentIndex + delta % count + count) % count;
         }
 
         private static string BuildStageLabel(PlayerContractEntry contract)
@@ -1992,6 +3328,81 @@ namespace LSOL.Systems
                 default:
                     return contract.Status.ToString();
             }
+        }
+
+        private float ResolveDistrictEventContractBias(Industry destination, string commodity)
+        {
+            if (_territoryManager == null || destination == null || string.IsNullOrWhiteSpace(destination.DistrictName))
+            {
+                return 0f;
+            }
+
+            var activeEvent = _territoryManager.GetDistrictEvent(destination.DistrictName);
+            if (activeEvent == null)
+            {
+                return 0f;
+            }
+
+            var commodityBias = ResolveDistrictEventCommodityBias(activeEvent, commodity);
+            if (commodityBias <= 0f)
+            {
+                if (activeEvent.CrisisType == DistrictCrisisType.ConstructionSurge && destination.IsConstructionSink)
+                {
+                    commodityBias = 0.45f;
+                }
+                else if (activeEvent.CrisisType == DistrictCrisisType.EmergencyRestock && (destination.IsStore || destination.IsGasStation))
+                {
+                    commodityBias = 0.35f;
+                }
+            }
+
+            if (commodityBias <= 0f)
+            {
+                return 0f;
+            }
+
+            return 8f + (commodityBias * 12f) + (Math.Max(0f, activeEvent.Severity) * 14f);
+        }
+
+        private string BuildDistrictEventListingDetail(string destinationDistrictName, string commodity)
+        {
+            if (_territoryManager == null || string.IsNullOrWhiteSpace(destinationDistrictName))
+            {
+                return string.Empty;
+            }
+
+            var activeEvent = _territoryManager.GetDistrictEvent(destinationDistrictName);
+            if (activeEvent == null || ResolveDistrictEventCommodityBias(activeEvent, commodity) <= 0f)
+            {
+                return string.Empty;
+            }
+
+            var status = string.IsNullOrWhiteSpace(activeEvent.StatusText)
+                ? activeEvent.Headline
+                : string.Format(CultureInfo.InvariantCulture, "{0} {1}", activeEvent.Headline, activeEvent.StatusText);
+            return string.Format(CultureInfo.InvariantCulture, "Event {0}", status).Trim();
+        }
+
+        private static float ResolveDistrictEventCommodityBias(TerritoryDistrictEventState activeEvent, string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            if (activeEvent == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return 0f;
+            }
+
+            if (string.Equals(activeEvent.PreferredCommodity, commodity, StringComparison.OrdinalIgnoreCase))
+            {
+                return 1f;
+            }
+
+            var affinity = CommodityCatalog.GetEventResponseAffinity(activeEvent.PreferredCommodity, commodity);
+            if (affinity <= 0f)
+            {
+                return 0f;
+            }
+
+            return Math.Max(0.25f, Math.Min(0.85f, affinity * (0.80f + (Math.Max(0f, activeEvent.Severity) * 0.20f))));
         }
 
         private static string BuildStatusDetail(PlayerContractEntry contract, int currentMinute)
@@ -2255,6 +3666,18 @@ namespace LSOL.Systems
             public float Score { get; set; }
 
             public string RouteKey { get; set; }
+
+            public string ShipperKey { get; set; }
+
+            public string ShipperDisplayName { get; set; }
+
+            public int ShipperTrustTier { get; set; }
+
+            public int DistrictStandingTier { get; set; }
+
+            public bool IsPremiumOpportunity { get; set; }
+
+            public float PremiumOpportunityScore { get; set; }
 
             public PlayerContractVehicleSelection VehicleSelection { get; set; }
         }

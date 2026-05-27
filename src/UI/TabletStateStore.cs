@@ -59,20 +59,52 @@ namespace LSOL.UI
 
         public int ActiveCompetitionJobs { get; set; }
 
+        public int ActiveCarrierCount { get; set; }
+
+        public string DominantCarrierName { get; set; }
+
         public int VisibleCompetitionCount { get; set; }
 
         public int CompetitiveWinCount { get; set; }
 
+        public int ContestedCorridorCount { get; set; }
+
+        public int CorridorHoldCount { get; set; }
+
+        public string HottestCorridorName { get; set; }
+
+        public float HottestCorridorPressurePercent { get; set; }
+
         public string CompetitionStatus { get; set; }
+
+        public string DistrictEventHeadline { get; set; }
+
+        public string DistrictEventCommodity { get; set; }
+
+        public string DistrictEventStatus { get; set; }
+
+        public string DistrictEventImpact { get; set; }
+
+        public float DistrictEventSeverityPercent { get; set; }
+
+        public string DistrictEventSeverityLabel { get; set; }
     }
 
     internal sealed class TabletNpcRoutePerformance
     {
         public NpcLogisticsContract Contract { get; set; }
 
+        public int ContractId { get; set; }
+
         public string Label { get; set; }
 
         public string Detail { get; set; }
+
+        public string FamilyLabel { get; set; }
+
+        public int FamilyContractCount { get; set; }
+
+        public int RouteCount { get; set; }
 
         public float DeliveredTons { get; set; }
 
@@ -149,6 +181,8 @@ namespace LSOL.UI
 
         public float UtilizationPercent { get; set; }
 
+        public WarehouseStorageRiskSnapshot WarehouseRisk { get; set; }
+
         public string OverviewDetail { get; set; }
 
         public string ProductionWarning { get; set; }
@@ -158,6 +192,8 @@ namespace LSOL.UI
         public string ModuleSummary { get; set; }
 
         public bool HasServiceBusinessInfo { get; set; }
+
+        public bool HasServiceContractInfo { get; set; }
 
         public bool ServiceStaffAssigned { get; set; }
 
@@ -182,6 +218,18 @@ namespace LSOL.UI
         public string ServiceRecentPayoutStatus { get; set; }
 
         public string ServiceContractStatus { get; set; }
+
+        public int ServiceCurrentWeekDeliveries { get; set; }
+
+        public float ServiceCurrentWeekTons { get; set; }
+
+        public float ServiceRequiredWeeklyTons { get; set; }
+
+        public int ServicePenaltySteps { get; set; }
+
+        public int ServiceSuccessStreak { get; set; }
+
+        public bool ServiceTargetMetLastWeek { get; set; }
     }
 
     internal sealed class IndustryLoadOptionsSnapshot
@@ -352,6 +400,8 @@ namespace LSOL.UI
             CompanyFinanceCategory.TerritoryOperations,
             CompanyFinanceCategory.CorporateOverhead,
             CompanyFinanceCategory.FleetMaintenance,
+            CompanyFinanceCategory.WarehouseSpoilage,
+            CompanyFinanceCategory.WarehouseShrinkage,
             CompanyFinanceCategory.InventoryLoss,
             CompanyFinanceCategory.FuelPurchase,
             CompanyFinanceCategory.RepairCost,
@@ -405,6 +455,11 @@ namespace LSOL.UI
         private string _selectedTrendCommodity;
         private string _selectedUtilizationIndustryId;
         private string _selectedStorageIndustryId;
+        private RoutePlannerSortMode _routePlannerSortMode;
+        private RoutePlannerAvailabilityFilterMode _routePlannerAvailabilityFilterMode;
+        private string _routePlannerCommodityFilter;
+        private string _routePlannerDistrictFilter;
+        private string _selectedRoutePlannerCandidateId;
 
         private int _lastRefreshMs;
         private bool _hasSnapshot;
@@ -481,6 +536,11 @@ namespace LSOL.UI
             _selectedTrendCommodity = string.Empty;
             _selectedUtilizationIndustryId = string.Empty;
             _selectedStorageIndustryId = string.Empty;
+            _routePlannerSortMode = RoutePlannerSortMode.Optimizer;
+            _routePlannerAvailabilityFilterMode = RoutePlannerAvailabilityFilterMode.All;
+            _routePlannerCommodityFilter = string.Empty;
+            _routePlannerDistrictFilter = string.Empty;
+            _selectedRoutePlannerCandidateId = string.Empty;
             Snapshot = new TabletStateSnapshot();
             MarkAllDirty();
         }
@@ -653,6 +713,31 @@ namespace LSOL.UI
             get { return EnsureSelectedStorageIndustryId(); }
         }
 
+        public RoutePlannerSortMode SelectedRoutePlannerSortMode
+        {
+            get { return _routePlannerSortMode; }
+        }
+
+        public RoutePlannerAvailabilityFilterMode SelectedRoutePlannerAvailabilityFilterMode
+        {
+            get { return _routePlannerAvailabilityFilterMode; }
+        }
+
+        public string SelectedRoutePlannerCommodityFilter
+        {
+            get { return EnsureRoutePlannerCommodityFilter(); }
+        }
+
+        public string SelectedRoutePlannerDistrictFilter
+        {
+            get { return EnsureRoutePlannerDistrictFilter(); }
+        }
+
+        public string SelectedRoutePlannerCandidateId
+        {
+            get { return EnsureSelectedRoutePlannerCandidateId(); }
+        }
+
         public void CycleGraphTimeframe(int delta)
         {
             _selectedGraphTimeframe = TabletGraphTimeframeCatalog.Cycle(_selectedGraphTimeframe, delta == 0 ? 1 : delta);
@@ -765,6 +850,90 @@ namespace LSOL.UI
             }
 
             _selectedStorageIndustryId = industries[nextIndex].Id;
+            MarkViewDirty();
+        }
+
+        public void CycleRoutePlannerSortMode(int delta)
+        {
+            var values = Enum.GetValues(typeof(RoutePlannerSortMode)).Cast<RoutePlannerSortMode>().ToArray();
+            var currentIndex = Array.IndexOf(values, _routePlannerSortMode);
+            if (currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = currentIndex + direction;
+            while (nextIndex < 0)
+            {
+                nextIndex += values.Length;
+            }
+
+            while (nextIndex >= values.Length)
+            {
+                nextIndex -= values.Length;
+            }
+
+            _routePlannerSortMode = values[nextIndex];
+            MarkViewDirty();
+        }
+
+        public void CycleRoutePlannerAvailabilityFilter(int delta)
+        {
+            var values = Enum.GetValues(typeof(RoutePlannerAvailabilityFilterMode)).Cast<RoutePlannerAvailabilityFilterMode>().ToArray();
+            var currentIndex = Array.IndexOf(values, _routePlannerAvailabilityFilterMode);
+            if (currentIndex < 0)
+            {
+                currentIndex = 0;
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = currentIndex + direction;
+            while (nextIndex < 0)
+            {
+                nextIndex += values.Length;
+            }
+
+            while (nextIndex >= values.Length)
+            {
+                nextIndex -= values.Length;
+            }
+
+            _routePlannerAvailabilityFilterMode = values[nextIndex];
+            MarkViewDirty();
+        }
+
+        public void CycleRoutePlannerCommodityFilter(int delta)
+        {
+            var options = GetRoutePlannerCommodityOptions();
+            if (options.Count == 0)
+            {
+                _routePlannerCommodityFilter = string.Empty;
+                MarkViewDirty();
+                return;
+            }
+
+            _routePlannerCommodityFilter = CycleStringSelection(options, EnsureRoutePlannerCommodityFilter(), delta, CommodityCatalog.Normalize);
+            MarkViewDirty();
+        }
+
+        public void CycleRoutePlannerDistrictFilter(int delta)
+        {
+            var options = GetRoutePlannerDistrictOptions();
+            if (options.Count == 0)
+            {
+                _routePlannerDistrictFilter = string.Empty;
+                MarkViewDirty();
+                return;
+            }
+
+            _routePlannerDistrictFilter = CycleStringSelection(options, EnsureRoutePlannerDistrictFilter(), delta, value => (value ?? string.Empty).Trim());
+            MarkViewDirty();
+        }
+
+        public void SetSelectedRoutePlannerCandidate(string candidateId)
+        {
+            _selectedRoutePlannerCandidateId = string.IsNullOrWhiteSpace(candidateId) ? string.Empty : candidateId.Trim();
             MarkViewDirty();
         }
 
@@ -915,37 +1084,158 @@ namespace LSOL.UI
                     CompetitivePressurePercent = Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),
                     CompetitiveOpportunityPercent = Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)),
                     ActiveCompetitionJobs = Math.Max(0, district.ActiveCompetitionJobs),
+                    ActiveCarrierCount = Math.Max(0, district.ActiveCarrierCount),
+                    DominantCarrierName = district.DominantCarrierName ?? string.Empty,
                     VisibleCompetitionCount = Math.Max(0, district.VisibleCompetitionCount),
                     CompetitiveWinCount = Math.Max(0, district.CompetitiveWinCount),
+                    ContestedCorridorCount = Math.Max(0, district.ContestedCorridorCount),
+                    CorridorHoldCount = Math.Max(0, district.CorridorHoldCount),
+                    HottestCorridorName = district.HottestCorridorName ?? string.Empty,
+                    HottestCorridorPressurePercent = Math.Max(0f, Math.Min(100f, district.HottestCorridorPressure * 100f)),
                     CompetitionStatus = district.CompetitionStatus ?? string.Empty,
+                    DistrictEventHeadline = district.ActiveEvent != null ? district.ActiveEvent.Headline ?? string.Empty : string.Empty,
+                    DistrictEventCommodity = district.ActiveEvent != null ? district.ActiveEvent.PreferredCommodity ?? string.Empty : string.Empty,
+                    DistrictEventStatus = district.ActiveEvent != null ? district.ActiveEvent.StatusText ?? string.Empty : string.Empty,
+                    DistrictEventImpact = district.ActiveEvent != null ? district.ActiveEvent.ImpactSummary ?? string.Empty : string.Empty,
+                    DistrictEventSeverityPercent = district.ActiveEvent != null ? Math.Max(0f, Math.Min(100f, district.ActiveEvent.Severity * 100f)) : 0f,
+                    DistrictEventSeverityLabel = district.ActiveEvent != null ? district.ActiveEvent.SeverityLabel ?? string.Empty : string.Empty,
                 })
                 .ToArray();
         }
 
         public IReadOnlyList<TabletNpcRoutePerformance> GetNpcRoutePerformance()
         {
-            if (_npcLogisticsManager == null || _npcLogisticsManager.Contracts == null)
+            var contracts = GetNpcRouteContracts();
+            if (contracts.Count == 0)
             {
                 return Array.Empty<TabletNpcRoutePerformance>();
             }
 
-            return _npcLogisticsManager.Contracts
-                .Where(contract => contract != null)
+            var familyLookup = BuildNpcRouteFamilySummaryLookup(contracts);
+
+            return contracts
                 .OrderByDescending(contract => contract.TotalDeliveredTons)
                 .ThenByDescending(contract => contract.TotalProfitEarned)
-                .Select(contract => new TabletNpcRoutePerformance
+                .Select(contract =>
                 {
-                    Contract = contract,
-                    Label = BuildRoutePerformanceLabel(contract),
-                    Detail = contract.StatusText ?? string.Empty,
-                    DeliveredTons = Math.Max(0f, contract.TotalDeliveredTons),
-                    LossRatioPercent = Math.Max(0f, contract.LastJourneyLossRatio * 100f),
-                    AveragePayout = contract.CompletedDeliveries > 0
-                        ? Math.Max(0f, contract.TotalProfitEarned / contract.CompletedDeliveries)
-                        : 0f,
-                    CompletedDeliveries = Math.Max(0, contract.CompletedDeliveries),
+                    var familySummary = ResolveNpcRouteFamilySummary(contract, familyLookup);
+                    return new TabletNpcRoutePerformance
+                    {
+                        Contract = contract,
+                        ContractId = contract.Id,
+                        Label = BuildRoutePerformanceLabel(contract),
+                        Detail = contract.StatusText ?? string.Empty,
+                        FamilyLabel = familySummary.Label,
+                        FamilyContractCount = Math.Max(1, familySummary.ContractCount),
+                        RouteCount = Math.Max(1, familySummary.RouteCount),
+                        DeliveredTons = Math.Max(0f, contract.TotalDeliveredTons),
+                        LossRatioPercent = Math.Max(0f, contract.LastJourneyLossRatio * 100f),
+                        AveragePayout = contract.CompletedDeliveries > 0
+                            ? Math.Max(0f, contract.TotalProfitEarned / contract.CompletedDeliveries)
+                            : 0f,
+                        CompletedDeliveries = Math.Max(0, contract.CompletedDeliveries),
+                    };
                 })
                 .ToArray();
+        }
+
+        public TabletNpcRouteDrilldown GetNpcRouteDrilldown(int contractId)
+        {
+            if (contractId <= 0)
+            {
+                return null;
+            }
+
+            var contracts = GetNpcRouteContracts();
+            if (contracts.Count == 0)
+            {
+                return null;
+            }
+
+            var contract = contracts.FirstOrDefault(entry => entry != null && entry.Id == contractId);
+            if (contract == null)
+            {
+                return null;
+            }
+
+            var routeLegs = BuildNpcRouteLegSummaries(contract);
+            var familyLookup = BuildNpcRouteFamilySummaryLookup(contracts);
+            var revenue = Math.Max(0f, contract.TotalProfitEarned);
+            var operatingCost = Math.Max(0f, contract.ContractCost) + Math.Max(0f, contract.TotalWeeklyWagesPaid);
+
+            return new TabletNpcRouteDrilldown
+            {
+                ContractId = contract.Id,
+                Label = BuildRoutePerformanceLabel(contract),
+                TierLabel = contract.Tier != null ? contract.Tier.DisplayName : "Route",
+                StatusText = contract.StatusText ?? string.Empty,
+                AssignedVehicleDisplayName = ResolveNpcRouteAssignedVehicleDisplayName(contract, routeLegs),
+                RouteCount = routeLegs.Count,
+                CurrentRouteIndex = GetNpcRouteCurrentRouteIndex(contract, routeLegs.Count),
+                Revenue = revenue,
+                OperatingCost = operatingCost,
+                NetProfit = revenue - operatingCost,
+                CompletedDeliveries = Math.Max(0, contract.CompletedDeliveries),
+                DeliveredTons = Math.Max(0f, contract.TotalDeliveredTons),
+                AveragePayout = contract.CompletedDeliveries > 0
+                    ? Math.Max(0f, contract.TotalProfitEarned / contract.CompletedDeliveries)
+                    : 0f,
+                LossRatioPercent = Math.Max(0f, contract.LastJourneyLossRatio * 100f),
+                RouteFamily = ResolveNpcRouteFamilySummary(contract, familyLookup),
+                RouteLegs = routeLegs,
+                RecentFinanceEntries = BuildNpcRouteFinanceEntries(contract.Id, GetCurrentFinanceMinute()),
+            };
+        }
+
+        public IReadOnlyList<TabletRoutePlannerCandidate> GetRoutePlannerCandidates()
+        {
+            var filtered = ApplyRoutePlannerFiltersAndSort(BuildRoutePlannerCandidatesInternal());
+            EnsureSelectedRoutePlannerCandidateId(filtered);
+            return filtered;
+        }
+
+        public TabletRoutePlannerCandidate GetSelectedRoutePlannerCandidate()
+        {
+            var candidates = GetRoutePlannerCandidates();
+            var selectedId = EnsureSelectedRoutePlannerCandidateId(candidates);
+            return candidates.FirstOrDefault(candidate => string.Equals(candidate.CandidateId, selectedId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public TabletRoutePlannerCandidate GetRoutePlannerCandidate(string candidateId)
+        {
+            candidateId = string.IsNullOrWhiteSpace(candidateId) ? string.Empty : candidateId.Trim();
+            if (string.IsNullOrWhiteSpace(candidateId))
+            {
+                return GetSelectedRoutePlannerCandidate();
+            }
+
+            return BuildRoutePlannerCandidatesInternal()
+                .FirstOrDefault(candidate => candidate != null && string.Equals(candidate.CandidateId, candidateId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public RoutePlannerOverlaySnapshot GetRoutePlannerOverlaySnapshot()
+        {
+            var candidates = GetRoutePlannerCandidates();
+            var selected = GetSelectedRoutePlannerCandidate();
+            var lanes = new List<RoutePlannerOverlayLane>();
+
+            AddPlannerOverlayCandidates(lanes, candidates.Where(candidate => candidate.HasActiveNpcRoute), RoutePlannerOverlayLaneKind.ActiveNpc, 3);
+            AddPlannerOverlayCandidates(lanes, candidates.Where(candidate => candidate.IsUnderperformingActiveLane), RoutePlannerOverlayLaneKind.Underperforming, 3);
+            AddPlannerOverlayCandidates(lanes, candidates.Where(candidate => candidate.AvailabilityState == RoutePlannerAvailabilityState.Available && !candidate.HasActiveNpcRoute), RoutePlannerOverlayLaneKind.Recommended, 3);
+            AddPlannerOverlayCandidates(lanes, candidates.Where(candidate => candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked), RoutePlannerOverlayLaneKind.Blocked, 3);
+
+            if (selected != null)
+            {
+                AddPlannerOverlayCandidate(lanes, selected, RoutePlannerOverlayLaneKind.Selected, true);
+            }
+
+            return new RoutePlannerOverlaySnapshot
+            {
+                SelectedCandidateId = selected != null ? selected.CandidateId : string.Empty,
+                SelectedDistrictA = selected != null && selected.OriginIndustry != null ? selected.OriginIndustry.DistrictName ?? string.Empty : string.Empty,
+                SelectedDistrictB = selected != null && selected.DestinationIndustry != null ? selected.DestinationIndustry.DistrictName ?? string.Empty : string.Empty,
+                Lanes = lanes,
+            };
         }
 
         public TabletBudgetOverview GetBudgetOverview()
@@ -959,6 +1249,9 @@ namespace LSOL.UI
                 ? _financeTracker.GetTotalAmount(currentMinute, InGameMinutesPerWeek, CompanyFinanceFlow.Expense)
                 : 0f;
             var upcomingBills = GetUpcomingBillsInternal(currentMinute);
+            var fleetResale = _propertyManager != null
+                ? BuildFleetResaleSummary(_propertyManager.GetFleetSaleSummary())
+                : new TabletFleetResaleSummary();
             return new TabletBudgetOverview
             {
                 CurrentBalance = currentBalance,
@@ -968,6 +1261,7 @@ namespace LSOL.UI
                 WeeklyExpenses = weeklyExpenses,
                 UpcomingBills = upcomingBills.Sum(entry => entry.Amount),
                 Forecast = BuildWeeklyForecast(currentMinute, currentBalance, upcomingBills),
+                FleetResale = fleetResale,
             };
         }
 
@@ -986,6 +1280,123 @@ namespace LSOL.UI
             return GetUpcomingBillsInternal(GetCurrentFinanceMinute());
         }
 
+        public TabletPropertyPortfolioSummary GetPropertyPortfolioSummary()
+        {
+            var summary = new TabletPropertyPortfolioSummary();
+            if (_propertyManager == null)
+            {
+                return summary;
+            }
+
+            var currentMinute = GetCurrentFinanceMinute();
+            var propertyBills = GetPropertyBillEntries(currentMinute);
+            var officeBillLookup = propertyBills
+                .Where(entry => entry != null && entry.Category == CompanyFinanceCategory.OfficeRent && !string.IsNullOrWhiteSpace(entry.PropertyId))
+                .GroupBy(entry => entry.PropertyId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.OrderBy(entry => entry.DueInMinutes).First(), StringComparer.OrdinalIgnoreCase);
+            var apartmentBillLookup = propertyBills
+                .Where(entry => entry != null && entry.Category == CompanyFinanceCategory.ApartmentRent && !string.IsNullOrWhiteSpace(entry.PropertyId))
+                .GroupBy(entry => entry.PropertyId, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.OrderBy(entry => entry.DueInMinutes).First(), StringComparer.OrdinalIgnoreCase);
+            var activeGarageVehicleCount = _propertyManager.GetActiveCommercialGarageVehicles().Count();
+            var reserveVehicleCount = _propertyManager.GetReserveCommercialVehicles().Count();
+
+            var offices = (_propertyManager.Offices ?? Array.Empty<OfficeDefinition>())
+                .Where(entry => entry != null)
+                .Select(office =>
+                {
+                    var state = _propertyManager.GetOfficeState(office.OfficeId);
+                    var hasAccess = state != null && (state.IsOwned || state.IsRented);
+                    var bill = GetPropertyBill(officeBillLookup, office.OfficeId);
+                    var isActive = string.Equals(_propertyManager.ActiveOfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase);
+                    return new TabletPropertyOfficeEntry
+                    {
+                        OfficeId = office.OfficeId ?? string.Empty,
+                        DisplayName = office.DisplayName,
+                        DistrictName = office.DistrictName ?? string.Empty,
+                        StatusLabel = BuildOfficePortfolioStatusLabel(state),
+                        IsOwned = state != null && state.IsOwned,
+                        IsRented = state != null && state.IsRented,
+                        IsAccessSuspended = state != null && state.IsAccessSuspended,
+                        IsActive = isActive,
+                        HasArrears = state != null && state.OutstandingRent > 0.01f,
+                        ArrearsAmount = state != null ? Math.Max(0f, state.OutstandingRent) : 0f,
+                        WeeklyRent = Math.Max(0f, office.WeeklyOfficeRent),
+                        PurchasePrice = Math.Max(0f, office.OfficePrice),
+                        DueInMinutes = bill != null ? Math.Max(0, bill.DueInMinutes) : (hasAccess && Math.Max(0f, office.WeeklyOfficeRent) > 0.01f ? InGameMinutesPerWeek : int.MaxValue),
+                        BillDetail = BuildOfficePortfolioBillDetail(office, state, bill),
+                        ActiveGarageVehicleCount = isActive ? activeGarageVehicleCount : 0,
+                        ReserveVehicleCount = isActive ? reserveVehicleCount : 0,
+                        AssignmentSummary = BuildOfficeAssignmentSummary(office, state, isActive, activeGarageVehicleCount, reserveVehicleCount),
+                    };
+                })
+                .OrderByDescending(entry => entry.IsActive)
+                .ThenByDescending(entry => entry.HasArrears)
+                .ThenByDescending(entry => entry.IsOwned)
+                .ThenByDescending(entry => entry.IsRented)
+                .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var apartments = (_propertyManager.Interiors ?? Array.Empty<InteriorDefinition>())
+                .Where(entry => entry != null)
+                .Select(apartment =>
+                {
+                    var state = _propertyManager.GetApartmentState(apartment.InteriorId);
+                    var hasAccess = state != null && (state.IsOwned || state.IsRented);
+                    var bill = GetPropertyBill(apartmentBillLookup, apartment.InteriorId);
+                    return new TabletPropertyApartmentEntry
+                    {
+                        InteriorId = apartment.InteriorId ?? string.Empty,
+                        DisplayName = apartment.DisplayName,
+                        InteriorType = apartment.InteriorType ?? string.Empty,
+                        InteriorIgName = apartment.InteriorIgName ?? string.Empty,
+                        StatusLabel = BuildApartmentPortfolioStatusLabel(state),
+                        IsOwned = state != null && state.IsOwned,
+                        IsRented = state != null && state.IsRented,
+                        IsAccessSuspended = state != null && state.IsAccessSuspended,
+                        IsActive = string.Equals(_propertyManager.ActiveApartmentId, apartment.InteriorId, StringComparison.OrdinalIgnoreCase),
+                        HasArrears = state != null && state.OutstandingRent > 0.01f,
+                        ArrearsAmount = state != null ? Math.Max(0f, state.OutstandingRent) : 0f,
+                        WeeklyRent = Math.Max(0f, apartment.InteriorWeeklyRent),
+                        PurchasePrice = Math.Max(0f, apartment.InteriorPrice),
+                        DueInMinutes = bill != null ? Math.Max(0, bill.DueInMinutes) : (hasAccess && !IsOwnedApartment(state) && Math.Max(0f, apartment.InteriorWeeklyRent) > 0.01f ? InGameMinutesPerWeek : int.MaxValue),
+                        BillDetail = BuildApartmentPortfolioBillDetail(apartment, state, bill),
+                    };
+                })
+                .OrderByDescending(entry => entry.IsActive)
+                .ThenByDescending(entry => entry.HasArrears)
+                .ThenByDescending(entry => entry.IsOwned)
+                .ThenByDescending(entry => entry.IsRented)
+                .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            var motels = (_propertyManager.Motels ?? Array.Empty<MotelDefinition>())
+                .Where(entry => entry != null)
+                .Select(motel => new TabletPropertyMotelEntry
+                {
+                    MotelId = motel.MotelId ?? string.Empty,
+                    DisplayName = motel.DisplayName,
+                    MotelType = motel.MotelType ?? string.Empty,
+                    MotelIgName = motel.MotelIgName ?? string.Empty,
+                    NightlyRestPrice = Math.Max(0f, motel.RestPrice),
+                })
+                .OrderBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            summary.Offices = offices;
+            summary.Apartments = apartments;
+            summary.Motels = motels;
+            summary.OwnedOfficeCount = offices.Count(entry => entry.IsOwned);
+            summary.RentedOfficeCount = offices.Count(entry => entry.IsRented && !entry.IsOwned);
+            summary.OwnedApartmentCount = apartments.Count(entry => entry.IsOwned);
+            summary.RentedApartmentCount = apartments.Count(entry => entry.IsRented && !entry.IsOwned);
+            summary.TotalArrears = offices.Sum(entry => entry.ArrearsAmount) + apartments.Sum(entry => entry.ArrearsAmount);
+            summary.UpcomingWeeklyRent = propertyBills
+                .Where(entry => entry != null && entry.DueInMinutes > 0)
+                .Sum(entry => entry.Amount);
+            return summary;
+        }
+
         public TabletBudgetForecast GetWeeklyForecast()
         {
             var currentMinute = GetCurrentFinanceMinute();
@@ -993,26 +1404,113 @@ namespace LSOL.UI
             return BuildWeeklyForecast(currentMinute, currentBalance, GetUpcomingBillsInternal(currentMinute));
         }
 
+        public TabletFleetAlertSummary GetFleetAlertSummary(TabletStateSnapshot snapshot)
+        {
+            snapshot = snapshot ?? Snapshot ?? new TabletStateSnapshot();
+
+            var summary = new TabletFleetAlertSummary();
+            var activeVehicle = ResolveActiveCommercialVehicleRecord();
+            if (activeVehicle != null)
+            {
+                var activeDefinition = !string.IsNullOrWhiteSpace(activeVehicle.PoweredModelName)
+                    ? _fleetManager.FindDefinitionByModelName(activeVehicle.PoweredModelName)
+                    : null;
+                var fuelCapacityLiters = snapshot.FuelCapacityLiters > 0.001f
+                    ? Math.Max(0f, snapshot.FuelCapacityLiters)
+                    : (activeDefinition != null ? Math.Max(0f, activeDefinition.FuelCapacityLiters) : 0f);
+                var fuelCurrentLiters = Math.Max(0f, snapshot.FuelCurrentLiters);
+
+                summary.HasActiveCompanyVehicle = true;
+                summary.ActiveVehicleName = ResolveCommercialVehicleLabel(activeVehicle, snapshot.PoweredVehicleName);
+                summary.FuelCurrentLiters = fuelCurrentLiters;
+                summary.FuelCapacityLiters = fuelCapacityLiters;
+                summary.FuelRatio = fuelCapacityLiters > 0.001f
+                    ? ModMath.Clamp01(fuelCurrentLiters / fuelCapacityLiters)
+                    : ModMath.Clamp01(snapshot.FuelRatio);
+                summary.FuelIsEmpty = snapshot.FuelIsEmpty || (fuelCapacityLiters > 0.001f && fuelCurrentLiters <= 0.001f);
+            }
+
+            if (_propertyManager == null || _propertyManager.CommercialVehicles == null)
+            {
+                return summary;
+            }
+
+            var currentMinute = GetCurrentFinanceMinute();
+            var currentWeekIndex = GetWeekIndex(currentMinute);
+            var maintenancePreview = _propertyManager.GetFleetMaintenancePreview(currentMinute);
+            var ownedVehicleCount = 0;
+            var overdueInspectionCount = 0;
+
+            for (int i = 0; i < _propertyManager.CommercialVehicles.Count; i++)
+            {
+                var vehicle = _propertyManager.CommercialVehicles[i];
+                if (vehicle == null || vehicle.IsRental)
+                {
+                    continue;
+                }
+
+                ownedVehicleCount += 1;
+
+                var overdueWeeks = GetFleetInspectionOverdueWeeks(vehicle, currentWeekIndex);
+                if (overdueWeeks > 0)
+                {
+                    overdueInspectionCount += 1;
+                    if (overdueWeeks > summary.WorstInspectionOverdueWeeks)
+                    {
+                        summary.WorstInspectionOverdueWeeks = overdueWeeks;
+                        summary.WorstOverdueVehicleName = ResolveCommercialVehicleLabel(vehicle);
+                    }
+                }
+
+                var conditionRatio = NormalizeFleetMaintenanceCondition(vehicle.MaintenanceCondition);
+                if (conditionRatio < 0.75f)
+                {
+                    var conditionPercent = conditionRatio * 100f;
+                    summary.PoorConditionCount += 1;
+                    if (summary.LowestConditionPercent <= 0.001f || conditionPercent < summary.LowestConditionPercent)
+                    {
+                        summary.LowestConditionPercent = conditionPercent;
+                        summary.WorstConditionVehicleName = ResolveCommercialVehicleLabel(vehicle);
+                    }
+                }
+            }
+
+            summary.FleetVehicleCount = maintenancePreview != null
+                ? Math.Max(ownedVehicleCount, Math.Max(0, maintenancePreview.VehicleCount))
+                : ownedVehicleCount;
+            summary.OverdueInspectionCount = maintenancePreview != null
+                ? Math.Max(overdueInspectionCount, Math.Max(0, maintenancePreview.OverdueInspectionCount))
+                : overdueInspectionCount;
+            return summary;
+        }
+
         public IReadOnlyList<TabletBudgetRouteEntry> GetBudgetRouteProfitability()
         {
-            if (_npcLogisticsManager == null || _npcLogisticsManager.Contracts == null)
+            var contracts = GetNpcRouteContracts();
+            if (contracts.Count == 0)
             {
                 return Array.Empty<TabletBudgetRouteEntry>();
             }
 
-            return _npcLogisticsManager.Contracts
-                .Where(contract => contract != null)
+            var familyLookup = BuildNpcRouteFamilySummaryLookup(contracts);
+
+            return contracts
                 .Select(contract =>
                 {
                     var revenue = Math.Max(0f, contract.TotalProfitEarned);
                     var operatingCost = Math.Max(0f, contract.ContractCost) + Math.Max(0f, contract.TotalWeeklyWagesPaid);
+                    var familySummary = ResolveNpcRouteFamilySummary(contract, familyLookup);
                     return new TabletBudgetRouteEntry
                     {
+                        ContractId = contract.Id,
                         Label = BuildRoutePerformanceLabel(contract),
                         Detail = string.Format(
                             "{0} | {1}",
                             contract.Tier != null ? contract.Tier.DisplayName : "Route",
                             contract.StatusText ?? string.Empty).Trim(),
+                        FamilyLabel = familySummary.Label,
+                        FamilyContractCount = Math.Max(1, familySummary.ContractCount),
+                        RouteCount = Math.Max(1, familySummary.RouteCount),
                         Revenue = revenue,
                         OperatingCost = operatingCost,
                         NetProfit = revenue - operatingCost,
@@ -1030,6 +1528,9 @@ namespace LSOL.UI
             var locationValues = new List<TabletInventoryValueEntry>();
             var commodityValues = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
             float totalValue = 0f;
+            var fleetResale = _propertyManager != null
+                ? BuildFleetResaleSummary(_propertyManager.GetFleetSaleSummary())
+                : new TabletFleetResaleSummary();
 
             if (_industryManager != null && _industryManager.Industries != null)
             {
@@ -1037,6 +1538,17 @@ namespace LSOL.UI
                 {
                     float locationValue = 0f;
                     float totalTons = 0f;
+                    var warehouseRisk = industry.IsWarehouse
+                        ? _industryManager.GetWarehouseStorageRiskSnapshot(industry)
+                        : null;
+                    var storageMultiplier = 1f;
+                    if (industry.IsWarehouse)
+                    {
+                        storageMultiplier = warehouseRisk != null && warehouseRisk.InventoryValue > 0.01f
+                            ? Math.Max(0f, Math.Min(1f, warehouseRisk.AdjustedInventoryValue / warehouseRisk.InventoryValue))
+                            : Math.Max(0.55f, Math.Min(1f, industry.StorageCondition));
+                    }
+
                     foreach (var commodity in industry.BufferStorage.Keys.OrderBy(key => key, StringComparer.OrdinalIgnoreCase))
                     {
                         var tons = Math.Max(0f, industry.GetStock(commodity));
@@ -1045,7 +1557,6 @@ namespace LSOL.UI
                             continue;
                         }
 
-                        var storageMultiplier = industry.IsWarehouse ? Math.Max(0.55f, Math.Min(1f, industry.StorageCondition)) : 1f;
                         var value = tons * _globalMarket.GetUnitPrice(commodity) * storageMultiplier;
                         locationValue += value;
                         totalTons += tons;
@@ -1143,6 +1654,7 @@ namespace LSOL.UI
                         Value = pair.Value,
                     })
                     .ToArray(),
+                FleetResale = fleetResale,
             };
         }
 
@@ -1196,6 +1708,61 @@ namespace LSOL.UI
             }
 
             _playerContractsManager.CycleCommodityFilter(delta);
+            MarkViewDirty();
+        }
+
+        public void CyclePlayerContractDistrictFilter(int delta)
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.CycleDistrictFilter(delta);
+            MarkViewDirty();
+        }
+
+        public void CyclePlayerContractRigClassFilter(int delta)
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.CycleRigClassFilter(delta);
+            MarkViewDirty();
+        }
+
+        public void CyclePlayerContractExpiryFilter(int delta)
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.CycleExpiryFilter(delta);
+            MarkViewDirty();
+        }
+
+        public void CyclePlayerContractPayoutDensityFilter(int delta)
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.CyclePayoutDensityFilter(delta);
+            MarkViewDirty();
+        }
+
+        public void CyclePlayerContractSortMode(int delta)
+        {
+            if (_playerContractsManager == null)
+            {
+                return;
+            }
+
+            _playerContractsManager.CycleSortMode(delta);
             MarkViewDirty();
         }
 
@@ -1437,6 +2004,9 @@ namespace LSOL.UI
                 var requiresPermitForGameplay = _industryManager.RequiresContractorPermit(industry);
                 var hasPermitForGameplay = _industryManager.HasContractorPermitForGameplay(industry);
                 var isOwnedByPlayer = industry.IsOwned;
+                var warehouseRisk = industry.SiteRole == SiteRole.Warehouse
+                    ? _industryManager.GetWarehouseStorageRiskSnapshot(industry)
+                    : null;
 
                 var summary = new TabletLocationSummary
                 {
@@ -1460,51 +2030,153 @@ namespace LSOL.UI
                     OmegaCapacityTons = industry.OmegaCapacityTons,
                     OutputPerHourTons = industry.CurrentOutputPerHourTons,
                     UtilizationPercent = industry.LastUtilizationPercent,
+                    WarehouseRisk = warehouseRisk,
                     ProductionWarning = productionWarning,
-                    OverviewDetail = BuildOverviewDetail(locationKind, industry, storage, fillRatio, productionWarning),
+                    OverviewDetail = BuildOverviewDetail(locationKind, industry, storage, fillRatio, productionWarning, warehouseRisk),
                     PrimaryConversion = industry.GetPrimaryConversionDescription(),
-                    ModuleSummary = string.Format(
-                        "Prod Lv.{0} | In Lv.{1} | Out Lv.{2} | Omega Lv.{3}",
-                        industry.ProductionModuleLevel,
-                        industry.InputStorageModuleLevel,
-                        industry.OutputStorageModuleLevel,
-                        industry.OmegaStorageModuleLevel),
+                    ModuleSummary = industry.SiteRole == SiteRole.Warehouse
+                        ? string.Format(
+                            "Storage In Lv.{0} | Storage Out Lv.{1}",
+                            industry.InputStorageModuleLevel,
+                            industry.OutputStorageModuleLevel)
+                        : string.Format(
+                            "Prod Lv.{0} | In Lv.{1} | Out Lv.{2} | Omega Lv.{3}",
+                            industry.ProductionModuleLevel,
+                            industry.InputStorageModuleLevel,
+                            industry.OutputStorageModuleLevel,
+                            industry.OmegaStorageModuleLevel),
                 };
 
-                PopulateOwnedServiceSiteBusinessSummary(summary, industry, fillRatio);
+                PopulateServiceSiteBusinessSummary(summary, industry, fillRatio);
                 summaries.Add(summary);
             }
 
             return summaries;
         }
 
-        private void PopulateOwnedServiceSiteBusinessSummary(TabletLocationSummary summary, Industry industry, float fillRatio)
+        private void PopulateServiceSiteBusinessSummary(TabletLocationSummary summary, Industry industry, float fillRatio)
         {
-            if (summary == null
-                || industry == null
-                || _territoryManager == null
-                || !industry.IsOwned
-                || (!industry.IsStore && !industry.IsGasStation))
+            if (summary == null || industry == null)
             {
                 return;
             }
 
-            var siteState = _territoryManager.GetSiteState(industry);
+            var siteState = _territoryManager != null
+                ? _territoryManager.GetSiteState(industry)
+                : null;
+            PopulateServiceSiteContractSummary(summary, industry, siteState);
+
+            PopulateServiceSiteBusinessPreview(summary, industry, siteState);
+
+            if (!industry.IsOwned || !summary.HasServiceBusinessInfo)
+            {
+                return;
+            }
+
+            PopulateOwnedServiceSiteBusinessSummary(summary, industry, fillRatio);
+        }
+
+        private static void PopulateServiceSiteBusinessPreview(TabletLocationSummary summary, Industry industry, TerritorySiteState siteState)
+        {
+            if (!industry.IsStore && !industry.IsGasStation)
+            {
+                return;
+            }
+
+            var weeklyIncome = Math.Max(0f, industry.WeeklyPassiveIncome);
+            var staffingCost = Math.Max(0f, ServiceSiteEconomyPolicy.ComputeWeeklyStaffingCost(industry));
+            var hasPassiveIncomeInfo = weeklyIncome > 0.01f
+                || staffingCost > 0.01f
+                || (siteState != null && (siteState.LastPassiveIncomeAmount > 0.01f || !string.IsNullOrWhiteSpace(siteState.LastPassiveIncomeStatus)));
+            if (!hasPassiveIncomeInfo)
+            {
+                return;
+            }
+
             summary.HasServiceBusinessInfo = true;
-            summary.ServiceStaffAssigned = siteState != null && siteState.SiteOperatorAssigned;
-            summary.ServiceStockReady = _territoryManager.IsServiceSinkStockedForPassiveIncome(industry);
-            summary.ServiceOperational = _territoryManager.IsServiceSinkOperationalForPassiveIncome(industry);
-            summary.ServiceWeeklyIncome = Math.Max(0f, industry.WeeklyPassiveIncome);
-            summary.ServiceWeeklyStaffingCost = _territoryManager.GetServiceSiteWeeklyStaffingCost(industry);
-            summary.ServiceLastPassiveIncome = siteState != null ? Math.Max(0f, siteState.LastPassiveIncomeAmount) : 0f;
-            summary.ServiceStaffStatus = summary.ServiceStaffAssigned ? "Assigned" : "Missing";
-            summary.ServiceStockStatus = summary.ServiceStockReady ? "Ready" : "Low stock";
-            summary.ServiceOperationsStatus = summary.ServiceOperational ? "Operational" : "Inactive";
-            summary.ServicePassiveIncomeStatus = siteState != null && !string.IsNullOrWhiteSpace(siteState.PassiveIncomeStatus)
-                ? siteState.PassiveIncomeStatus
-                : (summary.ServiceOperational ? "Passive income active" : "Inactive");
-            summary.ServiceRecentPayoutStatus = BuildOwnedServiceSitePayoutStatus(siteState);
-            summary.ServiceContractStatus = siteState != null ? siteState.ServiceContractStatus ?? string.Empty : string.Empty;
+            summary.ServiceWeeklyIncome = weeklyIncome;
+            summary.ServiceWeeklyStaffingCost = staffingCost;
+            summary.ServiceStaffAssigned = industry.IsOwned && siteState != null && siteState.SiteOperatorAssigned;
+            summary.ServiceStockReady = siteState != null && siteState.PassiveIncomeStockReady;
+            summary.ServiceOperational = industry.IsOwned && siteState != null && siteState.PassiveIncomeOperational;
+            summary.ServiceLastPassiveIncome = industry.IsOwned && siteState != null ? Math.Max(0f, siteState.LastPassiveIncomeAmount) : 0f;
+            summary.ServiceStaffStatus = industry.IsOwned
+                ? (summary.ServiceStaffAssigned ? "Assigned" : "Missing")
+                : "Requires operator";
+            summary.ServiceStockStatus = industry.IsOwned
+                ? (summary.ServiceStockReady ? "Ready" : "Low stock")
+                : "Requires stock";
+            summary.ServiceOperationsStatus = industry.IsOwned
+                ? (summary.ServiceOperational ? "Operational" : "Inactive")
+                : "Potential only";
+            summary.ServicePassiveIncomeStatus = BuildServiceSitePassiveIncomeStatus(industry, siteState);
+            summary.ServiceRecentPayoutStatus = BuildServiceSitePayoutStatus(industry, siteState);
+        }
+
+        private static void PopulateServiceSiteContractSummary(TabletLocationSummary summary, Industry industry, TerritorySiteState siteState)
+        {
+            if (summary == null
+                || industry == null
+                || siteState == null
+                || (!industry.IsStore && !industry.IsGasStation && industry.SiteRole != SiteRole.ConstructionSiteSink))
+            {
+                return;
+            }
+
+            summary.HasServiceContractInfo = true;
+            summary.ServiceCurrentWeekDeliveries = Math.Max(0, siteState.CurrentWeekServiceDeliveries);
+            summary.ServiceCurrentWeekTons = Math.Max(0f, siteState.CurrentWeekServiceTons);
+            summary.ServiceRequiredWeeklyTons = Math.Max(0f, siteState.RequiredWeeklyServiceTons);
+            summary.ServicePenaltySteps = Math.Max(0, siteState.ServicePenaltySteps);
+            summary.ServiceSuccessStreak = Math.Max(0, siteState.ServiceSuccessStreak);
+            summary.ServiceTargetMetLastWeek = siteState.ServiceTargetMetLastWeek;
+            summary.ServiceContractStatus = siteState.ServiceContractStatus ?? string.Empty;
+        }
+
+        private static string BuildServiceSitePassiveIncomeStatus(Industry industry, TerritorySiteState siteState)
+        {
+            if (industry == null)
+            {
+                return string.Empty;
+            }
+
+            if (!industry.IsOwned)
+            {
+                return "Potential passive income locked until purchase";
+            }
+
+            if (siteState != null && !string.IsNullOrWhiteSpace(siteState.PassiveIncomeStatus))
+            {
+                return siteState.PassiveIncomeStatus;
+            }
+
+            return "Passive income pending";
+        }
+
+        private static string BuildServiceSitePayoutStatus(Industry industry, TerritorySiteState siteState)
+        {
+            if (industry == null || !industry.IsOwned)
+            {
+                return string.Empty;
+            }
+
+            if (siteState == null || siteState.LastPassiveIncomeWeekIndex < 0)
+            {
+                return "No completed weekly payout yet";
+            }
+
+            return !string.IsNullOrWhiteSpace(siteState.LastPassiveIncomeStatus)
+                ? siteState.LastPassiveIncomeStatus
+                : "No recent payout";
+        }
+
+        private static void PopulateOwnedServiceSiteBusinessSummary(TabletLocationSummary summary, Industry industry, float fillRatio)
+        {
+            if (summary == null || industry == null)
+            {
+                return;
+            }
+
             summary.OverviewDetail = BuildOwnedServiceSiteOverviewDetail(summary, industry, fillRatio);
         }
 
@@ -1537,17 +2209,6 @@ namespace LSOL.UI
             return string.Join(" | ", segments.Where(segment => !string.IsNullOrWhiteSpace(segment)).ToArray());
         }
 
-        private static string BuildOwnedServiceSitePayoutStatus(TerritorySiteState siteState)
-        {
-            if (siteState == null || siteState.LastPassiveIncomeWeekIndex < 0)
-            {
-                return "No completed weekly payout yet";
-            }
-
-            return !string.IsNullOrWhiteSpace(siteState.LastPassiveIncomeStatus)
-                ? siteState.LastPassiveIncomeStatus
-                : "No recent payout";
-        }
 
         private IReadOnlyList<TabletMarketHighlight> BuildMarketHighlights(Industry nearestIndustry, VehicleCargoState cargoState)
         {
@@ -1634,7 +2295,7 @@ namespace LSOL.UI
                 : fallbackReason;
         }
 
-        private static string BuildOverviewDetail(ExternalLocationKind locationKind, Industry industry, float storage, float fillRatio, string productionWarning)
+        private static string BuildOverviewDetail(ExternalLocationKind locationKind, Industry industry, float storage, float fillRatio, string productionWarning, WarehouseStorageRiskSnapshot warehouseRisk)
         {
             if (industry == null)
             {
@@ -1643,7 +2304,11 @@ namespace LSOL.UI
 
             if (industry.SiteRole == SiteRole.Warehouse)
             {
-                return string.Format("Storage {0:0.0}t | {1:0}% full | Condition {2:0}%", storage, fillRatio * 100f, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)));
+                var detail = string.Format("Storage {0:0.0}t | {1:0}% full | Condition {2:0}%", storage, fillRatio * 100f, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)));
+                var warehouseTelemetry = TabletUiHelpers.BuildWarehouseOverviewTelemetry(warehouseRisk);
+                return string.IsNullOrWhiteSpace(warehouseTelemetry)
+                    ? detail
+                    : string.Format("{0} | {1}", detail, warehouseTelemetry);
             }
 
             if (locationKind == ExternalLocationKind.Industry)
@@ -1671,14 +2336,579 @@ namespace LSOL.UI
 
         private static string BuildRoutePerformanceLabel(NpcLogisticsContract contract)
         {
-            if (contract == null)
+            return NpcRouteProfitabilityFormatter.BuildContractLabel(contract);
+        }
+
+        private IReadOnlyList<NpcLogisticsContract> GetNpcRouteContracts()
+        {
+            return _npcLogisticsManager != null && _npcLogisticsManager.Contracts != null
+                ? _npcLogisticsManager.Contracts.Where(contract => contract != null).ToArray()
+                : Array.Empty<NpcLogisticsContract>();
+        }
+
+        private List<TabletRoutePlannerCandidate> BuildRoutePlannerCandidatesInternal()
+        {
+            var candidates = new List<TabletRoutePlannerCandidate>();
+            if (_npcLogisticsManager == null || _industryManager == null || _globalMarket == null)
             {
-                return "NPC Route";
+                return candidates;
             }
 
-            var originName = contract.OriginIndustry != null ? contract.OriginIndustry.Name : "Origin";
-            var destinationName = contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "Destination";
-            return string.Format("{0} -> {1}", originName, destinationName);
+            var currentMinute = GetCurrentFinanceMinute();
+            var originCandidates = _npcLogisticsManager.GetRoutePlannerOriginCandidates();
+            var contracts = GetNpcRouteContracts();
+            var familyLookup = BuildNpcRouteFamilySummaryLookup(contracts);
+            var exactContractLookup = BuildRoutePlannerContractLookup(contracts);
+
+            for (int originIndex = 0; originCandidates != null && originIndex < originCandidates.Count; originIndex++)
+            {
+                var originIndustry = originCandidates[originIndex];
+                if (originIndustry == null)
+                {
+                    continue;
+                }
+
+                var destinations = _npcLogisticsManager.GetRoutePlannerDestinationCandidates(originIndustry);
+                for (int destinationIndex = 0; destinations != null && destinationIndex < destinations.Count; destinationIndex++)
+                {
+                    var destinationIndustry = destinations[destinationIndex];
+                    if (destinationIndustry == null || string.Equals(originIndustry.Id, destinationIndustry.Id, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var resources = _npcLogisticsManager.GetResourceOptions(originIndustry, destinationIndustry);
+                    if (resources == null || resources.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    var blockerSummary = _npcLogisticsManager.GetRoutePlannerLaneBlockReason(originIndustry, destinationIndustry);
+                    var availabilityState = string.IsNullOrWhiteSpace(blockerSummary)
+                        ? RoutePlannerAvailabilityState.Available
+                        : RoutePlannerAvailabilityState.Blocked;
+
+                    for (int resourceIndex = 0; resourceIndex < resources.Count; resourceIndex++)
+                    {
+                        var commodity = CommodityCatalog.Normalize(resources[resourceIndex]);
+                        if (string.IsNullOrWhiteSpace(commodity))
+                        {
+                            continue;
+                        }
+
+                        var candidateId = BuildRoutePlannerCandidateId(originIndustry, destinationIndustry, commodity);
+                        NpcLogisticsContract matchingContract;
+                        exactContractLookup.TryGetValue(candidateId, out matchingContract);
+
+                        var familyKey = BuildRoutePlannerFamilyKey(commodity);
+                        TabletNpcRouteFamilySummary familySummary;
+                        var hasFamilySummary = familyLookup.TryGetValue(familyKey, out familySummary) && familySummary != null;
+                        familySummary = hasFamilySummary ? familySummary : new TabletNpcRouteFamilySummary();
+
+                        var suggestedShipmentTons = GetSuggestedShipmentTons(originIndustry, destinationIndustry, commodity);
+                        var currentUnitPrice = Math.Max(0f, _globalMarket.GetUnitPrice(commodity));
+                        var projectedValue = currentUnitPrice * suggestedShipmentTons;
+                        var projectedPayout = _industryManager.ComputeDeliveryProfit(destinationIndustry, commodity, suggestedShipmentTons, _globalMarket, currentMinute);
+                        var realizedRevenue = matchingContract != null
+                            ? Math.Max(0f, matchingContract.TotalProfitEarned)
+                            : Math.Max(0f, familySummary.Revenue);
+                        var realizedOperatingCost = matchingContract != null
+                            ? Math.Max(0f, matchingContract.ContractCost) + Math.Max(0f, matchingContract.TotalWeeklyWagesPaid)
+                            : Math.Max(0f, familySummary.OperatingCost);
+                        var realizedAveragePayout = matchingContract != null
+                            ? (matchingContract.CompletedDeliveries > 0 ? Math.Max(0f, matchingContract.TotalProfitEarned / matchingContract.CompletedDeliveries) : 0f)
+                            : Math.Max(0f, familySummary.AveragePayout);
+                        var realizedLossRatioPercent = matchingContract != null
+                            ? Math.Max(0f, matchingContract.LastJourneyLossRatio * 100f)
+                            : Math.Max(0f, familySummary.AverageLossRatioPercent);
+                        var candidate = new TabletRoutePlannerCandidate
+                        {
+                            CandidateId = candidateId,
+                            OriginIndustry = originIndustry,
+                            DestinationIndustry = destinationIndustry,
+                            Commodity = commodity,
+                            DistrictPairLabel = BuildRoutePlannerDistrictPairLabel(originIndustry, destinationIndustry),
+                            CorridorId = BuildRoutePlannerCorridorId(originIndustry, destinationIndustry),
+                            AvailabilityState = availabilityState,
+                            AvailabilityLabel = availabilityState == RoutePlannerAvailabilityState.Available
+                                ? (matchingContract != null ? "Active NPC lane" : "Available")
+                                : "Blocked",
+                            BlockerSummary = blockerSummary ?? string.Empty,
+                            CurrentUnitPrice = currentUnitPrice,
+                            SuggestedShipmentTons = suggestedShipmentTons,
+                            ProjectedValue = projectedValue,
+                            ProjectedPayout = projectedPayout,
+                            RealizedRevenue = realizedRevenue,
+                            RealizedOperatingCost = realizedOperatingCost,
+                            RealizedNetProfit = realizedRevenue - realizedOperatingCost,
+                            RealizedAveragePayout = realizedAveragePayout,
+                            RealizedLossRatioPercent = realizedLossRatioPercent,
+                            MatchingContractId = matchingContract != null ? matchingContract.Id : 0,
+                            MatchingContractLabel = matchingContract != null ? BuildRoutePerformanceLabel(matchingContract) : string.Empty,
+                            RouteFamily = familySummary,
+                            HasActiveNpcRoute = matchingContract != null,
+                            HasRouteFamilyHistory = hasFamilySummary && (familySummary.ContractCount > 0 || familySummary.CompletedDeliveries > 0),
+                            CanDraftNpcRoute = availabilityState == RoutePlannerAvailabilityState.Available,
+                        };
+
+                        candidate.IsUnderperformingActiveLane = matchingContract != null
+                            && matchingContract.CompletedDeliveries > 0
+                            && (candidate.RealizedNetProfit < 0f || candidate.RealizedAveragePayout + 0.01f < candidate.ProjectedPayout * 0.80f);
+
+                        candidate.ScoreBreakdown = BuildRoutePlannerScoreBreakdown(candidate);
+                        candidate.OptimizerScore = candidate.ScoreBreakdown.TotalScore;
+                        candidates.Add(candidate);
+                    }
+                }
+            }
+
+            return candidates;
+        }
+
+        private IReadOnlyList<TabletRoutePlannerCandidate> ApplyRoutePlannerFiltersAndSort(IReadOnlyList<TabletRoutePlannerCandidate> candidates)
+        {
+            candidates = candidates ?? Array.Empty<TabletRoutePlannerCandidate>();
+            var commodityFilter = EnsureRoutePlannerCommodityFilter();
+            var districtFilter = EnsureRoutePlannerDistrictFilter();
+
+            IEnumerable<TabletRoutePlannerCandidate> query = candidates;
+            if (!string.IsNullOrWhiteSpace(commodityFilter))
+            {
+                query = query.Where(candidate => string.Equals(candidate.Commodity, commodityFilter, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(districtFilter))
+            {
+                query = query.Where(candidate => candidate != null && candidate.InvolvesDistrict(districtFilter));
+            }
+
+            switch (_routePlannerAvailabilityFilterMode)
+            {
+                case RoutePlannerAvailabilityFilterMode.Available:
+                    query = query.Where(candidate => candidate != null && candidate.AvailabilityState == RoutePlannerAvailabilityState.Available);
+                    break;
+                case RoutePlannerAvailabilityFilterMode.Blocked:
+                    query = query.Where(candidate => candidate != null && candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked);
+                    break;
+                case RoutePlannerAvailabilityFilterMode.ActiveNpc:
+                    query = query.Where(candidate => candidate != null && candidate.HasActiveNpcRoute);
+                    break;
+                case RoutePlannerAvailabilityFilterMode.Underperforming:
+                    query = query.Where(candidate => candidate != null && candidate.IsUnderperformingActiveLane);
+                    break;
+            }
+
+            switch (_routePlannerSortMode)
+            {
+                case RoutePlannerSortMode.ProjectedPayout:
+                    query = query.OrderByDescending(candidate => candidate.ProjectedPayout).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                case RoutePlannerSortMode.ProjectedValue:
+                    query = query.OrderByDescending(candidate => candidate.ProjectedValue).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                case RoutePlannerSortMode.RealizedNetProfit:
+                    query = query.OrderByDescending(candidate => candidate.RealizedNetProfit).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                case RoutePlannerSortMode.UnitPrice:
+                    query = query.OrderByDescending(candidate => candidate.CurrentUnitPrice).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                case RoutePlannerSortMode.Commodity:
+                    query = query.OrderBy(candidate => candidate.Commodity, StringComparer.OrdinalIgnoreCase).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                case RoutePlannerSortMode.District:
+                    query = query.OrderBy(candidate => candidate.DistrictPairLabel, StringComparer.OrdinalIgnoreCase).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                case RoutePlannerSortMode.Availability:
+                    query = query.OrderBy(candidate => candidate.AvailabilityState).ThenByDescending(candidate => candidate.OptimizerScore).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+                default:
+                    query = query.OrderByDescending(candidate => candidate.OptimizerScore).ThenByDescending(candidate => candidate.ProjectedPayout).ThenBy(candidate => candidate.CandidateId, StringComparer.OrdinalIgnoreCase);
+                    break;
+            }
+
+            return query.ToArray();
+        }
+
+        private static IDictionary<string, NpcLogisticsContract> BuildRoutePlannerContractLookup(IEnumerable<NpcLogisticsContract> contracts)
+        {
+            var lookup = new Dictionary<string, NpcLogisticsContract>(StringComparer.OrdinalIgnoreCase);
+            if (contracts == null)
+            {
+                return lookup;
+            }
+
+            foreach (var contract in contracts.Where(entry => entry != null))
+            {
+                foreach (var route in GetContractRoutesForPlanner(contract))
+                {
+                    var candidateId = BuildRoutePlannerCandidateId(route.OriginIndustry, route.DestinationIndustry, route.Commodity);
+                    if (string.IsNullOrWhiteSpace(candidateId) || lookup.ContainsKey(candidateId))
+                    {
+                        continue;
+                    }
+
+                    lookup[candidateId] = contract;
+                }
+            }
+
+            return lookup;
+        }
+
+        private static IReadOnlyList<NpcLogisticsRouteDefinition> GetContractRoutesForPlanner(NpcLogisticsContract contract)
+        {
+            if (contract == null)
+            {
+                return Array.Empty<NpcLogisticsRouteDefinition>();
+            }
+
+            if (contract.Routes != null && contract.Routes.Count > 0)
+            {
+                return contract.Routes.Where(route => route != null).ToArray();
+            }
+
+            if (contract.OriginIndustry == null || contract.DestinationIndustry == null)
+            {
+                return Array.Empty<NpcLogisticsRouteDefinition>();
+            }
+
+            return new[]
+            {
+                new NpcLogisticsRouteDefinition
+                {
+                    OriginIndustry = contract.OriginIndustry,
+                    DestinationIndustry = contract.DestinationIndustry,
+                    Commodity = contract.Commodity,
+                    AssignedVehicleAssetId = contract.AssignedVehicleAssetId,
+                    AssignedVehicleDisplayName = contract.AssignedVehicleDisplayName,
+                    OriginTriggerThresholdPercent = contract.OriginTriggerThresholdPercent,
+                    DestinationTriggerThresholdPercent = contract.DestinationTriggerThresholdPercent,
+                },
+            };
+        }
+
+        private static string BuildRoutePlannerCandidateId(Industry originIndustry, Industry destinationIndustry, string commodity)
+        {
+            if (originIndustry == null || destinationIndustry == null)
+            {
+                return string.Empty;
+            }
+
+            commodity = CommodityCatalog.Normalize(commodity);
+            return string.IsNullOrWhiteSpace(commodity)
+                ? string.Empty
+                : string.Format(
+                    "{0}|{1}|{2}",
+                    originIndustry.Id ?? string.Empty,
+                    destinationIndustry.Id ?? string.Empty,
+                    commodity);
+        }
+
+        private static string BuildRoutePlannerFamilyKey(string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            return string.IsNullOrWhiteSpace(commodity)
+                ? string.Empty
+                : string.Format("1|{0}", commodity);
+        }
+
+        private static string BuildRoutePlannerDistrictPairLabel(Industry originIndustry, Industry destinationIndustry)
+        {
+            var originDistrict = originIndustry != null ? originIndustry.DistrictName ?? string.Empty : string.Empty;
+            var destinationDistrict = destinationIndustry != null ? destinationIndustry.DistrictName ?? string.Empty : string.Empty;
+            return string.Equals(originDistrict, destinationDistrict, StringComparison.OrdinalIgnoreCase)
+                ? originDistrict
+                : string.Format("{0} -> {1}", originDistrict, destinationDistrict);
+        }
+
+        private static string BuildRoutePlannerCorridorId(Industry originIndustry, Industry destinationIndustry)
+        {
+            var originDistrict = originIndustry != null ? originIndustry.DistrictName ?? string.Empty : string.Empty;
+            var destinationDistrict = destinationIndustry != null ? destinationIndustry.DistrictName ?? string.Empty : string.Empty;
+            if (string.IsNullOrWhiteSpace(originDistrict) || string.IsNullOrWhiteSpace(destinationDistrict))
+            {
+                return string.Empty;
+            }
+
+            return string.Compare(originDistrict, destinationDistrict, StringComparison.OrdinalIgnoreCase) <= 0
+                ? string.Format("{0}->{1}", originDistrict, destinationDistrict)
+                : string.Format("{0}->{1}", destinationDistrict, originDistrict);
+        }
+
+        private static float GetSuggestedShipmentTons(Industry originIndustry, Industry destinationIndustry, string commodity)
+        {
+            commodity = CommodityCatalog.Normalize(commodity);
+            var availableTons = originIndustry != null ? Math.Max(0f, originIndustry.GetStock(commodity)) : 0f;
+            var currentDestinationStock = destinationIndustry != null ? Math.Max(0f, destinationIndustry.GetStock(commodity)) : 0f;
+            var destinationCapacity = destinationIndustry != null
+                ? Math.Max(1f, destinationIndustry.InputCapacityTons + destinationIndustry.OutputCapacityTons)
+                : 1f;
+            var destinationSlack = Math.Max(1f, destinationCapacity - currentDestinationStock);
+            var baseShipment = availableTons > 0.01f ? availableTons : 1f;
+            return Math.Max(1f, Math.Min(10f, Math.Min(baseShipment, destinationSlack)));
+        }
+
+        private static RoutePlannerScoreBreakdown BuildRoutePlannerScoreBreakdown(TabletRoutePlannerCandidate candidate)
+        {
+            candidate = candidate ?? new TabletRoutePlannerCandidate();
+            var breakdown = new RoutePlannerScoreBreakdown();
+            breakdown.EligibilityScore = candidate.AvailabilityState == RoutePlannerAvailabilityState.Available ? 45f : 8f;
+            breakdown.ProjectedPayoutScore = Math.Min(28f, candidate.ProjectedPayout / 250f);
+            breakdown.MarketScore = Math.Min(15f, candidate.CurrentUnitPrice / 150f);
+
+            if (candidate.HasActiveNpcRoute || candidate.HasRouteFamilyHistory)
+            {
+                breakdown.ActualPerformanceScore += candidate.RealizedNetProfit >= 0f
+                    ? Math.Min(18f, candidate.RealizedNetProfit / 800f)
+                    : -Math.Min(18f, Math.Abs(candidate.RealizedNetProfit) / 800f);
+                breakdown.ActualPerformanceScore -= Math.Min(8f, candidate.RealizedLossRatioPercent / 6f);
+            }
+
+            if (candidate.IsUnderperformingActiveLane)
+            {
+                breakdown.ActualPerformanceScore -= 8f;
+            }
+
+            breakdown.BlockerPenalty = candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked
+                ? ResolveRoutePlannerBlockerPenalty(candidate.BlockerSummary)
+                : 0f;
+            breakdown.TotalScore = breakdown.EligibilityScore
+                + breakdown.ProjectedPayoutScore
+                + breakdown.MarketScore
+                + breakdown.ActualPerformanceScore
+                - breakdown.BlockerPenalty;
+            return breakdown;
+        }
+
+        private static float ResolveRoutePlannerBlockerPenalty(string blockerSummary)
+        {
+            blockerSummary = blockerSummary ?? string.Empty;
+            if (blockerSummary.IndexOf("permit", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 26f;
+            }
+
+            if (blockerSummary.IndexOf("established", StringComparison.OrdinalIgnoreCase) >= 0
+                || blockerSummary.IndexOf("influence", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 30f;
+            }
+
+            if (blockerSummary.IndexOf("corridor", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 24f;
+            }
+
+            if (blockerSummary.IndexOf("compatible", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 16f;
+            }
+
+            return string.IsNullOrWhiteSpace(blockerSummary) ? 0f : 20f;
+        }
+
+        private void AddPlannerOverlayCandidates(List<RoutePlannerOverlayLane> lanes, IEnumerable<TabletRoutePlannerCandidate> candidates, RoutePlannerOverlayLaneKind kind, int maxCount)
+        {
+            if (lanes == null || candidates == null || maxCount <= 0)
+            {
+                return;
+            }
+
+            foreach (var candidate in candidates.Where(entry => entry != null).Take(maxCount))
+            {
+                AddPlannerOverlayCandidate(lanes, candidate, kind, false);
+            }
+        }
+
+        private static void AddPlannerOverlayCandidate(List<RoutePlannerOverlayLane> lanes, TabletRoutePlannerCandidate candidate, RoutePlannerOverlayLaneKind kind, bool forceSelection)
+        {
+            if (lanes == null || candidate == null || candidate.OriginIndustry == null || candidate.DestinationIndustry == null)
+            {
+                return;
+            }
+
+            var existing = lanes.FirstOrDefault(entry => entry != null && string.Equals(entry.CandidateId, candidate.CandidateId, StringComparison.OrdinalIgnoreCase));
+            if (existing != null)
+            {
+                existing.IsSelected = existing.IsSelected || forceSelection;
+                if (forceSelection)
+                {
+                    existing.Kind = RoutePlannerOverlayLaneKind.Selected;
+                }
+
+                return;
+            }
+
+            lanes.Add(new RoutePlannerOverlayLane
+            {
+                CandidateId = candidate.CandidateId,
+                DistrictA = candidate.OriginIndustry.DistrictName ?? string.Empty,
+                DistrictB = candidate.DestinationIndustry.DistrictName ?? string.Empty,
+                Label = string.Format("{0} {1}", candidate.Commodity, candidate.DistrictPairLabel).Trim(),
+                Kind = forceSelection ? RoutePlannerOverlayLaneKind.Selected : kind,
+                IsSelected = forceSelection,
+            });
+        }
+
+        private List<string> GetRoutePlannerCommodityOptions()
+        {
+            var options = BuildRoutePlannerCandidatesInternal()
+                .Where(candidate => candidate != null && !string.IsNullOrWhiteSpace(candidate.Commodity))
+                .Select(candidate => candidate.Commodity)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            options.Insert(0, string.Empty);
+            return options;
+        }
+
+        private List<string> GetRoutePlannerDistrictOptions()
+        {
+            var options = BuildRoutePlannerCandidatesInternal()
+                .Where(candidate => candidate != null)
+                .SelectMany(candidate => new[]
+                {
+                    candidate.OriginIndustry != null ? candidate.OriginIndustry.DistrictName : string.Empty,
+                    candidate.DestinationIndustry != null ? candidate.DestinationIndustry.DistrictName : string.Empty,
+                })
+                .Where(value => !string.IsNullOrWhiteSpace(value))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(value => value, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            options.Insert(0, string.Empty);
+            return options;
+        }
+
+        private static IReadOnlyDictionary<string, TabletNpcRouteFamilySummary> BuildNpcRouteFamilySummaryLookup(IEnumerable<NpcLogisticsContract> contracts)
+        {
+            var lookup = new Dictionary<string, TabletNpcRouteFamilySummary>(StringComparer.OrdinalIgnoreCase);
+            if (contracts == null)
+            {
+                return lookup;
+            }
+
+            foreach (var group in contracts
+                .Where(contract => contract != null)
+                .GroupBy(contract => NpcRouteProfitabilityFormatter.BuildFamilyKey(contract), StringComparer.OrdinalIgnoreCase))
+            {
+                if (string.IsNullOrWhiteSpace(group.Key))
+                {
+                    continue;
+                }
+
+                lookup[group.Key] = NpcRouteProfitabilityFormatter.BuildFamilySummary(group);
+            }
+
+            return lookup;
+        }
+
+        private static TabletNpcRouteFamilySummary ResolveNpcRouteFamilySummary(NpcLogisticsContract contract, IReadOnlyDictionary<string, TabletNpcRouteFamilySummary> familyLookup)
+        {
+            var key = NpcRouteProfitabilityFormatter.BuildFamilyKey(contract);
+            TabletNpcRouteFamilySummary summary;
+            if (!string.IsNullOrWhiteSpace(key) && familyLookup != null && familyLookup.TryGetValue(key, out summary) && summary != null)
+            {
+                return summary;
+            }
+
+            return NpcRouteProfitabilityFormatter.BuildFamilySummary(new[] { contract });
+        }
+
+        private static IReadOnlyList<TabletNpcRouteLegSummary> BuildNpcRouteLegSummaries(NpcLogisticsContract contract)
+        {
+            if (contract == null)
+            {
+                return Array.Empty<TabletNpcRouteLegSummary>();
+            }
+
+            var routes = contract.Routes != null && contract.Routes.Count > 0
+                ? contract.Routes
+                : new List<NpcLogisticsRouteDefinition>
+                {
+                    new NpcLogisticsRouteDefinition
+                    {
+                        OriginIndustry = contract.OriginIndustry,
+                        DestinationIndustry = contract.DestinationIndustry,
+                        Commodity = contract.Commodity,
+                        AssignedVehicleDisplayName = contract.AssignedVehicleDisplayName,
+                        OriginTriggerThresholdPercent = contract.OriginTriggerThresholdPercent,
+                        DestinationTriggerThresholdPercent = contract.DestinationTriggerThresholdPercent,
+                    },
+                };
+
+            var routeCount = routes.Count;
+            var currentRouteIndex = GetNpcRouteCurrentRouteIndex(contract, routeCount);
+            var summaries = new List<TabletNpcRouteLegSummary>(routeCount);
+            for (int i = 0; i < routeCount; i++)
+            {
+                var route = routes[i];
+                summaries.Add(new TabletNpcRouteLegSummary
+                {
+                    RouteIndex = i + 1,
+                    RouteCount = routeCount,
+                    IsCurrentRoute = i == currentRouteIndex,
+                    OriginName = route != null && route.OriginIndustry != null && !string.IsNullOrWhiteSpace(route.OriginIndustry.Name)
+                        ? route.OriginIndustry.Name
+                        : (contract.OriginIndustry != null ? contract.OriginIndustry.Name : "Origin"),
+                    DestinationName = route != null && route.DestinationIndustry != null && !string.IsNullOrWhiteSpace(route.DestinationIndustry.Name)
+                        ? route.DestinationIndustry.Name
+                        : (contract.DestinationIndustry != null ? contract.DestinationIndustry.Name : "Destination"),
+                    Commodity = CommodityCatalog.Normalize(route != null ? route.Commodity : contract.Commodity),
+                    AssignedVehicleDisplayName = !string.IsNullOrWhiteSpace(route != null ? route.AssignedVehicleDisplayName : string.Empty)
+                        ? route.AssignedVehicleDisplayName
+                        : (contract.AssignedVehicleDisplayName ?? string.Empty),
+                    OriginTriggerThresholdPercent = route != null ? route.OriginTriggerThresholdPercent : contract.OriginTriggerThresholdPercent,
+                    DestinationTriggerThresholdPercent = route != null ? route.DestinationTriggerThresholdPercent : contract.DestinationTriggerThresholdPercent,
+                });
+            }
+
+            return summaries;
+        }
+
+        private IReadOnlyList<TabletNpcRouteFinanceEntry> BuildNpcRouteFinanceEntries(int contractId, int currentMinute)
+        {
+            if (_financeTracker == null || contractId <= 0 || _financeTracker.Transactions == null)
+            {
+                return Array.Empty<TabletNpcRouteFinanceEntry>();
+            }
+
+            return _financeTracker.Transactions
+                .Where(entry => entry != null && entry.RouteContractId == contractId)
+                .OrderByDescending(entry => entry.InGameMinute)
+                .ThenByDescending(entry => entry.Sequence)
+                .Take(4)
+                .Select(entry => new TabletNpcRouteFinanceEntry
+                {
+                    Flow = entry.Flow,
+                    Category = entry.Category,
+                    Amount = Math.Max(0f, entry.Amount),
+                    AgeMinutes = Math.Max(0, currentMinute - entry.InGameMinute),
+                    Description = entry.Description ?? string.Empty,
+                })
+                .ToArray();
+        }
+
+        private static string ResolveNpcRouteAssignedVehicleDisplayName(NpcLogisticsContract contract, IReadOnlyList<TabletNpcRouteLegSummary> routeLegs)
+        {
+            if (routeLegs != null)
+            {
+                var activeRoute = routeLegs.FirstOrDefault(route => route != null && route.IsCurrentRoute);
+                if (activeRoute != null && !string.IsNullOrWhiteSpace(activeRoute.AssignedVehicleDisplayName))
+                {
+                    return activeRoute.AssignedVehicleDisplayName;
+                }
+            }
+
+            return contract != null ? contract.AssignedVehicleDisplayName ?? string.Empty : string.Empty;
+        }
+
+        private static int GetNpcRouteCurrentRouteIndex(NpcLogisticsContract contract, int routeCount)
+        {
+            if (routeCount <= 0)
+            {
+                return 0;
+            }
+
+            return Math.Max(0, Math.Min(routeCount - 1, contract != null ? contract.CurrentRouteIndex : 0));
         }
 
         private IReadOnlyList<TabletBudgetBreakdownEntry> BuildBudgetBreakdown(int currentMinute, CompanyFinanceFlow flow, IReadOnlyList<CompanyFinanceCategory> categories)
@@ -1721,79 +2951,14 @@ namespace LSOL.UI
 
             if (_propertyManager != null)
             {
-                foreach (var office in _propertyManager.Offices.Where(entry => entry != null))
+                bills.AddRange(GetPropertyBillEntries(currentMinute).Select(entry => new TabletUpcomingBillEntry
                 {
-                    var state = _propertyManager.GetOfficeState(office.OfficeId);
-                    if (state == null || (!state.IsOwned && !state.IsRented))
-                    {
-                        continue;
-                    }
-
-                    if (state.OutstandingRent > 0.01f)
-                    {
-                        bills.Add(new TabletUpcomingBillEntry
-                        {
-                            Category = CompanyFinanceCategory.OfficeRent,
-                            Label = office.DisplayName,
-                            Detail = "Office arrears are blocking access until paid.",
-                            Amount = state.OutstandingRent,
-                            DueInMinutes = 0,
-                        });
-                        continue;
-                    }
-
-                    var weeklyRent = Math.Max(0f, office.WeeklyOfficeRent);
-                    if (weeklyRent <= 0.01f)
-                    {
-                        continue;
-                    }
-
-                    bills.Add(new TabletUpcomingBillEntry
-                    {
-                        Category = CompanyFinanceCategory.OfficeRent,
-                        Label = office.DisplayName,
-                        Detail = "Weekly office rent",
-                        Amount = weeklyRent,
-                        DueInMinutes = nextWeekDueInMinutes,
-                    });
-                }
-
-                foreach (var apartment in _propertyManager.Interiors.Where(entry => entry != null))
-                {
-                    var state = _propertyManager.GetApartmentState(apartment.InteriorId);
-                    if (state == null || state.IsOwned || !state.IsRented)
-                    {
-                        continue;
-                    }
-
-                    if (state.OutstandingRent > 0.01f)
-                    {
-                        bills.Add(new TabletUpcomingBillEntry
-                        {
-                            Category = CompanyFinanceCategory.ApartmentRent,
-                            Label = apartment.DisplayName,
-                            Detail = "Apartment arrears are outstanding.",
-                            Amount = state.OutstandingRent,
-                            DueInMinutes = 0,
-                        });
-                        continue;
-                    }
-
-                    var weeklyRent = Math.Max(0f, apartment.InteriorWeeklyRent);
-                    if (weeklyRent <= 0.01f)
-                    {
-                        continue;
-                    }
-
-                    bills.Add(new TabletUpcomingBillEntry
-                    {
-                        Category = CompanyFinanceCategory.ApartmentRent,
-                        Label = apartment.DisplayName,
-                        Detail = "Weekly apartment rent",
-                        Amount = weeklyRent,
-                        DueInMinutes = nextWeekDueInMinutes,
-                    });
-                }
+                    Category = entry.Category,
+                    Label = entry.Label,
+                    Detail = entry.Detail,
+                    Amount = entry.Amount,
+                    DueInMinutes = entry.DueInMinutes,
+                }));
 
                 foreach (var vehicle in _propertyManager.CommercialVehicles.Where(entry => entry != null && entry.IsRental && entry.DailyRent > 0.01f))
                 {
@@ -1944,6 +3109,98 @@ namespace LSOL.UI
                 .ToList();
         }
 
+        private List<TabletPropertyBillEntry> GetPropertyBillEntries(int currentMinute)
+        {
+            var bills = new List<TabletPropertyBillEntry>();
+            if (_propertyManager == null)
+            {
+                return bills;
+            }
+
+            var currentWeekIndex = GetWeekIndex(currentMinute);
+            var nextWeekDueInMinutes = Math.Max(0, ((currentWeekIndex + 1) * InGameMinutesPerWeek) - currentMinute);
+
+            foreach (var office in _propertyManager.Offices.Where(entry => entry != null))
+            {
+                var state = _propertyManager.GetOfficeState(office.OfficeId);
+                if (state == null || (!state.IsOwned && !state.IsRented))
+                {
+                    continue;
+                }
+
+                if (state.OutstandingRent > 0.01f)
+                {
+                    bills.Add(new TabletPropertyBillEntry
+                    {
+                        PropertyId = office.OfficeId ?? string.Empty,
+                        Category = CompanyFinanceCategory.OfficeRent,
+                        Label = office.DisplayName,
+                        Detail = "Office arrears are blocking access until paid.",
+                        Amount = state.OutstandingRent,
+                        DueInMinutes = 0,
+                    });
+                    continue;
+                }
+
+                var weeklyRent = Math.Max(0f, office.WeeklyOfficeRent);
+                if (weeklyRent <= 0.01f)
+                {
+                    continue;
+                }
+
+                bills.Add(new TabletPropertyBillEntry
+                {
+                    PropertyId = office.OfficeId ?? string.Empty,
+                    Category = CompanyFinanceCategory.OfficeRent,
+                    Label = office.DisplayName,
+                    Detail = "Weekly office rent",
+                    Amount = weeklyRent,
+                    DueInMinutes = nextWeekDueInMinutes,
+                });
+            }
+
+            foreach (var apartment in _propertyManager.Interiors.Where(entry => entry != null))
+            {
+                var state = _propertyManager.GetApartmentState(apartment.InteriorId);
+                if (state == null || state.IsOwned || !state.IsRented)
+                {
+                    continue;
+                }
+
+                if (state.OutstandingRent > 0.01f)
+                {
+                    bills.Add(new TabletPropertyBillEntry
+                    {
+                        PropertyId = apartment.InteriorId ?? string.Empty,
+                        Category = CompanyFinanceCategory.ApartmentRent,
+                        Label = apartment.DisplayName,
+                        Detail = "Apartment arrears are outstanding.",
+                        Amount = state.OutstandingRent,
+                        DueInMinutes = 0,
+                    });
+                    continue;
+                }
+
+                var weeklyRent = Math.Max(0f, apartment.InteriorWeeklyRent);
+                if (weeklyRent <= 0.01f)
+                {
+                    continue;
+                }
+
+                bills.Add(new TabletPropertyBillEntry
+                {
+                    PropertyId = apartment.InteriorId ?? string.Empty,
+                    Category = CompanyFinanceCategory.ApartmentRent,
+                    Label = apartment.DisplayName,
+                    Detail = "Weekly apartment rent",
+                    Amount = weeklyRent,
+                    DueInMinutes = nextWeekDueInMinutes,
+                });
+            }
+
+            return bills;
+        }
+
         internal static void AddServiceSiteStaffingBills(
             ICollection<TabletUpcomingBillEntry> bills,
             IEnumerable<Industry> industries,
@@ -2029,6 +3286,138 @@ namespace LSOL.UI
                 : 0f;
         }
 
+        private static TabletPropertyBillEntry GetPropertyBill(
+            IReadOnlyDictionary<string, TabletPropertyBillEntry> lookup,
+            string propertyId)
+        {
+            if (lookup == null || string.IsNullOrWhiteSpace(propertyId))
+            {
+                return null;
+            }
+
+            TabletPropertyBillEntry entry;
+            return lookup.TryGetValue(propertyId.Trim(), out entry)
+                ? entry
+                : null;
+        }
+
+        private static string BuildOfficePortfolioStatusLabel(OfficeOwnershipPersistenceEntry state)
+        {
+            if (state == null || (!state.IsOwned && !state.IsRented))
+            {
+                return "Available";
+            }
+
+            if (state.OutstandingRent > 0.01f || state.IsAccessSuspended)
+            {
+                return "Arrears";
+            }
+
+            return state.IsOwned ? "Owned" : "Rented";
+        }
+
+        private static string BuildApartmentPortfolioStatusLabel(ApartmentOwnershipPersistenceEntry state)
+        {
+            if (state == null || (!state.IsOwned && !state.IsRented))
+            {
+                return "Available";
+            }
+
+            if (state.OutstandingRent > 0.01f || state.IsAccessSuspended)
+            {
+                return "Arrears";
+            }
+
+            return state.IsOwned ? "Owned" : "Rented";
+        }
+
+        private static string BuildOfficePortfolioBillDetail(
+            OfficeDefinition office,
+            OfficeOwnershipPersistenceEntry state,
+            TabletPropertyBillEntry bill)
+        {
+            if (state == null || (!state.IsOwned && !state.IsRented))
+            {
+                return string.Format(
+                    "Rent {0} | Buy {1}",
+                    ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.WeeklyOfficeRent : 0f)),
+                    ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.OfficePrice : 0f)));
+            }
+
+            if (bill != null)
+            {
+                return string.Format(
+                    "{0} | {1}",
+                    ModFormatting.FormatMoney(bill.Amount),
+                    bill.DueInMinutes <= 0 ? "Due now" : "Due next week");
+            }
+
+            return state.IsOwned
+                ? "Owned access. No rent due."
+                : string.Format("Weekly rent {0}", ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.WeeklyOfficeRent : 0f)));
+        }
+
+        private static string BuildApartmentPortfolioBillDetail(
+            InteriorDefinition apartment,
+            ApartmentOwnershipPersistenceEntry state,
+            TabletPropertyBillEntry bill)
+        {
+            if (state == null || (!state.IsOwned && !state.IsRented))
+            {
+                return string.Format(
+                    "Rent {0} | Buy {1}",
+                    ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorWeeklyRent : 0f)),
+                    ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorPrice : 0f)));
+            }
+
+            if (bill != null)
+            {
+                return string.Format(
+                    "{0} | {1}",
+                    ModFormatting.FormatMoney(bill.Amount),
+                    bill.DueInMinutes <= 0 ? "Due now" : "Due next week");
+            }
+
+            return IsOwnedApartment(state)
+                ? "Owned residence. No rent due."
+                : string.Format("Weekly rent {0}", ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorWeeklyRent : 0f)));
+        }
+
+        private static string BuildOfficeAssignmentSummary(
+            OfficeDefinition office,
+            OfficeOwnershipPersistenceEntry state,
+            bool isActive,
+            int activeGarageVehicleCount,
+            int reserveVehicleCount)
+        {
+            if (state == null || (!state.IsOwned && !state.IsRented))
+            {
+                return "Acquire access to assign company vehicles here.";
+            }
+
+            if (state.OutstandingRent > 0.01f || state.IsAccessSuspended)
+            {
+                return "Garage assignment is paused until office arrears are cleared.";
+            }
+
+            if (!isActive)
+            {
+                return "Commercial garage assignment follows the active office.";
+            }
+
+            var capacity = office != null ? Math.Max(0, office.MaxCommercialVehicles) : 0;
+            return string.Format(
+                "Active garage {0}/{1} | Reserve {2}",
+                activeGarageVehicleCount,
+                capacity,
+                reserveVehicleCount);
+        }
+
+        private static bool IsOwnedApartment(ApartmentOwnershipPersistenceEntry state)
+        {
+            return state != null && state.IsOwned;
+        }
+
         private static void AddCommodityValue(IDictionary<string, float> commodityValues, string commodity, float value)
         {
             if (commodityValues == null || string.IsNullOrWhiteSpace(commodity) || value <= 0.01f)
@@ -2047,12 +3436,30 @@ namespace LSOL.UI
             commodityValues[normalized] = existing + value;
         }
 
+        private static TabletFleetResaleSummary BuildFleetResaleSummary(FleetSaleSummary summary)
+        {
+            summary = summary ?? new FleetSaleSummary();
+            var purchaseBasis = Math.Max(0f, summary.TotalPurchaseBasis);
+            var estimatedResale = Math.Max(0f, summary.TotalEstimatedResaleValue);
+
+            return new TabletFleetResaleSummary
+            {
+                OwnedVehicleCount = Math.Max(0, summary.OwnedVehicleCount),
+                PurchaseBasis = purchaseBasis,
+                EstimatedResaleValue = estimatedResale,
+                TotalDepreciationLoss = Math.Max(0f, summary.TotalDepreciationLoss),
+                RecoveryPercentOfPurchase = purchaseBasis > 0.01f ? (estimatedResale / purchaseBasis) * 100f : 0f,
+                WeakestVehicleName = summary.WorstVehicleName ?? string.Empty,
+                WeakestVehicleRecoveryPercent = Math.Max(0f, summary.WorstVehicleRecoveryPercent),
+            };
+        }
+
         private bool ShouldIncludeIndustryInventory(Industry industry)
         {
             return industry != null && _industryManager.IsIndustryOwnedForGameplay(industry);
         }
 
-        private static string BuildInventoryLocationDetail(Industry industry, float totalTons)
+        private string BuildInventoryLocationDetail(Industry industry, float totalTons)
         {
             if (industry == null)
             {
@@ -2077,9 +3484,17 @@ namespace LSOL.UI
                 locationLabel = industry.IsWarehouse ? "Warehouse" : "Industry";
             }
 
-            return industry.IsWarehouse
-                ? string.Format("{0} | {1:0.0}t on hand | Condition {2:0}%", locationLabel, totalTons, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)))
-                : string.Format("{0} | {1:0.0}t on hand", locationLabel, totalTons);
+            if (!industry.IsWarehouse)
+            {
+                return string.Format("{0} | {1:0.0}t on hand", locationLabel, totalTons);
+            }
+
+            var detail = string.Format("{0} | {1:0.0}t on hand | Condition {2:0}%", locationLabel, totalTons, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)));
+            var risk = _industryManager != null ? _industryManager.GetWarehouseStorageRiskSnapshot(industry) : null;
+            var warehouseTelemetry = TabletUiHelpers.BuildWarehouseOverviewTelemetry(risk);
+            return string.IsNullOrWhiteSpace(warehouseTelemetry)
+                ? detail
+                : string.Format("{0} | {1}", detail, warehouseTelemetry);
         }
 
         private static string BuildTerritoryOperationsBillDetail(TerritoryOperationsSummary summary)
@@ -2143,6 +3558,10 @@ namespace LSOL.UI
                     return "Corporate overhead";
                 case CompanyFinanceCategory.FleetMaintenance:
                     return "Fleet maintenance";
+                case CompanyFinanceCategory.WarehouseSpoilage:
+                    return "Warehouse spoilage";
+                case CompanyFinanceCategory.WarehouseShrinkage:
+                    return "Warehouse shrinkage";
                 case CompanyFinanceCategory.InventoryLoss:
                     return "Inventory losses";
                 case CompanyFinanceCategory.FuelPurchase:
@@ -2169,6 +3588,93 @@ namespace LSOL.UI
             return _getCurrentInGameMinute != null
                 ? Math.Max(0, _getCurrentInGameMinute())
                 : 0;
+        }
+
+        private OwnedCommercialVehiclePersistenceEntry ResolveActiveCommercialVehicleRecord()
+        {
+            if (_propertyManager == null || _getPlayer == null)
+            {
+                return null;
+            }
+
+            var player = _getPlayer();
+            if (player == null || !player.Exists())
+            {
+                return null;
+            }
+
+            Vehicle poweredVehicle;
+            Vehicle cargoVehicle;
+            if (!_fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle))
+            {
+                return null;
+            }
+
+            OwnedCommercialVehiclePersistenceEntry entry;
+            if (poweredVehicle != null
+                && poweredVehicle.Exists()
+                && _propertyManager.TryResolveCommercialVehicleRecord(poweredVehicle, out entry))
+            {
+                return entry;
+            }
+
+            if (cargoVehicle != null
+                && cargoVehicle.Exists()
+                && _propertyManager.TryResolveCommercialVehicleRecord(cargoVehicle, out entry))
+            {
+                return entry;
+            }
+
+            return null;
+        }
+
+        private string ResolveCommercialVehicleLabel(OwnedCommercialVehiclePersistenceEntry vehicle, string fallbackLabel = null)
+        {
+            if (!string.IsNullOrWhiteSpace(fallbackLabel))
+            {
+                return fallbackLabel.Trim();
+            }
+
+            if (vehicle == null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(vehicle.DisplayName))
+            {
+                return vehicle.DisplayName.Trim();
+            }
+
+            var definition = !string.IsNullOrWhiteSpace(vehicle.PoweredModelName)
+                ? _fleetManager.FindDefinitionByModelName(vehicle.PoweredModelName)
+                : null;
+            if (definition != null && !string.IsNullOrWhiteSpace(definition.DisplayName))
+            {
+                return definition.DisplayName.Trim();
+            }
+
+            return vehicle.PoweredModelName ?? string.Empty;
+        }
+
+        private static int GetFleetInspectionOverdueWeeks(OwnedCommercialVehiclePersistenceEntry vehicle, int currentWeekIndex)
+        {
+            if (vehicle == null)
+            {
+                return 0;
+            }
+
+            var lastInspectionWeekIndex = vehicle.LastInspectionWeekIndex < 0 ? currentWeekIndex : vehicle.LastInspectionWeekIndex;
+            return Math.Max(0, currentWeekIndex - lastInspectionWeekIndex - 1);
+        }
+
+        private static float NormalizeFleetMaintenanceCondition(float value)
+        {
+            if (value <= 0f)
+            {
+                return 1f;
+            }
+
+            return Math.Max(0.35f, Math.Min(1f, value));
         }
 
         private static int GetWeekIndex(int currentInGameMinute)
@@ -2276,6 +3782,107 @@ namespace LSOL.UI
             }
 
             return _selectedStorageIndustryId;
+        }
+
+        private string EnsureRoutePlannerCommodityFilter()
+        {
+            var options = GetRoutePlannerCommodityOptions();
+            if (options.Count == 0)
+            {
+                _routePlannerCommodityFilter = string.Empty;
+                return _routePlannerCommodityFilter;
+            }
+
+            var normalized = CommodityCatalog.Normalize(_routePlannerCommodityFilter);
+            if (string.IsNullOrWhiteSpace(normalized) || !options.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                _routePlannerCommodityFilter = string.Empty;
+            }
+            else
+            {
+                _routePlannerCommodityFilter = normalized;
+            }
+
+            return _routePlannerCommodityFilter;
+        }
+
+        private string EnsureRoutePlannerDistrictFilter()
+        {
+            var options = GetRoutePlannerDistrictOptions();
+            if (options.Count == 0)
+            {
+                _routePlannerDistrictFilter = string.Empty;
+                return _routePlannerDistrictFilter;
+            }
+
+            var normalized = (_routePlannerDistrictFilter ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized) || !options.Contains(normalized, StringComparer.OrdinalIgnoreCase))
+            {
+                _routePlannerDistrictFilter = string.Empty;
+            }
+            else
+            {
+                _routePlannerDistrictFilter = normalized;
+            }
+
+            return _routePlannerDistrictFilter;
+        }
+
+        private string EnsureSelectedRoutePlannerCandidateId()
+        {
+            return EnsureSelectedRoutePlannerCandidateId(ApplyRoutePlannerFiltersAndSort(BuildRoutePlannerCandidatesInternal()));
+        }
+
+        private string EnsureSelectedRoutePlannerCandidateId(IReadOnlyList<TabletRoutePlannerCandidate> candidates)
+        {
+            candidates = candidates ?? Array.Empty<TabletRoutePlannerCandidate>();
+            if (candidates.Count == 0)
+            {
+                _selectedRoutePlannerCandidateId = string.Empty;
+                return _selectedRoutePlannerCandidateId;
+            }
+
+            if (string.IsNullOrWhiteSpace(_selectedRoutePlannerCandidateId)
+                || !candidates.Any(candidate => candidate != null && string.Equals(candidate.CandidateId, _selectedRoutePlannerCandidateId, StringComparison.OrdinalIgnoreCase)))
+            {
+                _selectedRoutePlannerCandidateId = candidates[0].CandidateId;
+            }
+
+            return _selectedRoutePlannerCandidateId;
+        }
+
+        private static string CycleStringSelection(IReadOnlyList<string> options, string currentValue, int delta, Func<string, string> normalize)
+        {
+            if (options == null || options.Count == 0)
+            {
+                return string.Empty;
+            }
+
+            normalize = normalize ?? (value => value ?? string.Empty);
+            currentValue = normalize(currentValue);
+            var currentIndex = 0;
+            for (int i = 0; i < options.Count; i++)
+            {
+                if (string.Equals(normalize(options[i]), currentValue, StringComparison.OrdinalIgnoreCase))
+                {
+                    currentIndex = i;
+                    break;
+                }
+            }
+
+            var direction = delta == 0 ? 1 : delta;
+            var nextIndex = currentIndex + direction;
+            while (nextIndex < 0)
+            {
+                nextIndex += options.Count;
+            }
+
+            while (nextIndex >= options.Count)
+            {
+                nextIndex -= options.Count;
+            }
+
+            return normalize(options[nextIndex]);
         }
 
         private static IReadOnlyList<float> GetHistorySnapshot(

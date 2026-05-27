@@ -40,6 +40,7 @@ namespace LSOL.Systems
         private int _lastAvailabilityScanInGameMinute;
         private int _generatedBoardWeekIndex;
         private int _generatedBoardDayIndex;
+        private long _generatedBoardEventSignature;
 
         public SpecialMissionManager(
             string configPath,
@@ -73,6 +74,7 @@ namespace LSOL.Systems
             _lastAvailabilityScanInGameMinute = -1;
             _generatedBoardWeekIndex = -1;
             _generatedBoardDayIndex = -1;
+            _generatedBoardEventSignature = 0L;
 
             Catalog = SpecialMissionCatalog.Load(configPath, addonCatalog);
             _definitionsById = Catalog.Definitions
@@ -117,6 +119,26 @@ namespace LSOL.Systems
         public string ActiveObjectiveDetail
         {
             get { return _activeMission != null ? _activeMission.CurrentDetail : string.Empty; }
+        }
+
+        public TerritoryDistrictEventState GetLiveDistrictEvent(string eventId)
+        {
+            return _territoryManager != null ? _territoryManager.GetDistrictEventById(eventId) : null;
+        }
+
+        public TerritoryDistrictEventState ResolveLiveDistrictEvent(string eventId, string districtName)
+        {
+            if (_territoryManager == null)
+            {
+                return null;
+            }
+
+            var activeEvent = !string.IsNullOrWhiteSpace(eventId)
+                ? _territoryManager.GetDistrictEventById(eventId)
+                : null;
+            return activeEvent ?? (!string.IsNullOrWhiteSpace(districtName)
+                ? _territoryManager.GetDistrictEvent(districtName)
+                : null);
         }
 
         public bool HasDefinitions
@@ -866,19 +888,56 @@ namespace LSOL.Systems
             var currentInGameMinute = GetCurrentInGameMinute();
             var currentWeekIndex = GetWeekIndex(currentInGameMinute);
             var currentDayIndex = GetDayIndex(currentInGameMinute);
-            if (_generatedBoardWeekIndex == currentWeekIndex && _generatedBoardDayIndex == currentDayIndex)
+            var currentEventSignature = BuildDistrictEventSignature();
+            if (_generatedBoardWeekIndex == currentWeekIndex
+                && _generatedBoardDayIndex == currentDayIndex
+                && _generatedBoardEventSignature == currentEventSignature)
             {
                 return;
             }
 
-            RegenerateGeneratedBoard(currentInGameMinute, currentWeekIndex, currentDayIndex);
+            RegenerateGeneratedBoard(currentInGameMinute, currentWeekIndex, currentDayIndex, currentEventSignature);
         }
 
-        private void RegenerateGeneratedBoard(int currentInGameMinute, int currentWeekIndex, int currentDayIndex)
+        private long BuildDistrictEventSignature()
+        {
+            if (_territoryManager == null)
+            {
+                return 0L;
+            }
+
+            long hash = 17L;
+            var activeEvents = _territoryManager.GetActiveDistrictEvents();
+            for (int i = 0; i < activeEvents.Count; i++)
+            {
+                var activeEvent = activeEvents[i];
+                if (activeEvent == null)
+                {
+                    continue;
+                }
+
+                unchecked
+                {
+                    hash = (hash * 31L) + StringComparer.OrdinalIgnoreCase.GetHashCode(activeEvent.EventId ?? string.Empty);
+                    hash = (hash * 31L) + StringComparer.OrdinalIgnoreCase.GetHashCode(activeEvent.DistrictName ?? string.Empty);
+                    hash = (hash * 31L) + activeEvent.CrisisType.GetHashCode();
+                    hash = (hash * 31L) + StringComparer.OrdinalIgnoreCase.GetHashCode(activeEvent.PreferredCommodity ?? string.Empty);
+                    hash = (hash * 31L) + activeEvent.Severity.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.ResponseTargetTons.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.DeliveredReliefTons.GetHashCode();
+                    hash = (hash * 31L) + activeEvent.EndsAtWeekIndex;
+                }
+            }
+
+            return hash;
+        }
+
+        private void RegenerateGeneratedBoard(int currentInGameMinute, int currentWeekIndex, int currentDayIndex, long eventSignature)
         {
             ClearGeneratedBoard();
             _generatedBoardWeekIndex = currentWeekIndex;
             _generatedBoardDayIndex = currentDayIndex;
+            _generatedBoardEventSignature = eventSignature;
 
             var routeCandidates = BuildGeneratedRouteCandidates();
             if (routeCandidates.Count <= 0)
@@ -888,10 +947,6 @@ namespace LSOL.Systems
             }
 
             _activeDistrictCrises.AddRange(BuildActiveDistrictCrises(routeCandidates, currentWeekIndex));
-            for (int i = 0; i < _activeDistrictCrises.Count; i++)
-            {
-                ApplyCrisisMarketEffect(_activeDistrictCrises[i]);
-            }
 
             var usedRouteKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             AddGeneratedCrisisContracts(routeCandidates, currentInGameMinute, currentWeekIndex, usedRouteKeys);
@@ -902,15 +957,11 @@ namespace LSOL.Systems
 
         private void ClearGeneratedBoard()
         {
-            for (int i = 0; i < _activeDistrictCrises.Count; i++)
-            {
-                RemoveCrisisMarketEffect(_activeDistrictCrises[i]);
-            }
-
             _activeDistrictCrises.Clear();
             _generatedDefinitionsById.Clear();
             _generatedBoardWeekIndex = -1;
             _generatedBoardDayIndex = -1;
+            _generatedBoardEventSignature = 0L;
         }
 
         private List<GeneratedRouteCandidate> BuildGeneratedRouteCandidates()
@@ -1005,33 +1056,21 @@ namespace LSOL.Systems
         private List<GeneratedDistrictCrisis> BuildActiveDistrictCrises(IReadOnlyList<GeneratedRouteCandidate> routes, int currentWeekIndex)
         {
             var crises = new List<GeneratedDistrictCrisis>();
-            if (routes == null || routes.Count <= 0)
+            if (routes == null || routes.Count <= 0 || _territoryManager == null)
             {
                 return crises;
             }
 
-            var districtNames = routes
-                .Where(route => route != null && route.DestinationIndustry != null && !string.IsNullOrWhiteSpace(route.DestinationIndustry.DistrictName))
-                .Select(route => route.DestinationIndustry.DistrictName)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderByDescending(GetDistrictCrisisScore)
-                .ThenBy(name => name, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-            if (districtNames.Count <= 0)
+            var activeEvents = _territoryManager.GetActiveDistrictEvents();
+            for (int slot = 0; slot < activeEvents.Count && crises.Count < 3; slot++)
             {
-                return crises;
-            }
+                var activeEvent = activeEvents[slot];
+                if (activeEvent == null || string.IsNullOrWhiteSpace(activeEvent.DistrictName))
+                {
+                    continue;
+                }
 
-            var crisisCount = Math.Min(2, districtNames.Count);
-            var startIndex = districtNames.Count > 0
-                ? Math.Abs(currentWeekIndex) % districtNames.Count
-                : 0;
-            var weekEndMinute = (currentWeekIndex + 1) * InGameMinutesPerWeek;
-            for (int slot = 0; slot < crisisCount; slot++)
-            {
-                var districtName = districtNames[(startIndex + slot) % districtNames.Count];
-                var crisisType = ResolveDistrictCrisisType(districtName, currentWeekIndex, slot);
-                var preferredCommodity = ResolveCrisisCommodity(routes, districtName, crisisType);
+                var preferredCommodity = ResolveLiveDistrictEventCommodity(routes, activeEvent);
                 if (string.IsNullOrWhiteSpace(preferredCommodity))
                 {
                     continue;
@@ -1039,16 +1078,64 @@ namespace LSOL.Systems
 
                 crises.Add(new GeneratedDistrictCrisis
                 {
-                    Id = string.Format("generated_crisis_w{0}_{1}_{2}", currentWeekIndex, slot, SanitizeIdPart(districtName)),
-                    DistrictName = districtName,
-                    Type = crisisType,
+                    Id = string.IsNullOrWhiteSpace(activeEvent.EventId)
+                        ? string.Format("generated_crisis_w{0}_{1}_{2}", currentWeekIndex, slot, SanitizeIdPart(activeEvent.DistrictName))
+                        : activeEvent.EventId,
+                    DistrictName = activeEvent.DistrictName,
+                    Type = activeEvent.CrisisType,
                     PreferredCommodity = preferredCommodity,
-                    EndsAtInGameMinute = weekEndMinute,
-                    MarketPressureBonus = ResolveCrisisMarketPressureBonus(crisisType),
+                    EndsAtInGameMinute = ResolveDistrictEventEndMinute(activeEvent, currentWeekIndex),
+                    MarketPressureBonus = Math.Max(0f, activeEvent.MarketPressureBonus),
+                    Severity = Math.Max(0f, activeEvent.Severity),
+                    TriggerSummary = activeEvent.TriggerSummary ?? string.Empty,
+                    ImpactSummary = activeEvent.ImpactSummary ?? string.Empty,
+                    StatusText = activeEvent.StatusText ?? string.Empty,
                 });
             }
 
             return crises;
+        }
+
+        private string ResolveLiveDistrictEventCommodity(IReadOnlyList<GeneratedRouteCandidate> routes, TerritoryDistrictEventState activeEvent)
+        {
+            if (activeEvent == null)
+            {
+                return string.Empty;
+            }
+
+            if (!string.IsNullOrWhiteSpace(activeEvent.PreferredCommodity))
+            {
+                var preferredCommodity = CommodityCatalog.Normalize(activeEvent.PreferredCommodity);
+                var hasPreferredRoute = routes.Any(route => route != null
+                    && route.DestinationIndustry != null
+                    && string.Equals(route.DestinationIndustry.DistrictName, activeEvent.DistrictName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(route.Commodity, preferredCommodity, StringComparison.OrdinalIgnoreCase));
+                if (hasPreferredRoute)
+                {
+                    return preferredCommodity;
+                }
+
+                var alternateCommodity = ResolveRelatedCommodity(routes, activeEvent.DistrictName, preferredCommodity);
+                if (!string.IsNullOrWhiteSpace(alternateCommodity))
+                {
+                    return alternateCommodity;
+                }
+            }
+
+            return ResolveCrisisCommodity(routes, activeEvent.DistrictName, activeEvent.CrisisType);
+        }
+
+        private static int ResolveDistrictEventEndMinute(TerritoryDistrictEventState activeEvent, int fallbackWeekIndex)
+        {
+            if (activeEvent == null)
+            {
+                return (fallbackWeekIndex + 1) * InGameMinutesPerWeek;
+            }
+
+            var closingWeekIndex = activeEvent.EndsAtWeekIndex >= 0
+                ? activeEvent.EndsAtWeekIndex
+                : fallbackWeekIndex;
+            return (closingWeekIndex + 1) * InGameMinutesPerWeek;
         }
 
         private void AddGeneratedCrisisContracts(
@@ -1097,16 +1184,16 @@ namespace LSOL.Systems
                     expiresAt,
                     BuildGeneratedMissionName(GeneratedContractFamily.CrisisRelief, route, crisis),
                     string.Format(
-                        "District crisis in {0}: move {1} {2} from {3} to {4} before the board closes.",
+                        "District event in {0}: move {1} {2} from {3} to {4} before the board closes.",
                         crisis.DistrictName,
                         ModFormatting.FormatTons(targetTons),
                         route.Commodity,
                         route.SourceIndustry.Name,
                         route.DestinationIndustry.Name),
                     string.Format(
-                        "{0} demand spike | {1} route bonus | Closes in {2}",
+                        "{0} | {1} | Closes in {2}",
                         BuildDistrictCrisisHeadline(crisis),
-                        route.DestinationIndustry.DistrictName,
+                        string.IsNullOrWhiteSpace(crisis.StatusText) ? route.DestinationIndustry.DistrictName : crisis.StatusText,
                         FormatMissionDuration(Math.Max(0, expiresAt - currentInGameMinute))),
                     CalculateGeneratedReward(GeneratedContractFamily.CrisisRelief, route, targetTons),
                     eligibilitySummary,
@@ -1542,37 +1629,59 @@ namespace LSOL.Systems
 
         private string ResolveCrisisCommodity(IReadOnlyList<GeneratedRouteCandidate> routes, string districtName, DistrictCrisisType crisisType)
         {
-            var preferredCommodities = GetPreferredCrisisCommodities(crisisType);
-            for (int commodityIndex = 0; commodityIndex < preferredCommodities.Length; commodityIndex++)
+            var anchorCommodity = ResolveCrisisAnchorCommodity(crisisType);
+            var relatedCommodity = ResolveRelatedCommodity(routes, districtName, anchorCommodity);
+            if (!string.IsNullOrWhiteSpace(relatedCommodity))
             {
-                var commodity = preferredCommodities[commodityIndex];
-                var hasRoute = routes.Any(route => route != null
-                    && string.Equals(route.DestinationIndustry.DistrictName, districtName, StringComparison.OrdinalIgnoreCase)
-                    && string.Equals(route.Commodity, commodity, StringComparison.OrdinalIgnoreCase));
-                if (hasRoute)
-                {
-                    return commodity;
-                }
+                return relatedCommodity;
             }
 
             var fallback = routes.FirstOrDefault(route => route != null && string.Equals(route.DestinationIndustry.DistrictName, districtName, StringComparison.OrdinalIgnoreCase));
             return fallback != null ? fallback.Commodity : string.Empty;
         }
 
-        private static string[] GetPreferredCrisisCommodities(DistrictCrisisType crisisType)
+        private string ResolveRelatedCommodity(IReadOnlyList<GeneratedRouteCandidate> routes, string districtName, string preferredCommodity)
+        {
+            if (routes == null || string.IsNullOrWhiteSpace(districtName) || string.IsNullOrWhiteSpace(preferredCommodity))
+            {
+                return string.Empty;
+            }
+
+            var districtRoutes = routes.Where(route => route != null
+                && route.DestinationIndustry != null
+                && string.Equals(route.DestinationIndustry.DistrictName, districtName, StringComparison.OrdinalIgnoreCase));
+
+            foreach (var candidate in CommodityCatalog.GetEventResponseCommodityCandidates(preferredCommodity, 6))
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.Commodity))
+                {
+                    continue;
+                }
+
+                var hasRoute = districtRoutes.Any(route => string.Equals(route.Commodity, candidate.Commodity, StringComparison.OrdinalIgnoreCase));
+                if (hasRoute)
+                {
+                    return candidate.Commodity;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static string ResolveCrisisAnchorCommodity(DistrictCrisisType crisisType)
         {
             switch (crisisType)
             {
                 case DistrictCrisisType.FuelShortage:
-                    return new[] { "Fuel", "Oil", "Chemicals" };
+                    return "Fuel";
                 case DistrictCrisisType.ConstructionSurge:
-                    return new[] { "Concrete", "Steel", "Bricks", "Beam", "Lumber" };
+                    return "Concrete";
                 case DistrictCrisisType.SupplyDisruption:
-                    return new[] { "MechanicalParts", "Electronic", "Chemicals", "ProcessedFood" };
+                    return "MechanicalParts";
                 case DistrictCrisisType.EmergencyRestock:
-                    return new[] { "ProcessedFood", "Medicine", "Fuel", "Meat", "Water" };
+                    return "ProcessedFood";
                 default:
-                    return new[] { "Fuel", "ProcessedFood", "Concrete" };
+                    return "Fuel";
             }
         }
 
@@ -1600,7 +1709,18 @@ namespace LSOL.Systems
                 return;
             }
 
-            _globalMarket.SetTemporaryDemandShock(crisis.Id, crisis.PreferredCommodity, crisis.MarketPressureBonus);
+            foreach (var candidate in CommodityCatalog.GetEventResponseCommodityCandidates(crisis.PreferredCommodity, 4))
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.Commodity))
+                {
+                    continue;
+                }
+
+                _globalMarket.SetTemporaryDemandShock(
+                    BuildCrisisShockId(crisis.Id, candidate.Commodity),
+                    candidate.Commodity,
+                    crisis.MarketPressureBonus * (0.45f + (candidate.Affinity * 0.55f)));
+            }
         }
 
         private void RemoveCrisisMarketEffect(GeneratedDistrictCrisis crisis)
@@ -1610,7 +1730,20 @@ namespace LSOL.Systems
                 return;
             }
 
-            _globalMarket.ClearTemporaryDemandShock(crisis.Id);
+            foreach (var candidate in CommodityCatalog.GetEventResponseCommodityCandidates(crisis.PreferredCommodity, 4))
+            {
+                if (candidate == null || string.IsNullOrWhiteSpace(candidate.Commodity))
+                {
+                    continue;
+                }
+
+                _globalMarket.ClearTemporaryDemandShock(BuildCrisisShockId(crisis.Id, candidate.Commodity));
+            }
+        }
+
+        private static string BuildCrisisShockId(string crisisId, string commodity)
+        {
+            return string.Format("{0}:{1}", crisisId ?? string.Empty, CommodityCatalog.Normalize(commodity));
         }
 
         private static string BuildDistrictCrisisHeadline(GeneratedDistrictCrisis crisis)
@@ -2022,6 +2155,10 @@ namespace LSOL.Systems
             public string PreferredCommodity { get; set; }
             public int EndsAtInGameMinute { get; set; }
             public float MarketPressureBonus { get; set; }
+            public float Severity { get; set; }
+            public string TriggerSummary { get; set; }
+            public string ImpactSummary { get; set; }
+            public string StatusText { get; set; }
         }
 
         private abstract class ActiveSpecialMissionRuntime

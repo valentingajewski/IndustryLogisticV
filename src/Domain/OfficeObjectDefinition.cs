@@ -34,9 +34,33 @@ namespace LSOL.Domain
 
         public float Capacity { get; set; }
 
+        public OfficeObjectPlacementContext PlacementContext { get; set; }
+
+        public OfficeFacilityAnchorType AnchorType { get; set; }
+
+        public OfficeFacilityInteractionType InteractionType { get; set; }
+
+        public OfficeAmbientStaffRole AmbientStaffRole { get; set; }
+
+        public int AmbientStaffCount { get; set; }
+
+        public bool RequiresOwnedOffice { get; set; }
+
+        public string AmbientScenarioName { get; set; }
+
         public int PerOfficeLimit { get; set; }
 
         public float Price { get; set; }
+
+        public bool UsesFacilityAnchor
+        {
+            get { return AnchorType != OfficeFacilityAnchorType.None && PlacementContext != OfficeObjectPlacementContext.Yard; }
+        }
+
+        public bool RequiresRoomAnchor
+        {
+            get { return AnchorType != OfficeFacilityAnchorType.None && PlacementContext == OfficeObjectPlacementContext.Room; }
+        }
 
         public bool IsFunctional
         {

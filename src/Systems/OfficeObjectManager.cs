@@ -29,6 +29,7 @@ namespace LSOL.Systems
         private const float ServiceArrivalDistance = 18f;
         private const float VisibleDispatchApproachDistance = 150f;
         private const float VisibleReturnCleanupDistance = 180f;
+        private const float DefaultFacilityInteractionRadius = 2.2f;
         private const float OffscreenDispatchSpeedMps = 30f;
         private const int ServiceDriveRefreshIntervalMs = 4000;
         private const int ServiceTimeoutMs = 900000;
@@ -128,6 +129,49 @@ namespace LSOL.Systems
             public HaulDeliveryPhase Phase { get; set; }
         }
 
+        public sealed class FacilityInteractionContext
+        {
+            public string OfficeId { get; set; }
+
+            public string InstanceId { get; set; }
+
+            public string Label { get; set; }
+
+            public string PromptDescription { get; set; }
+
+            public OfficeFacilityInteractionType InteractionType { get; set; }
+        }
+
+        private sealed class FacilityInteractionPoint
+        {
+            public string OfficeId { get; set; }
+
+            public string InstanceId { get; set; }
+
+            public string Label { get; set; }
+
+            public string PromptDescription { get; set; }
+
+            public OfficeFacilityInteractionType InteractionType { get; set; }
+
+            public Vector3 Position { get; set; }
+
+            public float InteractionRadius { get; set; }
+        }
+
+        private sealed class AmbientStaffSpec
+        {
+            public string StaffId { get; set; }
+
+            public Vector3 Position { get; set; }
+
+            public float Heading { get; set; }
+
+            public OfficeAmbientStaffRole Role { get; set; }
+
+            public string ScenarioName { get; set; }
+        }
+
         private readonly PropertyManager _propertyManager;
         private readonly FleetManager _fleetManager;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
@@ -141,6 +185,8 @@ namespace LSOL.Systems
         private readonly Action<string> _showStatus;
         private readonly Action _onOfficeObjectPlaced;
         private readonly Dictionary<string, Prop> _spawnedProps;
+        private readonly Dictionary<string, Ped> _ambientStaff;
+        private readonly List<FacilityInteractionPoint> _facilityInteractionPoints;
         private PlacementSession _placement;
         private HaulDeliverySession _activeHaulDelivery;
         private FuelDeliveryDispatch _activeFuelDelivery;
@@ -176,6 +222,8 @@ namespace LSOL.Systems
             _showStatus = showStatus;
             _onOfficeObjectPlaced = onOfficeObjectPlaced;
             _spawnedProps = new Dictionary<string, Prop>(StringComparer.OrdinalIgnoreCase);
+            _ambientStaff = new Dictionary<string, Ped>(StringComparer.OrdinalIgnoreCase);
+            _facilityInteractionPoints = new List<FacilityInteractionPoint>();
             _previewDefinitionId = 0;
             _spawnedOfficeId = string.Empty;
         }
@@ -193,6 +241,60 @@ namespace LSOL.Systems
         public string ActiveFuelDeliveryOfficeId
         {
             get { return _activeFuelDelivery != null ? _activeFuelDelivery.OfficeId ?? string.Empty : string.Empty; }
+        }
+
+        public float FuelDeliveryRateMultiplier
+        {
+            get { return FuelDeliveryPriceMultiplier; }
+        }
+
+        public bool TryGetNearbyFacilityInteraction(Ped player, out FacilityInteractionContext interaction)
+        {
+            interaction = null;
+            if (player == null
+                || !player.Exists()
+                || _placement != null
+                || _activeHaulDelivery != null
+                || _facilityInteractionPoints.Count <= 0)
+            {
+                return false;
+            }
+
+            FacilityInteractionPoint nearest = null;
+            var nearestDistanceSquared = float.MaxValue;
+            for (int i = 0; i < _facilityInteractionPoints.Count; i++)
+            {
+                var point = _facilityInteractionPoints[i];
+                if (point == null)
+                {
+                    continue;
+                }
+
+                var interactionRadius = Math.Max(0.6f, point.InteractionRadius);
+                var distanceSquared = player.Position.DistanceToSquared(point.Position);
+                if (distanceSquared > interactionRadius * interactionRadius || distanceSquared >= nearestDistanceSquared)
+                {
+                    continue;
+                }
+
+                nearest = point;
+                nearestDistanceSquared = distanceSquared;
+            }
+
+            if (nearest == null)
+            {
+                return false;
+            }
+
+            interaction = new FacilityInteractionContext
+            {
+                OfficeId = nearest.OfficeId,
+                InstanceId = nearest.InstanceId,
+                Label = nearest.Label,
+                PromptDescription = nearest.PromptDescription,
+                InteractionType = nearest.InteractionType,
+            };
+            return true;
         }
 
         public void Update(Ped player, OfficeObjectDefinition previewDefinition, bool previewEnabled, int now)
@@ -288,6 +390,21 @@ namespace LSOL.Systems
             if (definition.IsFunctional && !entry.IsPlaced)
             {
                 return TryStartHaulDelivery(office, entry, definition, out message);
+            }
+
+            if (TryPlaceObjectAtFacilityAnchor(Game.Player != null ? Game.Player.Character : null, office, entry, definition, out message))
+            {
+                return true;
+            }
+
+            if (definition.RequiresRoomAnchor)
+            {
+                if (string.IsNullOrWhiteSpace(message))
+                {
+                    message = string.Format("{0} requires a matching office room anchor.", definition.DisplayName);
+                }
+
+                return false;
             }
 
             _placement = CreatePlacementSession(Game.Player.Character, office, entry, definition);
@@ -705,7 +822,7 @@ namespace LSOL.Systems
 
             string message;
             OfficeObjectPersistenceEntry placedEntry;
-            if (!_propertyManager.TryPlaceOfficeObject(entry.InstanceId, position, rotation, out placedEntry, out message))
+            if (!_propertyManager.TryPlaceOfficeObject(entry.InstanceId, position, rotation, string.Empty, out placedEntry, out message))
             {
                 _showStatus?.Invoke(message);
                 return;
@@ -716,6 +833,45 @@ namespace LSOL.Systems
             ClearPreviewProp();
             SyncPlacedObjects(player);
             _onOfficeObjectPlaced?.Invoke();
+        }
+
+        private bool TryPlaceObjectAtFacilityAnchor(Ped player, OfficeDefinition office, OfficeObjectPersistenceEntry entry, OfficeObjectDefinition definition, out string message)
+        {
+            message = string.Empty;
+            if (office == null || entry == null || definition == null)
+            {
+                return false;
+            }
+
+            OfficeFacilityAnchorDefinition anchor;
+            if (!_propertyManager.TryResolveOfficeObjectPlacementAnchor(office.OfficeId, definition, entry.InstanceId, false, out anchor, out message))
+            {
+                return false;
+            }
+
+            if (anchor == null)
+            {
+                return false;
+            }
+
+            OfficeObjectPersistenceEntry placedEntry;
+            string placedMessage;
+            if (!_propertyManager.TryPlaceOfficeObject(
+                entry.InstanceId,
+                anchor.Position,
+                new Vector3(0f, 0f, anchor.Heading),
+                anchor.AnchorId,
+                out placedEntry,
+                out placedMessage))
+            {
+                message = placedMessage;
+                return false;
+            }
+
+            SyncPlacedObjects(player);
+            _onOfficeObjectPlaced?.Invoke();
+            message = string.Format("{0} installed at {1}.", definition.DisplayName, string.IsNullOrWhiteSpace(anchor.Label) ? anchor.AnchorType.ToString() : anchor.Label);
+            return true;
         }
 
         private void CancelPlacement(string message = null)
@@ -906,7 +1062,9 @@ namespace LSOL.Systems
             if (office == null || player == null || !player.Exists() || player.Position.DistanceToSquared(office.SpawnPosition) > OfficeStreamingDistance * OfficeStreamingDistance)
             {
                 _spawnedOfficeId = string.Empty;
+                _facilityInteractionPoints.Clear();
                 ClearSpawnedProps();
+                ClearAmbientStaff();
                 return;
             }
 
@@ -914,6 +1072,7 @@ namespace LSOL.Systems
             if (!string.Equals(_spawnedOfficeId, activeOfficeId, StringComparison.OrdinalIgnoreCase))
             {
                 ClearSpawnedProps();
+                ClearAmbientStaff();
                 _spawnedOfficeId = activeOfficeId;
             }
 
@@ -922,6 +1081,8 @@ namespace LSOL.Systems
                 .Where(entry => entry != null && !string.Equals(entry.InstanceId, activePlacementInstanceId, StringComparison.OrdinalIgnoreCase))
                 .ToArray();
             var desiredIds = new HashSet<string>(desiredEntries.Select(entry => entry.InstanceId), StringComparer.OrdinalIgnoreCase);
+            var desiredInteractionPoints = new List<FacilityInteractionPoint>();
+            var desiredStaffSpecs = new List<AmbientStaffSpec>();
 
             var toRemove = _spawnedProps.Keys.Where(key => !desiredIds.Contains(key)).ToList();
             for (int i = 0; i < toRemove.Count; i++)
@@ -944,6 +1105,8 @@ namespace LSOL.Systems
                     continue;
                 }
 
+                AddFacilityRuntime(office, entry, definition, desiredInteractionPoints, desiredStaffSpecs);
+
                 Prop existing;
                 if (_spawnedProps.TryGetValue(entry.InstanceId, out existing) && existing != null && existing.Exists())
                 {
@@ -956,6 +1119,275 @@ namespace LSOL.Systems
                     _spawnedProps[entry.InstanceId] = prop;
                 }
             }
+
+            _facilityInteractionPoints.Clear();
+            _facilityInteractionPoints.AddRange(desiredInteractionPoints);
+            SyncAmbientStaff(desiredStaffSpecs);
+        }
+
+        private void AddFacilityRuntime(OfficeDefinition office, OfficeObjectPersistenceEntry entry, OfficeObjectDefinition definition, ICollection<FacilityInteractionPoint> interactionPoints, ICollection<AmbientStaffSpec> staffSpecs)
+        {
+            if (office == null || entry == null || definition == null)
+            {
+                return;
+            }
+
+            Vector3 position;
+            float heading;
+            float interactionRadius;
+            string label;
+            string scenarioName;
+            if (!TryGetFacilityReferencePoint(office, entry, definition, out position, out heading, out interactionRadius, out label, out scenarioName))
+            {
+                return;
+            }
+
+            if (definition.InteractionType != OfficeFacilityInteractionType.None && interactionPoints != null)
+            {
+                interactionPoints.Add(new FacilityInteractionPoint
+                {
+                    OfficeId = office.OfficeId,
+                    InstanceId = entry.InstanceId,
+                    Label = label,
+                    PromptDescription = BuildFacilityPromptDescription(definition.InteractionType, label),
+                    InteractionType = definition.InteractionType,
+                    Position = position,
+                    InteractionRadius = interactionRadius,
+                });
+            }
+
+            if (staffSpecs == null)
+            {
+                return;
+            }
+
+            var staffCount = definition.AmbientStaffRole == OfficeAmbientStaffRole.None
+                ? 0
+                : Math.Max(1, definition.AmbientStaffCount);
+            for (int i = 0; i < staffCount; i++)
+            {
+                staffSpecs.Add(new AmbientStaffSpec
+                {
+                    StaffId = BuildAmbientStaffId(entry.InstanceId, i),
+                    Position = BuildAmbientStaffPosition(position, heading, i, staffCount),
+                    Heading = heading,
+                    Role = definition.AmbientStaffRole,
+                    ScenarioName = ResolveAmbientScenarioName(scenarioName, definition.AmbientStaffRole),
+                });
+            }
+        }
+
+        private bool TryGetFacilityReferencePoint(OfficeDefinition office, OfficeObjectPersistenceEntry entry, OfficeObjectDefinition definition, out Vector3 position, out float heading, out float interactionRadius, out string label, out string scenarioName)
+        {
+            position = entry != null ? entry.Position : Vector3.Zero;
+            heading = entry != null ? NormalizeHeading(entry.Rotation.Z) : 0f;
+            interactionRadius = DefaultFacilityInteractionRadius;
+            label = definition != null ? definition.DisplayName ?? string.Empty : string.Empty;
+            scenarioName = definition != null ? definition.AmbientScenarioName ?? string.Empty : string.Empty;
+
+            if (office == null || entry == null || definition == null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(entry.AssignedFacilityAnchorId))
+            {
+                var anchor = _propertyManager.GetOfficeFacilityAnchor(office.OfficeId, entry.AssignedFacilityAnchorId);
+                if (anchor != null)
+                {
+                    position = anchor.Position;
+                    heading = NormalizeHeading(anchor.Heading);
+                    interactionRadius = anchor.InteractionRadius > 0.05f ? anchor.InteractionRadius : DefaultFacilityInteractionRadius;
+                    if (!string.IsNullOrWhiteSpace(anchor.Label))
+                    {
+                        label = anchor.Label;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(scenarioName) && !string.IsNullOrWhiteSpace(anchor.ScenarioName))
+                    {
+                        scenarioName = anchor.ScenarioName;
+                    }
+                }
+            }
+
+            return entry.IsPlaced
+                && (definition.InteractionType != OfficeFacilityInteractionType.None || definition.AmbientStaffRole != OfficeAmbientStaffRole.None)
+                && position.LengthSquared() > 0.01f;
+        }
+
+        private void SyncAmbientStaff(IEnumerable<AmbientStaffSpec> desiredStaffSpecs)
+        {
+            var desired = desiredStaffSpecs != null
+                ? desiredStaffSpecs.Where(spec => spec != null && !string.IsNullOrWhiteSpace(spec.StaffId)).ToList()
+                : new List<AmbientStaffSpec>();
+            var desiredIds = new HashSet<string>(desired.Select(spec => spec.StaffId), StringComparer.OrdinalIgnoreCase);
+            var toRemove = _ambientStaff.Keys.Where(key => !desiredIds.Contains(key)).ToList();
+            for (int i = 0; i < toRemove.Count; i++)
+            {
+                DeletePed(_ambientStaff[toRemove[i]]);
+                _ambientStaff.Remove(toRemove[i]);
+            }
+
+            for (int i = 0; i < desired.Count; i++)
+            {
+                var spec = desired[i];
+                Ped existing;
+                if (_ambientStaff.TryGetValue(spec.StaffId, out existing) && existing != null && existing.Exists())
+                {
+                    continue;
+                }
+
+                var ped = CreateAmbientStaffPed(spec);
+                if (ped != null && ped.Exists())
+                {
+                    _ambientStaff[spec.StaffId] = ped;
+                }
+            }
+        }
+
+        private static string BuildAmbientStaffId(string instanceId, int index)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "{0}:staff:{1}", instanceId ?? string.Empty, index);
+        }
+
+        private static Vector3 BuildAmbientStaffPosition(Vector3 origin, float heading, int index, int staffCount)
+        {
+            var forward = GetFlatDirectionFromHeading(heading);
+            var right = new Vector3(-forward.Y, forward.X, 0f);
+            var centeredIndex = index - ((staffCount - 1) * 0.5f);
+            return origin + (right * (centeredIndex * 0.75f)) - (forward * 0.35f);
+        }
+
+        private static string ResolveAmbientScenarioName(string scenarioName, OfficeAmbientStaffRole role)
+        {
+            if (!string.IsNullOrWhiteSpace(scenarioName))
+            {
+                return scenarioName;
+            }
+
+            switch (role)
+            {
+                case OfficeAmbientStaffRole.Security:
+                    return "WORLD_HUMAN_GUARD_STAND";
+                case OfficeAmbientStaffRole.Mechanic:
+                    return "WORLD_HUMAN_CLIPBOARD";
+                case OfficeAmbientStaffRole.SupportWorker:
+                    return "WORLD_HUMAN_STAND_IMPATIENT";
+                default:
+                    return "WORLD_HUMAN_CLIPBOARD";
+            }
+        }
+
+        private static string ResolveAmbientStaffModelName(OfficeAmbientStaffRole role)
+        {
+            switch (role)
+            {
+                case OfficeAmbientStaffRole.Receptionist:
+                    return "s_f_y_shop_mid";
+                case OfficeAmbientStaffRole.Dispatcher:
+                    return "s_m_m_gentransport";
+                case OfficeAmbientStaffRole.Mechanic:
+                    return "s_m_y_xmech_01";
+                case OfficeAmbientStaffRole.SupportWorker:
+                    return "s_m_m_dockwork_01";
+                case OfficeAmbientStaffRole.Security:
+                    return "s_m_m_security_01";
+                case OfficeAmbientStaffRole.Manager:
+                    return "a_m_y_business_02";
+                case OfficeAmbientStaffRole.AdminClerk:
+                    return "a_f_y_business_02";
+                default:
+                    return string.Empty;
+            }
+        }
+
+        private static string BuildFacilityPromptDescription(OfficeFacilityInteractionType interactionType, string label)
+        {
+            switch (interactionType)
+            {
+                case OfficeFacilityInteractionType.OfficeSummary:
+                    return string.IsNullOrWhiteSpace(label) ? "review the office facilities" : string.Format("review {0}", label);
+                case OfficeFacilityInteractionType.HireNpc:
+                    return string.IsNullOrWhiteSpace(label) ? "open dispatch staffing" : string.Format("open staffing at {0}", label);
+                case OfficeFacilityInteractionType.RepairVehicle:
+                    return string.IsNullOrWhiteSpace(label) ? "manage maintenance repairs" : string.Format("manage repairs at {0}", label);
+                case OfficeFacilityInteractionType.FuelManagement:
+                    return string.IsNullOrWhiteSpace(label) ? "manage office fuel" : string.Format("manage fuel at {0}", label);
+                case OfficeFacilityInteractionType.HeadquartersStatus:
+                    return string.IsNullOrWhiteSpace(label) ? "review headquarters status" : string.Format("review {0}", label);
+                default:
+                    return string.IsNullOrWhiteSpace(label) ? "use this facility" : string.Format("use {0}", label);
+            }
+        }
+
+        private Ped CreateAmbientStaffPed(AmbientStaffSpec spec)
+        {
+            if (spec == null || string.IsNullOrWhiteSpace(spec.StaffId))
+            {
+                return null;
+            }
+
+            var modelName = ResolveAmbientStaffModelName(spec.Role);
+            if (string.IsNullOrWhiteSpace(modelName))
+            {
+                return null;
+            }
+
+            var model = new Model(modelName);
+            if (!model.Request(500))
+            {
+                model.MarkAsNoLongerNeeded();
+                return null;
+            }
+
+            Ped ped;
+            try
+            {
+                ped = World.CreatePed(model, spec.Position, spec.Heading);
+            }
+            catch
+            {
+                ped = World.CreatePed(model, spec.Position);
+            }
+
+            model.MarkAsNoLongerNeeded();
+            if (ped == null || !ped.Exists())
+            {
+                return null;
+            }
+
+            ped.IsPersistent = true;
+            ped.Heading = spec.Heading;
+            Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, ped.Handle, true);
+
+            if (!string.IsNullOrWhiteSpace(spec.ScenarioName))
+            {
+                try
+                {
+                    Function.Call(Hash.TASK_START_SCENARIO_IN_PLACE, ped.Handle, spec.ScenarioName, 0, true);
+                }
+                catch
+                {
+                    // Leave the ped idle if the requested scenario is unavailable.
+                }
+            }
+
+            return ped;
+        }
+
+        private void ClearAmbientStaff()
+        {
+            var keys = _ambientStaff.Keys.ToList();
+            for (int i = 0; i < keys.Count; i++)
+            {
+                Ped ped;
+                if (_ambientStaff.TryGetValue(keys[i], out ped))
+                {
+                    DeletePed(ped);
+                }
+            }
+
+            _ambientStaff.Clear();
         }
 
         private void UpdateFuelDelivery(int now)
@@ -1032,6 +1464,26 @@ namespace LSOL.Systems
             if (office == null || entry == null || definition == null)
             {
                 CancelHaulDelivery("Office module delivery data is no longer available.");
+                return;
+            }
+
+            string anchoredMessage;
+            if (TryPlaceObjectAtFacilityAnchor(player, office, entry, definition, out anchoredMessage))
+            {
+                CleanupHaulDelivery();
+                ClearPreviewProp();
+                if (!string.IsNullOrWhiteSpace(anchoredMessage))
+                {
+                    _showStatus?.Invoke(anchoredMessage);
+                }
+                return;
+            }
+
+            if (definition.RequiresRoomAnchor)
+            {
+                CancelHaulDelivery(string.IsNullOrWhiteSpace(anchoredMessage)
+                    ? string.Format("{0} requires a matching office room anchor.", definition.DisplayName)
+                    : anchoredMessage);
                 return;
             }
 

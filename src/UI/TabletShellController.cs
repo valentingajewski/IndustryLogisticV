@@ -13,6 +13,7 @@ namespace LSOL.UI
         public const string Home = "home";
         public const string Network = "network";
         public const string Budget = "budget";
+        public const string PropertyPortfolio = "properties";
         public const string Analytics = "analytics";
         public const string Industry = "industry";
         public const string Missions = "missions";

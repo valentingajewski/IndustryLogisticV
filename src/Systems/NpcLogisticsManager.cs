@@ -42,6 +42,11 @@ namespace LSOL.Systems
         private const float MinDriverAggressiveness = 0.18f;
         private const float MaxDriverAggressiveness = 0.30f;
         private const float RoadSafeFallbackOffsetDistance = 24f;
+        private const float DriverTrainingPointsPerTier = 250f;
+        private const float DriverTrainingDeliveryWeight = 10f;
+        private const float DriverTrainingTonsWeight = 2f;
+        private const float DriverTrainingPayrollWeight = 30f;
+        private const float DriverTrainingLossWeight = 25f;
 
         private enum NpcDriveRecoveryOutcome
         {
@@ -101,13 +106,16 @@ namespace LSOL.Systems
         private readonly List<NpcLogisticsContract> _contracts;
         private readonly NpcWorldDispatchConfig _worldDispatchConfig;
         private readonly List<NpcWorldLogisticsJob> _worldJobs;
+        private readonly List<NpcCarrierNetworkState> _carrierNetworks;
         private readonly List<NpcWorldDispatchDiagnosticEntry> _worldDispatchDiagnostics;
         private readonly Random _random;
 
         private int _nextContractId;
         private int _nextWorldJobId;
+        private int _nextCarrierNetworkId;
         private int _lastObservedClockMinute;
         private int _lastWorldEvaluationClockMinute;
+        private int _lastCarrierMaintenanceWeekIndex;
         private int _worldEvaluationElapsedMinutes;
         private int _completedWorldDispatches;
         private NpcWeeklyWageDifficulty _weeklyWageDifficulty;
@@ -157,12 +165,15 @@ namespace LSOL.Systems
             _contracts = new List<NpcLogisticsContract>();
             _worldDispatchConfig = NpcWorldDispatchConfigLoader.Load(configDirectory);
             _worldJobs = new List<NpcWorldLogisticsJob>();
+            _carrierNetworks = new List<NpcCarrierNetworkState>();
             _worldDispatchDiagnostics = new List<NpcWorldDispatchDiagnosticEntry>(WorldDispatchDiagnosticsCapacity);
             _random = new Random();
             _nextContractId = 1;
             _nextWorldJobId = 1;
+            _nextCarrierNetworkId = 1;
             _lastObservedClockMinute = -1;
             _lastWorldEvaluationClockMinute = -1;
+            _lastCarrierMaintenanceWeekIndex = -1;
             _worldEvaluationElapsedMinutes = _worldDispatchConfig != null ? _worldDispatchConfig.EvaluationIntervalMinutes : 0;
             _completedWorldDispatches = 0;
             _weeklyWageDifficulty = NpcWeeklyWageDifficulty.Standard;
@@ -355,9 +366,41 @@ namespace LSOL.Systems
                 AccumulateDistrictCompetition(summaries, destination != null ? destination.DistrictName : string.Empty, job, 1f);
             }
 
+            AccumulateCarrierDistrictFootprintPressure(summaries);
+
             return summaries.Values
                 .OrderByDescending(summary => summary.PressureScore)
                 .ThenBy(summary => summary.DistrictName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        public IReadOnlyList<NpcCorridorCompetitionSummary> GetCorridorCompetitionSummaries()
+        {
+            var summaries = new Dictionary<string, NpcCorridorCompetitionSummary>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < _worldJobs.Count; i++)
+            {
+                var job = _worldJobs[i];
+                if (job == null
+                    || !job.IsRivalJob
+                    || (job.Phase != NpcWorldJobPhase.Listed && job.Phase != NpcWorldJobPhase.Traveling))
+                {
+                    continue;
+                }
+
+                var origin = FindIndustryById(job.OriginIndustryId);
+                var destination = FindIndustryById(job.DestinationIndustryId);
+                AccumulateCorridorCompetition(
+                    summaries,
+                    origin != null ? origin.DistrictName : string.Empty,
+                    destination != null ? destination.DistrictName : string.Empty,
+                    job);
+            }
+
+            AccumulateCarrierCorridorFootprintPressure(summaries);
+
+            return summaries.Values
+                .OrderByDescending(summary => summary.PressureScore)
+                .ThenBy(summary => summary.CorridorId, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
 
@@ -430,6 +473,11 @@ namespace LSOL.Systems
                 .ToList();
         }
 
+        public IReadOnlyList<Industry> GetRoutePlannerOriginCandidates()
+        {
+            return GetOriginAvailabilityCandidates();
+        }
+
         public List<Industry> GetDestinationIndustryOptions(Industry originIndustry)
         {
             if (originIndustry == null)
@@ -441,6 +489,51 @@ namespace LSOL.Systems
                 .Where(industry => CanUseAsDestination(originIndustry, industry))
                 .OrderBy(industry => industry.Name)
                 .ToList();
+        }
+
+        public IReadOnlyList<Industry> GetRoutePlannerDestinationCandidates(Industry originIndustry)
+        {
+            return GetDestinationAvailabilityCandidates(originIndustry);
+        }
+
+        public string GetRoutePlannerIndustryBlockReason(Industry industry)
+        {
+            return BuildAutomationBlockReason(industry);
+        }
+
+        public string GetRoutePlannerLaneBlockReason(Industry originIndustry, Industry destinationIndustry)
+        {
+            if (originIndustry == null || destinationIndustry == null)
+            {
+                return "Route endpoints are incomplete.";
+            }
+
+            var originBlocker = BuildAutomationBlockReason(originIndustry);
+            if (!string.IsNullOrWhiteSpace(originBlocker))
+            {
+                return originBlocker;
+            }
+
+            var destinationBlocker = BuildAutomationBlockReason(destinationIndustry);
+            if (!string.IsNullOrWhiteSpace(destinationBlocker))
+            {
+                return destinationBlocker;
+            }
+
+            if (GetResourceOptions(originIndustry, destinationIndustry).Count == 0)
+            {
+                return string.Format("No compatible destination accepts outputs from {0}.", originIndustry.Name);
+            }
+
+            if (_territoryManager == null)
+            {
+                return string.Empty;
+            }
+
+            string routeReason;
+            return _territoryManager.CanCreateNpcRouteWithPermits(originIndustry, destinationIndustry, out routeReason)
+                ? string.Empty
+                : (routeReason ?? string.Empty);
         }
 
         public string BuildOriginAvailabilityDetail()
@@ -547,15 +640,99 @@ namespace LSOL.Systems
 
         public string BuildPayrollStatus(NpcLogisticsContract contract)
         {
-            if (contract == null || contract.Tier == null)
+            var training = GetDriverTrainingSummary(contract);
+            if (contract == null || training.BaseTier == null)
             {
                 return "Payroll unavailable";
             }
 
             return string.Format(
-                "Weekly {0} | {1}",
-                ModFormatting.FormatMoney(GetWeeklyWage(contract.Tier)),
-                FormatPayrollCountdown(GetRemainingPayrollMinutes(contract)));
+                "Weekly {0} | {1} | {2}",
+                ModFormatting.FormatMoney(GetWeeklyWage(training.EffectiveTier)),
+                FormatPayrollCountdown(GetRemainingPayrollMinutes(contract)),
+                BuildDriverTrainingShortLabel(training));
+        }
+
+        public NpcDriverTrainingSummary GetDriverTrainingSummary(NpcLogisticsContract contract)
+        {
+            var baseTier = contract != null ? contract.Tier : null;
+            var progressionTiers = GetProgressionTiers();
+            if (baseTier == null || progressionTiers.Count == 0)
+            {
+                return new NpcDriverTrainingSummary
+                {
+                    BaseTier = baseTier,
+                    EffectiveTier = baseTier,
+                    BaseTierIndex = -1,
+                    EffectiveTierIndex = -1,
+                };
+            }
+
+            var baseIndex = GetProgressionTierIndex(baseTier, progressionTiers);
+            if (baseIndex < 0)
+            {
+                baseIndex = 0;
+            }
+
+            var experience = GetDriverTrainingExperience(contract);
+            var promotionsEarned = (int)(experience / DriverTrainingPointsPerTier);
+            var effectiveIndex = Math.Min(progressionTiers.Count - 1, baseIndex + Math.Max(0, promotionsEarned));
+            var effectiveTier = progressionTiers[effectiveIndex];
+            var progressToNextTier = effectiveIndex >= progressionTiers.Count - 1
+                ? 0f
+                : experience % DriverTrainingPointsPerTier;
+            var progressPercent = effectiveIndex >= progressionTiers.Count - 1
+                ? 100f
+                : Math.Max(0f, Math.Min(100f, (progressToNextTier / DriverTrainingPointsPerTier) * 100f));
+
+            return new NpcDriverTrainingSummary
+            {
+                BaseTier = baseTier,
+                EffectiveTier = effectiveTier,
+                BaseTierIndex = baseIndex,
+                EffectiveTierIndex = effectiveIndex,
+                ExperiencePoints = Math.Max(0f, experience),
+                ProgressPointsToNextTier = progressToNextTier,
+                ProgressPercent = progressPercent,
+                PromotionsEarned = Math.Max(0, promotionsEarned),
+                ProgressionTierCount = progressionTiers.Count,
+            };
+        }
+
+        public NpcDriverTierDefinition GetEffectiveDriverTier(NpcLogisticsContract contract)
+        {
+            return GetDriverTrainingSummary(contract).EffectiveTier;
+        }
+
+        public string BuildDriverTrainingDetail(NpcLogisticsContract contract)
+        {
+            var training = GetDriverTrainingSummary(contract);
+            if (training.BaseTier == null)
+            {
+                return "No NPC driver tier is configured.";
+            }
+
+            if (training.BaseTierIndex < 0 || training.EffectiveTierIndex < 0)
+            {
+                return string.Format("Base {0} | Effective {1}", training.BaseTier.DisplayName, training.EffectiveTier != null ? training.EffectiveTier.DisplayName : training.BaseTier.DisplayName);
+            }
+
+            if (training.EffectiveTierIndex >= training.ProgressionTierCount - 1)
+            {
+                return string.Format(
+                    "Base {0} | Effective {1} | Training maxed | Experience {2:0}",
+                    training.BaseTier.DisplayName,
+                    training.EffectiveTier != null ? training.EffectiveTier.DisplayName : training.BaseTier.DisplayName,
+                    training.ExperiencePoints);
+            }
+
+            return string.Format(
+                "Base {0} | Effective {1} | Training {2:0}% to next tier | Experience {3:0}/{4:0}",
+                training.BaseTier.DisplayName,
+                training.EffectiveTier != null ? training.EffectiveTier.DisplayName : training.BaseTier.DisplayName,
+                training.ProgressPercent,
+                training.ProgressPointsToNextTier,
+                DriverTrainingPointsPerTier);
         }
 
         public bool TryCreateContract(
@@ -698,11 +875,14 @@ namespace LSOL.Systems
 
             _contracts.Clear();
             _worldJobs.Clear();
+            _carrierNetworks.Clear();
             _worldDispatchDiagnostics.Clear();
             _nextContractId = 1;
             _nextWorldJobId = 1;
+            _nextCarrierNetworkId = 1;
             _lastObservedClockMinute = -1;
             _lastWorldEvaluationClockMinute = -1;
+            _lastCarrierMaintenanceWeekIndex = -1;
             _worldEvaluationElapsedMinutes = _worldDispatchConfig != null ? _worldDispatchConfig.EvaluationIntervalMinutes : 0;
             _completedWorldDispatches = 0;
             _officeDeliveryNotificationsEnabled = true;
@@ -731,6 +911,34 @@ namespace LSOL.Systems
             snapshot.LastWorldEvaluationClockMinute = _lastWorldEvaluationClockMinute;
             snapshot.CompletedWorldDispatches = _completedWorldDispatches;
 
+            for (int i = 0; i < _carrierNetworks.Count; i++)
+            {
+                var carrier = _carrierNetworks[i];
+                if (carrier == null || string.IsNullOrWhiteSpace(carrier.Id))
+                {
+                    continue;
+                }
+
+                var carrierSnapshot = new NpcCarrierNetworkSnapshot
+                {
+                    Id = carrier.Id,
+                    DisplayName = carrier.DisplayName ?? string.Empty,
+                    HomeDistrict = carrier.HomeDistrict ?? string.Empty,
+                    Strength = Math.Max(0f, carrier.Strength),
+                    GrowthMomentum = carrier.GrowthMomentum,
+                    DeclinePressure = carrier.DeclinePressure,
+                    IsDormant = carrier.IsDormant,
+                    DormantWeekCount = Math.Max(0, carrier.DormantWeekCount),
+                    LastActiveWeekIndex = carrier.LastActiveWeekIndex,
+                    LastExpansionWeekIndex = carrier.LastExpansionWeekIndex,
+                    VisualSeed = carrier.VisualSeed,
+                };
+                CopyDistinctValues(carrier.PreferredCommodityFamilies, carrierSnapshot.PreferredCommodityFamilies);
+                CopyDistinctValues(carrier.PreferredDistricts, carrierSnapshot.PreferredDistricts);
+                CopyDistinctValues(carrier.PreferredCorridors, carrierSnapshot.PreferredCorridors);
+                snapshot.Carriers.Add(carrierSnapshot);
+            }
+
             for (int i = 0; i < _worldJobs.Count; i++)
             {
                 var job = _worldJobs[i];
@@ -758,6 +966,7 @@ namespace LSOL.Systems
                     IsPriorityMatch = job.IsPriorityMatch,
                     HasVisibleConvoy = job.HasVisibleConvoy,
                     IsRivalJob = job.IsRivalJob,
+                    CarrierId = NormalizeCarrierId(job.CarrierId),
                     BackhaulDepth = job.BackhaulDepth,
                     StatusText = AmbientWorldDispatchText.NormalizeStatusText(job.StatusText),
                 });
@@ -781,104 +990,111 @@ namespace LSOL.Systems
             _premiumDispatchEnabled = snapshot.PremiumDispatchEnabled;
             _officeDeliveryNotificationsEnabled = snapshot.OfficeDeliveryNotificationsEnabled;
             _lastWorldEvaluationClockMinute = snapshot.LastWorldEvaluationClockMinute;
+            _lastCarrierMaintenanceWeekIndex = _lastWorldEvaluationClockMinute >= 0
+                ? GetWeekIndex(_lastWorldEvaluationClockMinute)
+                : -1;
             _worldEvaluationElapsedMinutes = 0;
             _completedWorldDispatches = Math.Max(0, snapshot.CompletedWorldDispatches);
+            RestoreCarrierNetworks(snapshot.Carriers);
 
             if (snapshot.Contracts == null || snapshot.Contracts.Count == 0)
             {
-                return;
+                _lastObservedClockMinute = -1;
             }
 
             var nextContractId = 1;
-            for (int i = 0; i < snapshot.Contracts.Count; i++)
+            if (snapshot.Contracts != null)
             {
-                var entry = snapshot.Contracts[i];
-                if (entry == null)
+                for (int i = 0; i < snapshot.Contracts.Count; i++)
                 {
-                    continue;
-                }
-
-                var originIndustry = FindIndustryById(entry.OriginIndustryId);
-                var destinationIndustry = FindIndustryById(entry.DestinationIndustryId);
-                var tier = FindDriverTier(entry.TierId);
-                if (originIndustry == null || destinationIndustry == null || tier == null)
-                {
-                    continue;
-                }
-
-                var routeDefinitions = NpcLogisticsPersistenceMapper.CreateRouteDefinitionsFromSnapshot(
-                    entry,
-                    originIndustry,
-                    destinationIndustry,
-                    FindIndustryById,
-                    CommodityCatalog.Normalize,
-                    ClampTriggerPercent);
-                if (routeDefinitions.Count == 0)
-                {
-                    continue;
-                }
-
-                if (!TryPreparePersistedRouteDefinitions(routeDefinitions))
-                {
-                    continue;
-                }
-
-                VehicleDefinition selectedVehicle;
-                VehicleDefinition selectedTractor;
-                OwnedCommercialVehiclePersistenceEntry assignedVehicle;
-                var currentRoute = routeDefinitions[Math.Max(0, Math.Min(routeDefinitions.Count - 1, entry.CurrentRouteIndex))];
-                var assignedVehicleAssetId = !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleAssetId)
-                    ? currentRoute.AssignedVehicleAssetId
-                    : (entry.AssignedVehicleAssetId ?? string.Empty);
-                var assignedVehicleDisplayName = !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleDisplayName)
-                    ? currentRoute.AssignedVehicleDisplayName
-                    : (entry.AssignedVehicleDisplayName ?? string.Empty);
-                if (string.IsNullOrWhiteSpace(assignedVehicleAssetId))
-                {
-                    assignedVehicle = null;
-                    if (!TryResolveVehicleForCommodity(currentRoute.Commodity, out selectedVehicle, out selectedTractor))
+                    var entry = snapshot.Contracts[i];
+                    if (entry == null)
                     {
                         continue;
                     }
 
-                    assignedVehicleDisplayName = string.IsNullOrWhiteSpace(assignedVehicleDisplayName)
-                        ? "Legacy auto-select"
-                        : assignedVehicleDisplayName;
+                    var originIndustry = FindIndustryById(entry.OriginIndustryId);
+                    var destinationIndustry = FindIndustryById(entry.DestinationIndustryId);
+                    var tier = FindDriverTier(entry.TierId);
+                    if (originIndustry == null || destinationIndustry == null || tier == null)
+                    {
+                        continue;
+                    }
+
+                    var routeDefinitions = NpcLogisticsPersistenceMapper.CreateRouteDefinitionsFromSnapshot(
+                        entry,
+                        originIndustry,
+                        destinationIndustry,
+                        FindIndustryById,
+                        CommodityCatalog.Normalize,
+                        ClampTriggerPercent);
+                    if (routeDefinitions.Count == 0)
+                    {
+                        continue;
+                    }
+
+                    if (!TryPreparePersistedRouteDefinitions(routeDefinitions))
+                    {
+                        continue;
+                    }
+
+                    VehicleDefinition selectedVehicle;
+                    VehicleDefinition selectedTractor;
+                    OwnedCommercialVehiclePersistenceEntry assignedVehicle;
+                    var currentRoute = routeDefinitions[Math.Max(0, Math.Min(routeDefinitions.Count - 1, entry.CurrentRouteIndex))];
+                    var assignedVehicleAssetId = !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleAssetId)
+                        ? currentRoute.AssignedVehicleAssetId
+                        : (entry.AssignedVehicleAssetId ?? string.Empty);
+                    var assignedVehicleDisplayName = !string.IsNullOrWhiteSpace(currentRoute.AssignedVehicleDisplayName)
+                        ? currentRoute.AssignedVehicleDisplayName
+                        : (entry.AssignedVehicleDisplayName ?? string.Empty);
+                    if (string.IsNullOrWhiteSpace(assignedVehicleAssetId))
+                    {
+                        assignedVehicle = null;
+                        if (!TryResolveVehicleForCommodity(currentRoute.Commodity, out selectedVehicle, out selectedTractor))
+                        {
+                            continue;
+                        }
+
+                        assignedVehicleDisplayName = string.IsNullOrWhiteSpace(assignedVehicleDisplayName)
+                            ? "Legacy auto-select"
+                            : assignedVehicleDisplayName;
+                    }
+                    else if (!TryResolveAssignedVehicleForCommodity(assignedVehicleAssetId, currentRoute.Commodity, out assignedVehicle, out selectedVehicle, out selectedTractor))
+                    {
+                        continue;
+                    }
+
+                    var contract = new NpcLogisticsContract(Math.Max(1, entry.Id))
+                    {
+                        OriginIndustry = currentRoute.OriginIndustry,
+                        DestinationIndustry = currentRoute.DestinationIndustry,
+                        Commodity = currentRoute.Commodity,
+                        Tier = tier,
+                        VehicleDefinition = selectedVehicle,
+                        TractorDefinition = selectedTractor,
+                        AssignedVehicleAssetId = assignedVehicle != null ? assignedVehicle.AssetId : assignedVehicleAssetId,
+                        AssignedVehicleDisplayName = assignedVehicle != null ? BuildAssignedVehicleDisplayName(assignedVehicle) : assignedVehicleDisplayName,
+                        OriginTriggerThresholdPercent = currentRoute.OriginTriggerThresholdPercent,
+                        DestinationTriggerThresholdPercent = currentRoute.DestinationTriggerThresholdPercent,
+                        CurrentRouteIndex = Math.Max(0, Math.Min(routeDefinitions.Count - 1, entry.CurrentRouteIndex)),
+                        ContractCost = Math.Max(0f, entry.ContractCost),
+                        PayrollElapsedInGameMinutes = Math.Max(0, entry.PayrollElapsedInGameMinutes),
+                        CompletedPayrollCycles = Math.Max(0, entry.CompletedPayrollCycles),
+                        TotalWeeklyWagesPaid = Math.Max(0f, entry.TotalWeeklyWagesPaid),
+                        CompletedDeliveries = Math.Max(0, entry.CompletedDeliveries),
+                        TotalDeliveredTons = Math.Max(0f, entry.TotalDeliveredTons),
+                        TotalProfitEarned = Math.Max(0f, entry.TotalProfitEarned),
+                        LastJourneyLossRatio = Math.Max(0f, entry.LastJourneyLossRatio),
+                        StatusText = "Preparing route",
+                    };
+
+                    SetContractRoutes(contract, routeDefinitions, contract.CurrentRouteIndex);
+                    UpdateContractAssignedVehicleSummary(contract);
+
+                    _contracts.Add(contract);
+                    nextContractId = Math.Max(nextContractId, contract.Id + 1);
                 }
-                else if (!TryResolveAssignedVehicleForCommodity(assignedVehicleAssetId, currentRoute.Commodity, out assignedVehicle, out selectedVehicle, out selectedTractor))
-                {
-                    continue;
-                }
-
-                var contract = new NpcLogisticsContract(Math.Max(1, entry.Id))
-                {
-                    OriginIndustry = currentRoute.OriginIndustry,
-                    DestinationIndustry = currentRoute.DestinationIndustry,
-                    Commodity = currentRoute.Commodity,
-                    Tier = tier,
-                    VehicleDefinition = selectedVehicle,
-                    TractorDefinition = selectedTractor,
-                    AssignedVehicleAssetId = assignedVehicle != null ? assignedVehicle.AssetId : assignedVehicleAssetId,
-                    AssignedVehicleDisplayName = assignedVehicle != null ? BuildAssignedVehicleDisplayName(assignedVehicle) : assignedVehicleDisplayName,
-                    OriginTriggerThresholdPercent = currentRoute.OriginTriggerThresholdPercent,
-                    DestinationTriggerThresholdPercent = currentRoute.DestinationTriggerThresholdPercent,
-                    CurrentRouteIndex = Math.Max(0, Math.Min(routeDefinitions.Count - 1, entry.CurrentRouteIndex)),
-                    ContractCost = Math.Max(0f, entry.ContractCost),
-                    PayrollElapsedInGameMinutes = Math.Max(0, entry.PayrollElapsedInGameMinutes),
-                    CompletedPayrollCycles = Math.Max(0, entry.CompletedPayrollCycles),
-                    TotalWeeklyWagesPaid = Math.Max(0f, entry.TotalWeeklyWagesPaid),
-                    CompletedDeliveries = Math.Max(0, entry.CompletedDeliveries),
-                    TotalDeliveredTons = Math.Max(0f, entry.TotalDeliveredTons),
-                    TotalProfitEarned = Math.Max(0f, entry.TotalProfitEarned),
-                    LastJourneyLossRatio = Math.Max(0f, entry.LastJourneyLossRatio),
-                    StatusText = "Preparing route",
-                };
-
-                SetContractRoutes(contract, routeDefinitions, contract.CurrentRouteIndex);
-                UpdateContractAssignedVehicleSummary(contract);
-
-                _contracts.Add(contract);
-                nextContractId = Math.Max(nextContractId, contract.Id + 1);
             }
 
             _nextContractId = nextContractId;
@@ -912,6 +1128,16 @@ namespace LSOL.Systems
                         continue;
                     }
 
+                    var normalizedCarrierId = NormalizeCarrierId(entry.CarrierId);
+                    if (entry.IsRivalJob)
+                    {
+                        var fallbackHomeDistrict = destination != null && !string.IsNullOrWhiteSpace(destination.DistrictName)
+                            ? destination.DistrictName
+                            : (origin != null ? origin.DistrictName : string.Empty);
+                        var carrier = EnsureCarrierNetwork(normalizedCarrierId, fallbackHomeDistrict, Math.Max(0, entry.CreatedClockMinute / InGameMinutesPerWeek));
+                        normalizedCarrierId = carrier != null ? carrier.Id : normalizedCarrierId;
+                    }
+
                     var job = new NpcWorldLogisticsJob
                     {
                         Id = restoredJobId,
@@ -931,6 +1157,8 @@ namespace LSOL.Systems
                         IsPriorityMatch = entry.IsPriorityMatch,
                         HasVisibleConvoy = entry.HasVisibleConvoy,
                         IsRivalJob = entry.IsRivalJob,
+                        CarrierId = normalizedCarrierId,
+                        CarrierName = !string.IsNullOrWhiteSpace(normalizedCarrierId) ? ResolveCarrierDisplayName(normalizedCarrierId) : string.Empty,
                         BackhaulDepth = Math.Max(0, entry.BackhaulDepth),
                         StatusText = AmbientWorldDispatchText.NormalizeStatusText(entry.StatusText),
                     };
@@ -940,6 +1168,169 @@ namespace LSOL.Systems
             }
 
             _nextWorldJobId = nextWorldJobId;
+        }
+
+        private void RestoreCarrierNetworks(IReadOnlyList<NpcCarrierNetworkSnapshot> carrierSnapshots)
+        {
+            if (carrierSnapshots == null || carrierSnapshots.Count == 0)
+            {
+                return;
+            }
+
+            for (int i = 0; i < carrierSnapshots.Count; i++)
+            {
+                var entry = carrierSnapshots[i];
+                if (entry == null)
+                {
+                    continue;
+                }
+
+                var carrier = EnsureCarrierNetwork(entry.Id, entry.HomeDistrict, entry.LastActiveWeekIndex, entry.DisplayName);
+                if (carrier == null)
+                {
+                    continue;
+                }
+
+                carrier.Strength = Math.Max(0f, entry.Strength);
+                carrier.GrowthMomentum = entry.GrowthMomentum;
+                carrier.DeclinePressure = entry.DeclinePressure;
+                carrier.IsDormant = entry.IsDormant;
+                carrier.DormantWeekCount = Math.Max(0, entry.DormantWeekCount);
+                carrier.LastActiveWeekIndex = entry.LastActiveWeekIndex;
+                carrier.LastExpansionWeekIndex = entry.LastExpansionWeekIndex;
+                carrier.VisualSeed = entry.VisualSeed;
+                carrier.PreferredCommodityFamilies.Clear();
+                carrier.PreferredDistricts.Clear();
+                carrier.PreferredCorridors.Clear();
+                CopyDistinctValues(entry.PreferredCommodityFamilies, carrier.PreferredCommodityFamilies);
+                CopyDistinctValues(entry.PreferredDistricts, carrier.PreferredDistricts);
+                CopyDistinctValues(entry.PreferredCorridors, carrier.PreferredCorridors);
+            }
+        }
+
+        private NpcCarrierNetworkState EnsureCarrierNetwork(string requestedId, string homeDistrict, int currentWeekIndex, string displayName = null)
+        {
+            var normalizedCarrierId = NormalizeCarrierId(requestedId);
+            if (!string.IsNullOrWhiteSpace(normalizedCarrierId))
+            {
+                var existing = FindCarrierNetwork(normalizedCarrierId);
+                if (existing != null)
+                {
+                    if (string.IsNullOrWhiteSpace(existing.DisplayName) && !string.IsNullOrWhiteSpace(displayName))
+                    {
+                        existing.DisplayName = displayName.Trim();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(existing.HomeDistrict) && !string.IsNullOrWhiteSpace(homeDistrict))
+                    {
+                        existing.HomeDistrict = homeDistrict.Trim();
+                    }
+
+                    return existing;
+                }
+            }
+
+            var sequence = _nextCarrierNetworkId++;
+            if (string.IsNullOrWhiteSpace(normalizedCarrierId))
+            {
+                normalizedCarrierId = string.Format("outside-carrier-{0}", sequence);
+            }
+
+            var normalizedHomeDistrict = string.IsNullOrWhiteSpace(homeDistrict)
+                ? string.Empty
+                : homeDistrict.Trim();
+            var carrier = new NpcCarrierNetworkState
+            {
+                Id = normalizedCarrierId,
+                DisplayName = !string.IsNullOrWhiteSpace(displayName)
+                    ? displayName.Trim()
+                    : BuildFallbackCarrierName(normalizedHomeDistrict, sequence),
+                HomeDistrict = normalizedHomeDistrict,
+                Strength = 0.35f,
+                LastActiveWeekIndex = currentWeekIndex,
+                LastExpansionWeekIndex = currentWeekIndex,
+                VisualSeed = sequence,
+            };
+            if (!string.IsNullOrWhiteSpace(normalizedHomeDistrict))
+            {
+                carrier.PreferredDistricts.Add(normalizedHomeDistrict);
+            }
+
+            _carrierNetworks.Add(carrier);
+            return carrier;
+        }
+
+        private NpcCarrierNetworkState FindCarrierNetwork(string carrierId)
+        {
+            var normalizedCarrierId = NormalizeCarrierId(carrierId);
+            if (string.IsNullOrWhiteSpace(normalizedCarrierId))
+            {
+                return null;
+            }
+
+            for (int i = 0; i < _carrierNetworks.Count; i++)
+            {
+                var carrier = _carrierNetworks[i];
+                if (carrier == null || !string.Equals(carrier.Id, normalizedCarrierId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                return carrier;
+            }
+
+            return null;
+        }
+
+        private string ResolveCarrierDisplayName(string carrierId)
+        {
+            var carrier = FindCarrierNetwork(carrierId);
+            if (carrier == null)
+            {
+                return string.Empty;
+            }
+
+            return carrier.DisplayName ?? string.Empty;
+        }
+
+        private static void CopyDistinctValues(IEnumerable<string> source, IList<string> destination)
+        {
+            if (source == null || destination == null)
+            {
+                return;
+            }
+
+            var seen = new HashSet<string>(destination.Select(NormalizeCarrierValue).Where(value => !string.IsNullOrWhiteSpace(value)), StringComparer.OrdinalIgnoreCase);
+            foreach (var entry in source)
+            {
+                var normalized = NormalizeCarrierValue(entry);
+                if (string.IsNullOrWhiteSpace(normalized) || !seen.Add(normalized))
+                {
+                    continue;
+                }
+
+                destination.Add(normalized);
+            }
+        }
+
+        private static string NormalizeCarrierId(string carrierId)
+        {
+            return NormalizeCarrierValue(carrierId);
+        }
+
+        private static string NormalizeCarrierValue(string value)
+        {
+            return string.IsNullOrWhiteSpace(value)
+                ? string.Empty
+                : value.Trim();
+        }
+
+        private static string BuildFallbackCarrierName(string homeDistrict, int sequence)
+        {
+            var district = string.IsNullOrWhiteSpace(homeDistrict)
+                ? "Regional"
+                : homeDistrict.Trim();
+            return string.Format("{0} Freight {1}", district, Math.Max(1, sequence));
         }
 
         private bool TryUpsertContract(
@@ -1133,7 +1524,7 @@ namespace LSOL.Systems
             var candidates = new List<NpcWorldJobCandidate>();
             BuildOverflowCandidates(candidates);
             BuildShortageCandidates(candidates);
-            BuildRivalCandidates(candidates);
+            BuildRivalCandidates(candidates, currentClockMinute);
 
             if (candidates.Count == 0)
             {
@@ -1312,16 +1703,52 @@ namespace LSOL.Systems
             }
         }
 
-        private void BuildRivalCandidates(List<NpcWorldJobCandidate> candidates)
+        private void BuildRivalCandidates(List<NpcWorldJobCandidate> candidates, int currentClockMinute)
         {
             if (candidates == null || _industryManager == null || _industryManager.Industries == null)
             {
                 return;
             }
 
-            if (_random.NextDouble() > _worldDispatchConfig.RivalJobChance)
+            MaintainCarrierEcosystem(currentClockMinute);
+            if (_carrierNetworks.Count == 0)
             {
                 return;
+            }
+
+            var queuedCarrierCandidates = 0;
+            var maxCarrierCandidates = Math.Max(1, _worldDispatchConfig.MaxCarrierOwnedJobsPerEvaluation);
+            foreach (var carrier in _carrierNetworks
+                .Where(entry => entry != null && !entry.IsDormant && entry.Strength > 0.05f)
+                .OrderByDescending(entry => entry.Strength)
+                .ThenBy(entry => entry.DisplayName, StringComparer.OrdinalIgnoreCase))
+            {
+                if (queuedCarrierCandidates >= maxCarrierCandidates)
+                {
+                    break;
+                }
+
+                if (GetActiveCarrierJobCount(carrier.Id) >= GetCarrierConcurrentJobLimit(carrier))
+                {
+                    continue;
+                }
+
+                var candidate = BuildBestCarrierRivalCandidate(carrier);
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                candidates.Add(candidate);
+                queuedCarrierCandidates += 1;
+            }
+        }
+
+        private NpcWorldJobCandidate BuildBestCarrierRivalCandidate(NpcCarrierNetworkState carrier)
+        {
+            if (carrier == null)
+            {
+                return null;
             }
 
             NpcWorldJobCandidate bestCandidate = null;
@@ -1345,7 +1772,7 @@ namespace LSOL.Systems
                 {
                     var commodity = CommodityCatalog.Normalize(outputs[outputIndex]);
                     var unitPrice = _globalMarket != null ? _globalMarket.GetUnitPrice(commodity) : 0f;
-                    if (unitPrice < 700f)
+                    if (unitPrice < 550f && GetCarrierCommodityAffinityScore(carrier, commodity) < 8f)
                     {
                         continue;
                     }
@@ -1364,15 +1791,25 @@ namespace LSOL.Systems
                     }
 
                     var tons = ComputeDispatchTons(originTons, GetDispatchDestinationFreeTons(destination, commodity));
+                    var score = 24f + (unitPrice / 75f);
+                    score += carrier.Strength * 38f;
+                    score += GetCarrierCommodityAffinityScore(carrier, commodity);
+                    score += GetCarrierDistrictAffinityScore(carrier, origin.DistrictName, destination.DistrictName);
+                    score += GetCarrierCorridorAffinityScore(carrier, origin.DistrictName, destination.DistrictName);
+                    score += GetCarrierOpportunityScore(destination.DistrictName, origin.DistrictName);
+                    score -= GetActiveCarrierJobCount(carrier.Id) * 10f;
+
                     var candidate = CreateWorldJobCandidate(
                         NpcWorldJobType.RivalFreight,
                         origin,
                         destination,
                         commodity,
                         tons,
-                        35f + (unitPrice / 60f),
+                        score,
                         true,
-                        0);
+                        0,
+                        carrier.Id,
+                        carrier.DisplayName);
                     if (candidate == null)
                     {
                         continue;
@@ -1385,10 +1822,658 @@ namespace LSOL.Systems
                 }
             }
 
-            if (bestCandidate != null)
+            return bestCandidate;
+        }
+
+        private void MaintainCarrierEcosystem(int currentClockMinute)
+        {
+            if (_worldDispatchConfig == null)
             {
-                candidates.Add(bestCandidate);
+                return;
             }
+
+            var currentWeekIndex = GetWeekIndex(currentClockMinute);
+            EnsureCarrierPopulation(currentWeekIndex);
+            if (_lastCarrierMaintenanceWeekIndex == currentWeekIndex)
+            {
+                return;
+            }
+
+            _lastCarrierMaintenanceWeekIndex = currentWeekIndex;
+            for (int i = _carrierNetworks.Count - 1; i >= 0; i--)
+            {
+                var carrier = _carrierNetworks[i];
+                if (carrier == null)
+                {
+                    _carrierNetworks.RemoveAt(i);
+                    continue;
+                }
+
+                UpdateCarrierLifecycle(carrier, currentWeekIndex);
+                if (carrier.IsDormant
+                    && carrier.DormantWeekCount > _worldDispatchConfig.DormancyWeeks
+                    && carrier.Strength <= 0.08f
+                    && _carrierNetworks.Count > Math.Max(0, _worldDispatchConfig.MinCarrierCount))
+                {
+                    _carrierNetworks.RemoveAt(i);
+                }
+            }
+
+            EnsureCarrierPopulation(currentWeekIndex);
+        }
+
+        private void EnsureCarrierPopulation(int currentWeekIndex)
+        {
+            if (_worldDispatchConfig == null)
+            {
+                return;
+            }
+
+            var minCarrierCount = Math.Max(0, _worldDispatchConfig.MinCarrierCount);
+            var maxCarrierCount = Math.Max(minCarrierCount, _worldDispatchConfig.MaxCarrierCount);
+            var targetCarrierCount = minCarrierCount;
+            if (HasNeglectedCarrierOpportunity() && _carrierNetworks.Count < maxCarrierCount)
+            {
+                targetCarrierCount = Math.Min(maxCarrierCount, Math.Max(targetCarrierCount, _carrierNetworks.Count + 1));
+            }
+
+            while (_carrierNetworks.Count < targetCarrierCount)
+            {
+                CreateCarrierNetwork(currentWeekIndex);
+            }
+        }
+
+        private NpcCarrierNetworkState CreateCarrierNetwork(int currentWeekIndex)
+        {
+            var homeDistrict = ChooseCarrierHomeDistrict();
+            var sequence = _nextCarrierNetworkId;
+            var carrier = EnsureCarrierNetwork(null, homeDistrict, currentWeekIndex, BuildGeneratedCarrierName(homeDistrict, sequence));
+            if (carrier == null)
+            {
+                return null;
+            }
+
+            carrier.Strength = Clamp01(0.28f + Math.Min(0.18f, (_carrierNetworks.Count - 1) * 0.04f));
+            carrier.GrowthMomentum = 0.05f;
+            carrier.DeclinePressure = 0f;
+            carrier.IsDormant = false;
+            carrier.DormantWeekCount = 0;
+            carrier.LastActiveWeekIndex = currentWeekIndex;
+            carrier.LastExpansionWeekIndex = currentWeekIndex;
+            AddDistinctCarrierValue(carrier.PreferredCommodityFamilies, ResolveCarrierFocusFamily(homeDistrict));
+            AddDistinctCarrierValue(carrier.PreferredDistricts, homeDistrict);
+            AddDistinctCarrierValue(carrier.PreferredCorridors, ResolvePreferredCorridorForDistrict(homeDistrict));
+            return carrier;
+        }
+
+        private void UpdateCarrierLifecycle(NpcCarrierNetworkState carrier, int currentWeekIndex)
+        {
+            if (carrier == null)
+            {
+                return;
+            }
+
+            var activeJobCount = GetActiveCarrierJobCount(carrier.Id);
+            var opportunity = ComputeCarrierOpportunity(carrier);
+            var suppression = ComputeCarrierSuppression(carrier);
+            if (activeJobCount > 0 || opportunity >= _worldDispatchConfig.ExpansionPressureThreshold * 0.85f)
+            {
+                carrier.LastActiveWeekIndex = currentWeekIndex;
+                carrier.DormantWeekCount = 0;
+                carrier.IsDormant = false;
+            }
+
+            var growthDelta = Math.Max(0f, opportunity - _worldDispatchConfig.ExpansionPressureThreshold) * _worldDispatchConfig.CarrierGrowthRate;
+            if (activeJobCount > 0)
+            {
+                growthDelta += _worldDispatchConfig.CarrierGrowthRate * 0.35f;
+            }
+
+            var declineDelta = Math.Max(0f, suppression - _worldDispatchConfig.CollapsePressureThreshold) * _worldDispatchConfig.CarrierDeclineRate;
+            if (activeJobCount <= 0 && opportunity < _worldDispatchConfig.CollapsePressureThreshold)
+            {
+                declineDelta += _worldDispatchConfig.CarrierDeclineRate * 0.35f;
+            }
+
+            carrier.GrowthMomentum = Clamp01((carrier.GrowthMomentum * 0.55f) + growthDelta);
+            carrier.DeclinePressure = Clamp01((carrier.DeclinePressure * 0.65f) + declineDelta);
+            carrier.Strength = Clamp01(carrier.Strength + (carrier.GrowthMomentum * 0.40f) - (carrier.DeclinePressure * 0.45f));
+
+            if (growthDelta > 0.001f)
+            {
+                ExpandCarrierFootprint(carrier, currentWeekIndex);
+            }
+            else if (declineDelta > 0.001f)
+            {
+                TrimCarrierFootprint(carrier);
+            }
+
+            var shouldDormant = activeJobCount <= 0
+                && (carrier.Strength <= 0.14f
+                    || (carrier.DeclinePressure >= 0.68f && opportunity < _worldDispatchConfig.ExpansionPressureThreshold));
+            if (shouldDormant)
+            {
+                carrier.IsDormant = true;
+                carrier.DormantWeekCount += 1;
+            }
+            else
+            {
+                carrier.IsDormant = false;
+                carrier.DormantWeekCount = 0;
+            }
+        }
+
+        private void ExpandCarrierFootprint(NpcCarrierNetworkState carrier, int currentWeekIndex)
+        {
+            if (carrier == null || _territoryManager == null)
+            {
+                return;
+            }
+
+            var expanded = false;
+            if (carrier.PreferredDistricts.Count < 3)
+            {
+                var bestDistrict = _territoryManager.DistrictStates
+                    .Where(state => state != null
+                        && !string.IsNullOrWhiteSpace(state.DistrictName)
+                        && !ContainsCarrierValue(carrier.PreferredDistricts, state.DistrictName))
+                    .OrderByDescending(state => GetDistrictOpportunitySignal(state) + (GetCarrierDistrictAffinityScore(carrier, state.DistrictName, string.Empty) * 0.01f))
+                    .ThenBy(state => state.DistrictName, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (bestDistrict != null)
+                {
+                    AddDistinctCarrierValue(carrier.PreferredDistricts, bestDistrict.DistrictName);
+                    expanded = true;
+                }
+            }
+
+            if (carrier.PreferredCorridors.Count < 3)
+            {
+                var bestCorridor = _territoryManager.CorridorStates
+                    .Where(state => state != null
+                        && !string.IsNullOrWhiteSpace(state.CorridorId)
+                        && IsCarrierRelevantCorridor(carrier, state)
+                        && !ContainsCarrierValue(carrier.PreferredCorridors, state.CorridorId))
+                    .OrderByDescending(state => GetCorridorOpportunitySignal(state) + (GetCarrierCorridorAffinityScore(carrier, state.DistrictA, state.DistrictB) * 0.01f))
+                    .ThenBy(state => state.CorridorId, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (bestCorridor != null)
+                {
+                    AddDistinctCarrierValue(carrier.PreferredCorridors, bestCorridor.CorridorId);
+                    expanded = true;
+                }
+            }
+
+            if (expanded)
+            {
+                carrier.LastExpansionWeekIndex = currentWeekIndex;
+            }
+        }
+
+        private void TrimCarrierFootprint(NpcCarrierNetworkState carrier)
+        {
+            if (carrier == null)
+            {
+                return;
+            }
+
+            if (carrier.PreferredDistricts.Count > 1)
+            {
+                var removableDistrict = carrier.PreferredDistricts
+                    .Where(district => !string.Equals(district, carrier.HomeDistrict, StringComparison.OrdinalIgnoreCase))
+                    .OrderBy(district =>
+                    {
+                        var state = _territoryManager != null ? _territoryManager.GetDistrictState(district) : null;
+                        return state != null ? GetDistrictOpportunitySignal(state) : 0f;
+                    })
+                    .ThenBy(district => district, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(removableDistrict))
+                {
+                    RemoveCarrierValue(carrier.PreferredDistricts, removableDistrict);
+                }
+            }
+
+            if (carrier.PreferredCorridors.Count > 1)
+            {
+                var removableCorridor = carrier.PreferredCorridors
+                    .OrderBy(corridorId =>
+                    {
+                        var state = FindCorridorState(corridorId);
+                        return state != null ? GetCorridorOpportunitySignal(state) : 0f;
+                    })
+                    .ThenBy(corridorId => corridorId, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(removableCorridor))
+                {
+                    RemoveCarrierValue(carrier.PreferredCorridors, removableCorridor);
+                }
+            }
+        }
+
+        private bool HasNeglectedCarrierOpportunity()
+        {
+            if (_territoryManager == null)
+            {
+                return false;
+            }
+
+            return _territoryManager.DistrictStates.Any(state => state != null && GetDistrictOpportunitySignal(state) >= _worldDispatchConfig.ExpansionPressureThreshold)
+                || _territoryManager.CorridorStates.Any(state => state != null && GetCorridorOpportunitySignal(state) >= _worldDispatchConfig.ExpansionPressureThreshold);
+        }
+
+        private string ChooseCarrierHomeDistrict()
+        {
+            if (_territoryManager != null)
+            {
+                var bestDistrict = _territoryManager.DistrictStates
+                    .Where(state => state != null && !string.IsNullOrWhiteSpace(state.DistrictName))
+                    .OrderByDescending(GetDistrictOpportunitySignal)
+                    .ThenBy(state => state.DistrictName, StringComparer.OrdinalIgnoreCase)
+                    .FirstOrDefault();
+                if (bestDistrict != null)
+                {
+                    return bestDistrict.DistrictName;
+                }
+            }
+
+            return _industryManager.Industries
+                .Where(industry => industry != null && !string.IsNullOrWhiteSpace(industry.DistrictName))
+                .Select(industry => industry.DistrictName)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault() ?? string.Empty;
+        }
+
+        private string ResolveCarrierFocusFamily(string homeDistrict)
+        {
+            var candidateCommodity = _industryManager.Industries
+                .Where(industry => industry != null && string.Equals(industry.DistrictName, homeDistrict, StringComparison.OrdinalIgnoreCase))
+                .SelectMany(industry => GetAmbientWorldDispatchOriginCommodities(industry))
+                .Select(CommodityCatalog.Normalize)
+                .Where(commodity => !string.IsNullOrWhiteSpace(commodity))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(commodity => _globalMarket != null ? _globalMarket.GetUnitPrice(commodity) : 0f)
+                .ThenBy(commodity => commodity, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            if (string.IsNullOrWhiteSpace(candidateCommodity))
+            {
+                return string.Empty;
+            }
+
+            var semantics = CommodityCatalog.GetEconomySemantics(candidateCommodity);
+            return !string.IsNullOrWhiteSpace(semantics.SubstituteFamily)
+                ? semantics.SubstituteFamily
+                : candidateCommodity;
+        }
+
+        private string ResolvePreferredCorridorForDistrict(string districtName)
+        {
+            if (_territoryManager == null || string.IsNullOrWhiteSpace(districtName))
+            {
+                return string.Empty;
+            }
+
+            var corridor = _territoryManager.CorridorStates
+                .Where(state => state != null
+                    && !string.IsNullOrWhiteSpace(state.CorridorId)
+                    && (string.Equals(state.DistrictA, districtName, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(state.DistrictB, districtName, StringComparison.OrdinalIgnoreCase)))
+                .OrderByDescending(GetCorridorOpportunitySignal)
+                .ThenBy(state => state.CorridorId, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            return corridor != null ? corridor.CorridorId : string.Empty;
+        }
+
+        private int GetActiveCarrierJobCount(string carrierId)
+        {
+            var normalizedCarrierId = NormalizeCarrierId(carrierId);
+            if (string.IsNullOrWhiteSpace(normalizedCarrierId))
+            {
+                return 0;
+            }
+
+            return _worldJobs.Count(job => job != null
+                && job.IsRivalJob
+                && string.Equals(job.CarrierId, normalizedCarrierId, StringComparison.OrdinalIgnoreCase)
+                && (job.Phase == NpcWorldJobPhase.Listed || job.Phase == NpcWorldJobPhase.Traveling));
+        }
+
+        private int GetCarrierConcurrentJobLimit(NpcCarrierNetworkState carrier)
+        {
+            if (carrier == null)
+            {
+                return 1;
+            }
+
+            return Math.Max(1, Math.Min(3, 1 + (int)Math.Floor(Math.Max(0f, carrier.Strength) * 2.5f)));
+        }
+
+        private float ComputeCarrierOpportunity(NpcCarrierNetworkState carrier)
+        {
+            if (carrier == null || _territoryManager == null)
+            {
+                return 0f;
+            }
+
+            var districtSignal = BuildCarrierDistrictList(carrier)
+                .Select(name => _territoryManager.GetDistrictState(name))
+                .Where(state => state != null)
+                .Select(GetDistrictOpportunitySignal)
+                .DefaultIfEmpty(0f)
+                .Max();
+            var corridorSignal = BuildCarrierCorridorList(carrier)
+                .Select(FindCorridorState)
+                .Where(state => state != null)
+                .Select(GetCorridorOpportunitySignal)
+                .DefaultIfEmpty(0f)
+                .Max();
+            return Clamp01((districtSignal * 0.65f) + (corridorSignal * 0.35f));
+        }
+
+        private float ComputeCarrierSuppression(NpcCarrierNetworkState carrier)
+        {
+            if (carrier == null || _territoryManager == null)
+            {
+                return 0f;
+            }
+
+            var districtSignal = BuildCarrierDistrictList(carrier)
+                .Select(name => _territoryManager.GetDistrictState(name))
+                .Where(state => state != null)
+                .Select(GetDistrictSuppressionSignal)
+                .DefaultIfEmpty(0f)
+                .Max();
+            var corridorSignal = BuildCarrierCorridorList(carrier)
+                .Select(FindCorridorState)
+                .Where(state => state != null)
+                .Select(GetCorridorSuppressionSignal)
+                .DefaultIfEmpty(0f)
+                .Max();
+            return Clamp01((districtSignal * 0.60f) + (corridorSignal * 0.40f));
+        }
+
+        private float GetCarrierCommodityAffinityScore(NpcCarrierNetworkState carrier, string commodity)
+        {
+            if (carrier == null || string.IsNullOrWhiteSpace(commodity))
+            {
+                return 0f;
+            }
+
+            var semantics = CommodityCatalog.GetEconomySemantics(commodity);
+            var focusKey = !string.IsNullOrWhiteSpace(semantics.SubstituteFamily)
+                ? semantics.SubstituteFamily
+                : CommodityCatalog.Normalize(commodity);
+            return ContainsCarrierValue(carrier.PreferredCommodityFamilies, focusKey)
+                ? 18f
+                : 0f;
+        }
+
+        private float GetCarrierDistrictAffinityScore(NpcCarrierNetworkState carrier, string originDistrict, string destinationDistrict)
+        {
+            if (carrier == null)
+            {
+                return 0f;
+            }
+
+            var score = 0f;
+            if (ContainsCarrierValue(carrier.PreferredDistricts, destinationDistrict))
+            {
+                score += 14f;
+            }
+
+            if (ContainsCarrierValue(carrier.PreferredDistricts, originDistrict))
+            {
+                score += 8f;
+            }
+
+            if (!string.IsNullOrWhiteSpace(carrier.HomeDistrict) && string.Equals(carrier.HomeDistrict, destinationDistrict, StringComparison.OrdinalIgnoreCase))
+            {
+                score += 10f;
+            }
+
+            return score;
+        }
+
+        private float GetCarrierCorridorAffinityScore(NpcCarrierNetworkState carrier, string districtA, string districtB)
+        {
+            if (carrier == null || string.IsNullOrWhiteSpace(districtA) || string.IsNullOrWhiteSpace(districtB))
+            {
+                return 0f;
+            }
+
+            string orderedLeft;
+            string orderedRight;
+            var corridorId = BuildCompetitionCorridorId(districtA, districtB, out orderedLeft, out orderedRight);
+            return ContainsCarrierValue(carrier.PreferredCorridors, corridorId)
+                ? Math.Max(0f, _worldDispatchConfig.PreferredCorridorWeight * 100f)
+                : 0f;
+        }
+
+        private float GetCarrierOpportunityScore(string destinationDistrict, string originDistrict)
+        {
+            if (_territoryManager == null)
+            {
+                return 0f;
+            }
+
+            var destination = _territoryManager.GetDistrictState(destinationDistrict);
+            var origin = _territoryManager.GetDistrictState(originDistrict);
+            var corridor = _territoryManager.GetCorridorState(originDistrict, destinationDistrict);
+            return (destination != null ? GetDistrictOpportunitySignal(destination) * 55f : 0f)
+                + (origin != null ? GetDistrictOpportunitySignal(origin) * 18f : 0f)
+                + (corridor != null ? GetCorridorOpportunitySignal(corridor) * 45f : 0f);
+        }
+
+        private static float GetDistrictOpportunitySignal(TerritoryDistrictState districtState)
+        {
+            if (districtState == null)
+            {
+                return 0f;
+            }
+
+            var activityTarget = districtState.RequiredWeeklyActivityTons > 0.01f
+                ? districtState.RequiredWeeklyActivityTons
+                : 18f;
+            var activityRatio = activityTarget > 0.01f
+                ? Math.Min(1.5f, districtState.CurrentWeekActivityTons / activityTarget)
+                : 0f;
+            var lowActivityOpportunity = Math.Max(0f, 0.80f - activityRatio) * 0.18f;
+            var pressureRelief = Math.Max(0f, 0.30f - districtState.CompetitivePressure) * 0.08f;
+            var licensePressure = districtState.LicenseStatus == DistrictLicenseStatus.None ? 0.06f : 0f;
+            return Clamp01(Math.Max(0f, districtState.CompetitiveOpportunity) + lowActivityOpportunity + pressureRelief + licensePressure);
+        }
+
+        private static float GetDistrictSuppressionSignal(TerritoryDistrictState districtState)
+        {
+            if (districtState == null)
+            {
+                return 0f;
+            }
+
+            var activityTarget = districtState.RequiredWeeklyActivityTons > 0.01f
+                ? districtState.RequiredWeeklyActivityTons
+                : 18f;
+            var activityRatio = activityTarget > 0.01f
+                ? Math.Min(1.5f, districtState.CurrentWeekActivityTons / activityTarget)
+                : 0f;
+            return Clamp01(
+                (activityRatio * 0.40f)
+                + Math.Min(0.25f, districtState.CorridorHoldCount * 0.08f)
+                + Math.Min(0.20f, districtState.CompetitiveWinCount * 0.03f)
+                + (districtState.LicenseStatus == DistrictLicenseStatus.Active ? 0.05f : 0f));
+        }
+
+        private static float GetCorridorOpportunitySignal(TerritoryCorridorState corridorState)
+        {
+            if (corridorState == null)
+            {
+                return 0f;
+            }
+
+            var flowTarget = corridorState.RequiredWeeklyDeliveredTons > 0.01f
+                ? corridorState.RequiredWeeklyDeliveredTons
+                : 20f;
+            var flowRatio = flowTarget > 0.01f
+                ? Math.Min(1.5f, corridorState.CurrentWeekDeliveredTons / flowTarget)
+                : 0f;
+            var rightWeakness = corridorState.RightLevel == CorridorRightLevel.None
+                ? 0.18f
+                : (corridorState.RightLevel == CorridorRightLevel.ServicePermit ? 0.10f : 0.04f);
+            return Clamp01(
+                Math.Max(0f, corridorState.CompetitiveOpportunity)
+                + rightWeakness
+                + (Math.Max(0f, 0.85f - flowRatio) * 0.16f)
+                - Math.Min(0.08f, corridorState.CompetitiveWinCount * 0.02f));
+        }
+
+        private static float GetCorridorSuppressionSignal(TerritoryCorridorState corridorState)
+        {
+            if (corridorState == null)
+            {
+                return 0f;
+            }
+
+            var flowTarget = corridorState.RequiredWeeklyDeliveredTons > 0.01f
+                ? corridorState.RequiredWeeklyDeliveredTons
+                : 20f;
+            var flowRatio = flowTarget > 0.01f
+                ? Math.Min(1.5f, corridorState.CurrentWeekDeliveredTons / flowTarget)
+                : 0f;
+            return Clamp01(
+                Math.Min(0.50f, flowRatio * 0.35f)
+                + Math.Min(0.25f, corridorState.CompetitiveWinCount * 0.05f)
+                + (corridorState.RightLevel != CorridorRightLevel.None ? 0.08f : 0f)
+                + Math.Min(0.10f, corridorState.ContestedWeekStreak * 0.02f));
+        }
+
+        private bool IsCarrierRelevantCorridor(NpcCarrierNetworkState carrier, TerritoryCorridorState corridorState)
+        {
+            if (carrier == null || corridorState == null)
+            {
+                return false;
+            }
+
+            return ContainsCarrierValue(carrier.PreferredDistricts, corridorState.DistrictA)
+                || ContainsCarrierValue(carrier.PreferredDistricts, corridorState.DistrictB)
+                || (!string.IsNullOrWhiteSpace(carrier.HomeDistrict)
+                    && (string.Equals(carrier.HomeDistrict, corridorState.DistrictA, StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(carrier.HomeDistrict, corridorState.DistrictB, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private TerritoryCorridorState FindCorridorState(string corridorId)
+        {
+            if (_territoryManager == null || string.IsNullOrWhiteSpace(corridorId))
+            {
+                return null;
+            }
+
+            return _territoryManager.CorridorStates.FirstOrDefault(state => state != null && string.Equals(state.CorridorId, corridorId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private IReadOnlyList<string> BuildCarrierDistrictList(NpcCarrierNetworkState carrier)
+        {
+            var districts = new List<string>();
+            AddDistinctCarrierValue(districts, carrier != null ? carrier.HomeDistrict : string.Empty);
+            if (carrier != null)
+            {
+                CopyDistinctValues(carrier.PreferredDistricts, districts);
+            }
+
+            return districts;
+        }
+
+        private IReadOnlyList<string> BuildCarrierCorridorList(NpcCarrierNetworkState carrier)
+        {
+            var corridors = new List<string>();
+            if (carrier != null)
+            {
+                CopyDistinctValues(carrier.PreferredCorridors, corridors);
+                if (corridors.Count == 0)
+                {
+                    AddDistinctCarrierValue(corridors, ResolvePreferredCorridorForDistrict(carrier.HomeDistrict));
+                }
+            }
+
+            return corridors;
+        }
+
+        private static bool ContainsCarrierValue(IReadOnlyList<string> values, string target)
+        {
+            if (values == null || string.IsNullOrWhiteSpace(target))
+            {
+                return false;
+            }
+
+            for (int i = 0; i < values.Count; i++)
+            {
+                if (string.Equals(values[i], target, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static void RemoveCarrierValue(IList<string> values, string target)
+        {
+            if (values == null || string.IsNullOrWhiteSpace(target))
+            {
+                return;
+            }
+
+            for (int i = values.Count - 1; i >= 0; i--)
+            {
+                if (string.Equals(values[i], target, StringComparison.OrdinalIgnoreCase))
+                {
+                    values.RemoveAt(i);
+                }
+            }
+        }
+
+        private static void AddDistinctCarrierValue(IList<string> values, string value)
+        {
+            if (values == null)
+            {
+                return;
+            }
+
+            var normalized = NormalizeCarrierValue(value);
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return;
+            }
+
+            for (int i = 0; i < values.Count; i++)
+            {
+                if (string.Equals(values[i], normalized, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+
+            values.Add(normalized);
+        }
+
+        private static string BuildGeneratedCarrierName(string homeDistrict, int sequence)
+        {
+            var nouns = new[] { "Transit", "Haulage", "Cartage", "Freight", "Logistics", "Cargo" };
+            var district = string.IsNullOrWhiteSpace(homeDistrict)
+                ? "Regional"
+                : homeDistrict.Trim();
+            var noun = nouns[Math.Abs(sequence) % nouns.Length];
+            return string.Format("{0} {1}", district, noun);
+        }
+
+        private int GetWeekIndex(int currentClockMinute)
+        {
+            return Math.Max(0, currentClockMinute) / InGameMinutesPerWeek;
+        }
+
+        private static float Clamp01(float value)
+        {
+            return Math.Max(0f, Math.Min(1f, value));
         }
 
         private NpcWorldJobCandidate CreateWorldJobCandidate(
@@ -1399,7 +2484,9 @@ namespace LSOL.Systems
             float tons,
             float baseScore,
             bool isRivalJob,
-            int backhaulDepth)
+            int backhaulDepth,
+            string carrierId = null,
+            string carrierName = null)
         {
             var sourceLabel = origin != null ? origin.Name : "Unknown source";
             var destinationLabel = destination != null ? destination.Name : "Unknown destination";
@@ -1491,6 +2578,8 @@ namespace LSOL.Systems
                 UsesPremiumDispatch = _premiumDispatchEnabled && priorityMatch && !isRivalJob,
                 HasVisibleConvoy = origin != null && destination != null && _random.NextDouble() <= _worldDispatchConfig.VisualSpawnChance,
                 IsRivalJob = isRivalJob,
+                CarrierId = NormalizeCarrierId(carrierId),
+                CarrierName = carrierName ?? string.Empty,
                 ListingLeadTimeMinutes = listingLeadTime,
                 BackhaulDepth = Math.Max(0, backhaulDepth),
             };
@@ -1514,7 +2603,7 @@ namespace LSOL.Systems
                 return false;
             }
 
-            _worldJobs.Add(new NpcWorldLogisticsJob
+            var queuedJob = new NpcWorldLogisticsJob
             {
                 Id = _nextWorldJobId++,
                 Type = candidate.Type,
@@ -1533,10 +2622,14 @@ namespace LSOL.Systems
                 IsPriorityMatch = candidate.IsPriorityMatch,
                 HasVisibleConvoy = candidate.HasVisibleConvoy,
                 IsRivalJob = candidate.IsRivalJob,
+                CarrierId = NormalizeCarrierId(candidate.CarrierId),
+                CarrierName = candidate.CarrierName ?? string.Empty,
                 BackhaulDepth = candidate.BackhaulDepth,
                 NextVisualSpawnAttemptMs = 0,
                 StatusText = AmbientWorldDispatchText.BuildQueuedStatusText(),
-            });
+            };
+            _worldJobs.Add(queuedJob);
+            RegisterQueuedCarrierJob(queuedJob, currentClockMinute);
 
             RecordWorldDispatchDiagnostic(
                 NpcWorldDispatchDiagnosticStage.Queueing,
@@ -1567,6 +2660,7 @@ namespace LSOL.Systems
                 job.StatusText = blocker;
                 job.Phase = NpcWorldJobPhase.Cancelled;
                 CleanupWorldJobVisual(job);
+                RegisterCarrierJobOutcome(job, false, currentClockMinute);
                 RecordWorldDispatchDiagnostic(
                     NpcWorldDispatchDiagnosticStage.Completion,
                     string.Format("World job cancelled with reason: {0}", blocker),
@@ -1635,6 +2729,7 @@ namespace LSOL.Systems
             job.Phase = succeeded ? NpcWorldJobPhase.Completed : NpcWorldJobPhase.Cancelled;
             if (!succeeded)
             {
+                RegisterCarrierJobOutcome(job, false, currentClockMinute);
                 RecordWorldDispatchDiagnostic(
                     NpcWorldDispatchDiagnosticStage.Completion,
                     string.Format("World job cancelled with reason: {0}", outcome),
@@ -1645,6 +2740,7 @@ namespace LSOL.Systems
             }
 
             _completedWorldDispatches += 1;
+            RegisterCarrierJobOutcome(job, true, currentClockMinute);
             RecordWorldDispatchDiagnostic(
                 NpcWorldDispatchDiagnosticStage.Completion,
                 string.Format("World job completed: {0}", outcome),
@@ -1793,6 +2889,78 @@ namespace LSOL.Systems
             if (bestCandidate != null)
             {
                 QueueWorldJob(bestCandidate, currentClockMinute);
+            }
+        }
+
+        private void RegisterQueuedCarrierJob(NpcWorldLogisticsJob job, int currentClockMinute)
+        {
+            if (job == null || !job.IsRivalJob)
+            {
+                return;
+            }
+
+            var destination = FindIndustryById(job.DestinationIndustryId);
+            var origin = FindIndustryById(job.OriginIndustryId);
+            var carrier = EnsureCarrierNetwork(
+                job.CarrierId,
+                destination != null ? destination.DistrictName : (origin != null ? origin.DistrictName : string.Empty),
+                GetWeekIndex(currentClockMinute),
+                job.CarrierName);
+            if (carrier == null)
+            {
+                return;
+            }
+
+            job.CarrierId = carrier.Id;
+            job.CarrierName = carrier.DisplayName;
+            carrier.LastActiveWeekIndex = GetWeekIndex(currentClockMinute);
+            carrier.IsDormant = false;
+            carrier.DormantWeekCount = 0;
+            carrier.GrowthMomentum = Clamp01(carrier.GrowthMomentum + 0.04f);
+            carrier.Strength = Clamp01(Math.Max(carrier.Strength, 0.22f));
+            AddDistinctCarrierValue(carrier.PreferredDistricts, destination != null ? destination.DistrictName : string.Empty);
+            AddDistinctCarrierValue(carrier.PreferredDistricts, origin != null ? origin.DistrictName : string.Empty);
+            if (origin != null && destination != null)
+            {
+                string orderedLeft;
+                string orderedRight;
+                AddDistinctCarrierValue(carrier.PreferredCorridors, BuildCompetitionCorridorId(origin.DistrictName, destination.DistrictName, out orderedLeft, out orderedRight));
+            }
+
+            var semantics = CommodityCatalog.GetEconomySemantics(job.Commodity);
+            AddDistinctCarrierValue(
+                carrier.PreferredCommodityFamilies,
+                !string.IsNullOrWhiteSpace(semantics.SubstituteFamily)
+                    ? semantics.SubstituteFamily
+                    : job.Commodity);
+        }
+
+        private void RegisterCarrierJobOutcome(NpcWorldLogisticsJob job, bool succeeded, int currentClockMinute)
+        {
+            if (job == null || !job.IsRivalJob)
+            {
+                return;
+            }
+
+            var carrier = FindCarrierNetwork(job.CarrierId);
+            if (carrier == null)
+            {
+                return;
+            }
+
+            carrier.LastActiveWeekIndex = GetWeekIndex(currentClockMinute);
+            if (succeeded)
+            {
+                carrier.Strength = Clamp01(carrier.Strength + (_worldDispatchConfig.CarrierGrowthRate * 0.35f));
+                carrier.GrowthMomentum = Clamp01(carrier.GrowthMomentum + (_worldDispatchConfig.CarrierGrowthRate * 0.45f));
+                carrier.DeclinePressure = Clamp01(carrier.DeclinePressure * 0.50f);
+                carrier.IsDormant = false;
+                carrier.DormantWeekCount = 0;
+            }
+            else
+            {
+                carrier.DeclinePressure = Clamp01(carrier.DeclinePressure + (_worldDispatchConfig.CarrierDeclineRate * 0.45f));
+                carrier.Strength = Clamp01(carrier.Strength - (_worldDispatchConfig.CarrierDeclineRate * 0.25f));
             }
         }
 
@@ -3132,7 +4300,8 @@ namespace LSOL.Systems
 
         private void UpdatePayroll(NpcLogisticsContract contract, int elapsedPayrollMinutes)
         {
-            if (contract == null || contract.Tier == null || elapsedPayrollMinutes <= 0)
+            var effectiveTier = GetEffectiveDriverTier(contract);
+            if (contract == null || effectiveTier == null || elapsedPayrollMinutes <= 0)
             {
                 return;
             }
@@ -3147,7 +4316,7 @@ namespace LSOL.Systems
 
             contract.PayrollElapsedInGameMinutes %= InGameMinutesPerWeek;
 
-            var weeklyWage = GetWeeklyWage(contract.Tier);
+            var weeklyWage = GetWeeklyWage(effectiveTier);
             var totalCharge = weeklyWage * payrollCyclesDue;
             if (totalCharge > 0f && _deductProfit != null)
             {
@@ -3252,7 +4421,8 @@ namespace LSOL.Systems
                 return;
             }
 
-            var lossRatio = (float)(_random.NextDouble() * Math.Max(0f, contract.Tier.CargoLossRate));
+            var effectiveTier = GetEffectiveDriverTier(contract);
+            var lossRatio = (float)(_random.NextDouble() * Math.Max(0f, effectiveTier != null ? effectiveTier.CargoLossRate : 0f));
             if (_territoryManager != null)
             {
                 lossRatio = _territoryManager.AdjustNpcLossRatio(contract.OriginIndustry, contract.DestinationIndustry, lossRatio);
@@ -3551,7 +4721,8 @@ namespace LSOL.Systems
             }
 
             contract.RouteBlip = CreateRouteBlip(contract);
-            contract.StatusText = string.Format("Spawned {0}", contract.Tier.DisplayName);
+            var effectiveTier = GetEffectiveDriverTier(contract);
+            contract.StatusText = string.Format("Spawned {0}", effectiveTier != null ? effectiveTier.DisplayName : contract.Tier.DisplayName);
 
             var cargoState = _fleetManager.GetOrCreateCargoState(GetCargoVehicle(contract));
             if (cargoState != null)
@@ -3572,7 +4743,8 @@ namespace LSOL.Systems
                 return null;
             }
 
-            var modelName = contract.Tier != null ? contract.Tier.NpcModel : DefaultNpcModel;
+            var effectiveTier = GetEffectiveDriverTier(contract);
+            var modelName = effectiveTier != null ? effectiveTier.NpcModel : DefaultNpcModel;
             var model = new Model(modelName);
             model.Request(1000);
             if (!model.IsLoaded)
@@ -3599,8 +4771,8 @@ namespace LSOL.Systems
             Function.Call(Hash.SET_BLOCKING_OF_NON_TEMPORARY_EVENTS, driver.Handle, true);
             Function.Call(Hash.SET_PED_KEEP_TASK, driver.Handle, true);
             Function.Call(Hash.SET_PED_CAN_BE_DRAGGED_OUT, driver.Handle, false);
-            Function.Call(Hash.SET_DRIVER_ABILITY, driver.Handle, GetDriverAbility(contract.Tier));
-            Function.Call(Hash.SET_DRIVER_AGGRESSIVENESS, driver.Handle, GetDriverAggressiveness(contract.Tier));
+            Function.Call(Hash.SET_DRIVER_ABILITY, driver.Handle, GetDriverAbility(effectiveTier));
+            Function.Call(Hash.SET_DRIVER_AGGRESSIVENESS, driver.Handle, GetDriverAggressiveness(effectiveTier));
             Function.Call(Hash.SET_VEHICLE_ENGINE_ON, truck.Handle, true, true, false);
             return driver;
         }
@@ -3615,6 +4787,84 @@ namespace LSOL.Systems
         {
             var normalizedSpeed = tier != null ? Math.Max(0.1f, tier.SpeedMultiplier) : 0.6f;
             return Math.Max(MinDriverAggressiveness, Math.Min(MaxDriverAggressiveness, 0.12f + (normalizedSpeed * 0.16f)));
+        }
+
+        private float GetDriverTrainingExperience(NpcLogisticsContract contract)
+        {
+            if (contract == null)
+            {
+                return 0f;
+            }
+
+            var experience = 0f;
+            experience += Math.Max(0, contract.CompletedDeliveries) * DriverTrainingDeliveryWeight;
+            experience += Math.Max(0f, contract.TotalDeliveredTons) * DriverTrainingTonsWeight;
+            experience += Math.Max(0, contract.CompletedPayrollCycles) * DriverTrainingPayrollWeight;
+            experience += Math.Max(0f, 1f - Math.Min(1f, Math.Max(0f, contract.LastJourneyLossRatio))) * DriverTrainingLossWeight;
+            return Math.Max(0f, experience);
+        }
+
+        private List<NpcDriverTierDefinition> GetProgressionTiers()
+        {
+            return _driverTiers
+                .Where(tier => tier != null)
+                .OrderBy(GetDriverTierProgressionScore)
+                .ThenBy(tier => tier.DisplayName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static float GetDriverTierProgressionScore(NpcDriverTierDefinition tier)
+        {
+            if (tier == null)
+            {
+                return float.MinValue;
+            }
+
+            return (Math.Max(0.1f, tier.SpeedMultiplier) * 1000f)
+                - (Math.Max(0f, tier.CargoLossRate) * 1000f)
+                + Math.Max(0f, tier.PriceMultiplier)
+                + Math.Max(0f, tier.WeeklyWageStandard) / 1000f;
+        }
+
+        private static int GetProgressionTierIndex(NpcDriverTierDefinition tier, IReadOnlyList<NpcDriverTierDefinition> orderedTiers)
+        {
+            if (tier == null || orderedTiers == null)
+            {
+                return -1;
+            }
+
+            for (int i = 0; i < orderedTiers.Count; i++)
+            {
+                if (orderedTiers[i] != null && string.Equals(orderedTiers[i].Id, tier.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private string BuildDriverTrainingShortLabel(NpcDriverTrainingSummary summary)
+        {
+            if (summary == null || summary.BaseTier == null)
+            {
+                return "Training unavailable";
+            }
+
+            if (summary.EffectiveTier == null)
+            {
+                return string.Format("Training {0:0}%", summary.ProgressPercent);
+            }
+
+            if (summary.EffectiveTierIndex >= summary.ProgressionTierCount - 1)
+            {
+                return string.Format("Training maxed at {0}", summary.EffectiveTier.DisplayName);
+            }
+
+            return string.Format(
+                "Training {0:0}% to {1}",
+                summary.ProgressPercent,
+                summary.EffectiveTier.DisplayName);
         }
 
         private void EnsureDriveTask(NpcLogisticsContract contract, Vector3 targetPosition, int now)
@@ -3634,6 +4884,7 @@ namespace LSOL.Systems
                 return;
             }
 
+            var effectiveTier = GetEffectiveDriverTier(contract);
             Function.Call(
                 Hash.TASK_VEHICLE_DRIVE_TO_COORD_LONGRANGE,
                 contract.Driver.Handle,
@@ -3641,7 +4892,7 @@ namespace LSOL.Systems
                 targetPosition.X,
                 targetPosition.Y,
                 targetPosition.Z,
-                Math.Max(8f, BaseDriveSpeed * Math.Max(0.1f, contract.Tier.SpeedMultiplier)),
+                Math.Max(8f, BaseDriveSpeed * Math.Max(0.1f, effectiveTier != null ? effectiveTier.SpeedMultiplier : 0.6f)),
                 DriveStyle,
                 ArrivalDistance * 0.5f);
             contract.NextDriveTaskRefreshMs = now + DriveTaskRefreshIntervalMs;
@@ -5846,12 +7097,259 @@ namespace LSOL.Systems
             }
 
             var weightedTons = Math.Max(0f, job.Tons) * weight;
+            var pressureContribution = (0.08f * weight)
+                + Math.Min(0.18f, weightedTons * 0.01f)
+                + (job.HasVisibleConvoy ? 0.05f * weight : 0f);
             summary.ActiveJobCount += 1;
             summary.VisibleConvoyCount += job.HasVisibleConvoy ? 1 : 0;
             summary.CompetitiveTons += weightedTons;
-            summary.PressureScore += (0.08f * weight)
-                + Math.Min(0.18f, weightedTons * 0.01f)
-                + (job.HasVisibleConvoy ? 0.05f * weight : 0f);
+            summary.PressureScore += pressureContribution;
+            UpdateDistrictCarrierCompetition(summary, job, pressureContribution);
+        }
+
+        private static void AccumulateCorridorCompetition(
+            IDictionary<string, NpcCorridorCompetitionSummary> summaries,
+            string districtA,
+            string districtB,
+            NpcWorldLogisticsJob job)
+        {
+            if (summaries == null
+                || job == null
+                || string.IsNullOrWhiteSpace(districtA)
+                || string.IsNullOrWhiteSpace(districtB)
+                || string.Equals(districtA, districtB, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            string orderedLeft;
+            string orderedRight;
+            var corridorId = BuildCompetitionCorridorId(districtA, districtB, out orderedLeft, out orderedRight);
+            NpcCorridorCompetitionSummary summary;
+            if (!summaries.TryGetValue(corridorId, out summary) || summary == null)
+            {
+                summary = new NpcCorridorCompetitionSummary
+                {
+                    CorridorId = corridorId,
+                    DistrictA = orderedLeft,
+                    DistrictB = orderedRight,
+                };
+                summaries[corridorId] = summary;
+            }
+
+            var contestedTons = Math.Max(0f, job.Tons);
+            var pressureContribution = 0.10f
+                + Math.Min(0.22f, contestedTons * 0.015f)
+                + (job.HasVisibleConvoy ? 0.08f : 0f)
+                + (job.Phase == NpcWorldJobPhase.Traveling ? 0.04f : 0f);
+            summary.ActiveJobCount += 1;
+            summary.VisibleConvoyCount += job.HasVisibleConvoy ? 1 : 0;
+            summary.CompetitiveTons += contestedTons;
+            summary.PressureScore += pressureContribution;
+            UpdateCorridorCarrierCompetition(summary, job, pressureContribution);
+        }
+
+        private static void UpdateDistrictCarrierCompetition(NpcDistrictCompetitionSummary summary, NpcWorldLogisticsJob job, float pressureContribution)
+        {
+            if (summary == null || job == null)
+            {
+                return;
+            }
+
+            UpdateCarrierCompetitionMetadata(
+                summary.CarrierPressureById,
+                summary.CarrierNamesById,
+                NormalizeCarrierId(job.CarrierId),
+                job.CarrierName,
+                pressureContribution,
+                out var activeCarrierCount,
+                out var dominantCarrierId,
+                out var dominantCarrierName);
+            summary.ActiveCarrierCount = activeCarrierCount;
+            summary.DominantCarrierId = dominantCarrierId;
+            summary.DominantCarrierName = dominantCarrierName;
+        }
+
+        private static void UpdateCorridorCarrierCompetition(NpcCorridorCompetitionSummary summary, NpcWorldLogisticsJob job, float pressureContribution)
+        {
+            if (summary == null || job == null)
+            {
+                return;
+            }
+
+            UpdateCarrierCompetitionMetadata(
+                summary.CarrierPressureById,
+                summary.CarrierNamesById,
+                NormalizeCarrierId(job.CarrierId),
+                job.CarrierName,
+                pressureContribution,
+                out var activeCarrierCount,
+                out var dominantCarrierId,
+                out var dominantCarrierName);
+            summary.ActiveCarrierCount = activeCarrierCount;
+            summary.DominantCarrierId = dominantCarrierId;
+            summary.DominantCarrierName = dominantCarrierName;
+        }
+
+        private static void UpdateCarrierCompetitionMetadata(
+            IDictionary<string, float> carrierPressureById,
+            IDictionary<string, string> carrierNamesById,
+            string carrierId,
+            string carrierName,
+            float pressureContribution,
+            out int activeCarrierCount,
+            out string dominantCarrierId,
+            out string dominantCarrierName)
+        {
+            activeCarrierCount = carrierPressureById != null ? carrierPressureById.Count : 0;
+            dominantCarrierId = string.Empty;
+            dominantCarrierName = string.Empty;
+            if (carrierPressureById == null || carrierNamesById == null || string.IsNullOrWhiteSpace(carrierId) || pressureContribution <= 0.001f)
+            {
+                return;
+            }
+
+            float currentPressure;
+            carrierPressureById.TryGetValue(carrierId, out currentPressure);
+            carrierPressureById[carrierId] = currentPressure + pressureContribution;
+            carrierNamesById[carrierId] = string.IsNullOrWhiteSpace(carrierName)
+                ? carrierId
+                : carrierName.Trim();
+            activeCarrierCount = carrierPressureById.Count;
+
+            var dominant = carrierPressureById
+                .OrderByDescending(entry => entry.Value)
+                .ThenBy(entry => entry.Key, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+            dominantCarrierId = dominant.Key ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(dominantCarrierId))
+            {
+                string resolvedCarrierName;
+                dominantCarrierName = carrierNamesById.TryGetValue(dominantCarrierId, out resolvedCarrierName)
+                    ? (resolvedCarrierName ?? string.Empty)
+                    : dominantCarrierId;
+            }
+        }
+
+        private void AccumulateCarrierDistrictFootprintPressure(IDictionary<string, NpcDistrictCompetitionSummary> summaries)
+        {
+            if (summaries == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _carrierNetworks.Count; i++)
+            {
+                var carrier = _carrierNetworks[i];
+                if (carrier == null || carrier.IsDormant || carrier.Strength <= 0.01f)
+                {
+                    continue;
+                }
+
+                var pressureContribution = Math.Max(0.01f, 0.02f + (carrier.Strength * 0.10f) + (carrier.GrowthMomentum * 0.05f) - (carrier.DeclinePressure * 0.04f));
+                var districts = BuildCarrierDistrictList(carrier);
+                for (int districtIndex = 0; districtIndex < districts.Count; districtIndex++)
+                {
+                    var districtName = districts[districtIndex];
+                    if (string.IsNullOrWhiteSpace(districtName))
+                    {
+                        continue;
+                    }
+
+                    NpcDistrictCompetitionSummary summary;
+                    if (!summaries.TryGetValue(districtName, out summary) || summary == null)
+                    {
+                        summary = new NpcDistrictCompetitionSummary
+                        {
+                            DistrictName = districtName,
+                        };
+                        summaries[districtName] = summary;
+                    }
+
+                    summary.PressureScore += pressureContribution;
+                    UpdateCarrierCompetitionMetadata(
+                        summary.CarrierPressureById,
+                        summary.CarrierNamesById,
+                        carrier.Id,
+                        carrier.DisplayName,
+                        pressureContribution,
+                        out var activeCarrierCount,
+                        out var dominantCarrierId,
+                        out var dominantCarrierName);
+                    summary.ActiveCarrierCount = activeCarrierCount;
+                    summary.DominantCarrierId = dominantCarrierId;
+                    summary.DominantCarrierName = dominantCarrierName;
+                }
+            }
+        }
+
+        private void AccumulateCarrierCorridorFootprintPressure(IDictionary<string, NpcCorridorCompetitionSummary> summaries)
+        {
+            if (summaries == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _carrierNetworks.Count; i++)
+            {
+                var carrier = _carrierNetworks[i];
+                if (carrier == null || carrier.IsDormant || carrier.Strength <= 0.01f)
+                {
+                    continue;
+                }
+
+                var pressureContribution = Math.Max(0.01f, 0.03f + (carrier.Strength * 0.11f) + (carrier.GrowthMomentum * 0.04f) - (carrier.DeclinePressure * 0.05f));
+                var corridors = BuildCarrierCorridorList(carrier);
+                for (int corridorIndex = 0; corridorIndex < corridors.Count; corridorIndex++)
+                {
+                    var corridorId = corridors[corridorIndex];
+                    var corridorState = FindCorridorState(corridorId);
+                    if (corridorState == null)
+                    {
+                        continue;
+                    }
+
+                    NpcCorridorCompetitionSummary summary;
+                    if (!summaries.TryGetValue(corridorState.CorridorId, out summary) || summary == null)
+                    {
+                        summary = new NpcCorridorCompetitionSummary
+                        {
+                            CorridorId = corridorState.CorridorId,
+                            DistrictA = corridorState.DistrictA,
+                            DistrictB = corridorState.DistrictB,
+                        };
+                        summaries[corridorState.CorridorId] = summary;
+                    }
+
+                    summary.PressureScore += pressureContribution;
+                    UpdateCarrierCompetitionMetadata(
+                        summary.CarrierPressureById,
+                        summary.CarrierNamesById,
+                        carrier.Id,
+                        carrier.DisplayName,
+                        pressureContribution,
+                        out var activeCarrierCount,
+                        out var dominantCarrierId,
+                        out var dominantCarrierName);
+                    summary.ActiveCarrierCount = activeCarrierCount;
+                    summary.DominantCarrierId = dominantCarrierId;
+                    summary.DominantCarrierName = dominantCarrierName;
+                }
+            }
+        }
+
+        private static string BuildCompetitionCorridorId(string districtA, string districtB, out string orderedLeft, out string orderedRight)
+        {
+            orderedLeft = (districtA ?? string.Empty).Trim();
+            orderedRight = (districtB ?? string.Empty).Trim();
+            if (StringComparer.OrdinalIgnoreCase.Compare(orderedLeft, orderedRight) > 0)
+            {
+                var swap = orderedLeft;
+                orderedLeft = orderedRight;
+                orderedRight = swap;
+            }
+
+            return orderedLeft + "|" + orderedRight;
         }
 
         private string BuildWorldDispatchHeadline()
@@ -6126,6 +7624,27 @@ namespace LSOL.Systems
                     return WeeklyWageStandard;
             }
         }
+    }
+
+    public sealed class NpcDriverTrainingSummary
+    {
+        public NpcDriverTierDefinition BaseTier { get; set; }
+
+        public NpcDriverTierDefinition EffectiveTier { get; set; }
+
+        public int BaseTierIndex { get; set; }
+
+        public int EffectiveTierIndex { get; set; }
+
+        public float ExperiencePoints { get; set; }
+
+        public float ProgressPointsToNextTier { get; set; }
+
+        public float ProgressPercent { get; set; }
+
+        public int PromotionsEarned { get; set; }
+
+        public int ProgressionTierCount { get; set; }
     }
 
     public sealed class NpcLogisticsRouteDefinition

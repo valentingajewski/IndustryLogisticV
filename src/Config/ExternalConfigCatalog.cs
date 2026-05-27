@@ -129,8 +129,11 @@ namespace LSOL.Config
         public HashSet<string> Outputs { get; set; }
         public Dictionary<string, float> RecipeInputWeights { get; set; }
         public Dictionary<string, float> RecipeOutputWeights { get; set; }
+        public List<IndustryRecipeVariantConfig> RecipeVariants { get; set; }
         public Dictionary<string, float> InputCapacityWeights { get; set; }
         public Dictionary<string, float> OutputCapacityWeights { get; set; }
+        public Dictionary<string, float> SinkPreferenceWeights { get; set; }
+        public float SinkElasticityMultiplier { get; set; } = 1f;
         public string Density { get; set; }
         public float StartingTankRatio { get; set; }
         public float EmptyingRate { get; set; }
@@ -167,5 +170,6 @@ namespace LSOL.Config
         public string GroupName { get; set; }
         public VehicleCargoType CargoType { get; set; }
         public float BasePrice { get; set; }
+        public CommodityEconomySemantics EconomySemantics { get; set; }
     }
 }

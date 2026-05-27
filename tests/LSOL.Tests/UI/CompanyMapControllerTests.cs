@@ -67,10 +67,158 @@ namespace LSOL.Tests.UI
             Assert.AreNotSame(first, refreshed);
         }
 
+        [TestMethod]
+        public void GetNetworkViewSnapshot_ReusesCacheUntilCorridorCompetitionStateChanges()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
+
+            var first = InvokeGetNetworkViewSnapshot(controller);
+
+            territoryManager.GetCorridorState(districtA, districtB).CompetitivePressure += 0.08f;
+
+            var refreshed = InvokeGetNetworkViewSnapshot(controller);
+
+            Assert.AreNotSame(first, refreshed);
+        }
+
+        [TestMethod]
+        public void GetNetworkViewSnapshot_ReusesCacheUntilCarrierMetadataChanges()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
+
+            var first = InvokeGetNetworkViewSnapshot(controller);
+
+            territoryManager.GetDistrictState(districtA).ActiveCarrierCount = 2;
+            territoryManager.GetDistrictState(districtA).DominantCarrierName = "Port Freight";
+            territoryManager.GetCorridorState(districtA, districtB).ActiveCarrierCount = 1;
+            territoryManager.GetCorridorState(districtA, districtB).DominantCarrierName = "Port Freight";
+
+            var refreshed = InvokeGetNetworkViewSnapshot(controller);
+
+            Assert.AreNotSame(first, refreshed);
+        }
+
+        [TestMethod]
+        public void GetNetworkViewSnapshot_ReusesCacheUntilPlannerOverlayStateChanges()
+        {
+            RoutePlannerOverlaySnapshot overlay = null;
+            var controller = CreateControllerWithScenario(
+                out var territoryManager,
+                out var districtA,
+                out var districtB,
+                () => overlay);
+
+            overlay = new RoutePlannerOverlaySnapshot
+            {
+                SelectedCandidateId = "lane-a",
+                SelectedDistrictA = districtA,
+                SelectedDistrictB = districtB,
+                Lanes = new[]
+                {
+                    new RoutePlannerOverlayLane
+                    {
+                        CandidateId = "lane-a",
+                        DistrictA = districtA,
+                        DistrictB = districtB,
+                        Label = "Fuel planner lane",
+                        Kind = RoutePlannerOverlayLaneKind.Recommended,
+                        IsSelected = true,
+                    },
+                },
+            };
+
+            var first = InvokeGetNetworkViewSnapshot(controller);
+
+            overlay = new RoutePlannerOverlaySnapshot
+            {
+                SelectedCandidateId = "lane-b",
+                SelectedDistrictA = districtB,
+                SelectedDistrictB = districtA,
+                Lanes = new[]
+                {
+                    new RoutePlannerOverlayLane
+                    {
+                        CandidateId = "lane-b",
+                        DistrictA = districtB,
+                        DistrictB = districtA,
+                        Label = "Blocked planner lane",
+                        Kind = RoutePlannerOverlayLaneKind.Blocked,
+                        IsSelected = true,
+                    },
+                },
+            };
+
+            var refreshed = InvokeGetNetworkViewSnapshot(controller);
+
+            Assert.AreNotSame(first, refreshed);
+        }
+
+        [TestMethod]
+        public void GetNetworkViewSnapshot_ExposesContestedCorridorMetadata()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
+
+            var snapshot = InvokeGetNetworkViewSnapshot(controller);
+            var visibleCorridors = GetPropertyValue<IList<TerritoryCorridorState>>(snapshot, "VisibleCorridors");
+
+            Assert.AreEqual(1, visibleCorridors.Count);
+            Assert.AreEqual(2, visibleCorridors[0].ActiveCompetitionJobs);
+            Assert.AreEqual(1, visibleCorridors[0].CompetitiveWinCount);
+            Assert.IsTrue(visibleCorridors[0].CompetitivePressure > 0.4f);
+            StringAssert.Contains(visibleCorridors[0].CompetitionStatus, "Contested");
+
+            var district = territoryManager.GetDistrictState(districtA);
+            Assert.IsNotNull(district);
+            Assert.AreEqual(1, district.ContestedCorridorCount);
+            Assert.AreEqual(districtB, district.HottestCorridorName);
+        }
+
+        [TestMethod]
+        public void GetSupportSiteDetail_IncludesActiveDepotSpecializationEffectSummary()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out _, out _);
+            var supportSite = territoryManager.GetDepotIndustries()
+                .First(industry => industry != null && territoryManager.GetDepotSpecialization(industry) == DepotSpecialization.Support);
+
+            var detail = InvokePrivate<string>(controller, "GetSupportSiteDetail", supportSite);
+
+            StringAssert.Contains(detail, "Support: amplifies district support bonuses and stabilizes licensed territory.");
+            StringAssert.Contains(detail, "Staff 2/0/0/1");
+        }
+
+        [TestMethod]
+        public void BuildCorridorNetworkSecondaryText_IncludesDominantCarrierMetadata()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
+            var corridor = territoryManager.GetCorridorState(districtA, districtB);
+
+            corridor.ActiveCarrierCount = 2;
+            corridor.DominantCarrierName = "Senora Line";
+
+            var detail = InvokePrivate<string>(controller, "BuildCorridorNetworkSecondaryText", corridor);
+
+            StringAssert.Contains(detail, "Carriers 2");
+            StringAssert.Contains(detail, "Lead Senora Line");
+        }
+
+        [TestMethod]
+        public void BuildDistrictServiceSupportDetail_IncludesDistrictDepotRoleSummary()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out _);
+            var district = territoryManager.GetDistrictState(districtA);
+            var operations = territoryManager.GetOperationsSummary().Districts.Single(entry => string.Equals(entry.DistrictName, districtA, StringComparison.OrdinalIgnoreCase));
+
+            var detail = InvokePrivate<string>(controller, "BuildDistrictServiceSupportDetail", district, operations);
+
+            StringAssert.Contains(detail, "Support bonus");
+            StringAssert.Contains(detail, "Depot roles: Support: amplifies district support bonuses and stabilizes licensed territory.");
+        }
+
         private static CompanyMapController CreateControllerWithScenario(
             out TerritoryManager territoryManager,
             out string districtA,
-            out string districtB)
+            out string districtB,
+            Func<RoutePlannerOverlaySnapshot> getRoutePlannerOverlaySnapshot = null)
         {
             var configDirectory = Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config");
             var config = ModConfig.Load(configDirectory);
@@ -148,6 +296,13 @@ namespace LSOL.Tests.UI
                 CurrentWeekDeliveryCount = 4,
                 CurrentWeekDeliveredTons = 28f,
                 DecayPressure = 0.1f,
+                CompetitivePressure = 0.44f,
+                CompetitiveOpportunity = 0.18f,
+                ActiveCompetitionJobs = 2,
+                VisibleCompetitionCount = 1,
+                CompetitiveTons = 24f,
+                CompetitiveWinCount = 1,
+                ContestedWeekStreak = 2,
             });
             snapshot.Corridors.Add(new TerritoryCorridorSnapshot
             {
@@ -177,7 +332,8 @@ namespace LSOL.Tests.UI
                 _ => string.Empty,
                 (_, __) => string.Empty,
                 (_, __) => string.Empty,
-                _ => { });
+                _ => { },
+                getRoutePlannerOverlaySnapshot);
         }
 
         private static object InvokeGetNetworkViewSnapshot(CompanyMapController controller)
@@ -185,6 +341,13 @@ namespace LSOL.Tests.UI
             var method = typeof(CompanyMapController).GetMethod("GetNetworkViewSnapshot", BindingFlags.Instance | BindingFlags.NonPublic);
             Assert.IsNotNull(method, "GetNetworkViewSnapshot");
             return method.Invoke(controller, null);
+        }
+
+        private static T InvokePrivate<T>(object target, string methodName, params object[] arguments)
+        {
+            var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, methodName);
+            return (T)method.Invoke(target, arguments);
         }
 
         private static T GetPropertyValue<T>(object target, string propertyName)

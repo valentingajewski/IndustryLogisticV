@@ -73,6 +73,52 @@ namespace LSOL
             FadingIn = 3,
         }
 
+        [Flags]
+        private enum PropertyUiRefreshFlags
+        {
+            None = 0,
+            Balance = 1,
+            Network = 2,
+            OfficeMenu = 4,
+            ApartmentMenu = 8,
+            CommercialGarage = 16,
+            AllTablet = 32,
+            PlayerSuccesses = 64,
+        }
+
+        private struct PropertyActionResult
+        {
+            public PropertyActionResult(bool succeeded, string message)
+            {
+                Succeeded = succeeded;
+                Message = message ?? string.Empty;
+            }
+
+            public bool Succeeded { get; }
+
+            public string Message { get; }
+        }
+
+        private PropertyPortfolioTabletActions CreatePropertyPortfolioTabletActions()
+        {
+            return new PropertyPortfolioTabletActions
+            {
+                RentOffice = RentOfficeById,
+                TransferOfficeRental = TransferOfficeRentalById,
+                PurchaseOffice = PurchaseOfficeById,
+                ActivateOffice = ActivateOfficeById,
+                RelinquishOfficeRental = RelinquishOfficeRentalById,
+                PayOfficeArrears = PayOfficeArrearsById,
+                PurchaseApartment = PurchaseApartmentById,
+                RentApartment = RentApartmentById,
+                ActivateApartment = ActivateApartmentById,
+                CancelApartmentRental = CancelApartmentRentalById,
+                SellApartment = SellApartmentById,
+                PayApartmentArrears = PayApartmentArrearsById,
+                RestAtMotel = RestAtMotelById,
+            };
+        }
+
         private void InitializePropertyMenus()
         {
             _commercialGarageMenu = new LemonMenu("Commercial Garage")
@@ -571,6 +617,16 @@ namespace LSOL
             Vector3 activeApartmentGaragePosition;
             var canUseActiveApartmentGarage = TryGetActiveApartmentGaragePosition(out activeApartmentGaragePosition);
 
+            OfficeObjectManager.FacilityInteractionContext facilityInteraction;
+            if (canShowPrompts
+                && !promptShown
+                && _officeObjectManager != null
+                && _officeObjectManager.TryGetNearbyFacilityInteraction(player, out facilityInteraction))
+            {
+                Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format("Press {0} to {1}.", KeyName(_controls.Interact), facilityInteraction.PromptDescription)));
+                promptShown = true;
+            }
+
             for (int i = 0; i < _propertyManager.Offices.Count; i++)
             {
                 var office = _propertyManager.Offices[i];
@@ -756,6 +812,14 @@ namespace LSOL
                 return true;
             }
 
+            OfficeObjectManager.FacilityInteractionContext facilityInteraction;
+            if (_officeObjectManager != null
+                && _officeObjectManager.TryGetNearbyFacilityInteraction(player, out facilityInteraction)
+                && HandleOfficeFacilityInteraction(facilityInteraction))
+            {
+                return true;
+            }
+
             var office = GetOfficeInInteractionRange(player.Position);
             if (office != null)
             {
@@ -790,6 +854,61 @@ namespace LSOL
             }
 
             return false;
+        }
+
+        private bool HandleOfficeFacilityInteraction(OfficeObjectManager.FacilityInteractionContext interaction)
+        {
+            if (interaction == null || string.IsNullOrWhiteSpace(interaction.OfficeId))
+            {
+                return false;
+            }
+
+            var office = _propertyManager.GetOfficeDefinition(interaction.OfficeId);
+            if (office == null)
+            {
+                return false;
+            }
+
+            _menuOffice = office;
+            switch (interaction.InteractionType)
+            {
+                case OfficeFacilityInteractionType.OfficeSummary:
+                    OpenOfficeMenuFor(office);
+                    return true;
+                case OfficeFacilityInteractionType.HireNpc:
+                    OpenNpcHiringMenu();
+                    return true;
+                case OfficeFacilityInteractionType.RepairVehicle:
+                    RepairVehicleAtOffice();
+                    return true;
+                case OfficeFacilityInteractionType.FuelManagement:
+                    OpenOfficeFuelManagementMenu();
+                    return true;
+                case OfficeFacilityInteractionType.HeadquartersStatus:
+                    ShowStatus(BuildHeadquartersFacilityStatus(office));
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private string BuildHeadquartersFacilityStatus(OfficeDefinition office)
+        {
+            var summary = _playerSuccessTracker != null
+                ? _playerSuccessTracker.GetEndgameSummary()
+                : new CompanyEndgameSummary();
+            var headquartersInstalled = office != null && _propertyManager.HasOfficeObjectFunction(office.OfficeId, OfficeObjectFunction.Headquarters);
+            var opportunity = !string.IsNullOrWhiteSpace(summary.PrimaryOpportunitySummary)
+                ? summary.PrimaryOpportunitySummary
+                : (summary.DoctrineLead != null ? summary.DoctrineLead.ReasonSummary ?? string.Empty : string.Empty);
+            return string.Format(
+                "{0} | {1} | Prestige {2:0}/{3:0}\n{4} | {5}",
+                office != null ? office.DisplayName : "Headquarters",
+                TabletEndgameStatusFormatter.BuildStatusCaption(summary),
+                Math.Max(0f, summary.PrestigeScore),
+                Math.Max(Math.Max(0f, summary.PrestigeScore), Math.Max(0f, summary.HighestPrestigeScore)),
+                headquartersInstalled ? "Landmark annex online" : "Landmark annex pending",
+                opportunity);
         }
 
         private OfficeDefinition GetOfficeInInteractionRange(Vector3 position)
@@ -1091,71 +1210,122 @@ namespace LSOL
             var objects = _propertyManager.GetOfficeObjects(_menuOffice.OfficeId, true);
             var placed = objects.Count(entry => entry != null && entry.IsPlaced);
             var pending = objects.Count - placed;
+            var placedDefinitions = objects
+                .Where(entry => entry != null && entry.IsPlaced)
+                .Select(entry => _propertyManager.GetOfficeObjectDefinition(entry.DefinitionId))
+                .Where(definition => definition != null)
+                .ToList();
+            var interactiveFacilities = placedDefinitions.Count(definition => definition.InteractionType != OfficeFacilityInteractionType.None);
+            var staffedPosts = placedDefinitions.Sum(definition => definition.AmbientStaffRole == OfficeAmbientStaffRole.None ? 0 : Math.Max(1, definition.AmbientStaffCount));
             var catalogCount = _propertyManager.OfficeObjectCatalog.Count;
-            return string.Format("Catalog {0} | Placed {1} | Pending placement {2}", catalogCount, placed, pending);
+            return string.Format("Catalog {0} | Placed {1} | Pending placement {2} | Facilities {3} | Staff {4}", catalogCount, placed, pending, interactiveFacilities, staffedPosts);
         }
 
         private string BuildOfficeFuelManagementSummary()
         {
-            return "Refuel vehicles, unload fuel cargo, or request refinery diesel delivery.";
+            return OfficeFuelManagementFormatter.BuildOfficeMenuSummary(BuildOfficeFuelManagementSnapshot());
         }
 
         private string BuildOfficeVehicleRefuelDetail()
         {
-            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
-            {
-                return "Activate this office to refuel company vehicles from its diesel tank.";
-            }
-
-            var tank = _propertyManager.GetFirstPlacedOfficeObjectByFunction(_menuOffice.OfficeId, OfficeObjectFunction.Refuel);
-            var definition = tank != null ? _propertyManager.GetOfficeObjectDefinition(tank.DefinitionId) : null;
-            if (tank == null || definition == null)
-            {
-                return "Install a Diesel Tank first.";
-            }
-
-            return string.Format("Stored diesel: {0}.", ModFormatting.FormatRatio(Math.Max(0f, tank.StoredResourceAmount), definition.Capacity, "L"));
+            return OfficeFuelManagementFormatter.BuildVehicleRefuelDetail(BuildOfficeFuelManagementSnapshot());
         }
 
         private string BuildOfficeFuelUnloadDetail()
         {
-            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
-            {
-                return "Activate this office to unload fuel cargo into its diesel tank.";
-            }
-
-            var tank = _propertyManager.GetFirstPlacedOfficeObjectByFunction(_menuOffice.OfficeId, OfficeObjectFunction.Refuel);
-            if (tank == null)
-            {
-                return "Install a Diesel Tank first.";
-            }
-
-            return "Unload Fuel cargo from an office truck into the active office tank.";
+            return OfficeFuelManagementFormatter.BuildFuelUnloadDetail(BuildOfficeFuelManagementSnapshot());
         }
 
         private string BuildOfficeFuelDeliveryDetail()
         {
-            if (_menuOffice == null || !string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            return OfficeFuelManagementFormatter.BuildFuelDeliveryDetail(BuildOfficeFuelManagementSnapshot());
+        }
+
+        private string BuildOfficeFuelManagementStatusDetail()
+        {
+            return OfficeFuelManagementFormatter.BuildTankStatusDetail(BuildOfficeFuelManagementSnapshot());
+        }
+
+        private string BuildOfficeFuelManagementPricingDetail()
+        {
+            return OfficeFuelManagementFormatter.BuildPricingDetail(BuildOfficeFuelManagementSnapshot());
+        }
+
+        private OfficeFuelManagementSnapshot BuildOfficeFuelManagementSnapshot()
+        {
+            var snapshot = new OfficeFuelManagementSnapshot
             {
-                return "Activate this office to request refinery diesel delivery.";
+                HasSelectedOffice = _menuOffice != null,
+            };
+
+            if (_menuOffice == null)
+            {
+                return snapshot;
             }
 
-            if (_officeObjectManager.HasActiveFuelDelivery && string.Equals(_officeObjectManager.ActiveFuelDeliveryOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            snapshot.OfficeIsActive = string.Equals(_propertyManager.ActiveOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase);
+            var spotRatePerLiter = _globalMarket != null
+                ? Math.Max(0f, _globalMarket.GetUnitPrice("Fuel")) / 1000f
+                : 0f;
+            snapshot.SpotReplacementRatePerLiter = spotRatePerLiter;
+            snapshot.DeliveredRatePerLiter = spotRatePerLiter * (_officeObjectManager != null ? _officeObjectManager.FuelDeliveryRateMultiplier : 1.05f);
+
+            if (!snapshot.OfficeIsActive)
             {
-                return "A refinery tanker is already en route to this office.";
+                return snapshot;
             }
 
             var tank = _propertyManager.GetFirstPlacedOfficeObjectByFunction(_menuOffice.OfficeId, OfficeObjectFunction.Refuel);
             var definition = tank != null ? _propertyManager.GetOfficeObjectDefinition(tank.DefinitionId) : null;
             if (tank == null || definition == null)
             {
-                return "Install a Diesel Tank first.";
+                return snapshot;
             }
 
-            var freeLiters = Math.Max(0f, definition.Capacity - tank.StoredResourceAmount);
-            return freeLiters <= 0.05f
-                ? "The office diesel tank is already full."
-                : string.Format("Dispatch a refinery tanker to deliver up to {0} at a service premium.", ModFormatting.FormatLiters(freeLiters));
+            snapshot.HasTankInstalled = true;
+            snapshot.StoredLiters = Math.Max(0f, tank.StoredResourceAmount);
+            snapshot.CapacityLiters = Math.Max(0f, definition.Capacity);
+            snapshot.FreeLiters = Math.Max(0f, snapshot.CapacityLiters - snapshot.StoredLiters);
+            snapshot.EstimatedFillCost = snapshot.FreeLiters * snapshot.DeliveredRatePerLiter;
+            snapshot.HasActiveDeliveryForOffice = _officeObjectManager != null
+                && _officeObjectManager.HasActiveFuelDelivery
+                && string.Equals(_officeObjectManager.ActiveFuelDeliveryOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase);
+
+            var player = Game.Player != null ? Game.Player.Character : null;
+            if (player == null || !player.Exists())
+            {
+                return snapshot;
+            }
+
+            Vehicle poweredVehicle;
+            Vehicle cargoVehicle;
+            if (!_fleetManager.TryResolveVehicleContext(player, out poweredVehicle, out cargoVehicle)
+                || poweredVehicle == null
+                || !poweredVehicle.Exists())
+            {
+                return snapshot;
+            }
+
+            OwnedCommercialVehiclePersistenceEntry vehicleEntry;
+            if (!_propertyManager.TryResolveCommercialVehicleRecord(poweredVehicle, out vehicleEntry)
+                || vehicleEntry == null
+                || !string.Equals(vehicleEntry.AssignedOfficeId, _menuOffice.OfficeId, StringComparison.OrdinalIgnoreCase))
+            {
+                return snapshot;
+            }
+
+            _vehicleFuelSystem.EnsureTrackedVehicle(poweredVehicle, vehicleEntry.CurrentFuelLiters > 0.001f ? (float?)vehicleEntry.CurrentFuelLiters : null);
+            var telemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
+            if (telemetry == null || telemetry.CapacityLiters <= 0.01f)
+            {
+                return snapshot;
+            }
+
+            snapshot.HasEligibleOfficeVehicle = true;
+            snapshot.VehicleName = poweredVehicle.DisplayName;
+            snapshot.VehicleFuelNeededLiters = Math.Max(0f, telemetry.CapacityLiters - telemetry.CurrentLiters);
+            snapshot.VehicleAlreadyFull = snapshot.VehicleFuelNeededLiters <= 0.05f;
+            return snapshot;
         }
 
         private string BuildOfficeRepairDetail()
@@ -1166,8 +1336,8 @@ namespace LSOL
             }
 
             return _propertyManager.HasOfficeObjectFunction(_menuOffice.OfficeId, OfficeObjectFunction.Repair)
-                ? "Repair the active office truck and trailer for free."
-                : "Install a Maintenance Bay first.";
+                ? "Repair the active office truck and trailer for free, either from the office menu or the maintenance desk."
+                : "Install a repair facility first.";
         }
 
         private void OpenOfficeObjectsMenu()
@@ -1211,6 +1381,16 @@ namespace LSOL
         {
             var items = new List<OfficeMenuItem>
             {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Diesel Tank Status",
+                    DetailFactory = BuildOfficeFuelManagementStatusDetail,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Implied Rate",
+                    DetailFactory = BuildOfficeFuelManagementPricingDetail,
+                },
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Refuel Vehicle",
@@ -1297,13 +1477,7 @@ namespace LSOL
 
         private string BuildOfficeObjectCaption(OfficeObjectDefinition definition)
         {
-            if (definition == null)
-            {
-                return string.Empty;
-            }
-
-            var category = definition.IsFunctional ? "Module" : "Decor";
-            return string.Format("[{0}] {1}", category, definition.DisplayName);
+            return OfficeObjectCatalogFormatter.BuildCaption(definition);
         }
 
         private string BuildOfficeObjectDetail(OfficeObjectDefinition definition)
@@ -1318,41 +1492,8 @@ namespace LSOL
                 .ToList();
             var placed = objects.Count(entry => entry.IsPlaced);
             var pending = objects.Count - placed;
-            var limitLabel = definition.Function == OfficeObjectFunction.Headquarters
-                ? "Company limit 1"
-                : (definition.PerOfficeLimit > 0 ? string.Format("Limit {0}", definition.PerOfficeLimit) : "No office limit");
-            var functionLabel = definition.IsFunctional
-                ? string.Format("{0} | Port haul required", BuildOfficeObjectFunctionLabel(definition))
-                : "Decorative placement";
-            return string.Format(
-                "{0} | {1} | Price {2} | Placed {3} | Pending {4}",
-                limitLabel,
-                functionLabel,
-                ModFormatting.FormatMoney(definition.Price),
-                placed,
-                pending);
-        }
 
-        private string BuildOfficeObjectFunctionLabel(OfficeObjectDefinition definition)
-        {
-            if (definition == null)
-            {
-                return string.Empty;
-            }
-
-            switch (definition.Function)
-            {
-                case OfficeObjectFunction.Refuel:
-                    return string.Format("Diesel storage {0}", ModFormatting.FormatLiters(Math.Max(0f, definition.Capacity)));
-                case OfficeObjectFunction.Repair:
-                    return "Repairs office trucks and trailers";
-                case OfficeObjectFunction.Npc:
-                    return string.Format("Supports {0:0} hired NPCs", Math.Max(0f, definition.Capacity));
-                case OfficeObjectFunction.Headquarters:
-                    return "Landmark HQ | Boosts the active doctrine once placed";
-                default:
-                    return definition.Function.ToString();
-            }
+            return OfficeObjectCatalogFormatter.BuildDetail(definition, placed, pending);
         }
 
         private void HandleOfficeObjectSelection(OfficeObjectDefinition definition)
@@ -1402,16 +1543,14 @@ namespace LSOL
             var canPurchase = CanPurchaseOfficeObject(definition, out blockedReason);
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => definition.DisplayName,
+                CaptionFactory = () => BuildOfficeObjectCaption(definition),
                 DetailFactory = () => BuildOfficeObjectDetail(definition),
             });
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => canPurchase ? string.Format("Purchase for {0}", ModFormatting.FormatMoney(definition.Price)) : "Purchase blocked",
                 DetailFactory = () => canPurchase
-                    ? (definition.IsFunctional
-                        ? "Buy now, then haul it from the port to the active office before placement."
-                        : "Buy now and immediately enter placement mode at the active office.")
+                    ? OfficeObjectCatalogFormatter.BuildPurchaseActionDetail(definition)
                     : blockedReason,
                 OnActivate = canPurchase
                     ? (Action)ConfirmOfficeObjectPurchase
@@ -1450,35 +1589,7 @@ namespace LSOL
                 return false;
             }
 
-            if (definition.PerOfficeLimit > 0 && _propertyManager.GetOfficeObjectCount(_menuOffice.OfficeId, definition.ObjectId) >= definition.PerOfficeLimit)
-            {
-                blockedReason = string.Format("{0} limit reached at this office.", definition.DisplayName);
-                return false;
-            }
-
-            if (definition.Function == OfficeObjectFunction.Headquarters)
-            {
-                var officeState = _propertyManager.GetOfficeState(_menuOffice.OfficeId);
-                if (officeState == null || !officeState.IsOwned)
-                {
-                    blockedReason = "Landmark HQ modules require an owned office.";
-                    return false;
-                }
-
-                if (_propertyManager.HasAnyOfficeObjectFunction(OfficeObjectFunction.Headquarters, false))
-                {
-                    blockedReason = "The company already has a Landmark HQ project in progress.";
-                    return false;
-                }
-            }
-
-            if (_profit + 0.001f < definition.Price)
-            {
-                blockedReason = string.Format("Need {0} to purchase {1}.", ModFormatting.FormatMoney(definition.Price), definition.DisplayName);
-                return false;
-            }
-
-            return true;
+            return _propertyManager.CanPurchaseOfficeObject(_menuOffice.OfficeId, definition, _profit, out blockedReason);
         }
 
         private void ConfirmOfficeObjectPurchase()
@@ -1931,114 +2042,122 @@ namespace LSOL
 
         private void RentSelectedOffice()
         {
-            if (_menuOffice == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryRentOffice(_menuOffice.OfficeId, ref _profit, GetCurrentInGameWeekMinute(), out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildOfficeMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            RentOfficeById(_menuOffice != null ? _menuOffice.OfficeId : null);
         }
 
         private void TransferSelectedOfficeRental()
         {
-            if (_menuOffice == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryTransferOfficeRental(_menuOffice.OfficeId, ref _profit, GetCurrentInGameWeekMinute(), out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                _tabletStateStore.MarkNetworkDirty();
-                RebuildOfficeMenuItems();
-                RebuildCommercialGarageMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            TransferOfficeRentalById(_menuOffice != null ? _menuOffice.OfficeId : null);
         }
 
         private void PurchaseSelectedOffice()
         {
-            if (_menuOffice == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryPurchaseOffice(_menuOffice.OfficeId, ref _profit, GetCurrentInGameWeekMinute(), out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildOfficeMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            PurchaseOfficeById(_menuOffice != null ? _menuOffice.OfficeId : null);
         }
 
         private void ActivateSelectedOffice()
         {
-            if (_menuOffice == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryActivateOffice(_menuOffice.OfficeId, out message))
-            {
-                _tabletStateStore.MarkNetworkDirty();
-                RebuildOfficeMenuItems();
-                RebuildCommercialGarageMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            ActivateOfficeById(_menuOffice != null ? _menuOffice.OfficeId : null);
         }
 
         private void RelinquishSelectedOfficeRental()
         {
-            if (_menuOffice == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryRelinquishOfficeRental(_menuOffice.OfficeId, out message))
-            {
-                _tabletStateStore.MarkNetworkDirty();
-                RebuildOfficeMenuItems();
-                RebuildCommercialGarageMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            RelinquishOfficeRentalById(_menuOffice != null ? _menuOffice.OfficeId : null);
         }
 
         private void PaySelectedOfficeArrears()
         {
-            if (_menuOffice == null)
-            {
-                return;
-            }
+            PayOfficeArrearsById(_menuOffice != null ? _menuOffice.OfficeId : null);
+        }
 
+        private void RentOfficeById(string officeId)
+        {
+            ExecutePropertyActionForId(
+                officeId,
+                TryRentOfficeAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.OfficeMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void TransferOfficeRentalById(string officeId)
+        {
+            ExecutePropertyActionForId(
+                officeId,
+                TryTransferOfficeRentalAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.Network | PropertyUiRefreshFlags.OfficeMenu | PropertyUiRefreshFlags.CommercialGarage | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void PurchaseOfficeById(string officeId)
+        {
+            ExecutePropertyActionForId(
+                officeId,
+                TryPurchaseOfficeAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.OfficeMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void ActivateOfficeById(string officeId)
+        {
+            ExecutePropertyActionForId(
+                officeId,
+                TryActivateOfficeAction,
+                PropertyUiRefreshFlags.Network | PropertyUiRefreshFlags.OfficeMenu | PropertyUiRefreshFlags.CommercialGarage | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void RelinquishOfficeRentalById(string officeId)
+        {
+            ExecutePropertyActionForId(
+                officeId,
+                TryRelinquishOfficeRentalAction,
+                PropertyUiRefreshFlags.Network | PropertyUiRefreshFlags.OfficeMenu | PropertyUiRefreshFlags.CommercialGarage | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void PayOfficeArrearsById(string officeId)
+        {
+            ExecutePropertyActionForId(
+                officeId,
+                TryPayOfficeArrearsAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.OfficeMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private PropertyActionResult TryRentOfficeAction(string officeId)
+        {
             string message;
-            if (_propertyManager.TryPayOfficeArrears(_menuOffice.OfficeId, ref _profit, out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildOfficeMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
+            var success = _propertyManager.TryRentOffice(officeId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            return new PropertyActionResult(success, message);
+        }
 
-            ShowStatus(message);
+        private PropertyActionResult TryTransferOfficeRentalAction(string officeId)
+        {
+            string message;
+            var success = _propertyManager.TryTransferOfficeRental(officeId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryPurchaseOfficeAction(string officeId)
+        {
+            string message;
+            var success = _propertyManager.TryPurchaseOffice(officeId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryActivateOfficeAction(string officeId)
+        {
+            string message;
+            var success = _propertyManager.TryActivateOffice(officeId, out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryRelinquishOfficeRentalAction(string officeId)
+        {
+            string message;
+            var success = _propertyManager.TryRelinquishOfficeRental(officeId, out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryPayOfficeArrearsAction(string officeId)
+        {
+            string message;
+            var success = _propertyManager.TryPayOfficeArrears(officeId, ref _profit, out message);
+            return new PropertyActionResult(success, message);
         }
 
         private void OpenCommercialGarageMenu()
@@ -2143,13 +2262,42 @@ namespace LSOL
             var acquisition = vehicle.IsRental
                 ? string.Format("Rent {0}/day", ModFormatting.FormatMoney(vehicle.DailyRent))
                 : "Owned";
+            var salePreview = !vehicle.IsRental ? _propertyManager.GetCommercialVehicleSalePreview(vehicle) : null;
+            var ownershipDetail = salePreview != null
+                ? string.Format("Condition {0:0}% | Resale {1}", salePreview.MaintenanceConditionPercent, ModFormatting.FormatMoney(salePreview.EstimatedResaleValue))
+                : acquisition;
             var cargo = string.IsNullOrWhiteSpace(vehicle.Commodity)
                 ? "Empty"
                 : string.Format("{0} {1}", vehicle.Commodity, ModFormatting.FormatRatio(vehicle.WeightTons, Math.Max(0f, vehicle.CapacityTons), "t"));
             var npcAssignment = BuildCommercialVehicleNpcAssignmentDetail(vehicle);
             return string.IsNullOrWhiteSpace(npcAssignment)
-                ? string.Format("{0} | {1} | {2} | {3}", location, deployed, acquisition, cargo)
-                : string.Format("{0} | {1} | {2} | {3} | {4}", location, deployed, acquisition, npcAssignment, cargo);
+                ? string.Format("{0} | {1} | {2} | {3}", location, deployed, ownershipDetail, cargo)
+                : string.Format("{0} | {1} | {2} | {3} | {4}", location, deployed, ownershipDetail, npcAssignment, cargo);
+        }
+
+        private string BuildCommercialVehicleSellActionDetail(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null || vehicle.IsRental)
+            {
+                return "Close the rental and stop future daily rent charges.";
+            }
+
+            var preview = _propertyManager.GetCommercialVehicleSalePreview(vehicle);
+            var conditionPrefix = preview.ConditionAdjustmentAmount >= 0f ? "+" : "-";
+            var conditionDelta = ModFormatting.FormatMoney(Math.Abs(preview.ConditionAdjustmentAmount));
+            var depreciationLoss = ModFormatting.FormatMoney(Math.Abs(preview.DepreciationLossAmount));
+            var depreciationSuffix = preview.DepreciationPenaltyPercent >= 20f ? " cap" : string.Empty;
+
+            return string.Format(
+                "Base {0} | Condition {1}{2} ({3:0}%) | Depreciation -{4} ({5:0.0}%{6}) | Final {7}",
+                ModFormatting.FormatMoney(preview.BaseRefund),
+                conditionPrefix,
+                conditionDelta,
+                preview.MaintenanceConditionPercent,
+                depreciationLoss,
+                preview.DepreciationPenaltyPercent,
+                depreciationSuffix,
+                ModFormatting.FormatMoney(preview.EstimatedResaleValue));
         }
 
         private string BuildCommercialVehicleStatusCaption(OwnedCommercialVehiclePersistenceEntry vehicle)
@@ -2415,7 +2563,7 @@ namespace LSOL
                     CaptionFactory = () => vehicle.IsRental ? "End Rent" : "Sell Vehicle",
                     DetailFactory = () => vehicle.IsRental
                         ? "Close the rental and stop future daily rent charges."
-                        : string.Format("Sell this vehicle back for {0}.", ModFormatting.FormatMoney(Math.Max(0f, vehicle.PurchasePrice * 0.5f))),
+                        : BuildCommercialVehicleSellActionDetail(vehicle),
                     OnActivate = () =>
                     {
                         if (vehicle.IsRental)
@@ -2807,108 +2955,122 @@ namespace LSOL
 
         private void PurchaseSelectedApartment()
         {
-            if (_menuApartment == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryPurchaseApartment(_menuApartment.InteriorId, ref _profit, GetCurrentInGameWeekMinute(), out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildApartmentMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            PurchaseApartmentById(_menuApartment != null ? _menuApartment.InteriorId : null);
         }
 
         private void RentSelectedApartment()
         {
-            if (_menuApartment == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryRentApartment(_menuApartment.InteriorId, ref _profit, GetCurrentInGameWeekMinute(), out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildApartmentMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            RentApartmentById(_menuApartment != null ? _menuApartment.InteriorId : null);
         }
 
         private void ActivateSelectedApartment()
         {
-            if (_menuApartment == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryActivateApartment(_menuApartment.InteriorId, out message))
-            {
-                RebuildApartmentMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            ActivateApartmentById(_menuApartment != null ? _menuApartment.InteriorId : null);
         }
 
         private void CancelSelectedApartmentRental()
         {
-            if (_menuApartment == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TryCancelApartmentRental(_menuApartment.InteriorId, out message))
-            {
-                RebuildApartmentMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            CancelApartmentRentalById(_menuApartment != null ? _menuApartment.InteriorId : null);
         }
 
         private void SellSelectedApartment()
         {
-            if (_menuApartment == null)
-            {
-                return;
-            }
-
-            string message;
-            if (_propertyManager.TrySellApartment(_menuApartment.InteriorId, ref _profit, out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildApartmentMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
-
-            ShowStatus(message);
+            SellApartmentById(_menuApartment != null ? _menuApartment.InteriorId : null);
         }
 
         private void PaySelectedApartmentArrears()
         {
-            if (_menuApartment == null)
-            {
-                return;
-            }
+            PayApartmentArrearsById(_menuApartment != null ? _menuApartment.InteriorId : null);
+        }
 
+        private void PurchaseApartmentById(string interiorId)
+        {
+            ExecutePropertyActionForId(
+                interiorId,
+                TryPurchaseApartmentAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.ApartmentMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void RentApartmentById(string interiorId)
+        {
+            ExecutePropertyActionForId(
+                interiorId,
+                TryRentApartmentAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.ApartmentMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void ActivateApartmentById(string interiorId)
+        {
+            ExecutePropertyActionForId(
+                interiorId,
+                TryActivateApartmentAction,
+                PropertyUiRefreshFlags.ApartmentMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void CancelApartmentRentalById(string interiorId)
+        {
+            ExecutePropertyActionForId(
+                interiorId,
+                TryCancelApartmentRentalAction,
+                PropertyUiRefreshFlags.ApartmentMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void SellApartmentById(string interiorId)
+        {
+            ExecutePropertyActionForId(
+                interiorId,
+                TrySellApartmentAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.ApartmentMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private void PayApartmentArrearsById(string interiorId)
+        {
+            ExecutePropertyActionForId(
+                interiorId,
+                TryPayApartmentArrearsAction,
+                PropertyUiRefreshFlags.Balance | PropertyUiRefreshFlags.ApartmentMenu | PropertyUiRefreshFlags.PlayerSuccesses);
+        }
+
+        private PropertyActionResult TryPurchaseApartmentAction(string interiorId)
+        {
             string message;
-            if (_propertyManager.TryPayApartmentArrears(_menuApartment.InteriorId, ref _profit, out message))
-            {
-                _tabletStateStore.MarkBalanceDirty();
-                RebuildApartmentMenuItems();
-                ReevaluatePlayerSuccesses(true);
-            }
+            var success = _propertyManager.TryPurchaseApartment(interiorId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            return new PropertyActionResult(success, message);
+        }
 
-            ShowStatus(message);
+        private PropertyActionResult TryRentApartmentAction(string interiorId)
+        {
+            string message;
+            var success = _propertyManager.TryRentApartment(interiorId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryActivateApartmentAction(string interiorId)
+        {
+            string message;
+            var success = _propertyManager.TryActivateApartment(interiorId, out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryCancelApartmentRentalAction(string interiorId)
+        {
+            string message;
+            var success = _propertyManager.TryCancelApartmentRental(interiorId, out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TrySellApartmentAction(string interiorId)
+        {
+            string message;
+            var success = _propertyManager.TrySellApartment(interiorId, ref _profit, out message);
+            return new PropertyActionResult(success, message);
+        }
+
+        private PropertyActionResult TryPayApartmentArrearsAction(string interiorId)
+        {
+            string message;
+            var success = _propertyManager.TryPayApartmentArrears(interiorId, ref _profit, out message);
+            return new PropertyActionResult(success, message);
         }
 
         private void EnterSelectedApartment()
@@ -3003,7 +3165,28 @@ namespace LSOL
 
         private void RestAtSelectedMotel()
         {
-            var motel = _menuMotel;
+            RestAtMotelInternal(_menuMotel);
+        }
+
+        private void RestAtMotelById(string motelId)
+        {
+            if (string.IsNullOrWhiteSpace(motelId) || _propertyManager == null)
+            {
+                return;
+            }
+
+            var motel = _propertyManager.Motels.FirstOrDefault(entry => entry != null && string.Equals(entry.MotelId, motelId, StringComparison.OrdinalIgnoreCase));
+            if (motel == null)
+            {
+                ShowStatus("Motel definition unavailable.");
+                return;
+            }
+
+            RestAtMotelInternal(motel);
+        }
+
+        private void RestAtMotelInternal(MotelDefinition motel)
+        {
             var player = Game.Player.Character;
             if (motel == null || player == null || !player.Exists())
             {
@@ -3028,7 +3211,11 @@ namespace LSOL
             }
 
             _profit -= motel.RestPrice;
-            _tabletStateStore.MarkBalanceDirty();
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkBalanceDirty();
+            }
+
             StartApartmentSleepTransition(player, Game.GameTime);
         }
 
@@ -3054,6 +3241,63 @@ namespace LSOL
             }
 
             return true;
+        }
+
+        private void ExecutePropertyActionForId(
+            string propertyId,
+            Func<string, PropertyActionResult> action,
+            PropertyUiRefreshFlags refreshFlags)
+        {
+            if (string.IsNullOrWhiteSpace(propertyId) || action == null)
+            {
+                return;
+            }
+
+            var result = action(propertyId);
+            if (result.Succeeded)
+            {
+                ApplyPropertyUiRefresh(refreshFlags);
+            }
+
+            ShowStatus(result.Message);
+        }
+
+        private void ApplyPropertyUiRefresh(PropertyUiRefreshFlags refreshFlags)
+        {
+            if ((refreshFlags & PropertyUiRefreshFlags.Balance) != 0 && _tabletStateStore != null)
+            {
+                _tabletStateStore.MarkBalanceDirty();
+            }
+
+            if ((refreshFlags & PropertyUiRefreshFlags.Network) != 0 && _tabletStateStore != null)
+            {
+                _tabletStateStore.MarkNetworkDirty();
+            }
+
+            if ((refreshFlags & PropertyUiRefreshFlags.AllTablet) != 0 && _tabletStateStore != null)
+            {
+                _tabletStateStore.MarkAllDirty();
+            }
+
+            if ((refreshFlags & PropertyUiRefreshFlags.OfficeMenu) != 0)
+            {
+                RebuildOfficeMenuItems();
+            }
+
+            if ((refreshFlags & PropertyUiRefreshFlags.ApartmentMenu) != 0)
+            {
+                RebuildApartmentMenuItems();
+            }
+
+            if ((refreshFlags & PropertyUiRefreshFlags.CommercialGarage) != 0)
+            {
+                RebuildCommercialGarageMenuItems();
+            }
+
+            if ((refreshFlags & PropertyUiRefreshFlags.PlayerSuccesses) != 0)
+            {
+                ReevaluatePlayerSuccesses(true);
+            }
         }
 
         private int GetApartmentSleepCooldownRemainingMinutes(int currentInGameMinute)

@@ -34,6 +34,8 @@ namespace LSOL.Systems
         InventoryLoss = 19,
         PlayerContract = 20,
         ServiceSiteStaffing = 21,
+        WarehouseSpoilage = 22,
+        WarehouseShrinkage = 23,
     }
 
     public sealed class CompanyFinanceTransaction
@@ -53,6 +55,12 @@ namespace LSOL.Systems
         public int RouteContractId { get; internal set; }
 
         public string RouteLabel { get; internal set; }
+
+        public string PlayerContractId { get; internal set; }
+
+        public string ShipperKey { get; internal set; }
+
+        public string DistrictName { get; internal set; }
     }
 
     public sealed class CompanyFinanceTransactionSnapshot
@@ -72,6 +80,12 @@ namespace LSOL.Systems
         public int RouteContractId { get; set; }
 
         public string RouteLabel { get; set; }
+
+        public string PlayerContractId { get; set; }
+
+        public string ShipperKey { get; set; }
+
+        public string DistrictName { get; set; }
     }
 
     public sealed class CompanyFinancePersistenceSnapshot
@@ -129,14 +143,32 @@ namespace LSOL.Systems
             _nextSequence = 1;
         }
 
-        public void RecordIncome(CompanyFinanceCategory category, float amount, int inGameMinute, string description = null, int routeContractId = 0, string routeLabel = null)
+        public void RecordIncome(
+            CompanyFinanceCategory category,
+            float amount,
+            int inGameMinute,
+            string description = null,
+            int routeContractId = 0,
+            string routeLabel = null,
+            string playerContractId = null,
+            string shipperKey = null,
+            string districtName = null)
         {
-            Record(CompanyFinanceFlow.Income, category, amount, inGameMinute, description, routeContractId, routeLabel);
+            Record(CompanyFinanceFlow.Income, category, amount, inGameMinute, description, routeContractId, routeLabel, playerContractId, shipperKey, districtName);
         }
 
-        public void RecordExpense(CompanyFinanceCategory category, float amount, int inGameMinute, string description = null, int routeContractId = 0, string routeLabel = null)
+        public void RecordExpense(
+            CompanyFinanceCategory category,
+            float amount,
+            int inGameMinute,
+            string description = null,
+            int routeContractId = 0,
+            string routeLabel = null,
+            string playerContractId = null,
+            string shipperKey = null,
+            string districtName = null)
         {
-            Record(CompanyFinanceFlow.Expense, category, amount, inGameMinute, description, routeContractId, routeLabel);
+            Record(CompanyFinanceFlow.Expense, category, amount, inGameMinute, description, routeContractId, routeLabel, playerContractId, shipperKey, districtName);
         }
 
         public float GetNetAmount(int currentInGameMinute, int lookbackMinutes)
@@ -216,6 +248,9 @@ namespace LSOL.Systems
                     Description = transaction.Description ?? string.Empty,
                     RouteContractId = transaction.RouteContractId,
                     RouteLabel = transaction.RouteLabel ?? string.Empty,
+                    PlayerContractId = transaction.PlayerContractId ?? string.Empty,
+                    ShipperKey = transaction.ShipperKey ?? string.Empty,
+                    DistrictName = transaction.DistrictName ?? string.Empty,
                 });
             }
 
@@ -250,6 +285,9 @@ namespace LSOL.Systems
                     Description = SanitizeText(entry.Description),
                     RouteContractId = Math.Max(0, entry.RouteContractId),
                     RouteLabel = SanitizeText(entry.RouteLabel),
+                    PlayerContractId = SanitizeText(entry.PlayerContractId),
+                    ShipperKey = SanitizeText(entry.ShipperKey),
+                    DistrictName = SanitizeText(entry.DistrictName),
                 });
             }
 
@@ -275,7 +313,17 @@ namespace LSOL.Systems
             }
         }
 
-        private void Record(CompanyFinanceFlow flow, CompanyFinanceCategory category, float amount, int inGameMinute, string description, int routeContractId, string routeLabel)
+        private void Record(
+            CompanyFinanceFlow flow,
+            CompanyFinanceCategory category,
+            float amount,
+            int inGameMinute,
+            string description,
+            int routeContractId,
+            string routeLabel,
+            string playerContractId,
+            string shipperKey,
+            string districtName)
         {
             if (amount <= 0f)
             {
@@ -292,6 +340,9 @@ namespace LSOL.Systems
                 Description = SanitizeText(description),
                 RouteContractId = Math.Max(0, routeContractId),
                 RouteLabel = SanitizeText(routeLabel),
+                PlayerContractId = SanitizeText(playerContractId),
+                ShipperKey = SanitizeText(shipperKey),
+                DistrictName = SanitizeText(districtName),
             };
 
             if (_transactions.Count >= MaxTransactions)

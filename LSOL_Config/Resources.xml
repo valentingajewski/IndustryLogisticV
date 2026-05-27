@@ -1,56 +1,56 @@
 <Resources>
   <Group name="Aggregates" cargoType="Aggregates">
     <Commodity name="Coal" basePrice="250" />
-    <Commodity name="Gravel" basePrice="260" />
-    <Commodity name="Ore" basePrice="320" />
-    <Commodity name="Crops" basePrice="340" />
+    <Commodity name="Gravel" basePrice="260" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" sinkPreference="0.85" />
+    <Commodity name="Ore" basePrice="320" substituteFamily="IndustrialFeedstock" demandClasses="SupplyRelief" scarcitySensitivity="1.12" />
+    <Commodity name="Crops" basePrice="340" substituteFamily="AgriFeedstock" demandClasses="EmergencyRelief,SupplyRelief" perishability="0.25" sinkElasticity="0.48" />
   </Group>
   <Group name="OpenHull" cargoType="OpenHull">
-    <Commodity name="Beam" basePrice="950" />
-    <Commodity name="Bricks" basePrice="650" />
-    <Commodity name="Lumber" basePrice="520" />
-    <Commodity name="Steel" basePrice="900" />
-    <Commodity name="Alloy" basePrice="1100" />
-    <Commodity name="Metal" basePrice="850" />
+    <Commodity name="Beam" basePrice="950" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" substitutes="Steel:0.74,Lumber:0.68,Bricks:0.30" />
+    <Commodity name="Bricks" basePrice="650" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" substitutes="Concrete:0.58,Cement:0.44,Beam:0.34" />
+    <Commodity name="Lumber" basePrice="520" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" substitutes="Beam:0.72,Bricks:0.28" sinkElasticity="0.62" />
+    <Commodity name="Steel" basePrice="900" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief,SupplyRelief" substitutes="Beam:0.74,Concrete:0.46,Bricks:0.32" scarcitySensitivity="1.25" sinkPreference="1.18" eventAffinity="1.10" />
+    <Commodity name="Alloy" basePrice="1100" substituteFamily="AdvancedComponents" demandClasses="SupplyRelief" scarcitySensitivity="1.20" volatility="1.12" />
+    <Commodity name="Metal" basePrice="850" substituteFamily="AdvancedComponents" demandClasses="SupplyRelief" substitutes="Alloy:0.48,Steel:0.42" />
   </Group>
   <Group name="Wood" cargoType="Wood">
-    <Commodity name="Wood" basePrice="320" />
+    <Commodity name="Wood" basePrice="320" substituteFamily="IndustrialFeedstock" demandClasses="SupplyRelief" />
   </Group>
   <Group name="CraftedGoods" cargoType="CraftedGoods">
-    <Commodity name="Livestock" basePrice="420" />
-    <Commodity name="Alcohol" basePrice="650" />
-    <Commodity name="Chemicals" basePrice="750" />
-    <Commodity name="Clothes" basePrice="1200" />
-    <Commodity name="Fabric" basePrice="700" />
-    <Commodity name="ProcessedFood" basePrice="850" />
-    <Commodity name="Plastic" basePrice="800" />
-    <Commodity name="Paper" basePrice="550" />
-    <Commodity name="Medicine" basePrice="2400" />
-    <Commodity name="MechanicalParts" basePrice="1100" />
-    <Commodity name="Omega" basePrice="7000" />
-    <Commodity name="TV" basePrice="3000" />
-    <Commodity name="Computer" basePrice="3800" />
-    <Commodity name="Electronic" basePrice="1400" />
-    <Commodity name="Furniture" basePrice="1500" />
+    <Commodity name="Livestock" basePrice="420" substituteFamily="ConsumerStaples" demandClasses="EmergencyRelief" perishability="0.55" />
+    <Commodity name="Alcohol" basePrice="650" substituteFamily="StoreConsumables" demandClasses="EmergencyRelief" sinkElasticity="0.78" volatility="1.12" />
+    <Commodity name="Chemicals" basePrice="750" substituteFamily="FuelSupply" demandClasses="FuelRelief,SupplyRelief" substitutes="Fuel:0.48,Oil:0.35" scarcitySensitivity="1.10" eventAffinity="0.95" />
+    <Commodity name="Clothes" basePrice="1200" substituteFamily="RetailApparel" demandClasses="EmergencyRelief" sinkPreference="1.08" sinkElasticity="0.72" />
+    <Commodity name="Fabric" basePrice="700" substituteFamily="RetailApparel" demandClasses="SupplyRelief" substitutes="Clothes:0.42" />
+    <Commodity name="ProcessedFood" basePrice="850" substituteFamily="ConsumerStaples" demandClasses="EmergencyRelief,SupplyRelief" substitutes="Meat:0.58,Water:0.32" perishability="0.72" eventAffinity="1.18" sinkPreference="1.15" />
+    <Commodity name="Plastic" basePrice="800" substituteFamily="IndustrialFeedstock" demandClasses="SupplyRelief" />
+    <Commodity name="Paper" basePrice="550" substituteFamily="StoreConsumables" demandClasses="EmergencyRelief" />
+    <Commodity name="Medicine" basePrice="2400" substituteFamily="MedicalSupply" demandClasses="EmergencyRelief" perishability="0.35" sinkElasticity="0.18" scarcitySensitivity="1.30" sinkPreference="1.20" eventAffinity="1.35" volatility="1.10" />
+    <Commodity name="MechanicalParts" basePrice="1100" substituteFamily="AdvancedComponents" demandClasses="SupplyRelief" substitutes="Electronic:0.44,Metal:0.38" scarcitySensitivity="1.18" eventAffinity="1.10" />
+    <Commodity name="Omega" basePrice="7000" substituteFamily="StrategicGoods" demandClasses="SupplyRelief" scarcitySensitivity="1.45" volatility="1.25" />
+    <Commodity name="TV" basePrice="3000" substituteFamily="TechGoods" demandClasses="EmergencyRelief" substitutes="Computer:0.72,Electronic:0.36" sinkElasticity="0.86" volatility="1.12" />
+    <Commodity name="Computer" basePrice="3800" substituteFamily="TechGoods" demandClasses="EmergencyRelief,SupplyRelief" substitutes="TV:0.68,Electronic:0.42" sinkElasticity="0.90" volatility="1.15" />
+    <Commodity name="Electronic" basePrice="1400" substituteFamily="TechGoods" demandClasses="SupplyRelief" substitutes="MechanicalParts:0.40,Computer:0.42,TV:0.34" scarcitySensitivity="1.16" eventAffinity="1.08" />
+    <Commodity name="Furniture" basePrice="1500" substituteFamily="HouseholdGoods" demandClasses="EmergencyRelief" sinkElasticity="0.74" />
   </Group>
   <Group name="Liquid" cargoType="Liquid">
-    <Commodity name="Fuel" basePrice="700" />
-    <Commodity name="LiquidFertilizer" basePrice="600" />
-    <Commodity name="Oil" basePrice="380" />
-    <Commodity name="Water" basePrice="220" />
+    <Commodity name="Fuel" basePrice="700" substituteFamily="FuelSupply" demandClasses="FuelRelief,EmergencyRelief" substitutes="Oil:0.82,Chemicals:0.68" sinkElasticity="0.38" scarcitySensitivity="1.35" sinkPreference="1.22" eventAffinity="1.25" volatility="1.12" />
+    <Commodity name="LiquidFertilizer" basePrice="600" substituteFamily="AgriInputs" demandClasses="SupplyRelief" sinkElasticity="0.52" />
+    <Commodity name="Oil" basePrice="380" substituteFamily="FuelSupply" demandClasses="FuelRelief,SupplyRelief" substitutes="Fuel:0.76,Chemicals:0.42" sinkElasticity="0.44" scarcitySensitivity="1.18" sinkPreference="0.96" eventAffinity="1.00" />
+    <Commodity name="Water" basePrice="220" substituteFamily="ConsumerStaples" demandClasses="EmergencyRelief" substitutes="ProcessedFood:0.28" sinkElasticity="0.20" scarcitySensitivity="1.02" sinkPreference="1.10" eventAffinity="1.05" perishability="0.10" />
   </Group>
   <Group name="DryBulk" cargoType="DryBulk">
-    <Commodity name="Asphalt" basePrice="400" />
-    <Commodity name="Cement" basePrice="450" />
-    <Commodity name="Concrete" basePrice="700" />
+    <Commodity name="Asphalt" basePrice="400" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" />
+    <Commodity name="Cement" basePrice="450" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" substitutes="Concrete:0.78,Bricks:0.44" sinkElasticity="0.46" scarcitySensitivity="1.10" />
+    <Commodity name="Concrete" basePrice="700" substituteFamily="ConstructionMaterials" demandClasses="ConstructionRelief" substitutes="Cement:0.82,Bricks:0.56,Beam:0.48,Steel:0.42" sinkElasticity="0.40" scarcitySensitivity="1.12" sinkPreference="1.14" eventAffinity="1.12" />
   </Group>
   <Group name="Refrigeration" cargoType="Refrigeration">
-    <Commodity name="Meat" basePrice="900" />
+    <Commodity name="Meat" basePrice="900" substituteFamily="ConsumerStaples" demandClasses="EmergencyRelief" substitutes="ProcessedFood:0.54" perishability="0.95" sinkElasticity="0.28" sinkPreference="1.05" eventAffinity="1.10" volatility="1.18" />
   </Group>
   <Group name="Recyclable" cargoType="Recyclable">
-    <Commodity name="Recyclable" basePrice="180" />
+    <Commodity name="Recyclable" basePrice="180" substituteFamily="IndustrialFeedstock" demandClasses="SupplyRelief" sinkElasticity="0.72" />
   </Group>
   <Group name="Vehicles" cargoType="Vehicles">
-    <Commodity name="Vehicles" basePrice="5000" />
+    <Commodity name="Vehicles" basePrice="5000" substituteFamily="StrategicGoods" demandClasses="SupplyRelief,EmergencyRelief" scarcitySensitivity="1.25" volatility="1.20" />
   </Group>
 </Resources>

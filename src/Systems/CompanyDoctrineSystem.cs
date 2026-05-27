@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace LSOL.Systems
 {
@@ -8,6 +9,101 @@ namespace LSOL.Systems
         Territorial = 1,
         Industrial = 2,
         Service = 3,
+    }
+
+    internal enum CompanyDoctrineLeadReasonType
+    {
+        None = 0,
+        Tier = 1,
+        ProgressRatio = 2,
+        DoctrinePriority = 3,
+    }
+
+    internal sealed class CompanyDoctrineProgressComponent
+    {
+        public string Key { get; set; }
+
+        public string Label { get; set; }
+
+        public float CurrentValue { get; set; }
+
+        public float TargetValue { get; set; }
+
+        public float MissingValue { get; set; }
+
+        public float CompletionRatio { get; set; }
+
+        public float Weight { get; set; }
+
+        public float ContributionRatio { get; set; }
+
+        public float PotentialStepProgressRatio { get; set; }
+
+        public string StatusText { get; set; }
+
+        public string NextStepText { get; set; }
+    }
+
+    internal sealed class CompanyDoctrineLeadSummary
+    {
+        public CompanyDoctrine LeadingDoctrine { get; set; }
+
+        public string LeadingDoctrineName { get; set; }
+
+        public int LeadingTier { get; set; }
+
+        public float LeadingProgressRatio { get; set; }
+
+        public CompanyDoctrine RunnerUpDoctrine { get; set; }
+
+        public string RunnerUpDoctrineName { get; set; }
+
+        public int RunnerUpTier { get; set; }
+
+        public float RunnerUpProgressRatio { get; set; }
+
+        public int TierGap { get; set; }
+
+        public float ProgressGapRatio { get; set; }
+
+        public CompanyDoctrineLeadReasonType ReasonType { get; set; }
+
+        public string ReasonSummary { get; set; }
+
+        public string TieBreakSummary { get; set; }
+    }
+
+    internal sealed class CompanyPrestigeComponent
+    {
+        public string Key { get; set; }
+
+        public string Label { get; set; }
+
+        public float Score { get; set; }
+
+        public float MaxScore { get; set; }
+
+        public float RemainingScore { get; set; }
+
+        public float ImmediateGain { get; set; }
+
+        public string StatusText { get; set; }
+
+        public string OpportunityText { get; set; }
+    }
+
+    internal sealed class CompanyPrestigeBreakdown
+    {
+        public CompanyPrestigeBreakdown()
+        {
+            Components = Array.Empty<CompanyPrestigeComponent>();
+        }
+
+        public IReadOnlyList<CompanyPrestigeComponent> Components { get; set; }
+
+        public float MissingScore { get; set; }
+
+        public string PrimaryOpportunity { get; set; }
     }
 
     internal sealed class CompanyDoctrineStatus
@@ -31,6 +127,26 @@ namespace LSOL.Systems
         public string TradeoffSummary { get; set; }
 
         public bool IsActive { get; set; }
+
+        public bool HasHeadquartersBoost { get; set; }
+
+        public CompanyDoctrine LeadingDoctrine { get; set; }
+
+        public CompanyDoctrineLeadReasonType LeadReasonType { get; set; }
+
+        public IReadOnlyList<CompanyDoctrineProgressComponent> ProgressComponents { get; set; }
+
+        public int NextTier { get; set; }
+
+        public float NextTierTargetProgressRatio { get; set; }
+
+        public float NextTierGapProgressRatio { get; set; }
+
+        public string NextTierSummary { get; set; }
+
+        public string LeadSummary { get; set; }
+
+        public string SteeringSummary { get; set; }
     }
 
     internal sealed class CompanyEndgameSummary
@@ -56,24 +172,60 @@ namespace LSOL.Systems
         public string Headline { get; set; }
 
         public string Detail { get; set; }
+
+        public CompanyDoctrineLeadSummary DoctrineLead { get; set; }
+
+        public CompanyPrestigeBreakdown PrestigeBreakdown { get; set; }
+
+        public string PrimaryOpportunitySummary { get; set; }
     }
 
     internal static class CompanyDoctrineSystem
     {
+        public static float GetTierThreshold(int tier)
+        {
+            switch (Math.Max(0, tier))
+            {
+                case 1:
+                    return 0.35f;
+                case 2:
+                    return 0.60f;
+                case 3:
+                    return 0.85f;
+                default:
+                    return 0f;
+            }
+        }
+
+        public static float GetNextTierThreshold(int currentTier)
+        {
+            switch (Math.Max(0, currentTier))
+            {
+                case 0:
+                    return GetTierThreshold(1);
+                case 1:
+                    return GetTierThreshold(2);
+                case 2:
+                    return GetTierThreshold(3);
+                default:
+                    return 0f;
+            }
+        }
+
         public static int ResolveTier(float progressRatio)
         {
             progressRatio = Clamp01(progressRatio);
-            if (progressRatio >= 0.85f)
+            if (progressRatio >= GetTierThreshold(3))
             {
                 return 3;
             }
 
-            if (progressRatio >= 0.60f)
+            if (progressRatio >= GetTierThreshold(2))
             {
                 return 2;
             }
 
-            if (progressRatio >= 0.35f)
+            if (progressRatio >= GetTierThreshold(1))
             {
                 return 1;
             }

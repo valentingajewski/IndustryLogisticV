@@ -89,6 +89,15 @@ namespace LSOL.Systems
                 var lastStoragePressureDayIndex = ParseInt(ini.GetString(section, "LastStoragePressureDayIndex", "-1"), -1);
                 var lifetimeStorageLossTons = ini.GetFloat(section, "LifetimeStorageLossTons", 0f);
                 var lifetimeStorageLossValue = ini.GetFloat(section, "LifetimeStorageLossValue", 0f);
+                var storageTelemetryWeekIndex = ParseInt(ini.GetString(section, "StorageTelemetryWeekIndex", "-1"), -1);
+                var lastDaySpoilageTons = ini.GetFloat(section, "LastDaySpoilageTons", 0f);
+                var lastDaySpoilageValue = ini.GetFloat(section, "LastDaySpoilageValue", 0f);
+                var lastDayShrinkageTons = ini.GetFloat(section, "LastDayShrinkageTons", 0f);
+                var lastDayShrinkageValue = ini.GetFloat(section, "LastDayShrinkageValue", 0f);
+                var currentWeekSpoilageTons = ini.GetFloat(section, "CurrentWeekSpoilageTons", 0f);
+                var currentWeekSpoilageValue = ini.GetFloat(section, "CurrentWeekSpoilageValue", 0f);
+                var currentWeekShrinkageTons = ini.GetFloat(section, "CurrentWeekShrinkageTons", 0f);
+                var currentWeekShrinkageValue = ini.GetFloat(section, "CurrentWeekShrinkageValue", 0f);
 
                 var bufferStorage = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
                 var block = ini.GetSection(section);
@@ -123,6 +132,16 @@ namespace LSOL.Systems
                     isOwned,
                     hasContractorPermit);
                 industry.ApplyStoragePressureState(storageCondition, lastStoragePressureDayIndex, lifetimeStorageLossTons, lifetimeStorageLossValue);
+                industry.ApplyStorageLossTelemetryState(
+                    storageTelemetryWeekIndex,
+                    lastDaySpoilageTons,
+                    lastDaySpoilageValue,
+                    lastDayShrinkageTons,
+                    lastDayShrinkageValue,
+                    currentWeekSpoilageTons,
+                    currentWeekSpoilageValue,
+                    currentWeekShrinkageTons,
+                    currentWeekShrinkageValue);
 
                 restoredCount += 1;
             }
@@ -246,6 +265,35 @@ namespace LSOL.Systems
                 persistenceVersion = 21;
             }
 
+            if (metadata != null && HasBankOfferHistoryData(metadata.BankLoans))
+            {
+                persistenceVersion = 22;
+            }
+
+            if (metadata != null && HasAlertRulesData(metadata.AlertRules))
+            {
+                persistenceVersion = 23;
+            }
+
+            if (metadata != null && HasPlayerContractReputationData(metadata.PlayerContracts))
+            {
+                persistenceVersion = 24;
+            }
+
+            if (HasWarehouseStorageTelemetryData(industries))
+            {
+                persistenceVersion = 25;
+            }
+
+            if (HasTerritoryDistrictEventData(territorySnapshot))
+            {
+                persistenceVersion = 26;
+            }
+            if ((metadata != null && HasNpcCarrierData(metadata.NpcLogistics)) || HasTerritoryCarrierCompetitionData(territorySnapshot))
+            {
+                persistenceVersion = 27;
+            }
+
             writer.WriteLine(
                 "Version={0}",
                 persistenceVersion);
@@ -305,6 +353,15 @@ namespace LSOL.Systems
                 writer.WriteLine("LastStoragePressureDayIndex={0}", industry.LastStoragePressureDayIndex);
                 writer.WriteLine("LifetimeStorageLossTons={0}", FormatFloat(industry.LifetimeStorageLossTons));
                 writer.WriteLine("LifetimeStorageLossValue={0}", FormatFloat(industry.LifetimeStorageLossValue));
+                writer.WriteLine("StorageTelemetryWeekIndex={0}", industry.StorageTelemetryWeekIndex);
+                writer.WriteLine("LastDaySpoilageTons={0}", FormatFloat(industry.LastDaySpoilageTons));
+                writer.WriteLine("LastDaySpoilageValue={0}", FormatFloat(industry.LastDaySpoilageValue));
+                writer.WriteLine("LastDayShrinkageTons={0}", FormatFloat(industry.LastDayShrinkageTons));
+                writer.WriteLine("LastDayShrinkageValue={0}", FormatFloat(industry.LastDayShrinkageValue));
+                writer.WriteLine("CurrentWeekSpoilageTons={0}", FormatFloat(industry.CurrentWeekSpoilageTons));
+                writer.WriteLine("CurrentWeekSpoilageValue={0}", FormatFloat(industry.CurrentWeekSpoilageValue));
+                writer.WriteLine("CurrentWeekShrinkageTons={0}", FormatFloat(industry.CurrentWeekShrinkageTons));
+                writer.WriteLine("CurrentWeekShrinkageValue={0}", FormatFloat(industry.CurrentWeekShrinkageValue));
 
                 foreach (var stock in industry.BufferStorage.OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase))
                 {
@@ -372,6 +429,11 @@ namespace LSOL.Systems
             if (metadata != null && HasPlayerContractsData(metadata.PlayerContracts))
             {
                 WritePlayerContractsSnapshot(writer, metadata.PlayerContracts);
+            }
+
+            if (metadata != null && HasAlertRulesData(metadata.AlertRules))
+            {
+                WriteAlertRulesSnapshot(writer, metadata.AlertRules);
             }
         }
 
@@ -441,11 +503,13 @@ namespace LSOL.Systems
             metadata.BankLoans = ReadBankLoanSnapshot(ini);
             metadata.PlayerStatistics = ReadPlayerStatisticsSnapshot(ini);
             metadata.PlayerContracts = ReadPlayerContractsSnapshot(ini);
+            metadata.AlertRules = ReadAlertRulesSnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
                 || HasPlayerStatisticsData(metadata.PlayerStatistics)
-                || HasPlayerContractsData(metadata.PlayerContracts);
+                || HasPlayerContractsData(metadata.PlayerContracts)
+                || HasAlertRulesData(metadata.AlertRules);
             return metadata;
         }
 
@@ -516,6 +580,9 @@ namespace LSOL.Systems
                     Description = ini.GetString(section, "Description", string.Empty),
                     RouteContractId = ParseInt(ini.GetString(section, "RouteContractId", "0"), 0),
                     RouteLabel = ini.GetString(section, "RouteLabel", string.Empty),
+                    PlayerContractId = ini.GetString(section, "PlayerContractId", string.Empty),
+                    ShipperKey = ini.GetString(section, "ShipperKey", string.Empty),
+                    DistrictName = ini.GetString(section, "DistrictName", string.Empty),
                 });
                 hasFinance = true;
             }
@@ -669,6 +736,9 @@ namespace LSOL.Systems
                 writer.WriteLine("Description={0}", transaction.Description ?? string.Empty);
                 writer.WriteLine("RouteContractId={0}", Math.Max(0, transaction.RouteContractId));
                 writer.WriteLine("RouteLabel={0}", transaction.RouteLabel ?? string.Empty);
+                writer.WriteLine("PlayerContractId={0}", transaction.PlayerContractId ?? string.Empty);
+                writer.WriteLine("ShipperKey={0}", transaction.ShipperKey ?? string.Empty);
+                writer.WriteLine("DistrictName={0}", transaction.DistrictName ?? string.Empty);
                 writer.WriteLine();
             }
         }
@@ -704,6 +774,21 @@ namespace LSOL.Systems
                 }
 
                 writer.WriteLine("[{0}]", BuildBankOfferSectionName(offer.BankId));
+                writer.WriteLine("WeekIndex={0}", offer.WeekIndex);
+                writer.WriteLine("RatePercent={0}", FormatFloat(offer.RatePercent));
+                writer.WriteLine();
+            }
+
+            foreach (var offer in snapshot.OfferHistory
+                .OrderBy(entry => entry != null ? entry.BankId : string.Empty, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(entry => entry != null ? entry.WeekIndex : 0))
+            {
+                if (offer == null || string.IsNullOrWhiteSpace(offer.BankId))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildBankOfferHistorySectionName(offer.BankId, offer.WeekIndex));
                 writer.WriteLine("WeekIndex={0}", offer.WeekIndex);
                 writer.WriteLine("RatePercent={0}", FormatFloat(offer.RatePercent));
                 writer.WriteLine();
@@ -754,6 +839,24 @@ namespace LSOL.Systems
                 {
                     BankId = bankId,
                     WeekIndex = ParseInt(ini.GetString(section, "WeekIndex", "0"), 0),
+                    RatePercent = ini.GetFloat(section, "RatePercent", 0f),
+                });
+                hasData = true;
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                string bankId;
+                int weekIndex;
+                if (!TryParseBankOfferHistorySectionName(section, out bankId, out weekIndex))
+                {
+                    continue;
+                }
+
+                snapshot.OfferHistory.Add(new BankOfferRateSnapshot
+                {
+                    BankId = bankId,
+                    WeekIndex = ParseInt(ini.GetString(section, "WeekIndex", weekIndex.ToString(CultureInfo.InvariantCulture)), weekIndex),
                     RatePercent = ini.GetFloat(section, "RatePercent", 0f),
                 });
                 hasData = true;
@@ -895,6 +998,11 @@ namespace LSOL.Systems
             writer.WriteLine("NextContractId={0}", Math.Max(1, snapshot.NextContractId));
             writer.WriteLine("LastBoardRefreshMinute={0}", snapshot.LastBoardRefreshMinute);
             writer.WriteLine("SelectedCommodityFilter={0}", snapshot.SelectedCommodityFilter ?? string.Empty);
+            writer.WriteLine("SelectedDistrictFilter={0}", snapshot.SelectedDistrictFilter ?? string.Empty);
+            writer.WriteLine("SelectedRigClassFilter={0}", snapshot.SelectedRigClassFilter ?? string.Empty);
+            writer.WriteLine("SelectedSortMode={0}", snapshot.SelectedSortMode);
+            writer.WriteLine("SelectedExpiryFilter={0}", snapshot.SelectedExpiryFilter);
+            writer.WriteLine("SelectedPayoutDensityFilter={0}", snapshot.SelectedPayoutDensityFilter);
             writer.WriteLine();
 
             if (snapshot.Contracts != null)
@@ -937,6 +1045,10 @@ namespace LSOL.Systems
                     writer.WriteLine("TotalLostTons={0}", FormatFloat(contract.TotalLostTons));
                     writer.WriteLine("SourceDistrictName={0}", contract.SourceDistrictName ?? string.Empty);
                     writer.WriteLine("StatusMessage={0}", contract.StatusMessage ?? string.Empty);
+                    writer.WriteLine("ReputationOutcomeApplied={0}", contract.ReputationOutcomeApplied ? "true" : "false");
+                    writer.WriteLine("ShipperKey={0}", contract.ShipperKey ?? string.Empty);
+                    writer.WriteLine("ShipperDisplayName={0}", contract.ShipperDisplayName ?? string.Empty);
+                    writer.WriteLine("IsPremiumOpportunity={0}", contract.IsPremiumOpportunity ? "true" : "false");
                     writer.WriteLine();
                 }
             }
@@ -959,6 +1071,32 @@ namespace LSOL.Systems
                 writer.WriteLine("AvailableAgainMinute={0}", cooldown.AvailableAgainMinute);
                 writer.WriteLine();
             }
+
+            if (snapshot.ShipperReputations == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < snapshot.ShipperReputations.Count; i++)
+            {
+                var reputation = snapshot.ShipperReputations[i];
+                if (reputation == null || string.IsNullOrWhiteSpace(reputation.ShipperKey))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[PlayerContractShipper:{0}]", i + 1);
+                writer.WriteLine("ShipperKey={0}", reputation.ShipperKey ?? string.Empty);
+                writer.WriteLine("DisplayName={0}", reputation.DisplayName ?? string.Empty);
+                writer.WriteLine("TrustScore={0}", FormatFloat(reputation.TrustScore));
+                writer.WriteLine("DeliveredTons={0}", FormatFloat(reputation.DeliveredTons));
+                writer.WriteLine("CompletedContracts={0}", Math.Max(0, reputation.CompletedContracts));
+                writer.WriteLine("CleanCompletions={0}", Math.Max(0, reputation.CleanCompletions));
+                writer.WriteLine("FailedContracts={0}", Math.Max(0, reputation.FailedContracts));
+                writer.WriteLine("CleanStreak={0}", Math.Max(0, reputation.CleanStreak));
+                writer.WriteLine("LastTierAwarded={0}", Math.Max(0, reputation.LastTierAwarded));
+                writer.WriteLine();
+            }
         }
 
         private static PlayerContractsPersistenceSnapshot ReadPlayerContractsSnapshot(IniFile ini)
@@ -974,6 +1112,11 @@ namespace LSOL.Systems
                 snapshot.NextContractId = ParseInt(ini.GetString("PlayerContracts", "NextContractId", "1"), 1);
                 snapshot.LastBoardRefreshMinute = ParseInt(ini.GetString("PlayerContracts", "LastBoardRefreshMinute", "-1"), -1);
                 snapshot.SelectedCommodityFilter = CommodityCatalog.Normalize(ini.GetString("PlayerContracts", "SelectedCommodityFilter", string.Empty));
+                snapshot.SelectedDistrictFilter = (ini.GetString("PlayerContracts", "SelectedDistrictFilter", string.Empty) ?? string.Empty).Trim();
+                snapshot.SelectedRigClassFilter = (ini.GetString("PlayerContracts", "SelectedRigClassFilter", string.Empty) ?? string.Empty).Trim();
+                snapshot.SelectedSortMode = ParsePlayerContractBoardSortMode(ini.GetString("PlayerContracts", "SelectedSortMode", PlayerContractBoardSortMode.Board.ToString()), PlayerContractBoardSortMode.Board);
+                snapshot.SelectedExpiryFilter = ParsePlayerContractBoardExpiryFilter(ini.GetString("PlayerContracts", "SelectedExpiryFilter", PlayerContractBoardExpiryFilter.Any.ToString()), PlayerContractBoardExpiryFilter.Any);
+                snapshot.SelectedPayoutDensityFilter = ParsePlayerContractBoardPayoutDensityFilter(ini.GetString("PlayerContracts", "SelectedPayoutDensityFilter", PlayerContractBoardPayoutDensityFilter.Any.ToString()), PlayerContractBoardPayoutDensityFilter.Any);
             }
 
             foreach (var section in ini.Sections)
@@ -1024,6 +1167,10 @@ namespace LSOL.Systems
                         TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
                         SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
                         StatusMessage = ini.GetString(section, "StatusMessage", string.Empty),
+                        ReputationOutcomeApplied = ini.GetBool(section, "ReputationOutcomeApplied", false),
+                        ShipperKey = ini.GetString(section, "ShipperKey", string.Empty),
+                        ShipperDisplayName = ini.GetString(section, "ShipperDisplayName", string.Empty),
+                        IsPremiumOpportunity = ini.GetBool(section, "IsPremiumOpportunity", false),
                     });
 
                     continue;
@@ -1041,7 +1188,73 @@ namespace LSOL.Systems
                 });
             }
 
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("PlayerContractShipper:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var shipperKey = ini.GetString(section, "ShipperKey", string.Empty);
+                if (string.IsNullOrWhiteSpace(shipperKey))
+                {
+                    continue;
+                }
+
+                snapshot.ShipperReputations.Add(new PlayerContractShipperReputationSnapshot
+                {
+                    ShipperKey = shipperKey,
+                    DisplayName = ini.GetString(section, "DisplayName", string.Empty),
+                    TrustScore = ini.GetFloat(section, "TrustScore", 0f),
+                    DeliveredTons = ini.GetFloat(section, "DeliveredTons", 0f),
+                    CompletedContracts = ParseInt(ini.GetString(section, "CompletedContracts", "0"), 0),
+                    CleanCompletions = ParseInt(ini.GetString(section, "CleanCompletions", "0"), 0),
+                    FailedContracts = ParseInt(ini.GetString(section, "FailedContracts", "0"), 0),
+                    CleanStreak = ParseInt(ini.GetString(section, "CleanStreak", "0"), 0),
+                    LastTierAwarded = ParseInt(ini.GetString(section, "LastTierAwarded", "0"), 0),
+                });
+            }
+
             return snapshot.HasData ? snapshot : null;
+        }
+
+        private static void WriteAlertRulesSnapshot(StreamWriter writer, AlertRulesPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[AlertRules]");
+            writer.WriteLine("RentLeadTime={0}", snapshot.RentLeadTime);
+            writer.WriteLine("ContractLeadTime={0}", snapshot.ContractLeadTime);
+            writer.WriteLine("FleetMode={0}", snapshot.FleetMode);
+            writer.WriteLine("TerritoryMode={0}", snapshot.TerritoryMode);
+            writer.WriteLine();
+        }
+
+        private static AlertRulesPersistenceSnapshot ReadAlertRulesSnapshot(IniFile ini)
+        {
+            if (ini == null || !ini.HasSection("AlertRules"))
+            {
+                return null;
+            }
+
+            return new AlertRulesPersistenceSnapshot
+            {
+                RentLeadTime = ParseAlertLeadTimeMode(
+                    ini.GetString("AlertRules", "RentLeadTime", AlertRulesPersistenceSnapshot.DefaultRentLeadTime.ToString()),
+                    AlertRulesPersistenceSnapshot.DefaultRentLeadTime),
+                ContractLeadTime = ParseAlertLeadTimeMode(
+                    ini.GetString("AlertRules", "ContractLeadTime", AlertRulesPersistenceSnapshot.DefaultContractLeadTime.ToString()),
+                    AlertRulesPersistenceSnapshot.DefaultContractLeadTime),
+                FleetMode = ParseFleetAlertMode(
+                    ini.GetString("AlertRules", "FleetMode", AlertRulesPersistenceSnapshot.DefaultFleetMode.ToString()),
+                    AlertRulesPersistenceSnapshot.DefaultFleetMode),
+                TerritoryMode = ParseTerritoryAlertMode(
+                    ini.GetString("AlertRules", "TerritoryMode", AlertRulesPersistenceSnapshot.DefaultTerritoryMode.ToString()),
+                    AlertRulesPersistenceSnapshot.DefaultTerritoryMode),
+            };
         }
 
         private static void WriteNamedSeriesPersistence(
@@ -1276,6 +1489,7 @@ namespace LSOL.Systems
                 writer.WriteLine("IsPlaced={0}", officeObject.IsPlaced ? "true" : "false");
                 writer.WriteLine("Position={0}", FormatVector3(officeObject.Position));
                 writer.WriteLine("Rotation={0}", FormatVector3(officeObject.Rotation));
+                writer.WriteLine("AssignedFacilityAnchorId={0}", officeObject.AssignedFacilityAnchorId ?? string.Empty);
                 writer.WriteLine("StoredResourceAmount={0}", FormatFloat(officeObject.StoredResourceAmount));
                 writer.WriteLine();
             }
@@ -1433,6 +1647,7 @@ namespace LSOL.Systems
                             IsPlaced = ini.GetBool(section, "IsPlaced", false),
                             Position = ParseVector3(ini.GetString(section, "Position", string.Empty), Vector3.Zero),
                             Rotation = ParseVector3(ini.GetString(section, "Rotation", string.Empty), Vector3.Zero),
+                            AssignedFacilityAnchorId = ini.GetString(section, "AssignedFacilityAnchorId", string.Empty),
                             StoredResourceAmount = ini.GetFloat(section, "StoredResourceAmount", 0f),
                         });
                     }
@@ -1877,6 +2092,34 @@ namespace LSOL.Systems
                 writer.WriteLine();
             }
 
+            if (snapshot.Carriers != null)
+            {
+                foreach (var carrier in snapshot.Carriers.OrderBy(entry => entry != null ? entry.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (carrier == null || string.IsNullOrWhiteSpace(carrier.Id))
+                    {
+                        continue;
+                    }
+
+                    writer.WriteLine("[{0}]", BuildNpcCarrierSectionName(carrier.Id));
+                    writer.WriteLine("Id={0}", carrier.Id ?? string.Empty);
+                    writer.WriteLine("DisplayName={0}", carrier.DisplayName ?? string.Empty);
+                    writer.WriteLine("HomeDistrict={0}", carrier.HomeDistrict ?? string.Empty);
+                    writer.WriteLine("PreferredCommodityFamilies={0}", string.Join(",", carrier.PreferredCommodityFamilies != null ? carrier.PreferredCommodityFamilies : Array.Empty<string>()));
+                    writer.WriteLine("PreferredDistricts={0}", string.Join(",", carrier.PreferredDistricts != null ? carrier.PreferredDistricts : Array.Empty<string>()));
+                    writer.WriteLine("PreferredCorridors={0}", string.Join(",", carrier.PreferredCorridors != null ? carrier.PreferredCorridors : Array.Empty<string>()));
+                    writer.WriteLine("Strength={0}", FormatFloat(carrier.Strength));
+                    writer.WriteLine("GrowthMomentum={0}", FormatFloat(carrier.GrowthMomentum));
+                    writer.WriteLine("DeclinePressure={0}", FormatFloat(carrier.DeclinePressure));
+                    writer.WriteLine("IsDormant={0}", carrier.IsDormant ? "true" : "false");
+                    writer.WriteLine("DormantWeekCount={0}", carrier.DormantWeekCount);
+                    writer.WriteLine("LastActiveWeekIndex={0}", carrier.LastActiveWeekIndex);
+                    writer.WriteLine("LastExpansionWeekIndex={0}", carrier.LastExpansionWeekIndex);
+                    writer.WriteLine("VisualSeed={0}", carrier.VisualSeed);
+                    writer.WriteLine();
+                }
+            }
+
             if (snapshot.WorldJobs == null)
             {
                 return;
@@ -1906,6 +2149,7 @@ namespace LSOL.Systems
                 writer.WriteLine("IsPriorityMatch={0}", job.IsPriorityMatch ? "true" : "false");
                 writer.WriteLine("HasVisibleConvoy={0}", job.HasVisibleConvoy ? "true" : "false");
                 writer.WriteLine("IsRivalJob={0}", job.IsRivalJob ? "true" : "false");
+                writer.WriteLine("CarrierId={0}", job.CarrierId ?? string.Empty);
                 writer.WriteLine("BackhaulDepth={0}", job.BackhaulDepth);
                 writer.WriteLine("StatusText={0}", job.StatusText ?? string.Empty);
                 writer.WriteLine();
@@ -1983,6 +2227,35 @@ namespace LSOL.Systems
                     continue;
                 }
 
+                if (section.StartsWith("NpcCarrier:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var carrierId = ini.GetString(section, "Id", section.Substring("NpcCarrier:".Length).Trim());
+                    if (string.IsNullOrWhiteSpace(carrierId))
+                    {
+                        continue;
+                    }
+
+                    var carrier = new NpcCarrierNetworkSnapshot
+                    {
+                        Id = carrierId,
+                        DisplayName = ini.GetString(section, "DisplayName", string.Empty),
+                        HomeDistrict = ini.GetString(section, "HomeDistrict", string.Empty),
+                        Strength = ini.GetFloat(section, "Strength", 0f),
+                        GrowthMomentum = ini.GetFloat(section, "GrowthMomentum", 0f),
+                        DeclinePressure = ini.GetFloat(section, "DeclinePressure", 0f),
+                        IsDormant = ini.GetBool(section, "IsDormant", false),
+                        DormantWeekCount = ParseInt(ini.GetString(section, "DormantWeekCount", "0"), 0),
+                        LastActiveWeekIndex = ParseInt(ini.GetString(section, "LastActiveWeekIndex", "-1"), -1),
+                        LastExpansionWeekIndex = ParseInt(ini.GetString(section, "LastExpansionWeekIndex", "-1"), -1),
+                        VisualSeed = ParseInt(ini.GetString(section, "VisualSeed", "0"), 0),
+                    };
+                    AddCsvValues(carrier.PreferredCommodityFamilies, ini.GetString(section, "PreferredCommodityFamilies", string.Empty), CommodityCatalog.Normalize);
+                    AddCsvValues(carrier.PreferredDistricts, ini.GetString(section, "PreferredDistricts", string.Empty), value => value.Trim());
+                    AddCsvValues(carrier.PreferredCorridors, ini.GetString(section, "PreferredCorridors", string.Empty), value => value.Trim());
+                    snapshot.Carriers.Add(carrier);
+                    continue;
+                }
+
                 if (!section.StartsWith("NpcWorldJob:", StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
@@ -2007,6 +2280,7 @@ namespace LSOL.Systems
                     IsPriorityMatch = ini.GetBool(section, "IsPriorityMatch", false),
                     HasVisibleConvoy = ini.GetBool(section, "HasVisibleConvoy", false),
                     IsRivalJob = ini.GetBool(section, "IsRivalJob", false),
+                    CarrierId = ini.GetString(section, "CarrierId", string.Empty),
                     BackhaulDepth = ParseInt(ini.GetString(section, "BackhaulDepth", "0"), 0),
                     StatusText = ini.GetString(section, "StatusText", string.Empty),
                 });
@@ -2246,6 +2520,39 @@ namespace LSOL.Systems
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 
+        private static AlertLeadTimeMode ParseAlertLeadTimeMode(string raw, AlertLeadTimeMode fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            AlertLeadTimeMode parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static FleetAlertMode ParseFleetAlertMode(string raw, FleetAlertMode fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            FleetAlertMode parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static TerritoryAlertMode ParseTerritoryAlertMode(string raw, TerritoryAlertMode fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            TerritoryAlertMode parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
         private static ModLanguage? ParseModLanguage(string raw, ModLanguage fallback)
         {
             if (string.IsNullOrWhiteSpace(raw))
@@ -2341,10 +2648,30 @@ namespace LSOL.Systems
                 writer.WriteLine("CompetitivePressure={0}", FormatFloat(district.CompetitivePressure));
                 writer.WriteLine("CompetitiveOpportunity={0}", FormatFloat(district.CompetitiveOpportunity));
                 writer.WriteLine("ActiveCompetitionJobs={0}", district.ActiveCompetitionJobs);
+                writer.WriteLine("ActiveCarrierCount={0}", district.ActiveCarrierCount);
+                writer.WriteLine("DominantCarrierId={0}", district.DominantCarrierId ?? string.Empty);
+                writer.WriteLine("DominantCarrierName={0}", district.DominantCarrierName ?? string.Empty);
                 writer.WriteLine("VisibleCompetitionCount={0}", district.VisibleCompetitionCount);
                 writer.WriteLine("CompetitiveTons={0}", FormatFloat(district.CompetitiveTons));
                 writer.WriteLine("CompetitiveResponseCount={0}", district.CompetitiveResponseCount);
                 writer.WriteLine("CompetitiveWinCount={0}", district.CompetitiveWinCount);
+                if (district.ActiveEvent != null && district.ActiveEvent.HasData)
+                {
+                    writer.WriteLine("ActiveEventId={0}", district.ActiveEvent.EventId ?? string.Empty);
+                    writer.WriteLine("ActiveEventDistrictName={0}", district.ActiveEvent.DistrictName ?? string.Empty);
+                    writer.WriteLine("ActiveEventType={0}", district.ActiveEvent.CrisisType);
+                    writer.WriteLine("ActiveEventCommodity={0}", district.ActiveEvent.PreferredCommodity ?? string.Empty);
+                    writer.WriteLine("ActiveEventSeverity={0}", FormatFloat(district.ActiveEvent.Severity));
+                    writer.WriteLine("ActiveEventMarketPressureBonus={0}", FormatFloat(district.ActiveEvent.MarketPressureBonus));
+                    writer.WriteLine("ActiveEventResponseTargetTons={0}", FormatFloat(district.ActiveEvent.ResponseTargetTons));
+                    writer.WriteLine("ActiveEventDeliveredReliefTons={0}", FormatFloat(district.ActiveEvent.DeliveredReliefTons));
+                    writer.WriteLine("ActiveEventReliefDeliveryCount={0}", district.ActiveEvent.ReliefDeliveryCount);
+                    writer.WriteLine("ActiveEventStartedWeekIndex={0}", district.ActiveEvent.StartedWeekIndex);
+                    writer.WriteLine("ActiveEventEndsAtWeekIndex={0}", district.ActiveEvent.EndsAtWeekIndex);
+                    writer.WriteLine("ActiveEventLastEscalatedWeekIndex={0}", district.ActiveEvent.LastEscalatedWeekIndex);
+                    writer.WriteLine("ActiveEventTriggerSummary={0}", district.ActiveEvent.TriggerSummary ?? string.Empty);
+                    writer.WriteLine("ActiveEventImpactSummary={0}", district.ActiveEvent.ImpactSummary ?? string.Empty);
+                }
                 writer.WriteLine();
             }
 
@@ -2364,6 +2691,16 @@ namespace LSOL.Systems
                 writer.WriteLine("CurrentWeekDeliveryCount={0}", corridor.CurrentWeekDeliveryCount);
                 writer.WriteLine("CurrentWeekDeliveredTons={0}", FormatFloat(corridor.CurrentWeekDeliveredTons));
                 writer.WriteLine("DecayPressure={0}", FormatFloat(corridor.DecayPressure));
+                writer.WriteLine("CompetitivePressure={0}", FormatFloat(corridor.CompetitivePressure));
+                writer.WriteLine("CompetitiveOpportunity={0}", FormatFloat(corridor.CompetitiveOpportunity));
+                writer.WriteLine("ActiveCompetitionJobs={0}", corridor.ActiveCompetitionJobs);
+                writer.WriteLine("ActiveCarrierCount={0}", corridor.ActiveCarrierCount);
+                writer.WriteLine("DominantCarrierId={0}", corridor.DominantCarrierId ?? string.Empty);
+                writer.WriteLine("DominantCarrierName={0}", corridor.DominantCarrierName ?? string.Empty);
+                writer.WriteLine("VisibleCompetitionCount={0}", corridor.VisibleCompetitionCount);
+                writer.WriteLine("CompetitiveTons={0}", FormatFloat(corridor.CompetitiveTons));
+                writer.WriteLine("CompetitiveWinCount={0}", corridor.CompetitiveWinCount);
+                writer.WriteLine("ContestedWeekStreak={0}", corridor.ContestedWeekStreak);
                 writer.WriteLine();
             }
 
@@ -2446,6 +2783,24 @@ namespace LSOL.Systems
                         continue;
                     }
 
+                    var activeEvent = new TerritoryDistrictEventSnapshot
+                    {
+                        EventId = ini.GetString(section, "ActiveEventId", string.Empty),
+                        DistrictName = ini.GetString(section, "ActiveEventDistrictName", districtName),
+                        CrisisType = ParseDistrictCrisisType(ini.GetString(section, "ActiveEventType", DistrictCrisisType.None.ToString())),
+                        PreferredCommodity = CommodityCatalog.Normalize(ini.GetString(section, "ActiveEventCommodity", string.Empty)),
+                        Severity = ini.GetFloat(section, "ActiveEventSeverity", 0f),
+                        MarketPressureBonus = ini.GetFloat(section, "ActiveEventMarketPressureBonus", 0f),
+                        ResponseTargetTons = ini.GetFloat(section, "ActiveEventResponseTargetTons", 0f),
+                        DeliveredReliefTons = ini.GetFloat(section, "ActiveEventDeliveredReliefTons", 0f),
+                        ReliefDeliveryCount = ParseInt(ini.GetString(section, "ActiveEventReliefDeliveryCount", "0"), 0),
+                        StartedWeekIndex = ParseInt(ini.GetString(section, "ActiveEventStartedWeekIndex", "-1"), -1),
+                        EndsAtWeekIndex = ParseInt(ini.GetString(section, "ActiveEventEndsAtWeekIndex", "-1"), -1),
+                        LastEscalatedWeekIndex = ParseInt(ini.GetString(section, "ActiveEventLastEscalatedWeekIndex", "-1"), -1),
+                        TriggerSummary = ini.GetString(section, "ActiveEventTriggerSummary", string.Empty),
+                        ImpactSummary = ini.GetString(section, "ActiveEventImpactSummary", string.Empty),
+                    };
+
                     snapshot.Districts.Add(new TerritoryDistrictSnapshot
                     {
                         DistrictName = districtName,
@@ -2456,10 +2811,14 @@ namespace LSOL.Systems
                         CompetitivePressure = ini.GetFloat(section, "CompetitivePressure", 0f),
                         CompetitiveOpportunity = ini.GetFloat(section, "CompetitiveOpportunity", 0f),
                         ActiveCompetitionJobs = ParseInt(ini.GetString(section, "ActiveCompetitionJobs", "0"), 0),
+                        ActiveCarrierCount = ParseInt(ini.GetString(section, "ActiveCarrierCount", "0"), 0),
+                        DominantCarrierId = ini.GetString(section, "DominantCarrierId", string.Empty),
+                        DominantCarrierName = ini.GetString(section, "DominantCarrierName", string.Empty),
                         VisibleCompetitionCount = ParseInt(ini.GetString(section, "VisibleCompetitionCount", "0"), 0),
                         CompetitiveTons = ini.GetFloat(section, "CompetitiveTons", 0f),
                         CompetitiveResponseCount = ParseInt(ini.GetString(section, "CompetitiveResponseCount", "0"), 0),
                         CompetitiveWinCount = ParseInt(ini.GetString(section, "CompetitiveWinCount", "0"), 0),
+                        ActiveEvent = activeEvent.HasData ? activeEvent : null,
                     });
 
                     continue;
@@ -2484,6 +2843,16 @@ namespace LSOL.Systems
                         CurrentWeekDeliveryCount = ParseInt(ini.GetString(section, "CurrentWeekDeliveryCount", "0"), 0),
                         CurrentWeekDeliveredTons = ini.GetFloat(section, "CurrentWeekDeliveredTons", 0f),
                         DecayPressure = ini.GetFloat(section, "DecayPressure", 0f),
+                        CompetitivePressure = ini.GetFloat(section, "CompetitivePressure", 0f),
+                        CompetitiveOpportunity = ini.GetFloat(section, "CompetitiveOpportunity", 0f),
+                        ActiveCompetitionJobs = ParseInt(ini.GetString(section, "ActiveCompetitionJobs", "0"), 0),
+                        ActiveCarrierCount = ParseInt(ini.GetString(section, "ActiveCarrierCount", "0"), 0),
+                        DominantCarrierId = ini.GetString(section, "DominantCarrierId", string.Empty),
+                        DominantCarrierName = ini.GetString(section, "DominantCarrierName", string.Empty),
+                        VisibleCompetitionCount = ParseInt(ini.GetString(section, "VisibleCompetitionCount", "0"), 0),
+                        CompetitiveTons = ini.GetFloat(section, "CompetitiveTons", 0f),
+                        CompetitiveWinCount = ParseInt(ini.GetString(section, "CompetitiveWinCount", "0"), 0),
+                        ContestedWeekStreak = ParseInt(ini.GetString(section, "ContestedWeekStreak", "0"), 0),
                     });
 
                     continue;
@@ -2529,15 +2898,31 @@ namespace LSOL.Systems
         private static bool HasTerritoryCompetitionData(TerritoryPersistenceSnapshot snapshot)
         {
             return snapshot != null
-                && snapshot.Districts != null
-                && snapshot.Districts.Any(district => district != null
+                && ((snapshot.Districts != null
+                    && snapshot.Districts.Any(district => district != null
                     && (district.CompetitivePressure > 0.001f
                         || district.CompetitiveOpportunity > 0.001f
                         || district.ActiveCompetitionJobs > 0
                         || district.VisibleCompetitionCount > 0
                         || district.CompetitiveTons > 0.001f
                         || district.CompetitiveResponseCount > 0
-                        || district.CompetitiveWinCount > 0));
+                        || district.CompetitiveWinCount > 0)))
+                || (snapshot.Corridors != null
+                    && snapshot.Corridors.Any(corridor => corridor != null
+                        && (corridor.CompetitivePressure > 0.001f
+                            || corridor.CompetitiveOpportunity > 0.001f
+                            || corridor.ActiveCompetitionJobs > 0
+                            || corridor.VisibleCompetitionCount > 0
+                            || corridor.CompetitiveTons > 0.001f
+                            || corridor.CompetitiveWinCount > 0
+                            || corridor.ContestedWeekStreak > 0))));
+        }
+
+        private static bool HasTerritoryDistrictEventData(TerritoryPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && snapshot.Districts != null
+                && snapshot.Districts.Any(district => district != null && district.ActiveEvent != null && district.ActiveEvent.HasData);
         }
 
         private static string BuildTerritorySiteSectionName(string siteId)
@@ -2568,6 +2953,25 @@ namespace LSOL.Systems
         private static string BuildNpcWorldJobSectionName(int jobId)
         {
             return "NpcWorldJob:" + Math.Max(1, jobId).ToString(CultureInfo.InvariantCulture);
+        }
+        private static string BuildNpcCarrierSectionName(string carrierId)
+        {
+            return "NpcCarrier:" + (carrierId ?? string.Empty).Trim();
+        }
+
+        private static bool HasTerritoryCarrierCompetitionData(TerritoryPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && ((snapshot.Districts != null
+                    && snapshot.Districts.Any(district => district != null
+                        && (district.ActiveCarrierCount > 0
+                            || !string.IsNullOrWhiteSpace(district.DominantCarrierId)
+                            || !string.IsNullOrWhiteSpace(district.DominantCarrierName))))
+                || (snapshot.Corridors != null
+                    && snapshot.Corridors.Any(corridor => corridor != null
+                        && (corridor.ActiveCarrierCount > 0
+                            || !string.IsNullOrWhiteSpace(corridor.DominantCarrierId)
+                            || !string.IsNullOrWhiteSpace(corridor.DominantCarrierName)))));
         }
 
         private static string BuildPropertyOfficeSectionName(string officeId)
@@ -2608,6 +3012,15 @@ namespace LSOL.Systems
         private static string BuildBankOfferSectionName(string bankId)
         {
             return "BankOffer:" + (bankId ?? string.Empty).Trim();
+        }
+
+        private static string BuildBankOfferHistorySectionName(string bankId, int weekIndex)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "BankOfferHistory:{0}:{1}",
+                (bankId ?? string.Empty).Trim(),
+                Math.Max(0, weekIndex));
         }
 
         private static string BuildSpecialMissionProgressSectionName(string missionId)
@@ -2656,6 +3069,12 @@ namespace LSOL.Systems
         {
             DistrictLicenseStatus parsed;
             return Enum.TryParse(raw ?? string.Empty, true, out parsed) ? parsed : DistrictLicenseStatus.None;
+        }
+
+        private static DistrictCrisisType ParseDistrictCrisisType(string raw)
+        {
+            DistrictCrisisType parsed;
+            return Enum.TryParse(raw ?? string.Empty, true, out parsed) ? parsed : DistrictCrisisType.None;
         }
 
         private static DepotSpecialization ParseDepotSpecialization(string raw)
@@ -2843,6 +3262,32 @@ namespace LSOL.Systems
                     || snapshot.LastWorldEvaluationClockMinute >= 0);
         }
 
+        private static bool HasNpcCarrierData(NpcLogisticsPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && ((snapshot.Carriers != null && snapshot.Carriers.Any(carrier => carrier != null && !string.IsNullOrWhiteSpace(carrier.Id)))
+                    || (snapshot.WorldJobs != null && snapshot.WorldJobs.Any(job => job != null && !string.IsNullOrWhiteSpace(job.CarrierId))));
+        }
+
+        private static void AddCsvValues(ICollection<string> destination, string raw, Func<string, string> normalize)
+        {
+            if (destination == null || string.IsNullOrWhiteSpace(raw))
+            {
+                return;
+            }
+
+            foreach (var part in raw.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var value = normalize != null ? normalize(part ?? string.Empty) : (part ?? string.Empty).Trim();
+                if (string.IsNullOrWhiteSpace(value) || destination.Contains(value))
+                {
+                    continue;
+                }
+
+                destination.Add(value);
+            }
+        }
+
         private static bool HasSpecialMissionData(SpecialMissionPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -2862,6 +3307,32 @@ namespace LSOL.Systems
             return snapshot != null && snapshot.HasData;
         }
 
+        private static bool HasBankOfferHistoryData(BankLoanPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.OfferHistory != null && snapshot.OfferHistory.Count > 0;
+        }
+
+        private static bool TryParseBankOfferHistorySectionName(string section, out string bankId, out int weekIndex)
+        {
+            bankId = string.Empty;
+            weekIndex = 0;
+            if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("BankOfferHistory:", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var rawValue = section.Substring("BankOfferHistory:".Length).Trim();
+            var separatorIndex = rawValue.LastIndexOf(':');
+            if (separatorIndex <= 0 || separatorIndex >= rawValue.Length - 1)
+            {
+                return false;
+            }
+
+            bankId = rawValue.Substring(0, separatorIndex).Trim();
+            weekIndex = ParseInt(rawValue.Substring(separatorIndex + 1), -1);
+            return !string.IsNullOrWhiteSpace(bankId) && weekIndex >= 0;
+        }
+
         private static bool HasPlayerStatisticsData(PlayerStatisticsPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -2878,6 +3349,33 @@ namespace LSOL.Systems
         private static bool HasPlayerContractsData(PlayerContractsPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
+        }
+
+        private static bool HasPlayerContractReputationData(PlayerContractsPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && snapshot.ShipperReputations != null
+                && snapshot.ShipperReputations.Count > 0;
+        }
+
+        private static bool HasAlertRulesData(AlertRulesPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static bool HasWarehouseStorageTelemetryData(IEnumerable<Industry> industries)
+        {
+            return industries != null && industries.Any(industry =>
+                industry != null &&
+                (industry.StorageTelemetryWeekIndex >= 0
+                    || industry.LastDaySpoilageTons > 0.001f
+                    || industry.LastDaySpoilageValue > 0.01f
+                    || industry.LastDayShrinkageTons > 0.001f
+                    || industry.LastDayShrinkageValue > 0.01f
+                    || industry.CurrentWeekSpoilageTons > 0.001f
+                    || industry.CurrentWeekSpoilageValue > 0.01f
+                    || industry.CurrentWeekShrinkageTons > 0.001f
+                    || industry.CurrentWeekShrinkageValue > 0.01f));
         }
 
         private static bool HasGlobalMarketData(GlobalMarketPersistenceSnapshot snapshot)
@@ -2915,6 +3413,39 @@ namespace LSOL.Systems
             }
 
             PlayerContractType parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static PlayerContractBoardSortMode ParsePlayerContractBoardSortMode(string raw, PlayerContractBoardSortMode fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            PlayerContractBoardSortMode parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static PlayerContractBoardExpiryFilter ParsePlayerContractBoardExpiryFilter(string raw, PlayerContractBoardExpiryFilter fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            PlayerContractBoardExpiryFilter parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static PlayerContractBoardPayoutDensityFilter ParsePlayerContractBoardPayoutDensityFilter(string raw, PlayerContractBoardPayoutDensityFilter fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            PlayerContractBoardPayoutDensityFilter parsed;
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 
@@ -3169,7 +3700,7 @@ namespace LSOL.Systems
         public bool UseMetricSpeedDisplay { get; set; }
         public bool VehicleFuelDifficultyEnabled { get; set; }
         public bool CargoWeightPowerDifficultyEnabled { get; set; }
-        public bool CargoDamageDifficultyEnabled { get; set; }
+        public bool CargoDamageDifficultyEnabled { get; set; } = true;
         public bool IndustryPricingDifficultyEnabled { get; set; }
         public bool LicensingDifficultyEnabled { get; set; }
         public bool CorridorRestrictionDifficultyEnabled { get; set; } = true;
@@ -3190,5 +3721,6 @@ namespace LSOL.Systems
         public BankLoanPersistenceSnapshot BankLoans { get; set; }
         public PlayerStatisticsPersistenceSnapshot PlayerStatistics { get; set; }
         public PlayerContractsPersistenceSnapshot PlayerContracts { get; set; }
+        public AlertRulesPersistenceSnapshot AlertRules { get; set; }
     }
 }

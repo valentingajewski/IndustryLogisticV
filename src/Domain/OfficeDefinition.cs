@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using GTA.Math;
 
 namespace LSOL.Domain
@@ -23,6 +24,8 @@ namespace LSOL.Domain
         public int? BarrierModelHash { get; set; }
 
         public Vector3? WorkerPosition { get; set; }
+
+        public List<OfficeFacilityAnchorDefinition> FacilityAnchors { get; set; } = new List<OfficeFacilityAnchorDefinition>();
 
         public float OfficePrice { get; set; }
 

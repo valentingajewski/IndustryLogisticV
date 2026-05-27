@@ -103,6 +103,30 @@ namespace LSOL.UI
             _rootMenu.Open();
         }
 
+        public void OpenPlannerDraft(NpcLogisticsRouteDefinition routeDefinition)
+        {
+            if (_manager.RouteLimit <= 0)
+            {
+                ShowStatus("Hiring NPC is disabled in Options.");
+                OpenRootMenu();
+                return;
+            }
+
+            var hireBlockedReason = GetHireBlockedReason();
+            if (!string.IsNullOrWhiteSpace(hireBlockedReason))
+            {
+                ShowStatus(hireBlockedReason);
+                OpenRootMenu();
+                return;
+            }
+
+            _editingContract = null;
+            SeedDraftFromPlannerRoute(routeDefinition);
+            RebuildHireMenuItems();
+            Close();
+            _hireMenu.Open();
+        }
+
         public void Close()
         {
             _rootMenu.Close();
@@ -629,6 +653,29 @@ namespace LSOL.UI
             }
         }
 
+        private void SeedDraftFromPlannerRoute(NpcLogisticsRouteDefinition routeDefinition)
+        {
+            SeedDraftFromContract(null);
+            if (routeDefinition == null || _draftRoutes.Count == 0)
+            {
+                return;
+            }
+
+            var draftRoute = _draftRoutes[0];
+            draftRoute.IsEnabled = true;
+            draftRoute.OriginIndustry = routeDefinition.OriginIndustry;
+            draftRoute.DestinationIndustry = routeDefinition.DestinationIndustry;
+            draftRoute.Commodity = routeDefinition.Commodity;
+            draftRoute.AssignedVehicleAssetId = routeDefinition.AssignedVehicleAssetId;
+            draftRoute.AssignedVehicleDisplayName = routeDefinition.AssignedVehicleDisplayName;
+            draftRoute.OriginTriggerThresholdPercent = routeDefinition.OriginTriggerThresholdPercent;
+            draftRoute.DestinationTriggerThresholdPercent = routeDefinition.DestinationTriggerThresholdPercent <= 0
+                ? 100
+                : routeDefinition.DestinationTriggerThresholdPercent;
+            _selectedRouteSlotIndex = 0;
+            LoadSelectedDraftRouteIntoSelections();
+        }
+
         private DraftRouteConfig GetSelectedDraftRouteConfig()
         {
             return _selectedRouteSlotIndex >= 0 && _selectedRouteSlotIndex < _draftRoutes.Count
@@ -1088,7 +1135,7 @@ namespace LSOL.UI
             }
 
             return string.Format(
-                "Model {0} | Loss up to {1} | Speed {2} | Weekly {3}",
+                "Model {0} | Loss up to {1} | Speed {2} | Weekly {3} | Base tier can train upward after enough completed work.",
                 tier.NpcModel,
                 ModFormatting.FormatPercent(tier.CargoLossRate * 100f),
                 ModFormatting.FormatPercent(tier.SpeedMultiplier * 100f),
@@ -1181,14 +1228,17 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
+            var trainingDetail = _manager.BuildDriverTrainingDetail(contract);
+
             return string.Format(
-                "{0} route{1} | Truck {2} | Active {3}% -> {4}% | {5} | {6} | Deliveries {7}",
+                "{0} route{1} | Truck {2} | Active {3}% -> {4}% | {5} | {6} | {7} | Deliveries {8}",
                 contract.Routes != null && contract.Routes.Count > 0 ? contract.Routes.Count : 1,
                 contract.Routes != null && contract.Routes.Count == 1 ? string.Empty : "s",
                 string.IsNullOrWhiteSpace(contract.AssignedVehicleDisplayName) ? "Legacy auto" : contract.AssignedVehicleDisplayName,
                 contract.OriginTriggerThresholdPercent,
                 contract.DestinationTriggerThresholdPercent,
                 _manager.BuildPayrollStatus(contract),
+                trainingDetail,
                 contract.StatusText,
                 contract.CompletedDeliveries);
         }

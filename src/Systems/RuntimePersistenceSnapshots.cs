@@ -70,11 +70,14 @@ namespace LSOL.Systems
         {
             Contracts = new List<NpcLogisticsContractSnapshot>();
             WorldJobs = new List<NpcWorldLogisticsJobSnapshot>();
+            Carriers = new List<NpcCarrierNetworkSnapshot>();
         }
 
         public List<NpcLogisticsContractSnapshot> Contracts { get; }
 
         public List<NpcWorldLogisticsJobSnapshot> WorldJobs { get; }
+
+        public List<NpcCarrierNetworkSnapshot> Carriers { get; }
 
         public NpcWorldDispatchPolicy DispatchPolicy { get; set; } = NpcWorldDispatchPolicy.Balanced;
 
@@ -96,6 +99,7 @@ namespace LSOL.Systems
             {
                 return Contracts.Count > 0
                     || WorldJobs.Count > 0
+                    || Carriers.Count > 0
                     || !string.IsNullOrWhiteSpace(PriorityCommodity)
                     || !string.IsNullOrWhiteSpace(PriorityDistrict)
                     || PremiumDispatchEnabled
@@ -204,8 +208,98 @@ namespace LSOL.Systems
 
         public bool IsRivalJob { get; set; }
 
+        public string CarrierId { get; set; }
+
         public int BackhaulDepth { get; set; }
 
         public string StatusText { get; set; }
+    }
+
+    public sealed class NpcCarrierNetworkSnapshot
+    {
+        public NpcCarrierNetworkSnapshot()
+        {
+            PreferredCommodityFamilies = new List<string>();
+            PreferredDistricts = new List<string>();
+            PreferredCorridors = new List<string>();
+        }
+
+        public string Id { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public string HomeDistrict { get; set; }
+
+        public List<string> PreferredCommodityFamilies { get; }
+
+        public List<string> PreferredDistricts { get; }
+
+        public List<string> PreferredCorridors { get; }
+
+        public float Strength { get; set; } = 0.35f;
+
+        public float GrowthMomentum { get; set; }
+
+        public float DeclinePressure { get; set; }
+
+        public bool IsDormant { get; set; }
+
+        public int DormantWeekCount { get; set; }
+
+        public int LastActiveWeekIndex { get; set; } = -1;
+
+        public int LastExpansionWeekIndex { get; set; } = -1;
+
+        public int VisualSeed { get; set; }
+    }
+
+    public enum AlertLeadTimeMode
+    {
+        Off = 0,
+        DueNow = 1,
+        Within60Minutes = 2,
+        Within180Minutes = 3,
+        WithinDay = 4,
+    }
+
+    public enum FleetAlertMode
+    {
+        Off = 0,
+        CriticalOnly = 1,
+        WatchAndCritical = 2,
+    }
+
+    public enum TerritoryAlertMode
+    {
+        Off = 0,
+        ChargesOnly = 1,
+        ChargesAndRisk = 2,
+    }
+
+    public sealed class AlertRulesPersistenceSnapshot
+    {
+        public const AlertLeadTimeMode DefaultRentLeadTime = AlertLeadTimeMode.Within180Minutes;
+        public const AlertLeadTimeMode DefaultContractLeadTime = AlertLeadTimeMode.Within60Minutes;
+        public const FleetAlertMode DefaultFleetMode = FleetAlertMode.CriticalOnly;
+        public const TerritoryAlertMode DefaultTerritoryMode = TerritoryAlertMode.ChargesAndRisk;
+
+        public AlertLeadTimeMode RentLeadTime { get; set; } = DefaultRentLeadTime;
+
+        public AlertLeadTimeMode ContractLeadTime { get; set; } = DefaultContractLeadTime;
+
+        public FleetAlertMode FleetMode { get; set; } = DefaultFleetMode;
+
+        public TerritoryAlertMode TerritoryMode { get; set; } = DefaultTerritoryMode;
+
+        public bool HasData
+        {
+            get
+            {
+                return RentLeadTime != DefaultRentLeadTime
+                    || ContractLeadTime != DefaultContractLeadTime
+                    || FleetMode != DefaultFleetMode
+                    || TerritoryMode != DefaultTerritoryMode;
+            }
+        }
     }
 }

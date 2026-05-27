@@ -1,5 +1,6 @@
 using System.Linq;
 using System.Reflection;
+using GTA.Math;
 using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
@@ -165,14 +166,102 @@ namespace LSOL.Tests.Systems
             Assert.IsTrue(bravoState.IsRented);
         }
 
-        private static PropertyManager CreatePropertyManager(params OfficeDefinition[] offices)
+        [TestMethod]
+        public void TryPurchaseOfficeObject_RoomOnlyFacilityWithoutAnchor_IsBlocked()
+        {
+            var manager = CreatePropertyManager(
+                new[] { CreateOffice("alpha", "Alpha Yard", 100f, 2) },
+                new[]
+                {
+                    new OfficeObjectDefinition
+                    {
+                        ObjectId = 77,
+                        DisplayName = "Boardroom Annex",
+                        Function = OfficeObjectFunction.Headquarters,
+                        RequiresOwnedOffice = true,
+                        PlacementContext = OfficeObjectPlacementContext.Room,
+                        AnchorType = OfficeFacilityAnchorType.Boardroom,
+                        Price = 25000f,
+                    },
+                });
+            var balance = 100000f;
+
+            manager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry { OfficeId = "alpha", IsOwned = true, LastChargedWeekIndex = 0 },
+                },
+            }, 0);
+
+            OfficeObjectPersistenceEntry purchasedEntry;
+            string message;
+
+            Assert.IsFalse(manager.TryPurchaseOfficeObject("alpha", 77, ref balance, out purchasedEntry, out message));
+            StringAssert.Contains(message, "boardroom");
+        }
+
+        [TestMethod]
+        public void TryPlaceOfficeObject_WithAssignedFacilityAnchor_PersistsAnchorId()
+        {
+            var manager = CreatePropertyManager(
+                new[]
+                {
+                    CreateOffice("alpha", "Alpha Yard", 100f, 2, new OfficeFacilityAnchorDefinition
+                    {
+                        AnchorId = "dispatch-main",
+                        AnchorType = OfficeFacilityAnchorType.DispatchDesk,
+                        Label = "Dispatch Desk",
+                        Position = new Vector3(1f, 2f, 3f),
+                        Heading = 90f,
+                    }),
+                },
+                new[]
+                {
+                    new OfficeObjectDefinition
+                    {
+                        ObjectId = 15,
+                        DisplayName = "Dispatch Desk",
+                        Function = OfficeObjectFunction.Npc,
+                        PlacementContext = OfficeObjectPlacementContext.Room,
+                        AnchorType = OfficeFacilityAnchorType.DispatchDesk,
+                        Price = 5000f,
+                    },
+                });
+            var balance = 20000f;
+
+            manager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry { OfficeId = "alpha", IsOwned = true, LastChargedWeekIndex = 0 },
+                },
+            }, 0);
+
+            OfficeObjectPersistenceEntry purchasedEntry;
+            Assert.IsTrue(manager.TryPurchaseOfficeObject("alpha", 15, ref balance, out purchasedEntry, out _));
+
+            OfficeObjectPersistenceEntry placedEntry;
+            Assert.IsTrue(manager.TryPlaceOfficeObject(purchasedEntry.InstanceId, new Vector3(1f, 2f, 3f), new Vector3(0f, 0f, 90f), "dispatch-main", out placedEntry, out _));
+            Assert.AreEqual("dispatch-main", placedEntry.AssignedFacilityAnchorId);
+        }
+
+        private static PropertyManager CreatePropertyManager(OfficeDefinition[] offices, OfficeObjectDefinition[] officeObjects)
         {
             var config = new ModConfig();
             SetProperty(config, nameof(ModConfig.OfficeDefinitions), offices.ToList());
+            SetProperty(config, nameof(ModConfig.OfficeObjectDefinitions), officeObjects.ToList());
             return new PropertyManager(config);
         }
 
-        private static OfficeDefinition CreateOffice(string officeId, string displayName, float weeklyRent, int maxCommercialVehicles)
+        private static PropertyManager CreatePropertyManager(params OfficeDefinition[] offices)
+        {
+            return CreatePropertyManager(offices, new OfficeObjectDefinition[0]);
+        }
+
+        private static OfficeDefinition CreateOffice(string officeId, string displayName, float weeklyRent, int maxCommercialVehicles, params OfficeFacilityAnchorDefinition[] facilityAnchors)
         {
             return new OfficeDefinition
             {
@@ -181,6 +270,7 @@ namespace LSOL.Tests.Systems
                 OfficePrice = weeklyRent * 10f,
                 WeeklyOfficeRent = weeklyRent,
                 MaxCommercialVehicles = maxCommercialVehicles,
+                FacilityAnchors = facilityAnchors != null ? facilityAnchors.ToList() : new System.Collections.Generic.List<OfficeFacilityAnchorDefinition>(),
             };
         }
 

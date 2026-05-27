@@ -117,6 +117,81 @@ namespace LSOL.Systems
         public float CompetitiveTons { get; set; }
 
         public float PressureScore { get; set; }
+
+        public int ActiveCarrierCount { get; set; }
+
+        public string DominantCarrierId { get; set; }
+
+        public string DominantCarrierName { get; set; }
+
+        internal Dictionary<string, float> CarrierPressureById { get; } = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        internal Dictionary<string, string> CarrierNamesById { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    public sealed class NpcCorridorCompetitionSummary
+    {
+        public string CorridorId { get; set; }
+
+        public string DistrictA { get; set; }
+
+        public string DistrictB { get; set; }
+
+        public int ActiveJobCount { get; set; }
+
+        public int VisibleConvoyCount { get; set; }
+
+        public float CompetitiveTons { get; set; }
+
+        public float PressureScore { get; set; }
+
+        public int ActiveCarrierCount { get; set; }
+
+        public string DominantCarrierId { get; set; }
+
+        public string DominantCarrierName { get; set; }
+
+        internal Dictionary<string, float> CarrierPressureById { get; } = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        internal Dictionary<string, string> CarrierNamesById { get; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    }
+
+    internal sealed class NpcCarrierNetworkState
+    {
+        public NpcCarrierNetworkState()
+        {
+            PreferredCommodityFamilies = new List<string>();
+            PreferredDistricts = new List<string>();
+            PreferredCorridors = new List<string>();
+        }
+
+        public string Id { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public string HomeDistrict { get; set; }
+
+        public List<string> PreferredCommodityFamilies { get; }
+
+        public List<string> PreferredDistricts { get; }
+
+        public List<string> PreferredCorridors { get; }
+
+        public float Strength { get; set; } = 0.35f;
+
+        public float GrowthMomentum { get; set; }
+
+        public float DeclinePressure { get; set; }
+
+        public bool IsDormant { get; set; }
+
+        public int DormantWeekCount { get; set; }
+
+        public int LastActiveWeekIndex { get; set; } = -1;
+
+        public int LastExpansionWeekIndex { get; set; } = -1;
+
+        public int VisualSeed { get; set; }
     }
 
     public sealed class NpcWorldDispatchDiagnosticEntry
@@ -176,6 +251,10 @@ namespace LSOL.Systems
 
         public bool IsRivalJob { get; set; }
 
+        public string CarrierId { get; set; }
+
+        public string CarrierName { get; set; }
+
         public int BackhaulDepth { get; set; }
 
         public string StatusText { get; set; }
@@ -212,6 +291,10 @@ namespace LSOL.Systems
         public bool HasVisibleConvoy { get; set; }
 
         public bool IsRivalJob { get; set; }
+
+        public string CarrierId { get; set; }
+
+        public string CarrierName { get; set; }
 
         public int ListingLeadTimeMinutes { get; set; }
 
@@ -261,6 +344,24 @@ namespace LSOL.Systems
         public float ExternalImportPremiumMultiplier { get; set; } = 1.15f;
 
         public float ExternalExportDiscountMultiplier { get; set; } = 0.70f;
+
+        public int MinCarrierCount { get; set; } = 2;
+
+        public int MaxCarrierCount { get; set; } = 4;
+
+        public float CarrierGrowthRate { get; set; } = 0.18f;
+
+        public float CarrierDeclineRate { get; set; } = 0.16f;
+
+        public int DormancyWeeks { get; set; } = 2;
+
+        public float ExpansionPressureThreshold { get; set; } = 0.28f;
+
+        public float CollapsePressureThreshold { get; set; } = 0.24f;
+
+        public float PreferredCorridorWeight { get; set; } = 0.22f;
+
+        public int MaxCarrierOwnedJobsPerEvaluation { get; set; } = 1;
 
         public IReadOnlyList<string> ServiceCommodities { get; set; } = new[] { "Fuel", "Water", "LiquidFertilizer" };
     }
@@ -313,6 +414,15 @@ namespace LSOL.Systems
             config.PremiumDispatchCostMultiplier = Math.Max(1f, ReadFloatAttribute(root, "premiumDispatchCostMultiplier", config.PremiumDispatchCostMultiplier));
             config.ExternalImportPremiumMultiplier = Math.Max(1f, ReadFloatAttribute(root, "externalImportPremiumMultiplier", config.ExternalImportPremiumMultiplier));
             config.ExternalExportDiscountMultiplier = Math.Max(0.1f, Math.Min(1f, ReadFloatAttribute(root, "externalExportDiscountMultiplier", config.ExternalExportDiscountMultiplier)));
+            config.MinCarrierCount = Math.Max(0, ReadIntAttribute(root, "minCarrierCount", config.MinCarrierCount));
+            config.MaxCarrierCount = Math.Max(config.MinCarrierCount, ReadIntAttribute(root, "maxCarrierCount", config.MaxCarrierCount));
+            config.CarrierGrowthRate = Math.Max(0.01f, ReadFloatAttribute(root, "carrierGrowthRate", config.CarrierGrowthRate));
+            config.CarrierDeclineRate = Math.Max(0.01f, ReadFloatAttribute(root, "carrierDeclineRate", config.CarrierDeclineRate));
+            config.DormancyWeeks = Math.Max(1, ReadIntAttribute(root, "dormancyWeeks", config.DormancyWeeks));
+            config.ExpansionPressureThreshold = Clamp01(ReadFloatAttribute(root, "expansionPressureThreshold", config.ExpansionPressureThreshold));
+            config.CollapsePressureThreshold = Clamp01(ReadFloatAttribute(root, "collapsePressureThreshold", config.CollapsePressureThreshold));
+            config.PreferredCorridorWeight = Math.Max(0f, ReadFloatAttribute(root, "preferredCorridorWeight", config.PreferredCorridorWeight));
+            config.MaxCarrierOwnedJobsPerEvaluation = Math.Max(1, ReadIntAttribute(root, "maxCarrierOwnedJobsPerEvaluation", config.MaxCarrierOwnedJobsPerEvaluation));
 
             var configuredServiceCommodities = ReadAttribute(root, "serviceCommodities")
                 .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)

@@ -22,6 +22,30 @@ namespace LSOL.UI
         public float UpcomingBills { get; set; }
 
         public TabletBudgetForecast Forecast { get; set; }
+
+        public TabletFleetResaleSummary FleetResale { get; set; }
+    }
+
+    internal sealed class TabletFleetResaleSummary
+    {
+        public TabletFleetResaleSummary()
+        {
+            WeakestVehicleName = string.Empty;
+        }
+
+        public int OwnedVehicleCount { get; set; }
+
+        public float PurchaseBasis { get; set; }
+
+        public float EstimatedResaleValue { get; set; }
+
+        public float TotalDepreciationLoss { get; set; }
+
+        public float RecoveryPercentOfPurchase { get; set; }
+
+        public string WeakestVehicleName { get; set; }
+
+        public float WeakestVehicleRecoveryPercent { get; set; }
     }
 
     internal sealed class TabletBudgetBreakdownEntry
@@ -65,9 +89,17 @@ namespace LSOL.UI
 
     internal sealed class TabletBudgetRouteEntry
     {
+        public int ContractId { get; set; }
+
         public string Label { get; set; }
 
         public string Detail { get; set; }
+
+        public string FamilyLabel { get; set; }
+
+        public int FamilyContractCount { get; set; }
+
+        public int RouteCount { get; set; }
 
         public float Revenue { get; set; }
 
@@ -95,6 +127,7 @@ namespace LSOL.UI
         {
             TopLocations = Array.Empty<TabletInventoryValueEntry>();
             TopCommodities = Array.Empty<TabletInventoryValueEntry>();
+            FleetResale = new TabletFleetResaleSummary();
         }
 
         public float TotalValue { get; set; }
@@ -102,6 +135,8 @@ namespace LSOL.UI
         public IReadOnlyList<TabletInventoryValueEntry> TopLocations { get; set; }
 
         public IReadOnlyList<TabletInventoryValueEntry> TopCommodities { get; set; }
+
+        public TabletFleetResaleSummary FleetResale { get; set; }
     }
 
     internal sealed class BudgetTabletApp : ITabletApp
@@ -134,6 +169,9 @@ namespace LSOL.UI
                 case "routes":
                     page = BuildRoutesPage(context);
                     break;
+                case "route-detail":
+                    page = BuildRouteDetailPage(context, route != null ? route.Payload : null);
+                    break;
                 case "inventory":
                     page = BuildInventoryPage(context);
                     break;
@@ -161,11 +199,12 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var overview = context.StateStore.GetBudgetOverview() ?? new TabletBudgetOverview();
+            var fleetResale = overview.FleetResale ?? new TabletFleetResaleSummary();
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateActionItem(
                     "Cash Summary",
-                    string.Format("Balance {0}\n7d net {1}", ModFormatting.FormatMoney(overview.CurrentBalance), FormatSignedMoney(overview.WeeklyNet)),
+                    string.Format("Balance {0}\n7d net {1}\n{2}", ModFormatting.FormatMoney(overview.CurrentBalance), FormatSignedMoney(overview.WeeklyNet), BudgetFleetResaleFormatter.BuildRootTileDetail(fleetResale)),
                     () => context.Push(TabletAppIds.Budget, "overview"),
                     iconLabel: "CSH"),
                 TabletUiHelpers.CreateActionItem(
@@ -195,7 +234,7 @@ namespace LSOL.UI
                     iconLabel: "RTE"),
                 TabletUiHelpers.CreateActionItem(
                     "Inventory Value",
-                    "Estimate on-hand cargo, stockpiles, and office fuel value.",
+                    "Estimate on-hand cargo, stockpiles, and office fuel value. Fleet equity is tracked separately.",
                     () => context.Push(TabletAppIds.Budget, "inventory"),
                     iconLabel: "INV"),
                 TabletUiHelpers.CreateNavigationItem(
@@ -224,6 +263,7 @@ namespace LSOL.UI
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var overview = context.StateStore.GetBudgetOverview() ?? new TabletBudgetOverview();
             var forecast = overview.Forecast ?? new TabletBudgetForecast();
+            var fleetResale = overview.FleetResale ?? new TabletFleetResaleSummary();
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateInfoItem(
@@ -241,6 +281,12 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateInfoItem(
                     "Forecast End Balance",
                     string.Format("Projected {0} | Lowest point {1}", ModFormatting.FormatMoney(forecast.ProjectedEndingBalance), ModFormatting.FormatMoney(forecast.LowestProjectedBalance))),
+                TabletUiHelpers.CreateInfoItem(
+                    "Fleet Recovery",
+                    BudgetFleetResaleFormatter.BuildOverviewRecoveryDetail(fleetResale)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Fleet Depreciation",
+                    BudgetFleetResaleFormatter.BuildOverviewDepreciationDetail(fleetResale)),
                 TabletUiHelpers.CreateInfoItem(
                     "Cash Posture",
                     BuildHealthDetail(overview)),
@@ -380,14 +426,18 @@ namespace LSOL.UI
                 for (int i = 0; i < routes.Count; i++)
                 {
                     var route = routes[i];
-                    items.Add(TabletUiHelpers.CreateInfoItem(
+                    var contractId = route.ContractId;
+                    items.Add(TabletUiHelpers.CreateActionItem(
                         route.Label,
                         string.Format(
-                            "Net {0} | Revenue {1} | Cost {2} | {3} deliveries",
+                            "{0} | Net {1} | Revenue {2} | Cost {3} | {4} deliveries",
+                            string.IsNullOrWhiteSpace(route.FamilyLabel) ? "Route" : route.FamilyLabel,
                             FormatSignedMoney(route.NetProfit),
                             ModFormatting.FormatMoney(route.Revenue),
                             ModFormatting.FormatMoney(route.OperatingCost),
-                            route.CompletedDeliveries)));
+                            route.CompletedDeliveries),
+                        () => context.Push(TabletAppIds.Budget, "route-detail", contractId),
+                        iconLabel: "NPC"));
                 }
             }
 
@@ -396,7 +446,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Route Profitability",
-                Subtitle = "NPC route earnings against contract and payroll costs",
+                Subtitle = "Select a route for contract totals, chain family, and recent route finance",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
@@ -404,16 +454,129 @@ namespace LSOL.UI
             };
         }
 
+        private static TabletShellPage BuildRouteDetailPage(TabletShellContext context, object payload)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var detail = context.StateStore.GetNpcRouteDrilldown(ResolveRouteContractId(payload));
+            if (detail == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "Route Detail",
+                    Subtitle = "Selected NPC contract was not found",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    WidthScale = 0.92f,
+                    MaxVisibleItems = 6,
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("Route unavailable", "The selected NPC contract no longer exists or has not been recorded yet."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to Route Profitability.", () => context.GoBack(), "BACK"),
+                    },
+                };
+            }
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    "Route State",
+                    NpcRouteProfitabilityFormatter.BuildRouteStateDetail(detail)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Contract Profitability",
+                    string.Format(
+                        "Net {0} | Revenue {1} | Cost {2}",
+                        FormatSignedMoney(detail.NetProfit),
+                        ModFormatting.FormatMoney(detail.Revenue),
+                        ModFormatting.FormatMoney(detail.OperatingCost))),
+                TabletUiHelpers.CreateInfoItem(
+                    "Throughput",
+                    string.Format(
+                        "{0} deliveries | {1} moved | Avg {2} | Loss {3}",
+                        Math.Max(0, detail.CompletedDeliveries),
+                        ModFormatting.FormatTons(detail.DeliveredTons),
+                        ModFormatting.FormatMoney(detail.AveragePayout),
+                        ModFormatting.FormatPercent(detail.LossRatioPercent))),
+                TabletUiHelpers.CreateInfoItem(
+                    detail.RouteFamily != null && !string.IsNullOrWhiteSpace(detail.RouteFamily.Label)
+                        ? detail.RouteFamily.Label
+                        : "Contract Family",
+                    NpcRouteProfitabilityFormatter.BuildFamilyDetail(detail.RouteFamily)),
+            };
+
+            if (detail.RouteLegs != null && detail.RouteLegs.Count > 0)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem("Route Chain", "Current and queued legs in this NPC contract."));
+                for (int i = 0; i < detail.RouteLegs.Count; i++)
+                {
+                    var leg = detail.RouteLegs[i];
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        NpcRouteProfitabilityFormatter.BuildLegCaption(leg),
+                        NpcRouteProfitabilityFormatter.BuildLegDetail(leg)));
+                }
+            }
+
+            if (detail.RecentFinanceEntries != null && detail.RecentFinanceEntries.Count > 0)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem("Recent Finance", "Latest route-specific income and payroll entries from the company ledger."));
+                for (int i = 0; i < detail.RecentFinanceEntries.Count; i++)
+                {
+                    var entry = detail.RecentFinanceEntries[i];
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        NpcRouteProfitabilityFormatter.BuildFinanceCaption(entry),
+                        NpcRouteProfitabilityFormatter.BuildFinanceDetail(entry)));
+                }
+            }
+            else
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "No recent finance history",
+                    "This contract has no route-specific delivery or payroll entries recorded yet."));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to Route Profitability.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Route Contract",
+                Subtitle = detail.Label,
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.92f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private static int ResolveRouteContractId(object payload)
+        {
+            if (payload is int)
+            {
+                return (int)payload;
+            }
+
+            var raw = payload as string;
+            int parsed;
+            return !string.IsNullOrWhiteSpace(raw) && int.TryParse(raw, out parsed)
+                ? parsed
+                : 0;
+        }
+
         private static TabletShellPage BuildInventoryPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var valuation = context.StateStore.GetInventoryValuation() ?? new TabletInventoryValuation();
+            var fleetResale = valuation.FleetResale ?? new TabletFleetResaleSummary();
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateInfoItem(
                     "Total Inventory Value",
                     string.Format("Estimated on-hand value {0}", ModFormatting.FormatMoney(valuation.TotalValue))),
             };
+
+            if (fleetResale.OwnedVehicleCount > 0)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem("Fleet Equity / Depreciation", "Owned fleet resale estimate tracked separately from on-hand inventory."));
+                items.Add(TabletUiHelpers.CreateInfoItem("Owned Fleet Resale", BudgetFleetResaleFormatter.BuildOverviewRecoveryDetail(fleetResale)));
+                items.Add(TabletUiHelpers.CreateInfoItem("Depreciation Drag", BudgetFleetResaleFormatter.BuildOverviewDepreciationDetail(fleetResale)));
+            }
 
             if (valuation.TopLocations.Count > 0)
             {
@@ -445,7 +608,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Inventory Value",
-                Subtitle = "Estimated value of stockpiles, cargo, and office fuel",
+                Subtitle = "Estimated stockpile/cargo/fuel value with fleet resale tracked separately",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
@@ -657,29 +820,7 @@ namespace LSOL.UI
 
         private static string FormatDueInMinutes(int minutes)
         {
-            if (minutes <= 0)
-            {
-                return "now";
-            }
-
-            var days = minutes / (24 * 60);
-            var hours = (minutes % (24 * 60)) / 60;
-            var remainingMinutes = minutes % 60;
-            if (days > 0)
-            {
-                return hours > 0
-                    ? string.Format("in {0}d {1}h", days, hours)
-                    : string.Format("in {0}d", days);
-            }
-
-            if (hours > 0)
-            {
-                return remainingMinutes > 0
-                    ? string.Format("in {0}h {1}m", hours, remainingMinutes)
-                    : string.Format("in {0}h", hours);
-            }
-
-            return string.Format("in {0}m", remainingMinutes);
+            return TabletDeadlineFormatter.FormatDueInMinutes(minutes);
         }
 
         private static Color GetIncomeAccent(int alpha)

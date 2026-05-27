@@ -39,7 +39,7 @@ namespace LSOL.Config
             var coreValidationMessages = new List<string>();
             var coreConfig = XmlConfigImport.LoadCoreConfig(configDirectory, coreValidationMessages);
             var externalCatalog = ExternalConfigCatalog.Load(configDirectory, addonCatalog);
-            CommodityCatalog.Configure(externalCatalog.ResourceGroups);
+            CommodityCatalog.Configure(externalCatalog.ResourceGroups, externalCatalog.ResourcesByCommodity.Values);
             externalCatalog.ValidationMessages.InsertRange(0, coreValidationMessages);
 
             var config = new ModConfig
@@ -174,6 +174,7 @@ namespace LSOL.Config
             var outputs = new HashSet<string>(location.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase);
             var recipeInputWeights = CloneCommodityWeightMap(location.RecipeInputWeights);
             var recipeOutputWeights = CloneCommodityWeightMap(location.RecipeOutputWeights);
+            var recipeVariants = CloneRecipeVariants(location.RecipeVariants);
             var inputCapacityWeights = CloneCommodityWeightMap(
                 location.InputCapacityWeights != null && location.InputCapacityWeights.Count > 0
                     ? location.InputCapacityWeights
@@ -182,6 +183,7 @@ namespace LSOL.Config
                 location.OutputCapacityWeights != null && location.OutputCapacityWeights.Count > 0
                     ? location.OutputCapacityWeights
                     : location.RecipeOutputWeights);
+            var sinkPreferenceWeights = CloneCommodityWeightMap(location.SinkPreferenceWeights);
 
             if (location.SiteRole == SiteRole.Warehouse)
             {
@@ -219,8 +221,11 @@ namespace LSOL.Config
                 Outputs = outputs,
                 RecipeInputWeights = recipeInputWeights,
                 RecipeOutputWeights = recipeOutputWeights,
+                RecipeVariants = recipeVariants,
                 InputCapacityWeights = inputCapacityWeights,
                 OutputCapacityWeights = outputCapacityWeights,
+                SinkPreferenceWeights = sinkPreferenceWeights,
+                SinkElasticityMultiplier = Math.Max(0.05f, location.SinkElasticityMultiplier <= 0f ? 1f : location.SinkElasticityMultiplier),
                 FactoryProductionRatio = productionRatio,
                 InputCapacityTons = inputCapacityTons,
                 OutputCapacityTons = outputCapacityTons,
@@ -321,6 +326,33 @@ namespace LSOL.Config
             }
 
             return result;
+        }
+
+        private static List<IndustryRecipeVariantConfig> CloneRecipeVariants(IEnumerable<IndustryRecipeVariantConfig> source)
+        {
+            if (source == null)
+            {
+                return new List<IndustryRecipeVariantConfig>();
+            }
+
+            return source
+                .Where(variant => variant != null)
+                .Select(variant => new IndustryRecipeVariantConfig
+                {
+                    Id = variant.Id,
+                    DisplayName = variant.DisplayName,
+                    SelectionPriority = variant.SelectionPriority,
+                    Inputs = new HashSet<string>(variant.Inputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                    OptionalInputs = new HashSet<string>(variant.OptionalInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                    BoostInputs = new HashSet<string>(variant.BoostInputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                    Outputs = new HashSet<string>(variant.Outputs ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase), StringComparer.OrdinalIgnoreCase),
+                    RecipeInputWeights = CloneCommodityWeightMap(variant.RecipeInputWeights),
+                    RecipeOutputWeights = CloneCommodityWeightMap(variant.RecipeOutputWeights),
+                    OptionalInputWeights = CloneCommodityWeightMap(variant.OptionalInputWeights),
+                    InputCapacityWeights = CloneCommodityWeightMap(variant.InputCapacityWeights),
+                    OutputCapacityWeights = CloneCommodityWeightMap(variant.OutputCapacityWeights),
+                })
+                .ToList();
         }
 
         private static List<int> ParseObjectModelHashes(string raw)
@@ -549,6 +581,21 @@ namespace LSOL.Config
                             GatePosition = x.GatePosition,
                             BarrierModelHash = x.BarrierModelHash,
                             WorkerPosition = x.WorkerPosition,
+                            FacilityAnchors = x.FacilityAnchors != null
+                                ? x.FacilityAnchors
+                                    .Where(anchor => anchor != null)
+                                    .Select(anchor => new OfficeFacilityAnchorDefinition
+                                    {
+                                        AnchorId = anchor.AnchorId,
+                                        AnchorType = anchor.AnchorType,
+                                        Label = anchor.Label,
+                                        Position = anchor.Position,
+                                        Heading = anchor.Heading,
+                                        InteractionRadius = anchor.InteractionRadius,
+                                        ScenarioName = anchor.ScenarioName,
+                                    })
+                                    .ToList()
+                                : new List<OfficeFacilityAnchorDefinition>(),
                             OfficePrice = x.OfficePrice,
                             WeeklyOfficeRent = x.WeeklyOfficeRent,
                             MaxCommercialVehicles = x.MaxCommercialVehicles,
@@ -573,6 +620,13 @@ namespace LSOL.Config
                             Function = x.Function,
                             ResourceType = x.ResourceType,
                             Capacity = x.Capacity,
+                            PlacementContext = x.PlacementContext,
+                            AnchorType = x.AnchorType,
+                            InteractionType = x.InteractionType,
+                            AmbientStaffRole = x.AmbientStaffRole,
+                            AmbientStaffCount = x.AmbientStaffCount,
+                            RequiresOwnedOffice = x.RequiresOwnedOffice,
+                            AmbientScenarioName = x.AmbientScenarioName,
                             PerOfficeLimit = x.PerOfficeLimit,
                             Price = x.Price,
                         })

@@ -154,6 +154,357 @@ namespace LSOL.UI
                 "RES");
         }
 
+        public static MenuItem CreateRoutePlannerSortSelectorItem(TabletShellContext context, string detail = null)
+        {
+            return CreateSelectorItem(
+                () => string.Format("Sort: < {0} >", context != null ? FormatRoutePlannerSortMode(context.StateStore.SelectedRoutePlannerSortMode) : FormatRoutePlannerSortMode(RoutePlannerSortMode.Optimizer)),
+                () => detail ?? "Left/right changes the planner ranking order.",
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerSortMode(-1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerSortMode(1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerSortMode(1);
+                    context.Refresh();
+                },
+                "SRT");
+        }
+
+        public static MenuItem CreateRoutePlannerAvailabilitySelectorItem(TabletShellContext context, string detail = null)
+        {
+            return CreateSelectorItem(
+                () => string.Format("Lane Filter: < {0} >", context != null ? FormatRoutePlannerAvailabilityFilter(context.StateStore.SelectedRoutePlannerAvailabilityFilterMode) : FormatRoutePlannerAvailabilityFilter(RoutePlannerAvailabilityFilterMode.All)),
+                () => detail ?? "Left/right filters planner lanes by availability and live contract state.",
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerAvailabilityFilter(-1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerAvailabilityFilter(1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerAvailabilityFilter(1);
+                    context.Refresh();
+                },
+                "FLT");
+        }
+
+        public static MenuItem CreateRoutePlannerCommoditySelectorItem(TabletShellContext context, string detail = null)
+        {
+            return CreateSelectorItem(
+                () => string.Format("Commodity: < {0} >", context != null && !string.IsNullOrWhiteSpace(context.StateStore.SelectedRoutePlannerCommodityFilter) ? context.StateStore.SelectedRoutePlannerCommodityFilter : "Any"),
+                () => detail ?? "Left/right narrows the planner to one commodity family.",
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerCommodityFilter(-1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerCommodityFilter(1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerCommodityFilter(1);
+                    context.Refresh();
+                },
+                "COM");
+        }
+
+        public static MenuItem CreateRoutePlannerDistrictSelectorItem(TabletShellContext context, string detail = null)
+        {
+            return CreateSelectorItem(
+                () => string.Format("District: < {0} >", context != null && !string.IsNullOrWhiteSpace(context.StateStore.SelectedRoutePlannerDistrictFilter) ? context.StateStore.SelectedRoutePlannerDistrictFilter : "All"),
+                () => detail ?? "Left/right narrows the planner to districts touched by the lane.",
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerDistrictFilter(-1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerDistrictFilter(1);
+                    context.Refresh();
+                },
+                () =>
+                {
+                    if (context == null)
+                    {
+                        return;
+                    }
+
+                    context.StateStore.CycleRoutePlannerDistrictFilter(1);
+                    context.Refresh();
+                },
+                "DST");
+        }
+
+        public static string FormatRoutePlannerSortMode(RoutePlannerSortMode mode)
+        {
+            switch (mode)
+            {
+                case RoutePlannerSortMode.ProjectedPayout:
+                    return "Projected payout";
+                case RoutePlannerSortMode.ProjectedValue:
+                    return "Projected value";
+                case RoutePlannerSortMode.RealizedNetProfit:
+                    return "Live net";
+                case RoutePlannerSortMode.UnitPrice:
+                    return "Unit price";
+                case RoutePlannerSortMode.Commodity:
+                    return "Commodity";
+                case RoutePlannerSortMode.District:
+                    return "District";
+                case RoutePlannerSortMode.Availability:
+                    return "Availability";
+                default:
+                    return "Optimizer";
+            }
+        }
+
+        public static string FormatRoutePlannerAvailabilityFilter(RoutePlannerAvailabilityFilterMode mode)
+        {
+            switch (mode)
+            {
+                case RoutePlannerAvailabilityFilterMode.Available:
+                    return "Available";
+                case RoutePlannerAvailabilityFilterMode.Blocked:
+                    return "Blocked";
+                case RoutePlannerAvailabilityFilterMode.ActiveNpc:
+                    return "Active NPC";
+                case RoutePlannerAvailabilityFilterMode.Underperforming:
+                    return "Underperforming";
+                default:
+                    return "All";
+            }
+        }
+
+        public static string BuildRoutePlannerCandidateCaption(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return "Planner lane";
+            }
+
+            var originName = candidate.OriginIndustry != null ? candidate.OriginIndustry.Name ?? "Origin" : "Origin";
+            var destinationName = candidate.DestinationIndustry != null ? candidate.DestinationIndustry.Name ?? "Destination" : "Destination";
+            return string.Format(
+                "{0} | {1} -> {2} {3}",
+                candidate.Commodity ?? "Cargo",
+                originName,
+                destinationName,
+                BuildRoutePlannerStatusTag(candidate)).Trim();
+        }
+
+        public static string BuildRoutePlannerNetworkDetail(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return "No lane data available.";
+            }
+
+            var liveLabel = candidate.HasActiveNpcRoute
+                ? string.Format("Live avg {0}", ModFormatting.FormatMoney(candidate.RealizedAveragePayout))
+                : (candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked
+                    ? candidate.BlockerSummary
+                    : string.Format("Score {0:0.0}", candidate.OptimizerScore));
+            return string.Format(
+                "{0} | Proj {1} | {2}",
+                string.IsNullOrWhiteSpace(candidate.DistrictPairLabel) ? "District unknown" : candidate.DistrictPairLabel,
+                ModFormatting.FormatMoney(candidate.ProjectedPayout),
+                liveLabel);
+        }
+
+        public static string BuildRoutePlannerAnalyticsDetail(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return "No lane data available.";
+            }
+
+            var delta = candidate.RealizedAveragePayout - candidate.ProjectedPayout;
+            var deltaLabel = delta >= 0f
+                ? "+" + ModFormatting.FormatMoney(delta)
+                : "-" + ModFormatting.FormatMoney(Math.Abs(delta));
+            var actualLabel = candidate.HasActiveNpcRoute || candidate.HasRouteFamilyHistory
+                ? ModFormatting.FormatMoney(candidate.RealizedAveragePayout)
+                : "n/a";
+            return string.Format(
+                "{0} | Proj {1} | Actual {2} | Delta {3}",
+                candidate.AvailabilityLabel,
+                ModFormatting.FormatMoney(candidate.ProjectedPayout),
+                actualLabel,
+                deltaLabel);
+        }
+
+        public static string BuildRoutePlannerProjectionDetail(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return string.Empty;
+            }
+
+            return string.Format(
+                "Unit {0} | Suggested {1} | Value {2} | Payout {3}",
+                ModFormatting.FormatPricePerTon(candidate.CurrentUnitPrice),
+                ModFormatting.FormatTons(candidate.SuggestedShipmentTons),
+                ModFormatting.FormatMoney(candidate.ProjectedValue),
+                ModFormatting.FormatMoney(candidate.ProjectedPayout));
+        }
+
+        public static string BuildRoutePlannerPerformanceDetail(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return string.Empty;
+            }
+
+            if (!candidate.HasActiveNpcRoute && !candidate.HasRouteFamilyHistory)
+            {
+                return string.Format(
+                    "No live route history yet | Optimizer {0:0.0}",
+                    candidate.OptimizerScore);
+            }
+
+            return string.Format(
+                "Net {0} | Avg payout {1} | Loss {2} | Optimizer {3:0.0}",
+                candidate.RealizedNetProfit >= 0f
+                    ? "+" + ModFormatting.FormatMoney(candidate.RealizedNetProfit)
+                    : "-" + ModFormatting.FormatMoney(Math.Abs(candidate.RealizedNetProfit)),
+                ModFormatting.FormatMoney(candidate.RealizedAveragePayout),
+                ModFormatting.FormatPercent(candidate.RealizedLossRatioPercent),
+                candidate.OptimizerScore);
+        }
+
+        public static string BuildRoutePlannerBlockerDetail(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return string.Empty;
+            }
+
+            if (candidate.AvailabilityState != RoutePlannerAvailabilityState.Blocked)
+            {
+                return candidate.HasActiveNpcRoute
+                    ? "Lane is already running through an active NPC contract."
+                    : "Lane is currently available for manual planning and NPC drafting.";
+            }
+
+            return string.Format(
+                "{0} | Penalty {1:0.0}",
+                string.IsNullOrWhiteSpace(candidate.BlockerSummary) ? "Lane is blocked." : candidate.BlockerSummary,
+                candidate.ScoreBreakdown != null ? candidate.ScoreBreakdown.BlockerPenalty : 0f);
+        }
+
+        public static NpcLogisticsRouteDefinition BuildRoutePlannerDraftDefinition(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null || candidate.OriginIndustry == null || candidate.DestinationIndustry == null)
+            {
+                return null;
+            }
+
+            return new NpcLogisticsRouteDefinition
+            {
+                OriginIndustry = candidate.OriginIndustry,
+                DestinationIndustry = candidate.DestinationIndustry,
+                Commodity = candidate.Commodity,
+                OriginTriggerThresholdPercent = 20,
+                DestinationTriggerThresholdPercent = 85,
+            };
+        }
+
+        private static string BuildRoutePlannerStatusTag(TabletRoutePlannerCandidate candidate)
+        {
+            if (candidate == null)
+            {
+                return string.Empty;
+            }
+
+            if (candidate.IsUnderperformingActiveLane)
+            {
+                return "~o~[UNDER]~s~";
+            }
+
+            if (candidate.HasActiveNpcRoute)
+            {
+                return "~b~[LIVE]~s~";
+            }
+
+            if (candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked)
+            {
+                return "~r~[BLOCKED]~s~";
+            }
+
+            return "~g~[OPEN]~s~";
+        }
+
         public static string BuildIndustryAccessDetail(TabletLocationSummary summary, Industry industry)
         {
             if (summary == null || industry == null)
@@ -496,14 +847,152 @@ namespace LSOL.UI
             var totalStorage = statistics != null ? statistics.Stockpile : industry.GetInputStockTotal() + industry.GetOutputStockTotal();
             var totalCapacity = statistics != null ? statistics.TotalCapacity : Math.Max(1f, industry.InputCapacityTons + industry.OutputCapacityTons);
             var fillRatio = statistics != null ? statistics.StockRatio : ModMath.Clamp01(totalStorage / Math.Max(1f, totalCapacity));
+            var warehouseRisk = summary != null ? summary.WarehouseRisk : null;
             items.Add(CreateInfoItem("Access", BuildIndustryAccessDetail(summary ?? new TabletLocationSummary { RequiresIndustryPurchase = industry.RequiresPurchase }, industry)));
             items.Add(CreateInfoItem(
                 string.Format("Storage {0:0.0}/{1:0.0}t", totalStorage, totalCapacity),
                 "Warehouse inventory capacity.",
                 fillRatio));
+            if (warehouseRisk != null)
+            {
+                var projectedLossRatio = warehouseRisk.InventoryValue > 0.01f
+                    ? Math.Max(0f, Math.Min(1f, warehouseRisk.ProjectedNextDayLossValue / warehouseRisk.InventoryValue))
+                    : 0f;
+                items.Add(CreateInfoItem(
+                    string.Format("Stewardship {0}", BuildWarehouseRiskLevel(warehouseRisk)),
+                    BuildWarehouseStewardshipDetail(warehouseRisk),
+                    projectedLossRatio));
+                items.Add(CreateInfoItem(
+                    string.Format("Inventory Value {0}", ModFormatting.FormatMoney(warehouseRisk.AdjustedInventoryValue)),
+                    string.Format(
+                        "Current drag {0} | Projected drag {1} | Next condition {2:0}%",
+                        ModFormatting.FormatMoney(warehouseRisk.ConditionValueLoss),
+                        ModFormatting.FormatMoney(warehouseRisk.ProjectedConditionValueLoss),
+                        Math.Max(0f, Math.Min(100f, warehouseRisk.ProjectedNextCondition * 100f)))));
+                items.Add(CreateInfoItem(
+                    "Module Levels",
+                    string.Format(
+                        "In Lv.{0} | Out Lv.{1} | Stability {2:0}%",
+                        industry.InputStorageModuleLevel,
+                        industry.OutputStorageModuleLevel,
+                        warehouseRisk.StabilityScore * 100f)));
+            }
+            else
+            {
+                items.Add(CreateInfoItem(
+                    "Module Levels",
+                    string.Format(
+                        "In Lv.{0} | Out Lv.{1}",
+                        industry.InputStorageModuleLevel,
+                        industry.OutputStorageModuleLevel)));
+            }
             items.Add(CreateInfoItem(
                 "Accepted Resources",
                 SummarizeCommodities(industry.SortedAcceptedInputs, 6)));
+        }
+
+        public static string BuildWarehouseRiskLevel(WarehouseStorageRiskSnapshot risk)
+        {
+            if (risk == null)
+            {
+                return "Stable";
+            }
+
+            var projectedLossRatio = risk.InventoryValue > 0.01f
+                ? risk.ProjectedNextDayLossValue / risk.InventoryValue
+                : 0f;
+            var hasRecentOrProjectedLoss = risk.ProjectedNextDayLossValue > 0.01f
+                || risk.LastDayTotalLossValue > 0.01f
+                || risk.CurrentWeekTotalLossValue > 0.01f;
+
+            if (!risk.HasSensitiveExposure && !hasRecentOrProjectedLoss)
+            {
+                return risk.StorageCondition < 0.75f ? "Watch" : "Stable";
+            }
+
+            if (risk.ProjectedNextDayLossValue >= 2500f || projectedLossRatio >= 0.020f || risk.StorageCondition < 0.62f)
+            {
+                return "Critical";
+            }
+
+            if (risk.ProjectedNextDayLossValue >= 900f || projectedLossRatio >= 0.010f || risk.StorageCondition < 0.72f)
+            {
+                return "High";
+            }
+
+            if (risk.ProjectedNextDayLossValue >= 250f || projectedLossRatio >= 0.004f || risk.StorageCondition < 0.82f)
+            {
+                return "Guarded";
+            }
+
+            return "Managed";
+        }
+
+        public static string BuildWarehouseFocusLabel(WarehouseStorageRiskSnapshot risk)
+        {
+            if (risk == null)
+            {
+                return "No active loss";
+            }
+
+            var classLabel = GetWarehouseLossClassLabel(risk.DominantLossClass);
+            return string.IsNullOrWhiteSpace(risk.DominantCommodity)
+                ? classLabel
+                : string.Format("{0} on {1}", classLabel, risk.DominantCommodity);
+        }
+
+        public static string BuildWarehouseOverviewTelemetry(WarehouseStorageRiskSnapshot risk)
+        {
+            if (risk == null)
+            {
+                return string.Empty;
+            }
+
+            if (!risk.HasSensitiveExposure && risk.LastDayTotalLossValue <= 0.01f && risk.CurrentWeekTotalLossValue <= 0.01f && risk.ProjectedNextDayLossValue <= 0.01f)
+            {
+                return string.Empty;
+            }
+
+            return string.Format(
+                "Risk {0} | Last {1} | Next {2}",
+                BuildWarehouseRiskLevel(risk),
+                ModFormatting.FormatMoney(risk.LastDayTotalLossValue),
+                ModFormatting.FormatMoney(risk.ProjectedNextDayLossValue));
+        }
+
+        public static string BuildWarehouseStewardshipDetail(WarehouseStorageRiskSnapshot risk)
+        {
+            if (risk == null)
+            {
+                return "No warehouse risk data.";
+            }
+
+            if (!risk.HasSensitiveExposure && risk.LastDayTotalLossValue <= 0.01f && risk.CurrentWeekTotalLossValue <= 0.01f && risk.ProjectedNextDayLossValue <= 0.01f)
+            {
+                return string.Format("Risk {0} | No spoilage or shrinkage exposure on hand.", BuildWarehouseRiskLevel(risk));
+            }
+
+            return string.Format(
+                "Risk {0} | This week {1} spoilage + {2} shrinkage | Next day {3} spoilage + {4} shrinkage | {5}",
+                BuildWarehouseRiskLevel(risk),
+                ModFormatting.FormatMoney(risk.CurrentWeekSpoilageValue),
+                ModFormatting.FormatMoney(risk.CurrentWeekShrinkageValue),
+                ModFormatting.FormatMoney(risk.ProjectedSpoilageValue),
+                ModFormatting.FormatMoney(risk.ProjectedShrinkageValue),
+                BuildWarehouseFocusLabel(risk));
+        }
+
+        private static string GetWarehouseLossClassLabel(WarehouseLossClass lossClass)
+        {
+            switch (lossClass)
+            {
+                case WarehouseLossClass.Spoilage:
+                    return "Spoilage";
+                case WarehouseLossClass.Shrinkage:
+                    return "Shrinkage";
+                default:
+                    return "No active loss";
+            }
         }
 
         public static string GetUpgradeTitle(IndustryUpgradeModule module)
@@ -581,6 +1070,11 @@ namespace LSOL.UI
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var dispatchOverview = context.StateStore.GetWorldDispatchOverview() ?? new NpcWorldDispatchOverview();
             var budgetOverview = context.StateStore.GetBudgetOverview() ?? new TabletBudgetOverview();
+            var endgame = _playerSuccessTracker != null
+                ? _playerSuccessTracker.GetEndgameSummary()
+                : new CompanyEndgameSummary();
+            var unlockedSuccessCount = _playerSuccessTracker != null ? _playerSuccessTracker.UnlockedCount : 0;
+            var totalSuccessCount = _playerSuccessTracker != null ? _playerSuccessTracker.TotalCount : 0;
             var items = new List<MenuItem>();
             var totalTrackedSites = snapshot.IndustrySummaries.Count + snapshot.ConstructionSiteSummaries.Count + snapshot.WarehouseSummaries.Count + snapshot.StoreSummaries.Count + snapshot.GasStationSummaries.Count;
             var warehouseCount = snapshot.WarehouseSummaries.Count;
@@ -667,6 +1161,21 @@ namespace LSOL.UI
                 Color.FromArgb(226, 96, 138, 110),
                 null,
                 "BDG"));
+            var propertySummary = context.StateStore.GetPropertyPortfolioSummary() ?? new TabletPropertyPortfolioSummary();
+            var propertyControlledCount = propertySummary.Offices.Count(entry => entry.IsOwned || entry.IsRented)
+                + propertySummary.Apartments.Count(entry => entry.IsOwned || entry.IsRented);
+            var propertyArrears = propertySummary.TotalArrears;
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Properties",
+                string.Format(
+                    "{0} controlled properties\nArrears {1}",
+                    propertyControlledCount,
+                    ModFormatting.FormatMoney(propertyArrears)),
+                () => context.Push(TabletAppIds.PropertyPortfolio, "root"),
+                Color.FromArgb(184, 54, 48, 38),
+                Color.FromArgb(226, 134, 114, 86),
+                null,
+                "PRP"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Industries",
                 string.Format("{0} tracked production sites", industryCount),
@@ -743,15 +1252,12 @@ namespace LSOL.UI
                 "ANA"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Successes",
-                string.Format(
-                    "{0}/{1} unlocked\nTrack locked and unlocked company milestones.",
-                    _playerSuccessTracker != null ? _playerSuccessTracker.UnlockedCount : 0,
-                    _playerSuccessTracker != null ? _playerSuccessTracker.TotalCount : 0),
+                TabletEndgameStatusFormatter.BuildHomeTileDetail(unlockedSuccessCount, totalSuccessCount, endgame),
                 () => context.Push(TabletAppIds.Successes, "root"),
                 Color.FromArgb(186, 60, 52, 46),
                 Color.FromArgb(228, 140, 122, 104),
-                _playerSuccessTracker != null && _playerSuccessTracker.TotalCount > 0
-                    ? (float?)_playerSuccessTracker.UnlockedCount / _playerSuccessTracker.TotalCount
+                totalSuccessCount > 0
+                    ? (float?)unlockedSuccessCount / totalSuccessCount
                     : null,
                 "SUC"));
             items.Add(TabletUiHelpers.CreateActionItem(
@@ -1027,9 +1533,10 @@ namespace LSOL.UI
 
             if (definition.IsGenerated)
             {
+                var liveDistrictEvent = _missionManager.ResolveLiveDistrictEvent(definition.CrisisEventId, definition.CrisisDistrictName);
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     "Contract",
-                    BuildGeneratedMissionContractDetail(definition)));
+                    BuildGeneratedMissionContractDetail(definition, liveDistrictEvent)));
             }
 
             items.Add(TabletUiHelpers.CreateInfoItem(
@@ -1215,7 +1722,7 @@ namespace LSOL.UI
             return listing.Category ?? "Board contract";
         }
 
-        private static string BuildGeneratedMissionContractDetail(SpecialMissionDefinition definition)
+        private static string BuildGeneratedMissionContractDetail(SpecialMissionDefinition definition, TerritoryDistrictEventState liveDistrictEvent)
         {
             if (definition == null)
             {
@@ -1227,7 +1734,17 @@ namespace LSOL.UI
                 string.Format("{0} | {1} {2}", definition.Category, ModFormatting.FormatTons(definition.TargetTons), definition.Commodity),
             };
 
-            if (definition.CrisisType != DistrictCrisisType.None)
+            if (liveDistrictEvent != null)
+            {
+                lines.Add(string.Format("District event: {0} in {1}", liveDistrictEvent.Headline, liveDistrictEvent.DistrictName));
+                lines.Add(string.Format("Status: {0}", liveDistrictEvent.StatusText));
+
+                if (!string.IsNullOrWhiteSpace(liveDistrictEvent.ImpactSummary))
+                {
+                    lines.Add(liveDistrictEvent.ImpactSummary);
+                }
+            }
+            else if (definition.CrisisType != DistrictCrisisType.None)
             {
                 lines.Add(string.Format("District event: {0} in {1}", definition.CrisisType, definition.CrisisDistrictName));
             }
@@ -1341,13 +1858,15 @@ namespace LSOL.UI
         private readonly Action _requestRepairService;
         private readonly Func<Industry, string> _toggleServiceSiteOperator;
         private readonly Action<string> _showStatus;
+        private readonly Action _openRoutePlannerMap;
+        private readonly Action<NpcLogisticsRouteDefinition> _openNpcPlannerDraft;
         private LocationListFilterMode _industryFilterMode;
         private LocationListFilterMode _permitFilterMode;
         private LocationListFilterMode _storeFilterMode;
         private LocationListFilterMode _stationFilterMode;
         private DispatchDiagnosticsFilterMode _dispatchDiagnosticsFilterMode;
 
-        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService, Func<Industry, string> toggleServiceSiteOperator, Action<string> showStatus = null)
+        public NetworkTabletApp(float interactionDistance, Func<Industry, string> purchasePermit, Action<Industry> addGpsRoute, Action clearGpsRoute, Action requestRefuelService, Action requestRepairService, Func<Industry, string> toggleServiceSiteOperator, Action<string> showStatus = null, Action openRoutePlannerMap = null, Action<NpcLogisticsRouteDefinition> openNpcPlannerDraft = null)
         {
             _interactionDistance = interactionDistance;
             _purchasePermit = purchasePermit;
@@ -1357,6 +1876,8 @@ namespace LSOL.UI
             _requestRepairService = requestRepairService;
             _toggleServiceSiteOperator = toggleServiceSiteOperator;
             _showStatus = showStatus;
+            _openRoutePlannerMap = openRoutePlannerMap;
+            _openNpcPlannerDraft = openNpcPlannerDraft;
             _industryFilterMode = LocationListFilterMode.All;
             _permitFilterMode = LocationListFilterMode.All;
             _storeFilterMode = LocationListFilterMode.All;
@@ -1379,6 +1900,10 @@ namespace LSOL.UI
                     return BuildLocationListPage(context, "Construction Sites", "Delivery sinks and build-site detail pages", context.Snapshot.ConstructionSiteSummaries, true, false);
                 case "dispatch":
                     return BuildDispatchPage(context);
+                case "planner":
+                    return BuildRoutePlannerPage(context);
+                case "planner-detail":
+                    return BuildRoutePlannerDetailPage(context, route != null ? route.Payload as string : null);
                 case "dispatch-world":
                     return BuildWorldDispatchPage(context);
                 case "dispatch-quick-jobs":
@@ -1457,6 +1982,10 @@ namespace LSOL.UI
                     snapshot.WarehouseSummaries.Count),
                 () => context.Push(TabletAppIds.Network, "warehouses")));
             items.Add(TabletUiHelpers.CreateActionItem(
+                "Route Planner",
+                "Rank player and NPC lane candidates, inspect blockers, and hand off recommended routes to the company map or NPC draft flow.",
+                () => context.Push(TabletAppIds.Network, "planner")));
+            items.Add(TabletUiHelpers.CreateActionItem(
                 "Dispatch",
                 string.Format(
                     "{0}\n{1} | {2}",
@@ -1489,7 +2018,9 @@ namespace LSOL.UI
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
             var warehouseSummaries = snapshot.WarehouseSummaries
-                .OrderBy(summary => summary.Name)
+                .OrderByDescending(summary => summary != null && summary.WarehouseRisk != null ? summary.WarehouseRisk.ProjectedNextDayLossValue : 0f)
+                .ThenByDescending(summary => summary != null && summary.WarehouseRisk != null ? summary.WarehouseRisk.CurrentWeekTotalLossValue : 0f)
+                .ThenBy(summary => summary.Name)
                 .ToList();
             var items = new List<MenuItem>();
 
@@ -1515,10 +2046,182 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Warehouses",
-                Subtitle = "Storage sites and accepted resources",
+                Subtitle = "Storage sites, accepted resources, and live loss risk",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.94f,
                 MaxVisibleItems = 5,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildRoutePlannerPage(TabletShellContext context)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var candidates = context.StateStore.GetRoutePlannerCandidates().ToList();
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateRoutePlannerSortSelectorItem(context),
+                TabletUiHelpers.CreateRoutePlannerAvailabilitySelectorItem(context),
+                TabletUiHelpers.CreateRoutePlannerCommoditySelectorItem(context),
+                TabletUiHelpers.CreateRoutePlannerDistrictSelectorItem(context),
+            };
+
+            for (int i = 0; i < candidates.Count; i++)
+            {
+                var candidate = candidates[i];
+                var candidateId = candidate.CandidateId;
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    TabletUiHelpers.BuildRoutePlannerCandidateCaption(candidate),
+                    TabletUiHelpers.BuildRoutePlannerNetworkDetail(candidate),
+                    () =>
+                    {
+                        context.StateStore.SetSelectedRoutePlannerCandidate(candidateId);
+                        context.Push(TabletAppIds.Network, "planner-detail", candidateId);
+                    },
+                    iconLabel: "LAN"));
+            }
+
+            if (candidates.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    "No planner lanes match",
+                    "Change the sort or filters, unlock more sites, or build a commodity surplus to surface new lane recommendations."));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Route Planner",
+                Subtitle = "Lane candidates, blockers, GPS actions, and NPC draft shortcuts",
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Filters | Enter Inspect Lane | Backspace/Esc Back",
+                WidthScale = 0.96f,
+                MaxVisibleItems = 6,
+                Items = items,
+            };
+        }
+
+        private TabletShellPage BuildRoutePlannerDetailPage(TabletShellContext context, string candidateId)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var candidate = context.StateStore.GetRoutePlannerCandidate(candidateId);
+            if (candidate == null)
+            {
+                return new TabletShellPage
+                {
+                    Title = "Route Planner",
+                    Subtitle = "Lane unavailable",
+                    HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                    Items = new[]
+                    {
+                        TabletUiHelpers.CreateInfoItem("Lane unavailable", "Return to Route Planner and choose a lane that still exists in the current network state."),
+                        TabletUiHelpers.CreateNavigationItem("Back", "Return to Route Planner.", () => context.GoBack(), "BACK"),
+                    },
+                };
+            }
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateInfoItem(
+                    candidate.AvailabilityLabel,
+                    string.Format(
+                        "{0} | {1}",
+                        string.IsNullOrWhiteSpace(candidate.DistrictPairLabel) ? "District unknown" : candidate.DistrictPairLabel,
+                        string.IsNullOrWhiteSpace(candidate.CorridorId) ? "No corridor id" : candidate.CorridorId)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Projection",
+                    TabletUiHelpers.BuildRoutePlannerProjectionDetail(candidate)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Live comparison",
+                    TabletUiHelpers.BuildRoutePlannerPerformanceDetail(candidate)),
+            };
+
+            if (candidate.IsUnderperformingActiveLane)
+            {
+                items.Add(TabletUiHelpers.CreateBannerItem(
+                    "Underperforming live lane",
+                    "This active NPC lane is returning materially less than the planner projection or is running at a loss."));
+            }
+
+            items.Add(TabletUiHelpers.CreateInfoItem(
+                candidate.AvailabilityState == RoutePlannerAvailabilityState.Blocked ? "Blocker" : "Planner status",
+                TabletUiHelpers.BuildRoutePlannerBlockerDetail(candidate)));
+
+            if (candidate.MatchingContractId > 0)
+            {
+                var contractId = candidate.MatchingContractId;
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Open Active NPC Contract",
+                    string.IsNullOrWhiteSpace(candidate.MatchingContractLabel)
+                        ? "Inspect the current NPC lane using the shared route drill-down."
+                        : candidate.MatchingContractLabel,
+                    () => context.Push(TabletAppIds.Analytics, "route-detail", contractId),
+                    iconLabel: "NPC"));
+            }
+
+            if (candidate.OriginIndustry != null)
+            {
+                var originIndustry = candidate.OriginIndustry;
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "GPS Origin",
+                    string.Format("Set a waypoint to {0}.", originIndustry.Name),
+                    () => _addGpsRoute?.Invoke(originIndustry),
+                    iconLabel: "O"));
+            }
+
+            if (candidate.DestinationIndustry != null)
+            {
+                var destinationIndustry = candidate.DestinationIndustry;
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "GPS Destination",
+                    string.Format("Set a waypoint to {0}.", destinationIndustry.Name),
+                    () => _addGpsRoute?.Invoke(destinationIndustry),
+                    iconLabel: "D"));
+            }
+
+            if (_openRoutePlannerMap != null)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Show on Company Map",
+                    "Open the metro network map with this planner lane selected in the overlay.",
+                    () =>
+                    {
+                        context.StateStore.SetSelectedRoutePlannerCandidate(candidate.CandidateId);
+                        context.Refresh();
+                        _openRoutePlannerMap();
+                    },
+                    iconLabel: "MAP"));
+            }
+
+            if (_openNpcPlannerDraft != null)
+            {
+                if (candidate.CanDraftNpcRoute)
+                {
+                    var draftDefinition = TabletUiHelpers.BuildRoutePlannerDraftDefinition(candidate);
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        "Draft NPC Lane",
+                        "Seed the Hire NPC flow with this planner recommendation.",
+                        () => _openNpcPlannerDraft(draftDefinition),
+                        iconLabel: "NPC"));
+                }
+                else
+                {
+                    items.Add(TabletUiHelpers.CreateInfoItem(
+                        "NPC draft locked",
+                        TabletUiHelpers.BuildRoutePlannerBlockerDetail(candidate)));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to Route Planner.", () => context.GoBack(), "BACK"));
+
+            return new TabletShellPage
+            {
+                Title = "Route Planner",
+                Subtitle = TabletUiHelpers.BuildRoutePlannerCandidateCaption(candidate),
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.96f,
+                MaxVisibleItems = 6,
                 Items = items,
             };
         }
@@ -1762,25 +2465,37 @@ namespace LSOL.UI
         private TabletShellPage BuildServicesPage(TabletShellContext context)
         {
             var snapshot = context.Snapshot ?? new TabletStateSnapshot();
-            var items = new List<MenuItem>
+            var alertRows = TabletFleetAlertFormatter.BuildRows(context.StateStore.GetFleetAlertSummary(snapshot));
+            var items = new List<MenuItem>(alertRows.Count + 3);
+            for (int i = 0; i < alertRows.Count; i++)
             {
-                TabletUiHelpers.CreateActionItem(
-                    "Refuel Current Vehicle",
-                    "Immediate support refuel for the currently active company truck while ambient dispatch stabilizes regional service demand.",
-                    () => _requestRefuelService?.Invoke(),
-                    iconLabel: "FUEL"),
-                TabletUiHelpers.CreateActionItem(
-                    "Repair Current Vehicle",
-                    "Restore the currently active vehicle and trailer to working order from the hub.",
-                    () => _requestRepairService?.Invoke(),
-                    iconLabel: "FIX"),
-                TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"),
-            };
+                var alertRow = alertRows[i];
+                if (alertRow == null)
+                {
+                    continue;
+                }
+
+                items.Add(alertRow.IsAlert
+                    ? TabletUiHelpers.CreateBannerItem(alertRow.Caption, alertRow.Detail)
+                    : TabletUiHelpers.CreateInfoItem(alertRow.Caption, alertRow.Detail));
+            }
+
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Refuel Current Vehicle",
+                "Immediate support refuel for the currently active company truck while ambient dispatch stabilizes regional service demand.",
+                () => _requestRefuelService?.Invoke(),
+                iconLabel: "FUEL"));
+            items.Add(TabletUiHelpers.CreateActionItem(
+                "Repair Current Vehicle",
+                "Restore the currently active vehicle and trailer to working order from the hub.",
+                () => _requestRepairService?.Invoke(),
+                iconLabel: "FIX"));
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"));
 
             return new TabletShellPage
             {
                 Title = "Services",
-                Subtitle = "Remote refuel and repair actions for the active company vehicle",
+                Subtitle = "Fleet alerts plus remote refuel and repair actions for the active company vehicle",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.88f,
                 MaxVisibleItems = 5,
@@ -1798,6 +2513,9 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateInfoItem(
                     contractsOverview.BoardHeadline ?? "Dispatch board cooling down",
                     contractsOverview.BoardDetail ?? "Permit-free side contracts generate from live source surpluses and destination demand."),
+                TabletUiHelpers.CreateInfoItem(
+                    contractsOverview.ReputationHeadline ?? "Strongest: no trusted shipper yet",
+                    contractsOverview.ReputationDetail ?? "District unlock: baseline side work only"),
                 CreatePlayerContractsCommodityFilterSelectorItem(
                     context,
                     "Contracts Commodity",
@@ -1976,6 +2694,26 @@ namespace LSOL.UI
                     type == PlayerContractType.QuickJob
                         ? "Short permit-free contracts with a supplied temporary rig. These jobs do not advance main progression."
                         : "Live imbalance contracts that pay on current demand. Use your own company commercial vehicle."),
+                CreatePlayerContractsSortSelectorItem(
+                    context,
+                    "Sort",
+                    "Left/right changes the live board ordering without changing which offers exist."),
+                CreatePlayerContractsExpiryFilterSelectorItem(
+                    context,
+                    "Expiry",
+                    "Left/right narrows the board by remaining contract time before the listing expires."),
+                CreatePlayerContractsPayoutDensityFilterSelectorItem(
+                    context,
+                    "Payout Density",
+                    "Left/right filters by estimated payout per kilometer so short, dense lanes are easy to spot."),
+                CreatePlayerContractsRigClassFilterSelectorItem(
+                    context,
+                    "Rig Class",
+                    "Left/right filters by the cargo rig class implied by the contract commodity."),
+                CreatePlayerContractsDistrictFilterSelectorItem(
+                    context,
+                    "District",
+                    "Left/right matches routes whose origin or destination touches the selected district."),
                 CreatePlayerContractsCommodityFilterSelectorItem(
                     context,
                     "Commodity",
@@ -1986,7 +2724,7 @@ namespace LSOL.UI
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     type == PlayerContractType.QuickJob ? "No Quick Jobs listed" : "No Freight Market contracts listed",
-                    "The live board will repopulate when a real source surplus and destination shortage reopen a lane."));
+                    "No contracts match the current board query. Change the selectors or refresh once a live lane reopens."));
             }
             else
             {
@@ -2011,7 +2749,7 @@ namespace LSOL.UI
                     ? "Permit-free short hauls with supplied vehicles"
                     : "Permit-free freight listings for company vehicles",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                FooterText = "Arrow Up/Down Navigate | Left/Right Change Filter | Enter Select | Backspace/Esc Back",
+                FooterText = "Arrow Up/Down Navigate | Left/Right Change Selectors | Enter Select | Backspace/Esc Back",
                 WidthScale = 0.94f,
                 MaxVisibleItems = 6,
                 Items = items,
@@ -2101,6 +2839,9 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateInfoItem(
                     "Vehicle",
                     BuildPlayerContractVehicleDetail(contract)),
+                TabletUiHelpers.CreateInfoItem(
+                    "Reputation",
+                    BuildPlayerContractReputationDetail(contract)),
             };
 
             if (contract.Status == PlayerContractStatus.Listed && contract.CanAccept)
@@ -2213,11 +2954,35 @@ namespace LSOL.UI
                 return "No details available.";
             }
 
+            var payoutLabel = ModFormatting.FormatMoney(contract.CurrentEstimatedGrossPayout > 0.001f ? contract.CurrentEstimatedGrossPayout : contract.QuotedGrossPayout);
+            var payoutDensityLabel = string.IsNullOrWhiteSpace(contract.PayoutDensityLabel) ? "n/a/km" : contract.PayoutDensityLabel;
+            var routeDistrictLabel = string.IsNullOrWhiteSpace(contract.RouteDistrictLabel) ? "Unknown district" : contract.RouteDistrictLabel;
+            var rigClassLabel = string.IsNullOrWhiteSpace(contract.RigClassLabel) ? "Unknown" : contract.RigClassLabel;
+            var shipperLabel = string.IsNullOrWhiteSpace(contract.ShipperDisplayName) ? "Unknown shipper" : contract.ShipperDisplayName;
+            var trustLabel = string.IsNullOrWhiteSpace(contract.ShipperTrustLabel) ? "New" : contract.ShipperTrustLabel;
+
+            if (contract.Status == PlayerContractStatus.Listed)
+            {
+                return string.Format(
+                    "{0} | {1} @ {2} | {3} | {4} trust {5} | {6} rig | {7}",
+                    ModFormatting.FormatTons(contract.ListedTons),
+                    payoutLabel,
+                    payoutDensityLabel,
+                    routeDistrictLabel,
+                    shipperLabel,
+                    trustLabel,
+                    rigClassLabel,
+                    BuildPlayerContractExpiryLabel(contract)).Trim();
+            }
+
             return string.Format(
-                "{0} | {1} | {2} | {3}",
-                FormatPlayerContractType(contract.Type),
-                ModFormatting.FormatTons(contract.ListedTons),
-                ModFormatting.FormatMoney(contract.CurrentEstimatedGrossPayout > 0.001f ? contract.CurrentEstimatedGrossPayout : contract.QuotedGrossPayout),
+                "{0} | {1} trust {2} | {3} @ {4} | {5} rig | {6}",
+                routeDistrictLabel,
+                shipperLabel,
+                trustLabel,
+                payoutLabel,
+                payoutDensityLabel,
+                rigClassLabel,
                 contract.StatusDetail ?? string.Empty).Trim();
         }
 
@@ -2245,25 +3010,181 @@ namespace LSOL.UI
                 : contract.VehicleRequirementLabel;
         }
 
+        private static string BuildPlayerContractExpiryLabel(PlayerContractListingSummary contract)
+        {
+            return TabletDeadlineFormatter.BuildPlayerContractExpiryLabel(contract);
+        }
+
+        private static string BuildPlayerContractReputationDetail(PlayerContractListingSummary contract)
+        {
+            if (contract == null)
+            {
+                return "No reputation context available.";
+            }
+
+            var shipper = string.IsNullOrWhiteSpace(contract.ShipperDisplayName) ? "Unknown shipper" : contract.ShipperDisplayName;
+            var trust = string.IsNullOrWhiteSpace(contract.ShipperTrustLabel) ? "New" : contract.ShipperTrustLabel;
+            var district = string.IsNullOrWhiteSpace(contract.DistrictStandingLabel) ? "District standing unavailable" : contract.DistrictStandingLabel;
+            var hint = string.IsNullOrWhiteSpace(contract.UnlockHint) ? string.Empty : contract.UnlockHint;
+            var premium = contract.IsPremiumOpportunity ? "Premium lane" : "Baseline lane";
+
+            return string.Format(
+                "{0} | {1} trust | {2} | {3}{4}",
+                shipper,
+                trust,
+                district,
+                premium,
+                string.IsNullOrWhiteSpace(hint) ? string.Empty : " | " + hint);
+        }
+
+        private static MenuItem CreatePlayerContractsSortSelectorItem(TabletShellContext context, string captionPrefix, string detail)
+        {
+            return CreatePlayerContractsBoardSelectorItem(
+                context,
+                captionPrefix ?? "Sort",
+                GetPlayerContractsSortLabel,
+                detail ?? "Left/right changes the board sort order.",
+                CyclePlayerContractsSortMode,
+                "SRT");
+        }
+
+        private static MenuItem CreatePlayerContractsExpiryFilterSelectorItem(TabletShellContext context, string captionPrefix, string detail)
+        {
+            return CreatePlayerContractsBoardSelectorItem(
+                context,
+                captionPrefix ?? "Expiry",
+                GetPlayerContractsExpiryFilterLabel,
+                detail ?? "Left/right filters dispatch-board contracts by remaining expiry time.",
+                CyclePlayerContractsExpiryFilter,
+                "EXP");
+        }
+
+        private static MenuItem CreatePlayerContractsPayoutDensityFilterSelectorItem(TabletShellContext context, string captionPrefix, string detail)
+        {
+            return CreatePlayerContractsBoardSelectorItem(
+                context,
+                captionPrefix ?? "Payout Density",
+                GetPlayerContractsPayoutDensityFilterLabel,
+                detail ?? "Left/right filters dispatch-board contracts by estimated money per kilometer.",
+                CyclePlayerContractsPayoutDensityFilter,
+                "DEN");
+        }
+
+        private static MenuItem CreatePlayerContractsRigClassFilterSelectorItem(TabletShellContext context, string captionPrefix, string detail)
+        {
+            return CreatePlayerContractsBoardSelectorItem(
+                context,
+                captionPrefix ?? "Rig Class",
+                GetPlayerContractsRigClassFilterLabel,
+                detail ?? "Left/right filters dispatch-board contracts by cargo rig class.",
+                CyclePlayerContractsRigClassFilter,
+                "RIG");
+        }
+
+        private static MenuItem CreatePlayerContractsDistrictFilterSelectorItem(TabletShellContext context, string captionPrefix, string detail)
+        {
+            return CreatePlayerContractsBoardSelectorItem(
+                context,
+                captionPrefix ?? "District",
+                GetPlayerContractsDistrictFilterLabel,
+                detail ?? "Left/right filters dispatch-board contracts by route district touchpoints.",
+                CyclePlayerContractsDistrictFilter,
+                "DST");
+        }
+
         private static MenuItem CreatePlayerContractsCommodityFilterSelectorItem(TabletShellContext context, string captionPrefix, string detail)
         {
-            return TabletUiHelpers.CreateSelectorItem(
-                () => string.Format("{0}: < {1} >", captionPrefix ?? "Commodity", GetPlayerContractsCommodityFilterLabel(context)),
-                () => detail ?? "Left/right filters dispatch-board contracts by commodity.",
-                () => CyclePlayerContractsCommodityFilter(context, -1),
-                () => CyclePlayerContractsCommodityFilter(context, 1),
-                () => CyclePlayerContractsCommodityFilter(context, 1),
+            return CreatePlayerContractsBoardSelectorItem(
+                context,
+                captionPrefix ?? "Commodity",
+                GetPlayerContractsCommodityFilterLabel,
+                detail ?? "Left/right filters dispatch-board contracts by commodity.",
+                CyclePlayerContractsCommodityFilter,
                 "COM");
+        }
+
+        private static MenuItem CreatePlayerContractsBoardSelectorItem(TabletShellContext context, string captionPrefix, Func<TabletShellContext, string> labelGetter, string detail, Action<TabletShellContext, int> cycleAction, string iconLabel)
+        {
+            return TabletUiHelpers.CreateSelectorItem(
+                () => string.Format("{0}: < {1} >", captionPrefix, labelGetter != null ? labelGetter(context) : "Any"),
+                () => detail ?? string.Empty,
+                () =>
+                {
+                    if (cycleAction != null)
+                    {
+                        cycleAction(context, -1);
+                    }
+                },
+                () =>
+                {
+                    if (cycleAction != null)
+                    {
+                        cycleAction(context, 1);
+                    }
+                },
+                () =>
+                {
+                    if (cycleAction != null)
+                    {
+                        cycleAction(context, 1);
+                    }
+                },
+                iconLabel);
         }
 
         private static string GetPlayerContractsCommodityFilterLabel(TabletShellContext context)
         {
-            var overview = context != null && context.StateStore != null
-                ? context.StateStore.GetPlayerContractsOverview() ?? new PlayerContractsOverview()
-                : new PlayerContractsOverview();
+            var overview = GetPlayerContractsOverview(context);
             return string.IsNullOrWhiteSpace(overview.SelectedCommodityFilter)
                 ? "Any"
                 : overview.SelectedCommodityFilter;
+        }
+
+        private static string GetPlayerContractsDistrictFilterLabel(TabletShellContext context)
+        {
+            var overview = GetPlayerContractsOverview(context);
+            return string.IsNullOrWhiteSpace(overview.SelectedDistrictFilter)
+                ? "Any"
+                : overview.SelectedDistrictFilter;
+        }
+
+        private static string GetPlayerContractsRigClassFilterLabel(TabletShellContext context)
+        {
+            var overview = GetPlayerContractsOverview(context);
+            return string.IsNullOrWhiteSpace(overview.SelectedRigClassFilter)
+                ? "Any"
+                : overview.SelectedRigClassFilter;
+        }
+
+        private static string GetPlayerContractsExpiryFilterLabel(TabletShellContext context)
+        {
+            var overview = GetPlayerContractsOverview(context);
+            return string.IsNullOrWhiteSpace(overview.SelectedExpiryFilter)
+                ? "Any"
+                : overview.SelectedExpiryFilter;
+        }
+
+        private static string GetPlayerContractsPayoutDensityFilterLabel(TabletShellContext context)
+        {
+            var overview = GetPlayerContractsOverview(context);
+            return string.IsNullOrWhiteSpace(overview.SelectedPayoutDensityFilter)
+                ? "Any"
+                : overview.SelectedPayoutDensityFilter;
+        }
+
+        private static string GetPlayerContractsSortLabel(TabletShellContext context)
+        {
+            var overview = GetPlayerContractsOverview(context);
+            return string.IsNullOrWhiteSpace(overview.SelectedSortMode)
+                ? "Board"
+                : overview.SelectedSortMode;
+        }
+
+        private static PlayerContractsOverview GetPlayerContractsOverview(TabletShellContext context)
+        {
+            return context != null && context.StateStore != null
+                ? context.StateStore.GetPlayerContractsOverview() ?? new PlayerContractsOverview()
+                : new PlayerContractsOverview();
         }
 
         private static void CyclePlayerContractsCommodityFilter(TabletShellContext context, int delta)
@@ -2274,6 +3195,61 @@ namespace LSOL.UI
             }
 
             context.StateStore.CyclePlayerContractCommodityFilter(delta);
+            context.Refresh();
+        }
+
+        private static void CyclePlayerContractsDistrictFilter(TabletShellContext context, int delta)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            context.StateStore.CyclePlayerContractDistrictFilter(delta);
+            context.Refresh();
+        }
+
+        private static void CyclePlayerContractsRigClassFilter(TabletShellContext context, int delta)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            context.StateStore.CyclePlayerContractRigClassFilter(delta);
+            context.Refresh();
+        }
+
+        private static void CyclePlayerContractsExpiryFilter(TabletShellContext context, int delta)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            context.StateStore.CyclePlayerContractExpiryFilter(delta);
+            context.Refresh();
+        }
+
+        private static void CyclePlayerContractsPayoutDensityFilter(TabletShellContext context, int delta)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            context.StateStore.CyclePlayerContractPayoutDensityFilter(delta);
+            context.Refresh();
+        }
+
+        private static void CyclePlayerContractsSortMode(TabletShellContext context, int delta)
+        {
+            if (context == null)
+            {
+                return;
+            }
+
+            context.StateStore.CyclePlayerContractSortMode(delta);
             context.Refresh();
         }
 
@@ -2884,36 +3860,22 @@ namespace LSOL.UI
                         : "Open stockpile, utilization, and per-commodity statistics for this industry.")));
 
             var items = new List<MenuItem>();
+            var ownerCutDetail = TabletLocationEconomicsFormatter.BuildOwnerCutDetail(summary);
+            if (!string.IsNullOrWhiteSpace(ownerCutDetail))
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem("Owner cut", ownerCutDetail));
+            }
+
             if (summary != null && summary.HasServiceBusinessInfo)
             {
                 items.Add(TabletUiHelpers.CreateBannerItem(
                     string.Format("{0} {1} {2}", summary.Name, summary.OwnershipTag, summary.PermitTag),
                     summary.ServicePassiveIncomeStatus));
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    "Weekly income",
+                    "Passive income",
                     BuildServiceSiteIncomeDetail(summary)));
-                items.Add(TabletUiHelpers.CreateInfoItem(
-                    "Staff",
-                    string.Format(
-                        "{0} | Wage {1}/wk",
-                        summary.ServiceStaffStatus,
-                        ModFormatting.FormatMoney(summary.ServiceWeeklyStaffingCost))));
-                items.Add(TabletUiHelpers.CreateInfoItem(
-                    "Stock",
-                    summary.ServiceStockReady
-                        ? string.Format("{0} | {1:0.0}t on hand", summary.ServiceStockStatus, summary.StorageTons)
-                        : string.Format("{0} | Resupply to restart passive income", summary.ServiceStockStatus)));
-                items.Add(TabletUiHelpers.CreateInfoItem(
-                    "Operations",
-                    BuildServiceSiteOperationsDetail(summary)));
 
-                if (!string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
-                    && !string.Equals(summary.ServiceContractStatus, "Open market", StringComparison.OrdinalIgnoreCase))
-                {
-                    items.Add(TabletUiHelpers.CreateInfoItem("Contract", summary.ServiceContractStatus));
-                }
-
-                if (_toggleServiceSiteOperator != null)
+                if (_toggleServiceSiteOperator != null && summary.IsOwnedByPlayer)
                 {
                     items.Add(TabletUiHelpers.CreateActionItem(
                         summary.ServiceStaffAssigned ? "Release Site Operator" : "Assign Site Operator",
@@ -2928,6 +3890,21 @@ namespace LSOL.UI
 
                             context.Refresh();
                         }));
+                }
+            }
+
+            if (summary != null)
+            {
+                var weeklyTargetDetail = TabletServiceSiteStatusFormatter.BuildWeeklyTargetDetail(summary);
+                if (!string.IsNullOrWhiteSpace(weeklyTargetDetail))
+                {
+                    items.Add(TabletUiHelpers.CreateInfoItem("Weekly target", weeklyTargetDetail));
+                }
+
+                var contractStatusDetail = TabletServiceSiteStatusFormatter.BuildContractStatusDetail(summary);
+                if (!string.IsNullOrWhiteSpace(contractStatusDetail))
+                {
+                    items.Add(TabletUiHelpers.CreateInfoItem("Contract", contractStatusDetail));
                 }
             }
 
@@ -2958,23 +3935,7 @@ namespace LSOL.UI
 
         private static string BuildServiceSiteIncomeDetail(TabletLocationSummary summary)
         {
-            if (summary == null)
-            {
-                return string.Empty;
-            }
-
-            var detail = string.Format("Expected {0}/wk", ModFormatting.FormatMoney(summary.ServiceWeeklyIncome));
-            if (summary.ServiceLastPassiveIncome > 0.01f)
-            {
-                detail += string.Format(" | Last payout {0}", ModFormatting.FormatMoney(summary.ServiceLastPassiveIncome));
-            }
-
-            if (!string.IsNullOrWhiteSpace(summary.ServiceRecentPayoutStatus))
-            {
-                detail += string.Format(" | {0}", summary.ServiceRecentPayoutStatus);
-            }
-
-            return detail;
+            return TabletLocationEconomicsFormatter.BuildPassiveIncomeDetail(summary);
         }
 
         private static string BuildServiceSiteOperationsDetail(TabletLocationSummary summary)
@@ -3339,24 +4300,30 @@ namespace LSOL.UI
                 return BuildUnavailablePage(snapshot, "No industry selected.", () => context.GoBack());
             }
 
-            if (industry.SiteRole == SiteRole.Warehouse)
-            {
-                return BuildUnavailablePage(snapshot, "Warehouses do not expose production or storage upgrade modules.", () => context.GoBack());
-            }
-
             if (summary.RequiresIndustryPurchase)
             {
                 return BuildPurchaseConfirmPage(context, industry);
             }
 
             var items = new List<MenuItem>();
-            var modules = new[]
+            if (industry.SiteRole == SiteRole.Warehouse)
             {
-                IndustryUpgradeModule.Production,
-                IndustryUpgradeModule.InputStorage,
-                IndustryUpgradeModule.OutputStorage,
-                IndustryUpgradeModule.OmegaStorage,
-            };
+                items.Add(TabletUiHelpers.CreateInfoItem("Warehouse Modules", "Storage modules expand capacity and improve resilience against spoilage and shrinkage."));
+            }
+
+            var modules = industry.SiteRole == SiteRole.Warehouse
+                ? new[]
+                {
+                    IndustryUpgradeModule.InputStorage,
+                    IndustryUpgradeModule.OutputStorage,
+                }
+                : new[]
+                {
+                    IndustryUpgradeModule.Production,
+                    IndustryUpgradeModule.InputStorage,
+                    IndustryUpgradeModule.OutputStorage,
+                    IndustryUpgradeModule.OmegaStorage,
+                };
 
             for (int i = 0; i < modules.Length; i++)
             {
@@ -3385,7 +4352,7 @@ namespace LSOL.UI
 
             return new TabletShellPage
             {
-                Title = "Industry Upgrades",
+                Title = industry.SiteRole == SiteRole.Warehouse ? "Warehouse Upgrades" : "Industry Upgrades",
                 Subtitle = industry.Name,
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.94f,

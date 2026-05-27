@@ -73,6 +73,49 @@ namespace LSOL.Systems
         public float AverageConditionPercent { get; set; }
     }
 
+    public sealed class CommercialVehicleSalePreview
+    {
+        public float PurchasePrice { get; set; }
+
+        public float BaseRefund { get; set; }
+
+        public float MaintenanceConditionPercent { get; set; }
+
+        public float MaintenanceMultiplier { get; set; }
+
+        public float ConditionAdjustmentAmount { get; set; }
+
+        public float DepreciationPenaltyPercent { get; set; }
+
+        public float DepreciationLossAmount { get; set; }
+
+        public float EstimatedResaleValue { get; set; }
+
+        public float RecoveryPercentOfPurchase { get; set; }
+
+        public float RecoveryPercentOfBaseRefund { get; set; }
+    }
+
+    public sealed class FleetSaleSummary
+    {
+        public FleetSaleSummary()
+        {
+            WorstVehicleName = string.Empty;
+        }
+
+        public int OwnedVehicleCount { get; set; }
+
+        public float TotalPurchaseBasis { get; set; }
+
+        public float TotalEstimatedResaleValue { get; set; }
+
+        public float TotalDepreciationLoss { get; set; }
+
+        public string WorstVehicleName { get; set; }
+
+        public float WorstVehicleRecoveryPercent { get; set; }
+    }
+
     public sealed class PropertyManager
     {
         private const int MinutesPerWeek = 7 * 24 * 60;
@@ -438,6 +481,43 @@ namespace LSOL.Systems
             vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
             vehicle.LastInspectionWeekIndex = currentWeekIndex;
             vehicle.InspectionOverdueWeeks = 0;
+        }
+
+        public CommercialVehicleSalePreview GetCommercialVehicleSalePreview(string assetId)
+        {
+            return GetCommercialVehicleSalePreview(GetCommercialVehicle(assetId));
+        }
+
+        public CommercialVehicleSalePreview GetCommercialVehicleSalePreview(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            return BuildCommercialVehicleSalePreview(vehicle);
+        }
+
+        public FleetSaleSummary GetFleetSaleSummary()
+        {
+            var summary = new FleetSaleSummary();
+            if (_state == null || _state.CommercialVehicles == null)
+            {
+                return summary;
+            }
+
+            foreach (var vehicle in _state.CommercialVehicles.Where(entry => entry != null && !entry.IsRental))
+            {
+                var preview = BuildCommercialVehicleSalePreview(vehicle);
+                summary.OwnedVehicleCount += 1;
+                summary.TotalPurchaseBasis += preview.PurchasePrice;
+                summary.TotalEstimatedResaleValue += preview.EstimatedResaleValue;
+                summary.TotalDepreciationLoss += Math.Max(0f, preview.PurchasePrice - preview.EstimatedResaleValue);
+
+                if (string.IsNullOrWhiteSpace(summary.WorstVehicleName)
+                    || preview.RecoveryPercentOfPurchase < summary.WorstVehicleRecoveryPercent)
+                {
+                    summary.WorstVehicleName = vehicle.DisplayName ?? string.Empty;
+                    summary.WorstVehicleRecoveryPercent = preview.RecoveryPercentOfPurchase;
+                }
+            }
+
+            return summary;
         }
 
         public bool CanUseCommercialSystems(out string reason)
@@ -1088,8 +1168,7 @@ namespace LSOL.Systems
                 TryStoreCommercialVehicle(assetId, fleetManager, fuelSystem, out _);
             }
 
-            var refund = Math.Max(0f, vehicle.PurchasePrice * CommercialVehicleSaleRefundRatio);
-            refund = CalculateCommercialVehicleSaleRefund(vehicle);
+            var refund = CalculateCommercialVehicleSaleRefund(vehicle);
             balance += refund;
             RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Sold commercial vehicle {0}", vehicle.DisplayName));
             _state.CommercialVehicles.Remove(vehicle);
@@ -1379,6 +1458,28 @@ namespace LSOL.Systems
                 : null;
         }
 
+        public IReadOnlyList<OfficeFacilityAnchorDefinition> GetOfficeFacilityAnchors(string officeId)
+        {
+            var office = GetOfficeDefinition(officeId);
+            return office != null && office.FacilityAnchors != null
+                ? office.FacilityAnchors
+                    .Where(anchor => anchor != null && !string.IsNullOrWhiteSpace(anchor.AnchorId))
+                    .OrderBy(anchor => anchor.AnchorId, StringComparer.OrdinalIgnoreCase)
+                    .ToArray()
+                : Array.Empty<OfficeFacilityAnchorDefinition>();
+        }
+
+        public OfficeFacilityAnchorDefinition GetOfficeFacilityAnchor(string officeId, string anchorId)
+        {
+            if (string.IsNullOrWhiteSpace(anchorId))
+            {
+                return null;
+            }
+
+            return GetOfficeFacilityAnchors(officeId)
+                .FirstOrDefault(anchor => string.Equals(anchor.AnchorId, anchorId, StringComparison.OrdinalIgnoreCase));
+        }
+
         public IReadOnlyList<OfficeObjectPersistenceEntry> GetOfficeObjects(string officeId, bool includeUnplaced = true)
         {
             if (string.IsNullOrWhiteSpace(officeId))
@@ -1451,9 +1552,84 @@ namespace LSOL.Systems
                 });
         }
 
-        public bool TryPurchaseOfficeObject(string officeId, int definitionId, ref float balance, out OfficeObjectPersistenceEntry purchasedEntry, out string message)
+        public OfficeFacilityAnchorDefinition GetAvailableOfficeFacilityAnchor(string officeId, OfficeObjectDefinition definition, string instanceId = null, bool includeUnplacedReservations = true)
         {
-            purchasedEntry = null;
+            if (definition == null || definition.AnchorType == OfficeFacilityAnchorType.None || definition.PlacementContext == OfficeObjectPlacementContext.Yard)
+            {
+                return null;
+            }
+
+            var matchingAnchors = GetOfficeFacilityAnchors(officeId)
+                .Where(anchor => anchor.AnchorType == definition.AnchorType)
+                .OrderBy(anchor => anchor.AnchorId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (matchingAnchors.Count <= 0)
+            {
+                return null;
+            }
+
+            var officeObjects = GetOfficeObjects(officeId, includeUnplacedReservations);
+            var reservedAnchorIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pendingReservations = 0;
+
+            for (int i = 0; i < officeObjects.Count; i++)
+            {
+                var entry = officeObjects[i];
+                if (entry == null || string.Equals(entry.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var otherDefinition = GetOfficeObjectDefinition(entry.DefinitionId);
+                if (!ShouldReserveFacilityAnchor(officeId, otherDefinition) || otherDefinition.AnchorType != definition.AnchorType)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrWhiteSpace(entry.AssignedFacilityAnchorId))
+                {
+                    reservedAnchorIds.Add(entry.AssignedFacilityAnchorId);
+                }
+                else
+                {
+                    pendingReservations += 1;
+                }
+            }
+
+            var availableAnchors = matchingAnchors
+                .Where(anchor => !reservedAnchorIds.Contains(anchor.AnchorId))
+                .ToList();
+            return pendingReservations < availableAnchors.Count
+                ? availableAnchors[pendingReservations]
+                : null;
+        }
+
+        public bool TryResolveOfficeObjectPlacementAnchor(string officeId, OfficeObjectDefinition definition, string instanceId, bool includeUnplacedReservations, out OfficeFacilityAnchorDefinition anchor, out string message)
+        {
+            anchor = null;
+            message = string.Empty;
+
+            if (definition == null || definition.AnchorType == OfficeFacilityAnchorType.None || definition.PlacementContext == OfficeObjectPlacementContext.Yard)
+            {
+                return true;
+            }
+
+            anchor = GetAvailableOfficeFacilityAnchor(officeId, definition, instanceId, includeUnplacedReservations);
+            if (anchor != null || definition.PlacementContext != OfficeObjectPlacementContext.Room)
+            {
+                return true;
+            }
+
+            var hasAnyMatchingAnchor = GetOfficeFacilityAnchors(officeId).Any(candidate => candidate.AnchorType == definition.AnchorType);
+            var anchorLabel = BuildOfficeFacilityAnchorLabel(definition.AnchorType);
+            message = hasAnyMatchingAnchor
+                ? string.Format("{0} needs a free {1} anchor at this office.", definition.DisplayName, anchorLabel)
+                : string.Format("{0} requires a {1} anchor at this office.", definition.DisplayName, anchorLabel);
+            return false;
+        }
+
+        public bool CanPurchaseOfficeObject(string officeId, OfficeObjectDefinition definition, float balance, out string message)
+        {
             message = string.Empty;
 
             var officeDefinition = GetOfficeDefinition(officeId);
@@ -1464,43 +1640,65 @@ namespace LSOL.Systems
                 return false;
             }
 
+            if (!string.Equals(ActiveOfficeId, officeId, StringComparison.OrdinalIgnoreCase))
+            {
+                message = "Activate this office before buying objects for it.";
+                return false;
+            }
+
             if (officeState.IsAccessSuspended || officeState.OutstandingRent > 0.01f)
             {
                 message = string.Format("{0} is unavailable until office arrears are settled.", officeDefinition.DisplayName);
                 return false;
             }
 
-            var definition = GetOfficeObjectDefinition(definitionId);
             if (definition == null)
             {
                 message = "Office object definition unavailable.";
                 return false;
             }
 
-            if (definition.Function == OfficeObjectFunction.Headquarters)
+            if ((definition.RequiresOwnedOffice || definition.Function == OfficeObjectFunction.Headquarters) && !officeState.IsOwned)
             {
-                if (!officeState.IsOwned)
-                {
-                    message = "Landmark HQ modules can only be installed in an owned office.";
-                    return false;
-                }
-
-                if (HasAnyOfficeObjectFunction(OfficeObjectFunction.Headquarters, false))
-                {
-                    message = "The company already has a Landmark HQ project in progress.";
-                    return false;
-                }
+                message = string.Format("{0} can only be installed in an owned office.", definition.DisplayName);
+                return false;
             }
 
-            if (definition.PerOfficeLimit > 0 && GetOfficeObjectCount(officeId, definitionId) >= definition.PerOfficeLimit)
+            if (definition.Function == OfficeObjectFunction.Headquarters && HasAnyOfficeObjectFunction(OfficeObjectFunction.Headquarters, false))
+            {
+                message = "The company already has a Landmark HQ project in progress.";
+                return false;
+            }
+
+            if (definition.PerOfficeLimit > 0 && GetOfficeObjectCount(officeId, definition.ObjectId) >= definition.PerOfficeLimit)
             {
                 message = string.Format("{0} limit reached for this office.", definition.DisplayName);
+                return false;
+            }
+
+            OfficeFacilityAnchorDefinition anchor;
+            if (!TryResolveOfficeObjectPlacementAnchor(officeId, definition, null, true, out anchor, out message))
+            {
                 return false;
             }
 
             if (balance < definition.Price)
             {
                 message = string.Format("Need {0} to purchase {1}.", ModFormatting.FormatMoney(definition.Price), definition.DisplayName);
+                return false;
+            }
+
+            return true;
+        }
+
+        public bool TryPurchaseOfficeObject(string officeId, int definitionId, ref float balance, out OfficeObjectPersistenceEntry purchasedEntry, out string message)
+        {
+            purchasedEntry = null;
+            message = string.Empty;
+
+            var definition = GetOfficeObjectDefinition(definitionId);
+            if (!CanPurchaseOfficeObject(officeId, definition, balance, out message))
+            {
                 return false;
             }
 
@@ -1514,6 +1712,7 @@ namespace LSOL.Systems
                 IsPlaced = false,
                 Position = Vector3.Zero,
                 Rotation = Vector3.Zero,
+                AssignedFacilityAnchorId = string.Empty,
                 StoredResourceAmount = 0f,
             };
 
@@ -1522,7 +1721,7 @@ namespace LSOL.Systems
             return true;
         }
 
-        public bool TryPlaceOfficeObject(string instanceId, Vector3 position, Vector3 rotation, out OfficeObjectPersistenceEntry placedEntry, out string message)
+        public bool TryPlaceOfficeObject(string instanceId, Vector3 position, Vector3 rotation, string assignedFacilityAnchorId, out OfficeObjectPersistenceEntry placedEntry, out string message)
         {
             placedEntry = null;
             message = string.Empty;
@@ -1536,12 +1735,18 @@ namespace LSOL.Systems
 
             entry.Position = position;
             entry.Rotation = rotation;
+            entry.AssignedFacilityAnchorId = assignedFacilityAnchorId ?? string.Empty;
             entry.IsPlaced = true;
             placedEntry = entry;
 
             var definition = GetOfficeObjectDefinition(entry.DefinitionId);
             message = string.Format("Placed {0}.", definition != null ? definition.DisplayName : "office object");
             return true;
+        }
+
+        public bool TryPlaceOfficeObject(string instanceId, Vector3 position, Vector3 rotation, out OfficeObjectPersistenceEntry placedEntry, out string message)
+        {
+            return TryPlaceOfficeObject(instanceId, position, rotation, string.Empty, out placedEntry, out message);
         }
 
         public bool TryUpdateOfficeObjectStoredResourceAmount(string instanceId, float amount, out OfficeObjectPersistenceEntry updatedEntry)
@@ -2624,14 +2829,36 @@ namespace LSOL.Systems
 
         private static float CalculateCommercialVehicleSaleRefund(OwnedCommercialVehiclePersistenceEntry vehicle)
         {
-            if (vehicle == null || vehicle.PurchasePrice <= 0.01f)
-            {
-                return 0f;
-            }
+            return BuildCommercialVehicleSalePreview(vehicle).EstimatedResaleValue;
+        }
 
-            var maintenanceRatio = 0.75f + (NormalizeMaintenanceCondition(vehicle.MaintenanceCondition) * 0.25f);
-            var depreciationPenalty = Math.Min(0.20f, Math.Max(0f, vehicle.LifetimeMaintenanceCost) / Math.Max(1f, vehicle.PurchasePrice) * 0.18f);
-            return Math.Max(0f, vehicle.PurchasePrice * CommercialVehicleSaleRefundRatio * maintenanceRatio * (1f - depreciationPenalty));
+        private static CommercialVehicleSalePreview BuildCommercialVehicleSalePreview(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            var purchasePrice = vehicle != null ? Math.Max(0f, vehicle.PurchasePrice) : 0f;
+            var baseRefund = purchasePrice * CommercialVehicleSaleRefundRatio;
+            var normalizedCondition = NormalizeMaintenanceCondition(vehicle != null ? vehicle.MaintenanceCondition : 1f);
+            var maintenanceMultiplier = 0.75f + (normalizedCondition * 0.25f);
+            var conditionAdjustedBase = baseRefund * maintenanceMultiplier;
+            var conditionAdjustmentAmount = conditionAdjustedBase - baseRefund;
+            var depreciationPenalty = purchasePrice > 0.01f
+                ? Math.Min(0.20f, Math.Max(0f, vehicle != null ? vehicle.LifetimeMaintenanceCost : 0f) / Math.Max(1f, purchasePrice) * 0.18f)
+                : 0f;
+            var depreciationLossAmount = conditionAdjustedBase * depreciationPenalty;
+            var estimatedResale = Math.Max(0f, conditionAdjustedBase - depreciationLossAmount);
+
+            return new CommercialVehicleSalePreview
+            {
+                PurchasePrice = purchasePrice,
+                BaseRefund = baseRefund,
+                MaintenanceConditionPercent = normalizedCondition * 100f,
+                MaintenanceMultiplier = maintenanceMultiplier,
+                ConditionAdjustmentAmount = conditionAdjustmentAmount,
+                DepreciationPenaltyPercent = depreciationPenalty * 100f,
+                DepreciationLossAmount = depreciationLossAmount,
+                EstimatedResaleValue = estimatedResale,
+                RecoveryPercentOfPurchase = purchasePrice > 0.01f ? (estimatedResale / purchasePrice) * 100f : 0f,
+                RecoveryPercentOfBaseRefund = baseRefund > 0.01f ? (estimatedResale / baseRefund) * 100f : 0f,
+            };
         }
 
         private OfficeOwnershipPersistenceEntry GetOrCreateOfficeState(string officeId)
@@ -2900,6 +3127,38 @@ namespace LSOL.Systems
             return _state.OfficeObjects.FirstOrDefault(entry => entry != null && string.Equals(entry.InstanceId, instanceId, StringComparison.OrdinalIgnoreCase));
         }
 
+        private bool ShouldReserveFacilityAnchor(string officeId, OfficeObjectDefinition definition)
+        {
+            if (definition == null || definition.AnchorType == OfficeFacilityAnchorType.None || definition.PlacementContext == OfficeObjectPlacementContext.Yard)
+            {
+                return false;
+            }
+
+            return definition.PlacementContext == OfficeObjectPlacementContext.Room
+                || GetOfficeFacilityAnchors(officeId).Any(anchor => anchor.AnchorType == definition.AnchorType);
+        }
+
+        private static string BuildOfficeFacilityAnchorLabel(OfficeFacilityAnchorType anchorType)
+        {
+            switch (anchorType)
+            {
+                case OfficeFacilityAnchorType.ReceptionDesk:
+                    return "reception desk";
+                case OfficeFacilityAnchorType.DispatchDesk:
+                    return "dispatch desk";
+                case OfficeFacilityAnchorType.Boardroom:
+                    return "boardroom";
+                case OfficeFacilityAnchorType.MaintenanceDesk:
+                    return "maintenance office";
+                case OfficeFacilityAnchorType.FuelDesk:
+                    return "fuel service counter";
+                case OfficeFacilityAnchorType.BreakRoom:
+                    return "break-room nook";
+                default:
+                    return "facility";
+            }
+        }
+
         private OwnedCommercialVehiclePersistenceEntry GetCommercialVehicle(string assetId)
         {
             if (string.IsNullOrWhiteSpace(assetId))
@@ -3028,6 +3287,7 @@ namespace LSOL.Systems
                     IsPlaced = entry.IsPlaced,
                     Position = entry.Position,
                     Rotation = entry.Rotation,
+                    AssignedFacilityAnchorId = entry.AssignedFacilityAnchorId,
                     StoredResourceAmount = entry.StoredResourceAmount,
                 });
             }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
 using GTA.Math;
 using LSOL.Config;
@@ -113,6 +114,54 @@ namespace LSOL.Tests.Systems
             Assert.AreEqual("Ore Truck", restoredContract.Routes[1].AssignedVehicleDisplayName);
             Assert.AreEqual(25, restoredContract.Routes[1].OriginTriggerThresholdPercent);
             Assert.AreEqual(80, restoredContract.Routes[1].DestinationTriggerThresholdPercent);
+
+            var restoredTraining = manager.GetDriverTrainingSummary(manager.Contracts[0]);
+            Assert.IsNotNull(restoredTraining);
+            Assert.IsNotNull(restoredTraining.BaseTier);
+            Assert.IsNotNull(restoredTraining.EffectiveTier);
+            Assert.IsTrue(restoredTraining.ExperiencePoints > 0f);
+            Assert.IsTrue(restoredTraining.ProgressPercent >= 0f);
+        }
+
+        [TestMethod]
+        public void GetDriverTrainingSummary_AdvancesEffectiveTierFromPersistedContractStats()
+        {
+            var commercialVehicles = new List<OwnedCommercialVehiclePersistenceEntry>
+            {
+                new OwnedCommercialVehiclePersistenceEntry
+                {
+                    AssetId = "truck-1",
+                    DisplayName = "Ore Truck",
+                    PoweredModelName = "oretruck",
+                    CargoModelName = "oretruck",
+                    HasSeparateCargoVehicle = false,
+                    InActiveGarage = true,
+                    IsDeployed = false,
+                    CargoType = VehicleCargoType.Aggregates,
+                    CapacityTons = 12f,
+                },
+            };
+
+            var manager = CreateNpcLogisticsManager(commercialVehicles);
+            var rookieTierId = manager.DriverTiers.First(tier => string.Equals(tier.Id, "Rookie", StringComparison.OrdinalIgnoreCase)).Id;
+            var snapshot = new NpcLogisticsPersistenceSnapshot();
+            var contract = CreateContractSnapshot(9, rookieTierId, "alpha-depot", "bravo-depot", "truck-1");
+            contract.CompletedPayrollCycles = 5;
+            contract.CompletedDeliveries = 20;
+            contract.TotalDeliveredTons = 150f;
+            contract.TotalProfitEarned = 50000f;
+            contract.LastJourneyLossRatio = 0.05f;
+            snapshot.Contracts.Add(contract);
+
+            manager.ApplyPersistenceSnapshot(snapshot);
+
+            var training = manager.GetDriverTrainingSummary(manager.Contracts[0]);
+
+            Assert.IsNotNull(training.BaseTier);
+            Assert.AreEqual("Rookie", training.BaseTier.DisplayName);
+            Assert.IsNotNull(training.EffectiveTier);
+            Assert.IsTrue(training.EffectiveTierIndex >= training.BaseTierIndex + 1 || string.Equals(training.EffectiveTier.Id, "Veteran", StringComparison.OrdinalIgnoreCase));
+            Assert.IsTrue(training.ProgressPointsToNextTier >= 0f);
         }
 
         [TestMethod]
