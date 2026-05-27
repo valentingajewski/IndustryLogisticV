@@ -37,7 +37,6 @@ namespace LSOL.Domain
             SpawnedVehiclePosition = config.SpawnedVehiclePosition;
             SpawnedVehicleHeading = config.SpawnedVehicleHeading;
             GatePosition = config.GatePosition;
-            BarrierModelHash = config.BarrierModelHash;
             WorkerPosition = config.WorkerPosition;
             DisplayObjectModelHash = config.DisplayObjectModelHash;
             DisplayObjectsAtGroundLevel = config.DisplayObjectsAtGroundLevel;
@@ -131,7 +130,6 @@ namespace LSOL.Domain
         public Vector3? SpawnedVehiclePosition { get; }
         public float? SpawnedVehicleHeading { get; }
         public Vector3? GatePosition { get; }
-        public int? BarrierModelHash { get; }
         public Vector3? WorkerPosition { get; }
         public int? DisplayObjectModelHash { get; }
         public bool DisplayObjectsAtGroundLevel { get; }

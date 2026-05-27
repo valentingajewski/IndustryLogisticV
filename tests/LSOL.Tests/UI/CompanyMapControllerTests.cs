@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -212,6 +213,71 @@ namespace LSOL.Tests.UI
 
             StringAssert.Contains(detail, "Support bonus");
             StringAssert.Contains(detail, "Depot roles: Support: amplifies district support bonuses and stabilizes licensed territory.");
+        }
+
+        [TestMethod]
+        public void BuildMetroAnchorRatios_ReflectsExpectedGeographicRelationships()
+        {
+            CreateControllerWithScenario(out var territoryManager, out _, out _);
+
+            var districtNames = territoryManager.DistrictStates
+                .Where(state => state != null)
+                .Select(state => state.DistrictName)
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var anchors = CompanyMapController.BuildMetroAnchorRatios(districtNames, territoryManager.GetDistrictCentroidsByName());
+
+            Assert.IsTrue(anchors["PaletoBay"].Y < anchors["GrandSenora"].Y);
+            Assert.IsTrue(anchors["Grapeseed"].Y < anchors["GrandSenora"].Y);
+            Assert.IsTrue(anchors["GrandSenora"].Y < anchors["SouthLosSantos"].Y);
+            Assert.IsTrue(anchors["Port"].Y > anchors["Downtown"].Y);
+            Assert.IsTrue(anchors["Airport"].Y > anchors["WestLosSantos"].Y);
+            Assert.IsTrue(anchors["EastLosSantos"].X > anchors["WestLosSantos"].X);
+        }
+
+        [TestMethod]
+        public void BuildMetroAnchorRatios_AssignsDeterministicFallbackForUnknownDistricts()
+        {
+            var anchors = CompanyMapController.BuildMetroAnchorRatios(
+                new[] { "Port", "FutureHarbor", "FutureHighlands" },
+                new Dictionary<string, PointF>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "Port", new PointF(300f, -2400f) },
+                });
+
+            Assert.IsTrue(anchors.ContainsKey("FutureHarbor"));
+            Assert.IsTrue(anchors.ContainsKey("FutureHighlands"));
+            Assert.IsTrue(anchors["FutureHarbor"].X >= 0.04f && anchors["FutureHarbor"].X <= 0.96f);
+            Assert.IsTrue(anchors["FutureHarbor"].Y >= 0.04f && anchors["FutureHarbor"].Y <= 0.96f);
+            Assert.AreNotEqual(anchors["FutureHarbor"], anchors["FutureHighlands"]);
+        }
+
+        [TestMethod]
+        public void BuildNetworkLayouts_KeepsNodeCardsInsideGraphBounds()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out _, out _);
+            var districts = territoryManager.DistrictStates
+                .Where(state => state != null)
+                .OrderBy(state => state.DistrictName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            var rawLayouts = InvokePrivate<object>(controller, "BuildNetworkLayouts", new Size(1280, 720), districts);
+            var layouts = ((System.Collections.IEnumerable)rawLayouts).Cast<object>().ToList();
+            var graphBounds = CompanyMapController.GetNetworkGraphBounds(new Size(1280, 720));
+
+            Assert.AreEqual(districts.Count, layouts.Count);
+            foreach (var layout in layouts)
+            {
+                var centerX = GetPropertyValue<float>(layout, "CenterX");
+                var centerY = GetPropertyValue<float>(layout, "CenterY");
+                var width = GetPropertyValue<float>(layout, "Width");
+                var height = GetPropertyValue<float>(layout, "Height");
+
+                Assert.IsTrue(centerX - (width * 0.5f) >= graphBounds.Left - 0.1f);
+                Assert.IsTrue(centerX + (width * 0.5f) <= graphBounds.Right + 0.1f);
+                Assert.IsTrue(centerY - (height * 0.5f) >= graphBounds.Top - 0.1f);
+                Assert.IsTrue(centerY + (height * 0.5f) <= graphBounds.Bottom + 0.1f);
+            }
         }
 
         private static CompanyMapController CreateControllerWithScenario(

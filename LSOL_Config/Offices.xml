@@ -2,7 +2,7 @@
   <Office id="1" legacyKey="MainOffice" name="Elysian Island Logistic Office" district="Port" price="900000" weeklyRent="36000" maxCommercialVehicles="40">
     <Marker x="-56.85" y="-2520.17" z="7.4" />
     <Spawn x="-97.75" y="-2498.41" z="6" heading="234" />
-    <Gate x="10.43" y="-2538.56" z="5.55" barrierModelHash="1286392437" />
+    <Gate x="10.43" y="-2538.56" z="5.55" />
     <Worker x="-78.23" y="-2532" z="6" />
     <FacilityAnchor id="reception-main" type="ReceptionDesk" label="Reception Desk" x="-72.4" y="-2528.95" z="6" heading="54" radius="2.4" scenario="WORLD_HUMAN_CLIPBOARD" />
     <FacilityAnchor id="dispatch-main" type="DispatchDesk" label="Dispatch Desk" x="-80.65" y="-2524.42" z="6" heading="55" radius="2.4" scenario="WORLD_HUMAN_CLIPBOARD" />

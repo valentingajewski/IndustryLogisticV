@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.Linq;
 using LSOL.Config;
 using LSOL.Domain;
@@ -155,6 +156,28 @@ namespace LSOL.Systems
                 .Where(state => state != null && state.ActiveEvent != null)
                 .Select(state => state.ActiveEvent)
                 .FirstOrDefault(state => string.Equals(state.EventId, normalized, StringComparison.OrdinalIgnoreCase));
+        }
+
+        internal Dictionary<string, PointF> GetDistrictCentroidsByName()
+        {
+            var centroids = new Dictionary<string, PointF>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in _districtConfigsByName)
+            {
+                var districtName = pair.Key;
+                var districtConfig = pair.Value;
+                if (string.IsNullOrWhiteSpace(districtName)
+                    || districtConfig == null
+                    || districtConfig.PolygonVertices == null
+                    || districtConfig.PolygonVertices.Count == 0)
+                {
+                    continue;
+                }
+
+                var centroid = districtConfig.GetCentroid();
+                centroids[districtName] = new PointF(centroid.X, centroid.Y);
+            }
+
+            return centroids;
         }
 
         public void RefreshState()

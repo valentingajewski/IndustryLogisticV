@@ -21,8 +21,6 @@ namespace LSOL.Domain
 
         public Vector3? GatePosition { get; set; }
 
-        public int? BarrierModelHash { get; set; }
-
         public Vector3? WorkerPosition { get; set; }
 
         public List<OfficeFacilityAnchorDefinition> FacilityAnchors { get; set; } = new List<OfficeFacilityAnchorDefinition>();

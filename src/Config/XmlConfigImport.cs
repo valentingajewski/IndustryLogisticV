@@ -57,7 +57,6 @@ namespace LSOL.Config
                 coreConfig.Controls.OpenModMenu = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openModMenu"), coreConfig.Controls.OpenModMenu);
                 coreConfig.Controls.OpenDebugMenu = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openDebugMenu"), coreConfig.Controls.OpenDebugMenu);
                 coreConfig.Controls.Interact = ControlBindings.ParseOrDefault(ReadAttribute(controls, "interact"), coreConfig.Controls.Interact);
-                coreConfig.Controls.GateInteract = ControlBindings.ParseOrDefault(ReadAttribute(controls, "gateInteract"), coreConfig.Controls.GateInteract);
                 coreConfig.Controls.OpenUpgrade = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openUpgrade"), coreConfig.Controls.OpenUpgrade);
                 coreConfig.Controls.MenuUp = ControlBindings.ParseOrDefault(ReadAttribute(controls, "menuUp"), coreConfig.Controls.MenuUp);
                 coreConfig.Controls.MenuDown = ControlBindings.ParseOrDefault(ReadAttribute(controls, "menuDown"), coreConfig.Controls.MenuDown);
@@ -811,7 +810,6 @@ namespace LSOL.Config
                     SpawnedVehiclePosition = ReadOptionalVector3(element.Element("DisplaySpawn")),
                     SpawnedVehicleHeading = ReadOptionalFloatAttribute(element.Element("DisplaySpawn"), "heading"),
                     GatePosition = ReadOptionalVector3(element.Element("Gate")),
-                    BarrierModelHash = ReadOptionalIntAttribute(element.Element("Gate"), "barrierModelHash"),
                     WorkerPosition = ReadOptionalVector3(element.Element("Worker")),
                     DisplayObjectModelHash = ReadOptionalIntAttribute(element.Element("Display"), "objectModelHash"),
                     MaxSpawnedVehiclesLine = ReadOptionalIntAttribute(element.Element("Display"), "maxLine"),
@@ -1057,7 +1055,6 @@ namespace LSOL.Config
                     SpawnPosition = spawnPosition.Value,
                     SpawnHeading = ReadFloatAttribute(spawnElement, "heading", 0f),
                     GatePosition = ReadOptionalVector3(element.Element("Gate")),
-                    BarrierModelHash = ReadOptionalIntAttribute(element.Element("Gate"), "barrierModelHash"),
                     WorkerPosition = ReadOptionalVector3(element.Element("Worker")),
                     FacilityAnchors = ParseOfficeFacilityAnchors(element, catalog.ValidationMessages, officeId),
                     OfficePrice = Math.Max(0f, ReadFloatAttribute(element, "price", 0f)),

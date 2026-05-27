@@ -984,7 +984,6 @@ namespace LSOL.Systems
                 SpawnedVehiclePosition = source.SpawnedVehiclePosition,
                 SpawnedVehicleHeading = source.SpawnedVehicleHeading,
                 GatePosition = source.GatePosition,
-                BarrierModelHash = source.BarrierModelHash,
                 WorkerPosition = source.WorkerPosition,
                 DisplayObjectModelHash = source.DisplayObjectModelHash,
                 DisplayObjectsAtGroundLevel = source.DisplayObjectsAtGroundLevel,

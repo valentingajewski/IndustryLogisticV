@@ -39,7 +39,6 @@ namespace LSOL
             CancelActiveRefuelDispatchForShutdown();
             _officeObjectManager.Cleanup();
             _cargoTransferController.ClearState();
-            _barrierInteractionHandler.ClearState();
             _financeTracker.Clear();
             _bankLoanManager.ApplyPersistenceSnapshot(null, GetCurrentInGameWeekMinute());
             _playerSuccessTracker.ResetForNewSave(_profit);

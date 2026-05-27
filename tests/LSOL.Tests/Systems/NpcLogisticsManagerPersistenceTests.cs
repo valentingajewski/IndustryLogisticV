@@ -272,31 +272,26 @@ namespace LSOL.Tests.Systems
             Assert.AreEqual(8, resolved.Id);
         }
 
-        private static NpcLogisticsManager CreateNpcLogisticsManager(IReadOnlyList<OwnedCommercialVehiclePersistenceEntry> commercialVehicles)
+        [TestMethod]
+        public void ResolveIndustrySpawnAnchor_UsesGatePositionWhenVehicleSpawnIsMissing()
         {
-            var config = new ModConfig();
-            SetProperty(config, nameof(ModConfig.IndustryOmegaCapacityMultiplier), 0.2f);
-            SetProperty(config, nameof(ModConfig.IndustryConfigs), new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase)
-            {
-                { "alpha-depot", CreateIndustryConfig("alpha-depot", "Alpha Depot", "Port") },
-                { "bravo-depot", CreateIndustryConfig("bravo-depot", "Bravo Depot", "GrandSenora") },
-            });
-            SetProperty(config, nameof(ModConfig.VehicleDefinitions), new List<VehicleDefinition>
-            {
-                new VehicleDefinition
-                {
-                    Id = "oretruck",
-                    DisplayName = "Ore Truck",
-                    ModelName = "oretruck",
-                    CargoType = VehicleCargoType.Aggregates,
-                    AcceptedCommodities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Ore" },
-                    CapacityTons = 12f,
-                    IsEnabled = true,
-                    IsTrailer = false,
-                    IsTractor = false,
-                },
-            });
-            SetProperty(config, nameof(ModConfig.ObjectModels), new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase));
+            var commercialVehicles = new List<OwnedCommercialVehiclePersistenceEntry>();
+            var alphaConfig = CreateIndustryConfig("alpha-depot", "Alpha Depot", "Port");
+            alphaConfig.GatePosition = new Vector3(12f, 34f, 5f);
+
+            var manager = CreateNpcLogisticsManager(commercialVehicles, alphaConfig, CreateIndustryConfig("bravo-depot", "Bravo Depot", "GrandSenora"));
+            var industry = new IndustryManager(CreateRuntimeConfig(alphaConfig, CreateIndustryConfig("bravo-depot", "Bravo Depot", "GrandSenora")))
+                .Industries
+                .Single(entry => string.Equals(entry.Id, "alpha-depot", StringComparison.OrdinalIgnoreCase));
+
+            var resolved = InvokePrivate<Vector3>(manager, "ResolveIndustrySpawnAnchor", industry, new Vector3(100f, 200f, 10f));
+
+            Assert.AreEqual(alphaConfig.GatePosition.Value, resolved);
+        }
+
+        private static NpcLogisticsManager CreateNpcLogisticsManager(IReadOnlyList<OwnedCommercialVehiclePersistenceEntry> commercialVehicles, params IndustryConfig[] industryConfigs)
+        {
+            var config = CreateRuntimeConfig(industryConfigs);
 
             var industryManager = new IndustryManager(config);
             var fleetManager = new FleetManager(config);
@@ -320,6 +315,37 @@ namespace LSOL.Tests.Systems
                 null,
                 null,
                 null);
+        }
+
+        private static ModConfig CreateRuntimeConfig(params IndustryConfig[] industryConfigs)
+        {
+            var config = new ModConfig();
+            SetProperty(config, nameof(ModConfig.IndustryOmegaCapacityMultiplier), 0.2f);
+            var effectiveIndustryConfigs = industryConfigs != null && industryConfigs.Length > 0
+                ? industryConfigs
+                : new[]
+                {
+                    CreateIndustryConfig("alpha-depot", "Alpha Depot", "Port"),
+                    CreateIndustryConfig("bravo-depot", "Bravo Depot", "GrandSenora"),
+                };
+            SetProperty(config, nameof(ModConfig.IndustryConfigs), effectiveIndustryConfigs.ToDictionary(entry => entry.Id, entry => entry, StringComparer.OrdinalIgnoreCase));
+            SetProperty(config, nameof(ModConfig.VehicleDefinitions), new List<VehicleDefinition>
+            {
+                new VehicleDefinition
+                {
+                    Id = "oretruck",
+                    DisplayName = "Ore Truck",
+                    ModelName = "oretruck",
+                    CargoType = VehicleCargoType.Aggregates,
+                    AcceptedCommodities = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Ore" },
+                    CapacityTons = 12f,
+                    IsEnabled = true,
+                    IsTrailer = false,
+                    IsTractor = false,
+                },
+            });
+            SetProperty(config, nameof(ModConfig.ObjectModels), new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase));
+            return config;
         }
 
         private static NpcLogisticsContractSnapshot CreateContractSnapshot(int id, string tierId, string originIndustryId, string destinationIndustryId, string assignedVehicleAssetId)
@@ -367,6 +393,13 @@ namespace LSOL.Tests.Systems
                 OutputCapacityTons = 1f,
                 IndustryOwnerCut = 0.5f,
             };
+        }
+
+        private static T InvokePrivate<T>(object target, string methodName, params object[] arguments)
+        {
+            var method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method, methodName);
+            return (T)method.Invoke(target, arguments);
         }
 
         private static List<NpcLogisticsContract> GetContractsList(NpcLogisticsManager manager)

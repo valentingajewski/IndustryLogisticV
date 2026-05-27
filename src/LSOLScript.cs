@@ -110,7 +110,6 @@ namespace LSOL
         private readonly LemonMenu _debugMenu;
         private readonly LemonMenu _debugMissionMenu;
         private readonly DebugMenuProvider _debugMenuProvider;
-        private readonly BarrierInteractionHandler _barrierInteractionHandler;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
         private readonly NpcLogisticsManager _npcLogisticsManager;
@@ -253,11 +252,6 @@ namespace LSOL
 
             _mainOfficeMarkerSeed = _config.MainOfficePosition;
             _vehicleSpawnMarkerSeed = _config.VehicleSpawnPosition;
-            _barrierInteractionHandler = new BarrierInteractionHandler(
-                () => (_propertyManager != null ? _propertyManager.Offices.Select(x => x.BarrierModelHash) : Enumerable.Empty<int?>())
-                    .Concat(_industryManager != null ? _industryManager.Industries.Select(x => x.BarrierModelHash) : Enumerable.Empty<int?>())
-                    .Where(x => x.HasValue)
-                    .Select(x => x.Value));
             _blipLifecycleManager = new BlipLifecycleManager(
                 _industryManager,
                 () => _propertyManager != null ? _propertyManager.Offices : new OfficeDefinition[0],
@@ -811,15 +805,6 @@ namespace LSOL
                 return;
             }
 
-            if (e.KeyCode == _controls.GateInteract)
-            {
-                var player = Game.Player.Character;
-                if (player != null && player.Exists() && TryOpenNearbyBarrier(player))
-                {
-                    return;
-                }
-            }
-
             if (e.KeyCode == _controls.Interact)
             {
                 var player = Game.Player.Character;
@@ -1071,7 +1056,7 @@ namespace LSOL
             var now = Game.GameTime;
             var cooldownMs = AnyMenuOpen ? 95 : 220;
 
-            if (key == _controls.Interact || key == _controls.GateInteract)
+            if (key == _controls.Interact)
             {
                 cooldownMs = 320;
             }
@@ -1168,14 +1153,6 @@ namespace LSOL
                         KeyName(_controls.Interact))));
                     promptShown = true;
                 }
-            }
-
-            Prop nearestBarrier;
-            if (canShowPrompts && !promptShown && TryGetNearestBarrier(playerPos, out nearestBarrier))
-            {
-                Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
-                    "Press {0} to open nearby gate/door.",
-                    KeyName(_controls.GateInteract))));
             }
         }
 
@@ -6197,16 +6174,6 @@ namespace LSOL
             return MessagePrefix + message;
         }
 
-        private bool TryGetNearestBarrier(Vector3 playerPos, out Prop nearestBarrier)
-        {
-            return _barrierInteractionHandler.TryGetNearestBarrier(playerPos, out nearestBarrier);
-        }
-
-        private bool TryOpenNearbyBarrier(Ped player)
-        {
-            return _barrierInteractionHandler.TryOpenNearbyBarrier(player);
-        }
-
         private static string JoinSet(HashSet<string> values)
         {
             if (values == null || values.Count == 0)
@@ -6238,7 +6205,6 @@ namespace LSOL
             DestroyMapBlips();
             _cargoTransferController.ClearState();
             _industryOutputPropManager.DestroyAll();
-            _barrierInteractionHandler.ClearState();
             _officeObjectManager.Cleanup();
             CloseAllMenus();
             _heldKeys.Clear();

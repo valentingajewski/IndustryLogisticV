@@ -208,7 +208,6 @@ namespace LSOL.Config
                 SpawnedVehiclePosition = location.SpawnedVehiclePosition,
                 SpawnedVehicleHeading = location.SpawnedVehicleHeading,
                 GatePosition = location.GatePosition,
-                BarrierModelHash = location.BarrierModelHash,
                 WorkerPosition = location.WorkerPosition,
                 DisplayObjectModelHash = location.DisplayObjectModelHash,
                 DisplayObjectsAtGroundLevel = location.DisplayObjectsAtGroundLevel,
@@ -579,7 +578,6 @@ namespace LSOL.Config
                             SpawnPosition = x.SpawnPosition,
                             SpawnHeading = x.SpawnHeading,
                             GatePosition = x.GatePosition,
-                            BarrierModelHash = x.BarrierModelHash,
                             WorkerPosition = x.WorkerPosition,
                             FacilityAnchors = x.FacilityAnchors != null
                                 ? x.FacilityAnchors

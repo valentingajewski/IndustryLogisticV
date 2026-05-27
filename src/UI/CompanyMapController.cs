@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text;
 using GTA.Native;
 using GTA.UI;
 using LSOL.Config;
@@ -25,6 +26,26 @@ namespace LSOL.UI
         private const float EmergingInfluenceThreshold = 0.35f;
         private const float AnchoredInfluenceThreshold = 0.6f;
         private const float DominantInfluenceThreshold = 1f;
+        private const int NetworkDetailWrapCharacters = 46;
+        private const float NetworkDetailLineSpacing = 11f;
+        private const float NetworkNodeMinimumWidth = 158f;
+        private const float NetworkNodeMaximumWidth = 202f;
+        private const float NetworkNodeHeight = 64f;
+
+        private static readonly Dictionary<string, PointF> PreferredMetroAnchorRatios = new Dictionary<string, PointF>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Airport", new PointF(0.22f, 0.88f) },
+            { "Downtown", new PointF(0.43f, 0.63f) },
+            { "EastLosSantos", new PointF(0.73f, 0.58f) },
+            { "GrandSenora", new PointF(0.59f, 0.37f) },
+            { "Grapeseed", new PointF(0.68f, 0.17f) },
+            { "NorthLosSantos", new PointF(0.17f, 0.36f) },
+            { "PaletoBay", new PointF(0.35f, 0.10f) },
+            { "Port", new PointF(0.58f, 0.90f) },
+            { "SouthLosSantos", new PointF(0.49f, 0.75f) },
+            { "Vinewood", new PointF(0.40f, 0.48f) },
+            { "WestLosSantos", new PointF(0.20f, 0.56f) },
+        };
 
         private readonly ControlBindings _controls;
         private readonly TerritoryManager _territoryManager;
@@ -912,8 +933,8 @@ namespace LSOL.UI
                 return;
             }
 
-            const float nodeWidth = 132f;
-            const float nodeHeight = 54f;
+            var nodeWidth = layout.Width > 0f ? layout.Width : NetworkNodeMinimumWidth;
+            var nodeHeight = layout.Height > 0f ? layout.Height : NetworkNodeHeight;
             var selected = string.Equals(layout.District.DistrictName, _selectedDistrictName, StringComparison.OrdinalIgnoreCase);
             var x = layout.CenterX - (nodeWidth * 0.5f);
             var y = layout.CenterY - (nodeHeight * 0.5f);
@@ -928,16 +949,16 @@ namespace LSOL.UI
             DrawRect(resolution.Width, resolution.Height, x, y, nodeWidth, nodeHeight, Color.FromArgb(214, 10, 15, 24));
             DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, nodeWidth - 4f, nodeHeight - 4f, fill);
             DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, 7f, nodeHeight - 4f, influenceHeatColor);
-            DrawRect(resolution.Width, resolution.Height, x + 11f, y + nodeHeight - 9f, nodeWidth - 20f, 4f, Color.FromArgb(96, 10, 15, 24));
+        DrawRect(resolution.Width, resolution.Height, x + 12f, y + nodeHeight - 11f, nodeWidth - 24f, 5f, Color.FromArgb(96, 10, 15, 24));
             if (influenceHeatRatio > 0f)
             {
                 DrawRect(
                     resolution.Width,
                     resolution.Height,
-                    x + 11f,
-                    y + nodeHeight - 9f,
-                    (nodeWidth - 20f) * influenceHeatRatio,
-                    4f,
+            x + 12f,
+            y + nodeHeight - 11f,
+            (nodeWidth - 24f) * influenceHeatRatio,
+            5f,
                     influenceHeatColor);
             }
 
@@ -959,9 +980,9 @@ namespace LSOL.UI
 
             DrawTextLine(
                 resolution,
-                AbbreviateDistrictName(layout.District.DistrictName, 18),
+                AbbreviateDistrictName(layout.DisplayName, 24),
                 x + 10f,
-                y + 10f,
+                y + 12f,
                 0.26f,
                 Color.FromArgb(242, 244, 247, 250),
                 GTA.UI.Font.ChaletLondon,
@@ -970,7 +991,7 @@ namespace LSOL.UI
                 resolution,
                 string.Format("{0} | {1}", GetReputationLabel(layout.District), ModFormatting.FormatPercent(layout.District.InfluenceRatio * 100f)),
                 x + 10f,
-                y + 30f,
+                y + nodeHeight - 28f,
                 0.20f,
                 Color.FromArgb(232, 219, 228, 237),
                 GTA.UI.Font.ChaletLondon,
@@ -1026,9 +1047,10 @@ namespace LSOL.UI
                 corridorLines = new List<TerritoryCorridorState>();
             }
 
+            var title = FormatDistrictDisplayName(district.DistrictName);
             DrawTextLine(
                 resolution,
-                district.DistrictName,
+                title,
                 x + 18f,
                 y + 18f,
                 0.40f,
@@ -1050,7 +1072,6 @@ namespace LSOL.UI
                 ? "NPC Ready"
                 : "NPC Locked";
             var operationsCost = GetDistrictOperationsCost(snapshot.OperationsByDistrict, district.DistrictName);
-            var supportSummary = BuildNetworkDistrictSupportSummary(district, districtOperations, supportBonusText);
             var plannerSummary = BuildPlannerDistrictSummary(snapshot.PlannerOverlay, district.DistrictName);
             var posture = district.CompetitiveOpportunity > district.CompetitivePressure + 0.08f
                 ? "Opportunity opening"
@@ -1059,55 +1080,22 @@ namespace LSOL.UI
                     : district.ContestedCorridorCount > 0
                         ? "Watching lanes"
                         : "Calm posture";
-            var hottestLane = !string.IsNullOrWhiteSpace(district.HottestCorridorName)
-                ? string.Format("{0} {1}", district.HottestCorridorName, ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, district.HottestCorridorPressure * 100f))))
-                : "None";
-            var dominantCarrier = !string.IsNullOrWhiteSpace(district.DominantCarrierName)
-                ? district.DominantCarrierName
-                : "None";
-            var summary = string.Format(
-                "Influence score {0}\nReputation score {1}\nSites {2} | Controlled {3} | Operational {4}\nCharter {5} | Territory ops {6} / week\n{7}\n{20}\nCompetition {8:0}% | Opportunity {9:0}% | District wins {10}\nOutside jobs {11} | Rival carriers {12} | Visible {13}\nLane holds {14} | Contested lanes {15} | Hottest lane {16}\nLead carrier {17}\nPosture {18} | {19}",
-                ModFormatting.FormatNumber(district.InfluenceScore),
-                ModFormatting.FormatNumber(district.ReputationScore),
-                district.SiteCount,
-                district.ControlledSites,
-                district.OperationalSites,
-                GetDistrictLicenseLabel(district),
-                ModFormatting.FormatMoney(operationsCost),
-                supportSummary,
-                Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),
-                Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)),
-                Math.Max(0, district.CompetitiveWinCount),
-                Math.Max(0, district.ActiveCompetitionJobs),
-                Math.Max(0, district.ActiveCarrierCount),
-                Math.Max(0, district.VisibleCompetitionCount),
-                Math.Max(0, district.CorridorHoldCount),
-                Math.Max(0, district.ContestedCorridorCount),
-                hottestLane,
-                dominantCarrier,
-                posture,
-                string.IsNullOrWhiteSpace(plannerSummary) ? npcStatus : string.Format("{0} | {1}", npcStatus, plannerSummary),
-                BuildNetworkDistrictEventSummary(district));
-            DrawTextBlock(
-                resolution,
-                summary,
-                x + 18f,
-                y + 82f,
-                0.20f,
-                Color.FromArgb(226, 228, 232, 238),
-                GTA.UI.Font.ChaletLondon,
-                Alignment.Left,
-                14f);
+            var overviewLines = BuildNetworkOverviewLines(district, districtOperations, supportBonusText, operationsCost, npcStatus, plannerSummary, posture);
+            var hotNowCard = BuildHotNowCardData(district, corridorLines);
+            var activityCardHeight = GetDistrictActivityCardHeight(district);
+            var hotNowCardHeight = GetHotNowCardHeight(hotNowCard);
+            var detailLayout = CalculateNetworkDetailPanelLayout(y, height, overviewLines.Count, activityCardHeight, hotNowCardHeight);
 
-            var activityMeterY = y + 194f;
-            DrawDistrictActivityMeter(resolution, x, activityMeterY, width, district);
+            DrawNetworkOverviewCard(resolution, x, detailLayout.OverviewY, width, district, overviewLines);
+            DrawDistrictActivityMeter(resolution, x, detailLayout.ActivityY, width, district);
+            DrawHotNowCard(resolution, x, detailLayout.HotNowY, width, hotNowCard);
 
-            DrawRect(resolution.Width, resolution.Height, x + 16f, y + 272f, width - 32f, 2f, Color.FromArgb(88, 115, 149, 177));
+            DrawRect(resolution.Width, resolution.Height, x + 16f, detailLayout.CorridorsDividerY, width - 32f, 2f, Color.FromArgb(88, 115, 149, 177));
             DrawTextLine(
                 resolution,
                 "Connected Corridors",
                 x + 18f,
-                y + 288f,
+                detailLayout.CorridorsTitleY,
                 0.28f,
                 Color.FromArgb(236, 239, 243, 248),
                 GTA.UI.Font.ChaletComprimeCologne,
@@ -1119,7 +1107,7 @@ namespace LSOL.UI
                     resolution,
                     "No active corridors yet. Run cross-district deliveries to unlock them.",
                     x + 18f,
-                    y + 318f,
+                    detailLayout.CorridorsStartY,
                     0.22f,
                     Color.FromArgb(216, 202, 212, 223),
                     GTA.UI.Font.ChaletLondon,
@@ -1128,8 +1116,11 @@ namespace LSOL.UI
                 return;
             }
 
-            var rowY = y + 322f;
-            for (int i = 0; i < corridorLines.Count; i++)
+            var rowY = detailLayout.CorridorsStartY;
+            var availableBottom = y + height - 16f;
+            var maxVisibleRows = Math.Max(1, (int)Math.Floor(Math.Max(0f, availableBottom - rowY) / 42f));
+            var displayedRows = Math.Min(maxVisibleRows, corridorLines.Count);
+            for (int i = 0; i < displayedRows; i++)
             {
                 var corridor = corridorLines[i];
                 var corridorColor = GetCorridorColor(corridor, true);
@@ -1138,7 +1129,7 @@ namespace LSOL.UI
                     resolution,
                     string.Format(
                         "{0}  {1}{2}",
-                        GetOtherDistrictName(corridor, district.DistrictName),
+                        FormatDistrictDisplayName(GetOtherDistrictName(corridor, district.DistrictName)),
                         FormatCorridorLevel(corridor.RightLevel),
                         corridor.CompetitivePressure >= 0.35f || corridor.ActiveCompetitionJobs > 0
                             ? string.Format(" | {0}", GetCorridorPosture(corridor))
@@ -1169,96 +1160,111 @@ namespace LSOL.UI
                     Alignment.Left);
                 rowY += 42f;
             }
+
+            if (displayedRows < corridorLines.Count)
+            {
+                DrawTextLine(
+                    resolution,
+                    string.Format("+{0} more corridors", corridorLines.Count - displayedRows),
+                    x + width - 18f,
+                    availableBottom - 12f,
+                    0.18f,
+                    Color.FromArgb(188, 176, 191, 206),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right);
+            }
         }
 
-            private void DrawDistrictActivityMeter(Size resolution, float x, float y, float width, TerritoryDistrictState district)
+        private float DrawDistrictActivityMeter(Size resolution, float x, float y, float width, TerritoryDistrictState district)
+        {
+            var currentWeekActivityTons = district != null ? Math.Max(0f, district.CurrentWeekActivityTons) : 0f;
+            var requiredWeeklyActivityTons = district != null ? Math.Max(0f, district.RequiredWeeklyActivityTons) : 0f;
+            var hasTarget = HasWeeklyActivityTarget(requiredWeeklyActivityTons);
+            var meterRatio = GetWeeklyActivityTargetMeterRatio(currentWeekActivityTons, requiredWeeklyActivityTons);
+            var percentOfTarget = GetWeeklyActivityTargetPercentOfTarget(currentWeekActivityTons, requiredWeeklyActivityTons);
+            var forecastText = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
+            var cardX = x + 18f;
+            var cardY = y;
+            var cardWidth = width - 36f;
+            var cardHeight = GetDistrictActivityCardHeight(district);
+            var meterColor = GetWeeklyActivityMeterColor(currentWeekActivityTons, requiredWeeklyActivityTons);
+
+            DrawRect(resolution.Width, resolution.Height, cardX, cardY, cardWidth, cardHeight, Color.FromArgb(112, 10, 15, 24));
+            DrawRect(resolution.Width, resolution.Height, cardX, cardY, cardWidth, 3f, meterColor);
+            DrawTextLine(
+                resolution,
+                "Weekly Activity",
+                cardX + 10f,
+                cardY + 8f,
+                0.26f,
+                Color.FromArgb(238, 239, 243, 248),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left);
+
+            if (!hasTarget)
             {
-                var currentWeekActivityTons = district != null ? Math.Max(0f, district.CurrentWeekActivityTons) : 0f;
-                var requiredWeeklyActivityTons = district != null ? Math.Max(0f, district.RequiredWeeklyActivityTons) : 0f;
-                var hasTarget = HasWeeklyActivityTarget(requiredWeeklyActivityTons);
-                var meterRatio = GetWeeklyActivityTargetMeterRatio(currentWeekActivityTons, requiredWeeklyActivityTons);
-                var percentOfTarget = GetWeeklyActivityTargetPercentOfTarget(currentWeekActivityTons, requiredWeeklyActivityTons);
-                var forecastText = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
-                var cardX = x + 18f;
-                var cardY = y;
-                var cardWidth = width - 36f;
-                var cardHeight = !string.IsNullOrWhiteSpace(forecastText) && hasTarget ? 72f : 60f;
-                var meterColor = GetWeeklyActivityMeterColor(currentWeekActivityTons, requiredWeeklyActivityTons);
-
-                DrawRect(resolution.Width, resolution.Height, cardX, cardY, cardWidth, cardHeight, Color.FromArgb(112, 10, 15, 24));
-                DrawRect(resolution.Width, resolution.Height, cardX, cardY, cardWidth, 3f, meterColor);
                 DrawTextLine(
                     resolution,
-                    "Weekly Activity",
-                    cardX + 10f,
-                    cardY + 8f,
-                    0.26f,
-                    Color.FromArgb(238, 239, 243, 248),
-                    GTA.UI.Font.ChaletComprimeCologne,
-                    Alignment.Left);
-
-                if (!hasTarget)
-                {
-                    DrawTextLine(
-                        resolution,
-                        "No weekly charter target",
-                        cardX + 10f,
-                        cardY + 26f,
-                        0.20f,
-                        Color.FromArgb(224, 208, 216, 225),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left);
-                    DrawTextLine(
-                        resolution,
-                        string.Format("Current week {0:0.#}t", currentWeekActivityTons),
-                        cardX + cardWidth - 10f,
-                        cardY + 26f,
-                        0.19f,
-                        Color.FromArgb(208, 184, 198, 212),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Right);
-                    DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 44f, cardWidth - 20f, 6f, Color.FromArgb(92, 24, 34, 46));
-                    return;
-                }
-
-                DrawTextLine(
-                    resolution,
-                    string.Format("{0:0.#}/{1:0.#}t", currentWeekActivityTons, requiredWeeklyActivityTons),
+                    "No weekly charter target",
                     cardX + 10f,
                     cardY + 26f,
                     0.20f,
-                    Color.FromArgb(232, 226, 232, 238),
+                    Color.FromArgb(224, 208, 216, 225),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Left);
                 DrawTextLine(
                     resolution,
-                    string.Format("{0:0}% of target", percentOfTarget * 100f),
+                    string.Format("Current week {0:0.#}t", currentWeekActivityTons),
                     cardX + cardWidth - 10f,
                     cardY + 26f,
                     0.19f,
-                    meterColor,
+                    Color.FromArgb(208, 184, 198, 212),
                     GTA.UI.Font.ChaletLondon,
                     Alignment.Right);
-
-                DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 42f, cardWidth - 20f, 6f, Color.FromArgb(92, 24, 34, 46));
-                if (meterRatio > 0f)
-                {
-                    DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 42f, (cardWidth - 20f) * meterRatio, 6f, meterColor);
-                }
-
-                if (!string.IsNullOrWhiteSpace(forecastText))
-                {
-                    DrawTextLine(
-                        resolution,
-                        forecastText,
-                        cardX + 10f,
-                        cardY + 54f,
-                        0.18f,
-                        Color.FromArgb(198, 176, 191, 206),
-                        GTA.UI.Font.ChaletLondon,
-                        Alignment.Left);
-                }
+                DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 44f, cardWidth - 20f, 6f, Color.FromArgb(92, 24, 34, 46));
+                return cardHeight;
             }
+
+            DrawTextLine(
+                resolution,
+                string.Format("{0:0.#}/{1:0.#}t", currentWeekActivityTons, requiredWeeklyActivityTons),
+                cardX + 10f,
+                cardY + 26f,
+                0.20f,
+                Color.FromArgb(232, 226, 232, 238),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left);
+            DrawTextLine(
+                resolution,
+                string.Format("{0:0}% of target", percentOfTarget * 100f),
+                cardX + cardWidth - 10f,
+                cardY + 26f,
+                0.19f,
+                meterColor,
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Right);
+
+            DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 42f, cardWidth - 20f, 6f, Color.FromArgb(92, 24, 34, 46));
+            if (meterRatio > 0f)
+            {
+                DrawRect(resolution.Width, resolution.Height, cardX + 10f, cardY + 42f, (cardWidth - 20f) * meterRatio, 6f, meterColor);
+            }
+
+            if (!string.IsNullOrWhiteSpace(forecastText))
+            {
+                DrawTextLine(
+                    resolution,
+                    forecastText,
+                    cardX + 10f,
+                    cardY + 54f,
+                    0.18f,
+                    Color.FromArgb(198, 176, 191, 206),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left);
+            }
+
+            return cardHeight;
+        }
 
         private void DrawNetworkFooter(Size resolution, float x, float y, float width, float height, NetworkViewSnapshot snapshot)
         {
@@ -1504,36 +1510,61 @@ namespace LSOL.UI
                 return layouts;
             }
 
-            var panelX = resolution.Width * 0.07f;
-            var panelY = resolution.Height * 0.085f;
-            var panelWidth = resolution.Width * 0.86f;
-            var panelHeight = resolution.Height * 0.83f;
-            var graphX = panelX + 22f;
-            var graphY = panelY + 82f;
-            var graphWidth = panelWidth * 0.60f;
-            var graphHeight = panelHeight - 158f;
-            var centerX = graphX + (graphWidth * 0.5f);
-            var centerY = graphY + (graphHeight * 0.5f);
-            var radiusX = graphWidth * 0.34f;
-            var radiusY = graphHeight * 0.35f;
+            var graphBounds = GetNetworkGraphBounds(resolution);
+            var districtCentroids = _territoryManager != null
+                ? _territoryManager.GetDistrictCentroidsByName()
+                : new Dictionary<string, PointF>(StringComparer.OrdinalIgnoreCase);
+            var districtNames = districts
+                .Where(district => district != null && !string.IsNullOrWhiteSpace(district.DistrictName))
+                .Select(district => district.DistrictName)
+                .ToList();
+            var anchorRatios = BuildMetroAnchorRatios(districtNames, districtCentroids);
 
             if (districts.Count == 1)
             {
-                layouts.Add(new MetroNodeLayout { District = districts[0], CenterX = centerX, CenterY = centerY });
+                var district = districts[0];
+                var size = GetNetworkNodeSize(district != null ? district.DistrictName : string.Empty);
+                layouts.Add(new MetroNodeLayout
+                {
+                    District = district,
+                    DisplayName = FormatDistrictDisplayName(district != null ? district.DistrictName : string.Empty),
+                    Width = size.Width,
+                    Height = size.Height,
+                    CenterX = graphBounds.Left + (graphBounds.Width * 0.5f),
+                    CenterY = graphBounds.Top + (graphBounds.Height * 0.5f),
+                });
                 return layouts;
             }
 
             for (int i = 0; i < districts.Count; i++)
             {
-                var angle = (-Math.PI / 2d) + ((Math.PI * 2d * i) / districts.Count);
-                var ringScale = districts.Count > 8 && (i % 2 == 1) ? 0.82f : 1f;
+                var district = districts[i];
+                if (district == null)
+                {
+                    continue;
+                }
+
+                var size = GetNetworkNodeSize(district.DistrictName);
+                PointF anchorRatio;
+                if (!anchorRatios.TryGetValue(district.DistrictName ?? string.Empty, out anchorRatio))
+                {
+                    anchorRatio = new PointF(0.5f, 0.5f);
+                }
+
+                var clampedX = ClampRatio(anchorRatio.X);
+                var clampedY = ClampRatio(anchorRatio.Y);
                 layouts.Add(new MetroNodeLayout
                 {
-                    District = districts[i],
-                    CenterX = centerX + ((float)Math.Cos(angle) * radiusX * ringScale),
-                    CenterY = centerY + ((float)Math.Sin(angle) * radiusY * ringScale),
+                    District = district,
+                    DisplayName = FormatDistrictDisplayName(district.DistrictName),
+                    Width = size.Width,
+                    Height = size.Height,
+                    CenterX = graphBounds.Left + ((graphBounds.Width - size.Width) * clampedX) + (size.Width * 0.5f),
+                    CenterY = graphBounds.Top + ((graphBounds.Height - size.Height) * clampedY) + (size.Height * 0.5f),
                 });
             }
+
+            ResolveMetroNodeCollisions(graphBounds, layouts);
 
             return layouts;
         }
@@ -1783,6 +1814,573 @@ namespace LSOL.UI
             return string.Equals(corridor.DistrictA, districtName, StringComparison.OrdinalIgnoreCase)
                 ? corridor.DistrictB
                 : corridor.DistrictA;
+        }
+
+        internal static string FormatDistrictDisplayName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(name.Length + 4);
+            for (int i = 0; i < name.Length; i++)
+            {
+                var current = name[i];
+                if (i > 0
+                    && char.IsUpper(current)
+                    && (char.IsLower(name[i - 1]) || (i + 1 < name.Length && char.IsLower(name[i + 1]))))
+                {
+                    builder.Append(' ');
+                }
+
+                builder.Append(current);
+            }
+
+            return builder.ToString().Trim();
+        }
+
+        internal static SizeF GetNetworkNodeSize(string districtName)
+        {
+            var displayName = FormatDistrictDisplayName(districtName);
+            var length = string.IsNullOrWhiteSpace(displayName) ? 0 : displayName.Length;
+            var width = NetworkNodeMinimumWidth;
+            if (length > 12)
+            {
+                width += Math.Min(44f, (length - 12) * 4.5f);
+            }
+
+            var height = length > 18 ? NetworkNodeHeight + 4f : NetworkNodeHeight;
+            return new SizeF(
+                Math.Max(NetworkNodeMinimumWidth, Math.Min(NetworkNodeMaximumWidth, width)),
+                height);
+        }
+
+        internal static RectangleF GetNetworkGraphBounds(Size resolution)
+        {
+            var panelX = resolution.Width * 0.07f;
+            var panelY = resolution.Height * 0.085f;
+            var panelWidth = resolution.Width * 0.86f;
+            var panelHeight = resolution.Height * 0.83f;
+            return new RectangleF(
+                panelX + 22f,
+                panelY + 82f,
+                panelWidth * 0.60f,
+                panelHeight - 158f);
+        }
+
+        internal static Dictionary<string, PointF> BuildMetroAnchorRatios(IList<string> districtNames, IDictionary<string, PointF> districtCentroids)
+        {
+            var anchors = new Dictionary<string, PointF>(StringComparer.OrdinalIgnoreCase);
+            if (districtNames == null || districtNames.Count == 0)
+            {
+                return anchors;
+            }
+
+            var centroidAnchors = BuildCentroidAnchorRatios(districtNames, districtCentroids);
+            var fallbackDistricts = new List<string>();
+            for (int i = 0; i < districtNames.Count; i++)
+            {
+                var districtName = districtNames[i];
+                if (string.IsNullOrWhiteSpace(districtName))
+                {
+                    continue;
+                }
+
+                PointF anchor;
+                PointF preferredAnchor;
+                var hasCentroidAnchor = centroidAnchors.TryGetValue(districtName, out anchor);
+                var hasPreferredAnchor = PreferredMetroAnchorRatios.TryGetValue(districtName, out preferredAnchor);
+                if (hasCentroidAnchor && hasPreferredAnchor)
+                {
+                    anchors[districtName] = ClampRatioPoint(LerpPoint(anchor, preferredAnchor, 0.75f));
+                    continue;
+                }
+
+                if (hasCentroidAnchor)
+                {
+                    anchors[districtName] = ClampRatioPoint(anchor);
+                    continue;
+                }
+
+                if (hasPreferredAnchor)
+                {
+                    anchors[districtName] = ClampRatioPoint(preferredAnchor);
+                    continue;
+                }
+
+                fallbackDistricts.Add(districtName);
+            }
+
+            if (fallbackDistricts.Count > 0)
+            {
+                for (int i = 0; i < fallbackDistricts.Count; i++)
+                {
+                    var angle = (-Math.PI / 2d) + ((Math.PI * 2d * i) / fallbackDistricts.Count);
+                    anchors[fallbackDistricts[i]] = new PointF(
+                        ClampRatio(0.5f + ((float)Math.Cos(angle) * 0.28f)),
+                        ClampRatio(0.56f + ((float)Math.Sin(angle) * 0.22f)));
+                }
+            }
+
+            return anchors;
+        }
+
+        internal static string[] WrapTextToLines(string text, int maxCharactersPerLine)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return Array.Empty<string>();
+            }
+
+            var wrappedLines = new List<string>();
+            var paragraphs = text.Replace("\r", string.Empty).Split(new[] { '\n' }, StringSplitOptions.None);
+            for (int i = 0; i < paragraphs.Length; i++)
+            {
+                var paragraph = paragraphs[i];
+                if (string.IsNullOrWhiteSpace(paragraph))
+                {
+                    continue;
+                }
+
+                var remainingWords = paragraph
+                    .Trim()
+                    .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                var currentLine = new StringBuilder();
+                for (int wordIndex = 0; wordIndex < remainingWords.Length; wordIndex++)
+                {
+                    var word = remainingWords[wordIndex];
+                    if (maxCharactersPerLine > 0 && word.Length > maxCharactersPerLine)
+                    {
+                        if (currentLine.Length > 0)
+                        {
+                            wrappedLines.Add(currentLine.ToString());
+                            currentLine.Clear();
+                        }
+
+                        for (int segmentStart = 0; segmentStart < word.Length; segmentStart += maxCharactersPerLine)
+                        {
+                            var segmentLength = Math.Min(maxCharactersPerLine, word.Length - segmentStart);
+                            wrappedLines.Add(word.Substring(segmentStart, segmentLength));
+                        }
+
+                        continue;
+                    }
+
+                    if (currentLine.Length == 0)
+                    {
+                        currentLine.Append(word);
+                        continue;
+                    }
+
+                    if (maxCharactersPerLine > 0 && currentLine.Length + 1 + word.Length > maxCharactersPerLine)
+                    {
+                        wrappedLines.Add(currentLine.ToString());
+                        currentLine.Clear();
+                        currentLine.Append(word);
+                        continue;
+                    }
+
+                    currentLine.Append(' ').Append(word);
+                }
+
+                if (currentLine.Length > 0)
+                {
+                    wrappedLines.Add(currentLine.ToString());
+                }
+            }
+
+            return wrappedLines.ToArray();
+        }
+
+        internal static float GetNetworkOverviewCardHeight(int overviewLineCount)
+        {
+            return 28f + (Math.Max(1, overviewLineCount) * NetworkDetailLineSpacing) + 10f;
+        }
+
+        internal static float GetDistrictActivityCardHeight(TerritoryDistrictState district)
+        {
+            var requiredWeeklyActivityTons = district != null ? Math.Max(0f, district.RequiredWeeklyActivityTons) : 0f;
+            var hasTarget = HasWeeklyActivityTarget(requiredWeeklyActivityTons);
+            var forecastText = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
+            return !string.IsNullOrWhiteSpace(forecastText) && hasTarget ? 72f : 60f;
+        }
+
+        internal static float GetHotNowCardHeight(NetworkHotNowCardData hotNowCard)
+        {
+            if (hotNowCard == null || !hotNowCard.HasHotLane)
+            {
+                return 58f;
+            }
+
+            return string.IsNullOrWhiteSpace(hotNowCard.CarrierLine) ? 64f : 74f;
+        }
+
+        internal static NetworkDetailPanelLayout CalculateNetworkDetailPanelLayout(float panelY, float panelHeight, int overviewLineCount, float activityCardHeight, float hotNowCardHeight)
+        {
+            var layout = new NetworkDetailPanelLayout
+            {
+                OverviewY = panelY + 72f,
+                OverviewHeight = GetNetworkOverviewCardHeight(overviewLineCount),
+            };
+            layout.ActivityY = layout.OverviewY + layout.OverviewHeight + 8f;
+            layout.ActivityHeight = activityCardHeight;
+            layout.HotNowY = layout.ActivityY + layout.ActivityHeight + 8f;
+            layout.HotNowHeight = hotNowCardHeight;
+            layout.CorridorsDividerY = layout.HotNowY + layout.HotNowHeight + 12f;
+            layout.CorridorsTitleY = layout.CorridorsDividerY + 14f;
+            layout.CorridorsStartY = layout.CorridorsDividerY + 38f;
+            layout.RemainingHeight = Math.Max(0f, (panelY + panelHeight) - layout.CorridorsStartY - 16f);
+            return layout;
+        }
+
+        private static Dictionary<string, PointF> BuildCentroidAnchorRatios(IList<string> districtNames, IDictionary<string, PointF> districtCentroids)
+        {
+            var anchors = new Dictionary<string, PointF>(StringComparer.OrdinalIgnoreCase);
+            if (districtNames == null || districtCentroids == null || districtCentroids.Count == 0)
+            {
+                return anchors;
+            }
+
+            var points = new List<KeyValuePair<string, PointF>>();
+            for (int i = 0; i < districtNames.Count; i++)
+            {
+                var districtName = districtNames[i];
+                PointF point;
+                if (string.IsNullOrWhiteSpace(districtName) || !districtCentroids.TryGetValue(districtName, out point))
+                {
+                    continue;
+                }
+
+                points.Add(new KeyValuePair<string, PointF>(districtName, point));
+            }
+
+            if (points.Count == 0)
+            {
+                return anchors;
+            }
+
+            var minX = points.Min(pair => pair.Value.X);
+            var maxX = points.Max(pair => pair.Value.X);
+            var minY = points.Min(pair => pair.Value.Y);
+            var maxY = points.Max(pair => pair.Value.Y);
+            var rangeX = Math.Max(1f, maxX - minX);
+            var rangeY = Math.Max(1f, maxY - minY);
+            for (int i = 0; i < points.Count; i++)
+            {
+                var point = points[i];
+                anchors[point.Key] = new PointF(
+                    (point.Value.X - minX) / rangeX,
+                    1f - ((point.Value.Y - minY) / rangeY));
+            }
+
+            return anchors;
+        }
+
+        private static PointF LerpPoint(PointF from, PointF to, float ratio)
+        {
+            var clampedRatio = Math.Max(0f, Math.Min(1f, ratio));
+            return new PointF(
+                from.X + ((to.X - from.X) * clampedRatio),
+                from.Y + ((to.Y - from.Y) * clampedRatio));
+        }
+
+        private static PointF ClampRatioPoint(PointF point)
+        {
+            return new PointF(ClampRatio(point.X), ClampRatio(point.Y));
+        }
+
+        private static float ClampRatio(float value)
+        {
+            return Math.Max(0.04f, Math.Min(0.96f, value));
+        }
+
+        private static void ResolveMetroNodeCollisions(RectangleF graphBounds, IList<MetroNodeLayout> layouts)
+        {
+            if (layouts == null || layouts.Count < 2)
+            {
+                return;
+            }
+
+            const float minimumHorizontalGap = 18f;
+            const float minimumVerticalGap = 14f;
+            for (int iteration = 0; iteration < 24; iteration++)
+            {
+                var adjusted = false;
+                for (int i = 0; i < layouts.Count; i++)
+                {
+                    var left = layouts[i];
+                    if (left == null)
+                    {
+                        continue;
+                    }
+
+                    for (int j = i + 1; j < layouts.Count; j++)
+                    {
+                        var right = layouts[j];
+                        if (right == null)
+                        {
+                            continue;
+                        }
+
+                        var deltaX = right.CenterX - left.CenterX;
+                        var deltaY = right.CenterY - left.CenterY;
+                        var minimumDeltaX = ((left.Width + right.Width) * 0.5f) + minimumHorizontalGap;
+                        var minimumDeltaY = ((left.Height + right.Height) * 0.5f) + minimumVerticalGap;
+                        var overlapX = minimumDeltaX - Math.Abs(deltaX);
+                        var overlapY = minimumDeltaY - Math.Abs(deltaY);
+                        if (overlapX <= 0f || overlapY <= 0f)
+                        {
+                            continue;
+                        }
+
+                        adjusted = true;
+                        if (overlapX <= overlapY)
+                        {
+                            var direction = Math.Abs(deltaX) > 0.1f ? Math.Sign(deltaX) : (i % 2 == 0 ? 1f : -1f);
+                            var shift = (overlapX * 0.5f) + 0.5f;
+                            left.CenterX -= shift * direction;
+                            right.CenterX += shift * direction;
+                        }
+                        else
+                        {
+                            var direction = Math.Abs(deltaY) > 0.1f ? Math.Sign(deltaY) : (i % 2 == 0 ? 1f : -1f);
+                            var shift = (overlapY * 0.5f) + 0.5f;
+                            left.CenterY -= shift * direction;
+                            right.CenterY += shift * direction;
+                        }
+
+                        ClampNodeToGraphBounds(graphBounds, left);
+                        ClampNodeToGraphBounds(graphBounds, right);
+                    }
+                }
+
+                if (!adjusted)
+                {
+                    return;
+                }
+            }
+        }
+
+        private static void ClampNodeToGraphBounds(RectangleF graphBounds, MetroNodeLayout layout)
+        {
+            if (layout == null)
+            {
+                return;
+            }
+
+            var halfWidth = layout.Width * 0.5f;
+            var halfHeight = layout.Height * 0.5f;
+            layout.CenterX = Math.Max(graphBounds.Left + halfWidth, Math.Min(graphBounds.Right - halfWidth, layout.CenterX));
+            layout.CenterY = Math.Max(graphBounds.Top + halfHeight, Math.Min(graphBounds.Bottom - halfHeight, layout.CenterY));
+        }
+
+        private List<string> BuildNetworkOverviewLines(
+            TerritoryDistrictState district,
+            TerritoryDistrictOperationsEntry districtOperations,
+            float supportBonusPercent,
+            float operationsCost,
+            string npcStatus,
+            string plannerSummary,
+            string posture)
+        {
+            if (district == null)
+            {
+                return new List<string>();
+            }
+
+            var lines = new List<string>();
+            AddWrappedLines(lines, string.Format("Influence {0} | Reputation {1}", ModFormatting.FormatNumber(district.InfluenceScore), ModFormatting.FormatNumber(district.ReputationScore)));
+            AddWrappedLines(lines, string.Format("Sites {0} | Controlled {1} | Operational {2}", district.SiteCount, district.ControlledSites, district.OperationalSites));
+            AddWrappedLines(lines, string.Format("Charter {0} | Territory ops {1}/week", GetDistrictLicenseLabel(district), ModFormatting.FormatMoney(operationsCost)));
+            AddWrappedLines(lines, string.Format("Support +{0:0}% | Depots {1}{2}", supportBonusPercent, Math.Max(0, district.ControlledDepots), BuildDistrictRiskSuffix(districtOperations)));
+            AddWrappedLines(lines, string.IsNullOrWhiteSpace(plannerSummary) ? npcStatus : string.Format("{0} | {1}", npcStatus, plannerSummary));
+            AddWrappedLines(lines, string.Format("Pressure {0:0}% | Opportunity {1:0}% | Jobs {2}", Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)), Math.Max(0f, Math.Min(100f, district.CompetitiveOpportunity * 100f)), Math.Max(0, district.ActiveCompetitionJobs)));
+            AddWrappedLines(lines, string.Format("Carriers {0} | Visible {1} | Holds {2} | Contested {3}", Math.Max(0, district.ActiveCarrierCount), Math.Max(0, district.VisibleCompetitionCount), Math.Max(0, district.CorridorHoldCount), Math.Max(0, district.ContestedCorridorCount)));
+            AddWrappedLines(lines, string.Format("Posture {0} | {1}", posture, BuildNetworkDistrictEventTag(district)));
+            return lines;
+        }
+
+        private static void AddWrappedLines(ICollection<string> destination, string text)
+        {
+            if (destination == null)
+            {
+                return;
+            }
+
+            var lines = WrapTextToLines(text, NetworkDetailWrapCharacters);
+            for (int i = 0; i < lines.Length; i++)
+            {
+                destination.Add(lines[i]);
+            }
+        }
+
+        private void DrawNetworkOverviewCard(Size resolution, float x, float y, float width, TerritoryDistrictState district, IList<string> overviewLines)
+        {
+            var cardX = x + 18f;
+            var cardWidth = width - 36f;
+            var cardHeight = GetNetworkOverviewCardHeight(overviewLines != null ? overviewLines.Count : 0);
+            var accentColor = GetDistrictInfluenceHeatColor(district != null ? district.InfluenceRatio : 0f, false);
+            DrawRect(resolution.Width, resolution.Height, cardX, y, cardWidth, cardHeight, Color.FromArgb(112, 10, 15, 24));
+            DrawRect(resolution.Width, resolution.Height, cardX, y, cardWidth, 3f, accentColor);
+            DrawTextLine(
+                resolution,
+                "Overview",
+                cardX + 10f,
+                y + 8f,
+                0.26f,
+                Color.FromArgb(238, 239, 243, 248),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left);
+            DrawTextBlock(
+                resolution,
+                string.Join("\n", overviewLines ?? Array.Empty<string>()),
+                cardX + 10f,
+                y + 24f,
+                0.19f,
+                Color.FromArgb(226, 228, 232, 238),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                NetworkDetailLineSpacing);
+        }
+
+        private static NetworkHotNowCardData BuildHotNowCardData(TerritoryDistrictState district, IList<TerritoryCorridorState> corridorLines)
+        {
+            var hotNowCard = new NetworkHotNowCardData
+            {
+                HasHotLane = false,
+                PrimaryLine = "No corridor is under elevated pressure.",
+                SecondaryLine = "Current lanes are stable across the metro.",
+                PressureText = "Calm",
+                PressureRatio = 0f,
+            };
+
+            var districtName = district != null ? district.DistrictName : string.Empty;
+            var hottestCorridor = corridorLines != null
+                ? corridorLines
+                    .Where(corridor => corridor != null)
+                    .OrderByDescending(corridor => string.Equals(GetOtherDistrictName(corridor, districtName), district != null ? district.HottestCorridorName : string.Empty, StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(corridor => corridor.CompetitivePressure)
+                    .ThenByDescending(corridor => corridor.ActiveCompetitionJobs)
+                    .FirstOrDefault()
+                : null;
+            var corridorSignal = hottestCorridor != null
+                && (hottestCorridor.CompetitivePressure > 0.01f || hottestCorridor.ActiveCompetitionJobs > 0 || hottestCorridor.VisibleCompetitionCount > 0);
+            var districtSignal = district != null
+                && !string.IsNullOrWhiteSpace(district.HottestCorridorName)
+                && district.HottestCorridorPressure > 0.01f;
+            if (!corridorSignal && !districtSignal)
+            {
+                return hotNowCard;
+            }
+
+            var otherDistrict = hottestCorridor != null
+                ? GetOtherDistrictName(hottestCorridor, districtName)
+                : district.HottestCorridorName;
+            var pressureRatio = hottestCorridor != null && hottestCorridor.CompetitivePressure > 0.01f
+                ? hottestCorridor.CompetitivePressure
+                : district.HottestCorridorPressure;
+            var status = hottestCorridor != null
+                ? GetCorridorPosture(hottestCorridor)
+                : GetPrimaryStatusText(district != null ? district.CompetitionStatus : string.Empty);
+            var dominantCarrier = hottestCorridor != null && !string.IsNullOrWhiteSpace(hottestCorridor.DominantCarrierName)
+                ? hottestCorridor.DominantCarrierName
+                : district != null ? district.DominantCarrierName : string.Empty;
+
+            hotNowCard.HasHotLane = true;
+            hotNowCard.PrimaryLine = string.Format("Lane to {0}", FormatDistrictDisplayName(otherDistrict));
+            hotNowCard.SecondaryLine = string.Format(
+                "{0}{1}",
+                string.IsNullOrWhiteSpace(status) ? "Monitoring pressure" : status,
+                hottestCorridor != null ? string.Format(" | {0}", FormatCorridorLevel(hottestCorridor.RightLevel)) : string.Empty);
+            hotNowCard.CarrierLine = !string.IsNullOrWhiteSpace(dominantCarrier)
+                ? string.Format("Lead carrier {0}", dominantCarrier)
+                : string.Empty;
+            hotNowCard.PressureRatio = ModMath.Clamp01(pressureRatio);
+            hotNowCard.PressureText = string.Format("Pressure {0}", ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, pressureRatio * 100f))));
+            return hotNowCard;
+        }
+
+        private void DrawHotNowCard(Size resolution, float x, float y, float width, NetworkHotNowCardData hotNowCard)
+        {
+            var cardX = x + 18f;
+            var cardWidth = width - 36f;
+            var cardHeight = GetHotNowCardHeight(hotNowCard);
+            var accentColor = hotNowCard != null && hotNowCard.HasHotLane
+                ? BlendColor(Color.FromArgb(220, 242, 190, 86), Color.FromArgb(236, 224, 96, 78), hotNowCard.PressureRatio, 228)
+                : Color.FromArgb(188, 122, 144, 166);
+
+            DrawRect(resolution.Width, resolution.Height, cardX, y, cardWidth, cardHeight, Color.FromArgb(112, 10, 15, 24));
+            DrawRect(resolution.Width, resolution.Height, cardX, y, cardWidth, 3f, accentColor);
+            DrawTextLine(
+                resolution,
+                "Hot Now",
+                cardX + 10f,
+                y + 8f,
+                0.26f,
+                Color.FromArgb(238, 239, 243, 248),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left);
+
+            DrawTextLine(
+                resolution,
+                hotNowCard != null ? hotNowCard.PrimaryLine : string.Empty,
+                cardX + 10f,
+                y + 28f,
+                0.22f,
+                Color.FromArgb(236, 239, 243, 248),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left);
+            DrawTextLine(
+                resolution,
+                hotNowCard != null ? hotNowCard.PressureText : string.Empty,
+                cardX + cardWidth - 10f,
+                y + 28f,
+                0.19f,
+                accentColor,
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Right);
+            DrawTextLine(
+                resolution,
+                hotNowCard != null ? hotNowCard.SecondaryLine : string.Empty,
+                cardX + 10f,
+                y + 46f,
+                0.18f,
+                Color.FromArgb(208, 184, 198, 212),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left);
+
+            if (hotNowCard != null && !string.IsNullOrWhiteSpace(hotNowCard.CarrierLine))
+            {
+                DrawTextLine(
+                    resolution,
+                    hotNowCard.CarrierLine,
+                    cardX + 10f,
+                    y + 58f,
+                    0.18f,
+                    Color.FromArgb(198, 176, 191, 206),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left);
+            }
+
+            DrawRect(resolution.Width, resolution.Height, cardX + 10f, y + cardHeight - 12f, cardWidth - 20f, 5f, Color.FromArgb(92, 24, 34, 46));
+            if (hotNowCard != null && hotNowCard.PressureRatio > 0f)
+            {
+                DrawRect(resolution.Width, resolution.Height, cardX + 10f, y + cardHeight - 12f, (cardWidth - 20f) * hotNowCard.PressureRatio, 5f, accentColor);
+            }
+        }
+
+        private static string GetPrimaryStatusText(string status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+            {
+                return string.Empty;
+            }
+
+            var delimiterIndex = status.IndexOf('|');
+            return delimiterIndex > 0
+                ? status.Substring(0, delimiterIndex).Trim()
+                : status.Trim();
         }
 
         private static Dictionary<string, TerritoryDistrictOperationsEntry> CreateOperationsByDistrictMap(TerritoryOperationsSummary summary)
@@ -2278,17 +2876,24 @@ namespace LSOL.UI
             var districtSummary = hottestDistrict != null
                 ? string.Format(
                     "District {0} {1}",
-                    hottestDistrict.DistrictName,
+                    FormatDistrictDisplayName(hottestDistrict.DistrictName),
                     ModFormatting.FormatPercent(Math.Max(0f, Math.Min(100f, hottestDistrict.CompetitivePressure * 100f))))
                 : "District calm";
             var corridorSummary = hottestCorridor != null
                 ? string.Format(
                     "Lane {0} / {1} {2}",
-                    hottestCorridor.DistrictA,
-                    hottestCorridor.DistrictB,
+                    FormatDistrictDisplayName(hottestCorridor.DistrictA),
+                    FormatDistrictDisplayName(hottestCorridor.DistrictB),
                     GetCorridorPosture(hottestCorridor))
                 : "Lane calm";
             return string.Format("Hot now: {0} | {1}", districtSummary, corridorSummary);
+        }
+
+        private static string BuildNetworkDistrictEventTag(TerritoryDistrictState district)
+        {
+            return district != null && district.ActiveEvent != null && !string.IsNullOrWhiteSpace(district.ActiveEvent.Headline)
+                ? string.Format("Event {0}", district.ActiveEvent.Headline)
+                : "Event Stable";
         }
 
         private static void DrawTextBlock(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, Alignment alignment, float lineSpacing)
@@ -2989,8 +3594,35 @@ namespace LSOL.UI
         private sealed class MetroNodeLayout
         {
             public TerritoryDistrictState District { get; set; }
+            public string DisplayName { get; set; }
+            public float Width { get; set; }
+            public float Height { get; set; }
             public float CenterX { get; set; }
             public float CenterY { get; set; }
+        }
+
+        internal sealed class NetworkHotNowCardData
+        {
+            public bool HasHotLane { get; set; }
+            public string PrimaryLine { get; set; }
+            public string PressureText { get; set; }
+            public string SecondaryLine { get; set; }
+            public string CarrierLine { get; set; }
+            public float PressureRatio { get; set; }
+        }
+
+        internal sealed class NetworkDetailPanelLayout
+        {
+            public float OverviewY { get; set; }
+            public float OverviewHeight { get; set; }
+            public float ActivityY { get; set; }
+            public float ActivityHeight { get; set; }
+            public float HotNowY { get; set; }
+            public float HotNowHeight { get; set; }
+            public float CorridorsDividerY { get; set; }
+            public float CorridorsTitleY { get; set; }
+            public float CorridorsStartY { get; set; }
+            public float RemainingHeight { get; set; }
         }
 
         private sealed class NetworkViewSnapshot

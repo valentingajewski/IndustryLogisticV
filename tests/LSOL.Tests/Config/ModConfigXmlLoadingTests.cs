@@ -24,6 +24,7 @@ namespace LSOL.Tests.Config
 
             var harborTerminal = config.IndustryConfigs["HarborTerminal"];
             var smeltingFactory = config.IndustryConfigs["SmeltingFactory"];
+            var quarry = config.IndustryConfigs.Values.Single(industry => industry != null && industry.LegacyKey == "MineralMine");
             var davisStore = config.IndustryConfigs["Store1"];
             var burtonMall = config.IndustryConfigs["Store2"];
             var elRanchoGasStation = config.IndustryConfigs["Petrol Station 02"];
@@ -43,6 +44,10 @@ namespace LSOL.Tests.Config
             Assert.IsNotNull(mainOffice);
             Assert.AreEqual("Elysian Island Logistic Office", mainOffice.SiteName);
             Assert.AreEqual("Port", mainOffice.DistrictName);
+            Assert.IsTrue(quarry.GatePosition.HasValue);
+            Assert.AreEqual(new Vector3(2570.45f, 2710.2f, 41.69f), quarry.GatePosition.Value);
+            Assert.IsTrue(mainOffice.GatePosition.HasValue);
+            Assert.AreEqual(new Vector3(10.43f, -2538.56f, 5.55f), mainOffice.GatePosition.Value);
         }
 
         [TestMethod]

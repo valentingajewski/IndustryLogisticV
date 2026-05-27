@@ -2,7 +2,7 @@
   <Site catalogId="100" legacyKey="MineralMine" name="Quarry" role="RawProducer" district="GrandSenora" startingTankRatio="0.3" ownershipTier="Starter" industryOwnerCut="0.2" enabled="true">
     <Marker x="2686" y="2767" z="37.88" />
     <VehicleSpawn x="2707" y="2755.62" z="37.36" heading="120" />
-    <Gate x="2570.45" y="2710.2" z="41.69" barrierModelHash="3110450777" />
+    <Gate x="2570.45" y="2710.2" z="41.69" />
     <Worker x="2677.02" y="2763.29" z="37.88" />
     <Inputs outputs="Gravel,Coal,Ore" boost="Omega" recipeOutputs="Gravel:2,Coal:1,Ore:1" outputCapacityWeights="Gravel:2,Coal:1,Ore:1" />
     <Economy>
@@ -118,7 +118,7 @@
   <Site catalogId="109" legacyKey="OmegaFactory" name="Rancho Omega Factory" role="SpecialPlant" district="SouthLosSantos" startingTankRatio="0.3" ownershipTier="Expansion" industryOwnerCut="0.4" enabled="true">
     <Marker x="494" y="-1969" z="24.92" />
     <VehicleSpawn x="479.74" y="-1991.74" z="24.86" heading="37" />
-    <Gate x="462.25" y="-1943" z="24.66" barrierModelHash="569833973" />
+    <Gate x="462.25" y="-1943" z="24.66" />
     <Worker x="498" y="-1966.4" z="24.86" />
     <Inputs outputs="Omega" primary="Ore,Oil" recipeInputs="Ore:1,Oil:1" inputCapacityWeights="Ore:1,Oil:1" />
     <Economy>
@@ -258,7 +258,7 @@
     <Marker x="3629.67" y="3750.47" z="28.52" />
     <VehicleSpawn x="3629.17" y="3778.63" z="28.67" heading="33" />
     <DisplaySpawn x="3622.4" y="3759.31" z="28.52" heading="92" />
-    <Gate x="3428.77" y="3763.1" z="30.64" barrierModelHash="1230099731" />
+    <Gate x="3428.77" y="3763.1" z="30.64" />
     <Worker x="3637.75" y="3758.19" z="28.52" />
     <Display maxLine="5" objectModelHash="4217628831" maxRow="1" />
     <Inputs outputs="Medicine" primary="Chemicals,Plastic" boost="Omega" recipeInputs="Chemicals:2,Plastic:1" inputCapacityWeights="Chemicals:2,Plastic:1" />

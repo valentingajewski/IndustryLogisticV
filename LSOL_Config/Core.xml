@@ -3,7 +3,7 @@
   <Markers radius="0.5" height="1" />
   <MainOffice x="-115.15" y="-2517" z="6" />
   <VehicleSpawn x="-97.75" y="-2498.41" z="6" heading="234" />
-  <Controls openModMenu="F7" gateInteract="E" />
+  <Controls openModMenu="F7" />
   <DensityProfiles>
     <Stores veryLowCapacity="6000" lowCapacity="12000" mediumCapacity="24000" highCapacity="40000" veryLowEmptyingRate="0.03" lowEmptyingRate="0.07" mediumEmptyingRate="0.12" highEmptyingRate="0.18" />
     <GasStations veryLowCapacity="20000" lowCapacity="35000" mediumCapacity="60000" highCapacity="90000" veryLowEmptyingRate="0.02" lowEmptyingRate="0.04" mediumEmptyingRate="0.07" highEmptyingRate="0.10" />

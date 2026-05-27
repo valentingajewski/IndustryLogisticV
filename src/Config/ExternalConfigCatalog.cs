@@ -119,7 +119,6 @@ namespace LSOL.Config
         public Vector3? VehicleSpawnPosition { get; set; }
         public float? VehicleSpawnHeading { get; set; }
         public Vector3? GatePosition { get; set; }
-        public int? BarrierModelHash { get; set; }
         public Vector3? WorkerPosition { get; set; }
         public Vector3? FactoryDoorPosition { get; set; }
         public float FactoryProductionRatio { get; set; }
