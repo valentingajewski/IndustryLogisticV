@@ -1,4 +1,4 @@
-# LSOL Player Documentation
+bnkl# LSOL Player Documentation
 
 LSOL turns GTA V into a logistics, property, and company-management game.
 
@@ -28,6 +28,8 @@ The shortest reliable opening sequence is:
 5. Visit the commercial dealership and buy a starter truck or trailer setup.
 6. Drive to an industry marker and press `E` to open the industry tablet.
 7. Load cargo, deliver it, and start building money and district influence.
+
+![image](../doc_images/f7.png)
 
 ## Runtime Content Roots
 

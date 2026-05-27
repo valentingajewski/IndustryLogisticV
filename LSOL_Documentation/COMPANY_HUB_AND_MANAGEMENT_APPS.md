@@ -25,6 +25,8 @@ If you want to create, load, delete, or manually save a profile, start here.
 
 This is the best place to review the current state of the company without driving across the map just to check one number.
 
+![image](../doc_images/f8.JPG)
+
 ## Core Company Hub Pages
 
 The Company Hub currently exposes these major surfaces:
@@ -57,6 +59,8 @@ They are the fastest way to answer questions like:
 - where storage risk is building
 - which locations are worth visiting next
 
+![image](../doc_images/f8_indus.JPG)
+
 ### Budget
 
 Budget is where LSOL's late-game economic pressure becomes readable.
@@ -70,6 +74,8 @@ It shows things like:
 - route profitability views
 - inventory and warehouse-loss exposure
 
+![image](../doc_images/f8_budget.JPG)
+
 ### Analytics
 
 Analytics is for trends and comparisons rather than immediate action.
@@ -82,6 +88,8 @@ Use it to inspect:
 - district pressure and competition visibility
 - longer-running business patterns
 
+![image](../doc_images/f8_analytics.JPG)
+
 ### Successes
 
 Successes tracks milestone progress and your late-game identity layer. It becomes more important once doctrine, prestige, and HQ development enter the save.
@@ -92,17 +100,6 @@ These two pages deserve their own guide because they work together closely.
 
 Read [COMPANY_MAP_AND_ROUTE_PLANNER.md](COMPANY_MAP_AND_ROUTE_PLANNER.md) for the details.
 
-## When To Open The Hub
-
-The Company Hub is most useful when you need to choose, not when you already know the next stop.
-
-Open it when you want to:
-
-- pick the next profitable lane
-- see why a district is weak
-- identify budget leaks
-- check whether a warehouse is becoming a liability
-- see if automation is worth adding yet
 
 ## Read Next
 

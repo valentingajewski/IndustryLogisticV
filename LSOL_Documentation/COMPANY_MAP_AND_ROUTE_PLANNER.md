@@ -16,6 +16,8 @@ It is built to show:
 - live corridor pressure
 - planner overlays on top of the network
 
+![image](../doc_images/f8_footprint.JPG)
+
 This is the fastest way to understand whether your company is growing in a coherent shape or just scattering deliveries randomly across the map.
 
 ## What You See On The Map

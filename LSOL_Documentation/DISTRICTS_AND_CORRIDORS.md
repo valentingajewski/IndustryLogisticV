@@ -114,6 +114,8 @@ Late-game district play is not just passive throughput growth.
 
 A corridor is the link between two different districts.
 
+![image](../doc_images/corridor.JPG)
+
 Whenever you complete a delivery from one district into another district, LSOL records progress on that corridor.
 
 Same-district deliveries do not build corridor rights. Cross-district deliveries do.

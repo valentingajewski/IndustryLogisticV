@@ -27,6 +27,8 @@ From there you can:
 - delete a save
 - manually save the current game
 
+![image](../doc_images/f7_save.JPG)
+
 ## Creating A New Save
 
 When you create a named save, LSOL does more than just write a file.
@@ -40,11 +42,15 @@ It also:
 
 The current starting-balance flow supports values from `-5000` to `100000` in `5000` steps.
 
+![image](../doc_images/f7_new_save.JPG)
+
 ## Difficulty Locking
 
 Once a named save is created or loaded, top-level difficulty settings stay tied to that profile.
 
 If you want a different difficulty setup, create a new save instead of trying to repurpose an old one.
+
+![image](../doc_images/f7_difficulty_option_message.JPG)
 
 ## What Persists
 

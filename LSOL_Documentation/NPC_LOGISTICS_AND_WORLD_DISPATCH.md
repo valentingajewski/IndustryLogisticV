@@ -30,6 +30,14 @@ The most common blockers are:
 
 The best way to unlock NPC logistics is still the same old rule: haul manually first, automate second.
 
+You will also need a Construction Site Cabin object which can be purchased in the active office object list.
+
+![image](../doc_images/office_npc_cabine.JPG)
+
+![image](../doc_images/npc_cabin.JPG)
+
+![image](../doc_images/npc_menu.JPG)
+
 ## Driver Tiers
 
 Driver tiers load from the hiring config and define the fundamentals of a contract:
@@ -38,6 +46,8 @@ Driver tiers load from the hiring config and define the fundamentals of a contra
 - driving speed and overall route quality
 - pricing multiplier
 - weekly wage
+
+![image](../doc_images/npc_level.JPG)
 
 The tier you hire is the base contract tier, but drivers also develop effective strength over time from real work.
 
@@ -56,6 +66,9 @@ LSOL supports more than one route per hired NPC contract.
 
 That matters because it lets you build drivers into long-term company assets instead of treating every commodity chain as a separate isolated hire. Office-garage vehicle assignment also follows the route logic more closely now, so mixed-resource chains can use the right equipment more reliably.
 
+![image](../doc_images/npc_route1.JPG)
+![image](../doc_images/npc_route2.JPG)
+
 ## World Dispatch
 
 `NpcLogisticsManager` also runs an ambient world-dispatch layer.
@@ -69,6 +82,9 @@ World dispatch creates background jobs such as:
 - internal balancing work
 - rival freight activity
 - optional visible convoys
+
+![image](../doc_images/ambiant_fuel.JPG)
+![image](../doc_images/ambiant_npc.JPG)
 
 These jobs are meant to stabilize the economy and create world motion. They do not replace manual hauling as your main income source.
 

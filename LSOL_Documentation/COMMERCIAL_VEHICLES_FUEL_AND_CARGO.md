@@ -6,12 +6,16 @@ Commercial vehicles are the physical backbone of LSOL. The rest of the company o
 
 Commercial vehicles are bought from the commercial dealership.
 
+![image](../doc_images/com_dealership_icon.JPG)
+
 The dealership supports:
 
 - cargo-type filtering
 - truck and trailer combinations
 - price comparison while cycling options
 - purchase into the active office garage
+
+![image](../doc_images/com_dealership_menu.JPG)
 
 The active office matters here. If you do not have an office set up properly, fleet ownership becomes awkward immediately.
 
@@ -34,6 +38,9 @@ Office fleet management lets you:
 - move them into reserve when needed
 - retrieve them through office workflows
 
+![image](../doc_images/office_garage.JPG)
+![image](../doc_images/office_vehicle_menu.JPG)
+
 Deployed office trucks also get their own map presence while you are outside them, which makes a larger fleet much easier to keep track of.
 
 ## Fuel
@@ -47,7 +54,7 @@ When fuel management is enabled, you need to watch:
 - route length relative to cargo value
 - refuel timing before long or multi-stop hauls
 
-Running out of fuel is not just an inconvenience. It can break the rhythm of a profitable route and stall an automated one later.
+![image](../doc_images/vehicle_fuel.JPG)
 
 ## Cargo Condition And Loss
 
@@ -59,6 +66,9 @@ That adds pressure around:
 - long routes without enough margin
 - low-quality NPC routes in weak corridors
 - loss value on damaged or missing cargo
+
+![image](../doc_images/cond_100.JPG)![image](../doc_images/cond_73.JPG)
+![image](../doc_images/cond_50.JPG)![image](../doc_images/cond_27.JPG)
 
 Once you are moving expensive loads, route quality matters almost as much as route length.
 
@@ -72,6 +82,8 @@ Over time, commercial vehicles face:
 - wear pressure across the owned fleet
 - overdue units that start dragging on weekly upkeep
 - resale depreciation tied to condition and maintenance history
+
+![image](../doc_images/fleet_maintenance.JPG)
 
 Maintenance Bays reduce that pressure and make larger fleets much more forgiving.
 
