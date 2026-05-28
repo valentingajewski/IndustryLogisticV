@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
 
@@ -263,7 +264,7 @@ namespace LSOL.UI
                 items.Add(new MenuItem
                 {
                     CaptionFactory = () => "No custom missions loaded",
-                    DetailFactory = () => "Add XML mission packs to scripts/LSOL_Config/missions and reload the mod.",
+                    DetailFactory = () => string.Format("Add XML mission packs to {0} and reload the mod.", RuntimeLayoutResolver.PreferredMissionDirectoryDisplayPath),
                 });
             }
 

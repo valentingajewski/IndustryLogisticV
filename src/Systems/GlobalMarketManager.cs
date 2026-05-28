@@ -179,6 +179,10 @@ namespace LSOL.Systems
                     Commodity = pair.Key,
                     PriceMultiplier = Math.Max(DefaultPriceMultiplier, pair.Value.PriceMultiplier),
                     RemainingScarcityMs = Math.Max(0, pair.Value.NextScarcityIncreaseAtMs - currentGameTimeMs),
+                    PendingSinkDemandTons = Math.Max(0f, pair.Value.PendingSinkDemandTons),
+                    PendingDeliveryTons = Math.Max(0f, pair.Value.PendingDeliveryTons),
+                    DemandMomentum = Math.Max(0f, pair.Value.DemandMomentum),
+                    DeliveryMomentum = Math.Max(0f, pair.Value.DeliveryMomentum),
                 });
             }
 
@@ -205,6 +209,10 @@ namespace LSOL.Systems
                 var state = EnsureCommodityState(commodity);
                 state.PriceMultiplier = Math.Max(DefaultPriceMultiplier, entry.PriceMultiplier);
                 state.NextScarcityIncreaseAtMs = currentGameTimeMs + Math.Max(0, entry.RemainingScarcityMs);
+                state.PendingSinkDemandTons = Math.Max(0f, entry.PendingSinkDemandTons);
+                state.PendingDeliveryTons = Math.Max(0f, entry.PendingDeliveryTons);
+                state.DemandMomentum = Math.Max(0f, entry.DemandMomentum);
+                state.DeliveryMomentum = Math.Max(0f, entry.DeliveryMomentum);
             }
         }
 
@@ -910,5 +918,13 @@ namespace LSOL.Systems
         public float PriceMultiplier { get; set; }
 
         public int RemainingScarcityMs { get; set; }
+
+        public float PendingSinkDemandTons { get; set; }
+
+        public float PendingDeliveryTons { get; set; }
+
+        public float DemandMomentum { get; set; }
+
+        public float DeliveryMomentum { get; set; }
     }
 }

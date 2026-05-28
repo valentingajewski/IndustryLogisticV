@@ -36,6 +36,7 @@ The Company Hub currently exposes these major surfaces:
 - Stores
 - Gas Stations
 - Warehouses
+- Dispatch
 - Budget
 - Analytics
 - Successes
@@ -60,6 +61,19 @@ They are the fastest way to answer questions like:
 - which locations are worth visiting next
 
 ![image](../doc_images/f8_indus.JPG)
+
+### Dispatch
+
+Dispatch is the network-control layer for side contracts and ambient freight support.
+
+Use it to:
+
+- browse permit-free Quick Jobs and Freight Market contracts
+- review accepted side contracts
+- open the `World Dispatch` page
+- bias ambient freight by policy, commodity, or district
+- toggle premium dispatch
+- inspect the `Dispatch Diagnostics` feed when ambient activity looks wrong or too quiet
 
 ### Budget
 

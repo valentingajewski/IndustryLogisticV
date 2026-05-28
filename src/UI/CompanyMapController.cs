@@ -755,7 +755,7 @@ namespace LSOL.UI
             {
                 DrawTextBlock(
                     resolution,
-                    "No district data is available. Check scripts/LSOL_Config/Districts.xml and the loaded territory state.",
+                    string.Format("No district data is available. Check {0} and the loaded territory state.", RuntimeLayoutResolver.BuildPreferredConfigFileDisplayPath("Districts.xml")),
                     graphX + 24f,
                     graphY + 28f,
                     0.27f,

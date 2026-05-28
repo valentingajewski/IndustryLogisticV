@@ -100,22 +100,7 @@ namespace LSOL.Config
 
         public static string ResolveAddonsDirectory(string configDirectory)
         {
-            if (string.IsNullOrWhiteSpace(configDirectory))
-            {
-                return string.Empty;
-            }
-
-            try
-            {
-                var runtimeDirectory = Path.GetDirectoryName(Path.GetFullPath(configDirectory));
-                return string.IsNullOrWhiteSpace(runtimeDirectory)
-                    ? string.Empty
-                    : Path.Combine(runtimeDirectory, "LSOL_Addons");
-            }
-            catch
-            {
-                return string.Empty;
-            }
+            return RuntimeLayoutResolver.FromConfigDirectory(configDirectory).AddonsDirectory;
         }
 
         public static LsolAddonCatalog Load(string configDirectory)

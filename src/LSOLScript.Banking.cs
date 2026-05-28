@@ -5,6 +5,7 @@ using System.Linq;
 using GTA;
 using GTA.Math;
 using GTA.UI;
+using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
 using LSOL.UI;
@@ -217,7 +218,7 @@ namespace LSOL
                 items.Add(new OfficeMenuItem
                 {
                     CaptionFactory = () => "No bank data loaded",
-                    DetailFactory = () => "Check LSOL_Config/Banks.xml for valid bank definitions.",
+                    DetailFactory = () => string.Format("Check {0} for valid bank definitions.", RuntimeLayoutResolver.BuildPreferredConfigFileDisplayPath("Banks.xml")),
                 });
                 items.Add(new OfficeMenuItem
                 {

@@ -32,7 +32,6 @@ namespace LSOL
         private const float IndustryObjectDeletionActivationRange = 250f;
         private const int IndustryObjectDeletionSweepIntervalMs = 5000;
         private const float DebugFillTons = 1000000f;
-        private const string SavegamesDirectoryName = "LSOLSaves";
         private const int MaxSaveNameLength = 40;
         private const float DefaultStartingBalance = 20000f;
         private const int DefaultNpcRouteLimit = 5;
@@ -208,9 +207,10 @@ namespace LSOL
         public LSOLScript()
         {
             _isConstructing = true;
-            _configDirectory = ResolveConfigDirectory();
-            _defaultIndustryStatePath = ResolveIndustryStatePath();
-            _savegamesDirectoryPath = ResolveSavegamesDirectoryPath();
+            var runtimeLayout = ResolveRuntimeLayout();
+            _configDirectory = runtimeLayout.ConfigDirectory;
+            _defaultIndustryStatePath = runtimeLayout.DefaultStatePath;
+            _savegamesDirectoryPath = runtimeLayout.SavegamesDirectory;
             _industryStatePath = _defaultIndustryStatePath;
             _difficultyTemplateStore = new DifficultySettingsTemplateStore(Path.Combine(_configDirectory, "DifficultyTemplates.xml"));
             _addonCatalog = LsolAddonCatalog.Load(_configDirectory);
@@ -2081,7 +2081,7 @@ namespace LSOL
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => Text(ModTextKey.RowCreateNewSave),
-                    DetailFactory = () => Text(ModTextKey.DetailCreateNewSave, "<name>", SavegamesDirectoryName),
+                    DetailFactory = () => Text(ModTextKey.DetailCreateNewSave, "<name>", RuntimeLayoutResolver.SavegamesDirectoryName),
                     OnActivate = PromptForNewSave,
                 },
                 new OfficeMenuItem
@@ -2162,7 +2162,7 @@ namespace LSOL
                 items.Add(new OfficeMenuItem
                 {
                     CaptionFactory = () => Text(ModTextKey.RowNoSavesFound),
-                    DetailFactory = () => Text(ModTextKey.DetailNoSavesFound, SavegamesDirectoryName),
+                    DetailFactory = () => Text(ModTextKey.DetailNoSavesFound, RuntimeLayoutResolver.SavegamesDirectoryName),
                 });
             }
             else
@@ -3451,8 +3451,15 @@ namespace LSOL
             if (missionCount <= 0)
             {
                 return warningCount > 0
-                    ? string.Format("No mission board entries available. Grow district presence or add XML mission packs to scripts/LSOL_Config/missions or scripts/LSOL_Addons/*/content/missions. {0} validation warning(s).", warningCount)
-                    : "No mission board entries available. Grow district presence or add XML mission packs to scripts/LSOL_Config/missions or scripts/LSOL_Addons/*/content/missions.";
+                    ? string.Format(
+                        "No mission board entries available. Grow district presence or add XML mission packs to {0} or {1}. {2} validation warning(s).",
+                        RuntimeLayoutResolver.PreferredMissionDirectoryDisplayPath,
+                        RuntimeLayoutResolver.PreferredAddonMissionDirectoryDisplayPath,
+                        warningCount)
+                    : string.Format(
+                        "No mission board entries available. Grow district presence or add XML mission packs to {0} or {1}.",
+                        RuntimeLayoutResolver.PreferredMissionDirectoryDisplayPath,
+                        RuntimeLayoutResolver.PreferredAddonMissionDirectoryDisplayPath);
             }
 
             if (_specialMissionManager.HasActiveMission)

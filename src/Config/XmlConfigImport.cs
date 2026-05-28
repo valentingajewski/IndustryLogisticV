@@ -759,7 +759,7 @@ namespace LSOL.Config
                 configDirectory,
                 "Sites.xml",
                 catalog.ValidationMessages,
-                "Sites.xml missing. No site catalog loaded from LSOL_Config.");
+                string.Format("{0} missing. No site catalog loaded.", RuntimeLayoutResolver.BuildPreferredConfigFileDisplayPath("Sites.xml")));
             if (document == null || document.Root == null)
             {
                 return false;

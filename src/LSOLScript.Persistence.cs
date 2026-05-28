@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Xml;
 using GTA;
+using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
 using LSOL.UI;
@@ -554,53 +555,9 @@ namespace LSOL
             RebuildOptionsMenuItems();
         }
 
-        private string ResolveRuntimeDirectory()
+        private RuntimeLayoutPaths ResolveRuntimeLayout()
         {
-            var assemblyDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-            var scriptsDirectory = Path.Combine(BaseDirectory, "scripts");
-            var candidates = new[]
-            {
-                assemblyDir,
-                scriptsDirectory,
-                BaseDirectory,
-            }
-                .Where(path => !string.IsNullOrWhiteSpace(path))
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                var configDirectory = Path.Combine(candidates[i], "LSOL_Config");
-                if (Directory.Exists(configDirectory))
-                {
-                    return candidates[i];
-                }
-            }
-
-            for (int i = 0; i < candidates.Count; i++)
-            {
-                if (Directory.Exists(candidates[i]))
-                {
-                    return candidates[i];
-                }
-            }
-
-            return BaseDirectory;
-        }
-
-        private string ResolveConfigDirectory()
-        {
-            return Path.Combine(ResolveRuntimeDirectory(), "LSOL_Config");
-        }
-
-        private string ResolveIndustryStatePath()
-        {
-            return Path.Combine(ResolveRuntimeDirectory(), "LSOL.state.xml");
-        }
-
-        private string ResolveSavegamesDirectoryPath()
-        {
-            return Path.Combine(ResolveRuntimeDirectory(), SavegamesDirectoryName);
+            return RuntimeLayoutResolver.Resolve(BaseDirectory, Assembly.GetExecutingAssembly().Location);
         }
 
         private List<NamedSaveEntry> GetAvailableNamedSaves()

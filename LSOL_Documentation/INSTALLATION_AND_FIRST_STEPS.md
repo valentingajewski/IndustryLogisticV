@@ -15,7 +15,7 @@ If any of those are missing, LSOL will not load correctly.
 
 ## Recommended Install Layout
 
-The safest install is to keep `LSOL.dll`, `LSOL.ini`, `LSOL_Config`, and `LSOL_Addons` together in GTA V's `scripts` folder.
+The safest install is to keep `LSOL.dll` and `LSOL.ini` directly in GTA V's `scripts` folder, then keep the rest of LSOL's runtime content under `scripts/LSOL/`.
 
 ```text
 GTA V/
@@ -23,35 +23,37 @@ GTA V/
     LSOL.dll
     LSOL.ini
     LemonUI.SHVDN3.dll
-    LSOL_Config/
-      Core.xml
-      Dealership.xml
-      Districts.xml
-      HiringNPC.xml
-      Interiors.xml
-      Offices.xml
-      OfficeObjects.xml
-      Resources.xml
-      Sites.xml
-      Vehicles.xml
-      WorldNpcLogistics.xml
-      missions/
-    LSOL_Addons/
-      some.author.package/
-        addon.xml
-        content/
-          missions/
-          resources/
-          sites/
-          vehicles/
-          office-objects/
+    LSOL/
+      LSOL_Config/
+        Core.xml
+        Dealership.xml
+        Districts.xml
+        HiringNPC.xml
+        Interiors.xml
+        Offices.xml
+        OfficeObjects.xml
+        Resources.xml
+        Sites.xml
+        Vehicles.xml
+        WorldNpcLogistics.xml
+        missions/
+      LSOL_Addons/
+        some.author.package/
+          addon.xml
+          content/
+            missions/
+            resources/
+            sites/
+            vehicles/
+            office-objects/
+      LSOLSaves/
 ```
 
 ## What Goes Where
 
-- Put the full `LSOL_Config` folder beside `LSOL.ini`.
-- Put loose mission `.xml` files in `LSOL_Config/missions/`.
-- Put packaged add-ons in `LSOL_Addons/<package-id>/`.
+- Put the full `LSOL_Config` folder in `scripts/LSOL/`.
+- Put loose mission `.xml` files in `scripts/LSOL/LSOL_Config/missions/`.
+- Put packaged add-ons in `scripts/LSOL/LSOL_Addons/<package-id>/`.
 - Do not place live content in the repository root `configs/` or `missions/` folders. Those are legacy reference folders only.
 
 ## Supported `LSOL.ini` Locations
@@ -60,7 +62,7 @@ LSOL can resolve `LSOL.ini` from several places, but the recommended location is
 
 - `GTA V/scripts/LSOL.ini`
 
-Keeping it beside `LSOL_Config` and `LSOL_Addons` avoids most path issues.
+Keeping it one level above the `LSOL` runtime folder avoids most path issues.
 
 ## First Launch Checklist
 
@@ -109,19 +111,19 @@ Check these first:
 
 - you are close enough to the marker
 - you are pressing `E`
-- the site is actually configured in `LSOL_Config`
-- the runtime folder still contains `LSOL_Config` beside `LSOL.ini`
+- the site is actually configured in `scripts/LSOL/LSOL_Config`
+- the runtime folder still contains `scripts/LSOL/LSOL_Config` under `scripts/LSOL/`
 
 ### Offices or dealerships do not appear
 
-That usually means the runtime config root is missing or incomplete. Re-check that the full `LSOL_Config` folder is present beside `LSOL.ini`.
+That usually means the runtime config root is missing or incomplete. Re-check that the full `scripts/LSOL/LSOL_Config` folder is present under `scripts/LSOL/`.
 
 ### A mission pack or add-on does not show up
 
 Make sure you installed it into a live runtime path:
 
-- loose missions go in `LSOL_Config/missions/`
-- packaged add-ons go in `LSOL_Addons/<package-id>/`
+- loose missions go in `scripts/LSOL/LSOL_Config/missions/`
+- packaged add-ons go in `scripts/LSOL/LSOL_Addons/<package-id>/`
 
 Root `missions/` is not runtime-loaded.
 

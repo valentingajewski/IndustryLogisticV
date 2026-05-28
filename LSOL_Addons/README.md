@@ -1,8 +1,8 @@
 # LSOL Add-on Packages
 
-LSOL add-ons live under `scripts/LSOL_Addons/<package-id>/` next to `LSOL_Config`.
+LSOL add-ons live under `scripts/LSOL/LSOL_Addons/<package-id>/` inside the nested LSOL runtime root.
 
-`LSOL_Config` remains the active base runtime content root for loose XML content. `LSOL_Addons` is the sibling runtime package root for packaged add-ons, including packaged mission packs under `content/missions`.
+`scripts/LSOL/LSOL_Config` remains the active base runtime content root for loose XML content. `scripts/LSOL/LSOL_Addons` is the sibling runtime package root for packaged add-ons, including packaged mission packs under `content/missions`.
 
 This first ecosystem pass is file-driven only. LSOL discovers package manifests, validates them, and then loads supported content directories. Third-party assemblies are not executed yet.
 
@@ -39,22 +39,23 @@ Recognized but not loaded yet:
 scripts/
   LSOL.dll
   LSOL.ini
-  LSOL_Config/
-    ...
-  LSOL_Addons/
-    some.author.package/
-      addon.xml
-      content/
-        missions/
-        resources/
-        sites/
-        vehicles/
-        office-objects/
-        ui/
-          localization/
-          themes/
-      assets/
-      bin/
+  LSOL/
+    LSOL_Config/
+      ...
+    LSOL_Addons/
+      some.author.package/
+        addon.xml
+        content/
+          missions/
+          resources/
+          sites/
+          vehicles/
+          office-objects/
+          ui/
+            localization/
+            themes/
+        assets/
+        bin/
 ```
 
 ## Minimal Manifest
@@ -96,7 +97,7 @@ scripts/
 
 For `resources`, `sites`, `vehicles`, and `office-objects`, LSOL uses additive-only merge semantics:
 
-- base `LSOL_Config` content loads first
+- base `scripts/LSOL/LSOL_Config` content loads first
 - add-on fragments load second
 - new IDs are accepted
 - duplicate IDs are rejected with validation warnings
@@ -126,4 +127,4 @@ LSOL surfaces validation warnings for:
 
 The repository includes a minimal packaged mission example under `LSOL_Addons_examples/sample.author.mission-pack/`.
 
-Copy that folder into `scripts/LSOL_Addons/` to test the packaged mission path alongside the loose runtime mission path in `LSOL_Config/missions`.
+Copy that folder into `scripts/LSOL/LSOL_Addons/` to test the packaged mission path alongside the loose runtime mission path in `scripts/LSOL/LSOL_Config/missions`.

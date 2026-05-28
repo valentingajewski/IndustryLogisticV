@@ -25,16 +25,18 @@ namespace LSOL.Config
 
         public static string ResolveMissionDirectory(string configDirectory)
         {
-            return string.IsNullOrWhiteSpace(configDirectory)
-                ? string.Empty
-                : Path.Combine(configDirectory, "missions");
+            return RuntimeLayoutResolver.FromConfigDirectory(configDirectory).MissionDirectory;
         }
 
         public static SpecialMissionCatalog Load(string configDirectory, LsolAddonCatalog addonCatalog = null)
         {
             var catalog = new SpecialMissionCatalog();
             var knownMissionIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            LoadMissionDirectory(ResolveMissionDirectory(configDirectory), "LSOL_Config/missions", catalog, knownMissionIds);
+            LoadMissionDirectory(
+                ResolveMissionDirectory(configDirectory),
+                RuntimeLayoutResolver.PreferredMissionDirectoryDisplayPath,
+                catalog,
+                knownMissionIds);
 
             if (addonCatalog != null)
             {
@@ -47,7 +49,11 @@ namespace LSOL.Config
                         continue;
                     }
 
-                    LoadMissionDirectory(contentDirectory, string.Format("LSOL_Addons/{0}", package.DisplayLabel), catalog, knownMissionIds);
+                    LoadMissionDirectory(
+                        contentDirectory,
+                        RuntimeLayoutResolver.BuildPreferredAddonContentDisplayPath(package.FolderName, "content/missions"),
+                        catalog,
+                        knownMissionIds);
                 }
             }
 

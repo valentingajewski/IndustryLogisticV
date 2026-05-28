@@ -417,26 +417,30 @@ namespace LSOL.Tests.Systems
                 var rawSave = File.ReadAllText(filePath);
                 StringAssert.Contains(rawSave, "<Value key=\"Version\">18</Value>");
                 StringAssert.Contains(rawSave, "<Section name=\"Market:Commodity:Fuel\">");
+                StringAssert.Contains(rawSave, "<Value key=\"DeliveryMomentum\">");
 
                 var result = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>());
                 var restoredMarket = new GlobalMarketManager(10000, basePrices);
                 restoredMarket.ApplyPersistenceSnapshot(result.Metadata.Market, 10000);
 
                 Assert.IsNotNull(result.Metadata.Market);
-                Assert.AreEqual(735f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
-                Assert.AreEqual(900f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Fuel"), restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Steel"), restoredMarket.GetUnitPrice("Steel"), 0.01f);
 
+                sourceMarket.Update(1849999);
                 restoredMarket.Update(359999);
-                Assert.AreEqual(735f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
-                Assert.AreEqual(900f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Fuel"), restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Steel"), restoredMarket.GetUnitPrice("Steel"), 0.01f);
 
+                sourceMarket.Update(1850000);
                 restoredMarket.Update(360000);
-                Assert.AreEqual(770f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
-                Assert.AreEqual(900f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Fuel"), restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Steel"), restoredMarket.GetUnitPrice("Steel"), 0.01f);
 
+                sourceMarket.Update(1900000);
                 restoredMarket.Update(410000);
-                Assert.AreEqual(770f, restoredMarket.GetUnitPrice("Fuel"), 0.01f);
-                Assert.AreEqual(945f, restoredMarket.GetUnitPrice("Steel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Fuel"), restoredMarket.GetUnitPrice("Fuel"), 0.01f);
+                Assert.AreEqual(sourceMarket.GetUnitPrice("Steel"), restoredMarket.GetUnitPrice("Steel"), 0.01f);
             }
             finally
             {

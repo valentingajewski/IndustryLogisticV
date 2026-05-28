@@ -1,6 +1,6 @@
-`scripts/LSOL_Config/missions` is an active runtime mission path inside the `LSOL_Config` content root.
+`scripts/LSOL/LSOL_Config/missions` is an active runtime mission path inside the nested `LSOL` content root.
 
-Packaged mission add-ons also load from `scripts/LSOL_Addons/<package-id>/content/missions` when the package contains a valid `addon.xml` manifest.
+Packaged mission add-ons also load from `scripts/LSOL/LSOL_Addons/<package-id>/content/missions` when the package contains a valid `addon.xml` manifest.
 
 The repository root `missions/` folder is legacy reference content only and is not runtime-loaded.
 
@@ -49,7 +49,7 @@ Important fields:
 
 Notes for community authors:
 
-- District names must match the entries from `scripts/LSOL_Config/Districts.xml`, for example `Port` or `GrandSenora`.
+- District names must match the entries from `scripts/LSOL/LSOL_Config/Districts.xml`, for example `Port` or `GrandSenora`.
 - `RepeatCooldownInGameWeeks=1` means the mission can only be accepted once per in-game week after completion.
 - `RepeatCooldownInGameMonths=1` means the mission can only be accepted once per in-game month after completion.
 - `AttachOffset` is added to the trailer-bed center that LSOL computes at runtime. Start small and tune by testing in game.
@@ -57,4 +57,4 @@ Notes for community authors:
 - Mission vehicles and props are cleaned up automatically when the mission is cancelled, failed, or completed.
 - Active missions and completion counts are saved with the normal LSOL save system.
 
-Use `port_container_handler.xml` and `quarry_heavy_machinery.xml` in `scripts/LSOL_Config/missions` as working loose-runtime reference implementations, or copy the sample packaged add-on from `LSOL_Addons_examples/sample.author.mission-pack/` into `scripts/LSOL_Addons/`.
+Use `port_container_handler.xml` and `quarry_heavy_machinery.xml` in `scripts/LSOL/LSOL_Config/missions` as working loose-runtime reference implementations, or copy the sample packaged add-on from `LSOL_Addons_examples/sample.author.mission-pack/` into `scripts/LSOL/LSOL_Addons/`.

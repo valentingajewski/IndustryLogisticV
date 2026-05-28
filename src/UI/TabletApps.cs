@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using LSOL;
+using LSOL.Config;
 using LSOL.Domain;
 using LSOL.Systems;
 
@@ -1431,14 +1432,20 @@ namespace LSOL.UI
             {
                 items.Add(TabletUiHelpers.CreateBannerItem(
                     "Add-on Warnings",
-                    string.Format("{0} mission/add-on validation message(s) found. Review LSOL_Config/missions and the LSOL add-on package docs before publishing new contracts.", validationWarningCount)));
+                    string.Format(
+                        "{0} mission/add-on validation message(s) found. Review {1} and the LSOL add-on package docs before publishing new contracts.",
+                        validationWarningCount,
+                        RuntimeLayoutResolver.PreferredMissionDirectoryDisplayPath)));
             }
 
             if (_missionManager == null || !_missionManager.HasDefinitions)
             {
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     "No contracts available",
-                    "Grow district presence and fleet capability for rotating tenders, or add XML mission packs under LSOL_Config/missions or LSOL_Addons/*/content/missions."));
+                    string.Format(
+                        "Grow district presence and fleet capability for rotating tenders, or add XML mission packs under {0} or {1}.",
+                        RuntimeLayoutResolver.PreferredMissionDirectoryDisplayPath,
+                        RuntimeLayoutResolver.PreferredAddonMissionDirectoryDisplayPath)));
             }
             else
             {

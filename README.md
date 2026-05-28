@@ -18,6 +18,6 @@ Authoring and runtime reference docs that stay in place:
 
 Runtime content roots:
 
-- `LSOL_Config/` is the active base runtime content root.
-- `LSOL_Addons/` is the active packaged add-on root.
+- `scripts/LSOL/LSOL_Config/` is the active base runtime content root.
+- `scripts/LSOL/LSOL_Addons/` is the active packaged add-on root.
 - Root `configs/` and root `missions/` are legacy reference folders and are not runtime-loaded.

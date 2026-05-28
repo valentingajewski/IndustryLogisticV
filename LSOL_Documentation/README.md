@@ -1,4 +1,4 @@
-bnkl# LSOL Player Documentation
+# LSOL Player Documentation
 
 LSOL turns GTA V into a logistics, property, and company-management game.
 
@@ -21,7 +21,7 @@ If you are new to LSOL, read these in order:
 
 The shortest reliable opening sequence is:
 
-1. Install LSOL with `LSOL_Config` beside `LSOL.ini`.
+1. Install LSOL so `LSOL.dll` and `LSOL.ini` stay in `scripts/`, and LSOL's runtime content stays under `scripts/LSOL/`.
 2. Launch GTA V and open the `F7` Mod Control menu.
 3. Create a save if you want a clean named profile.
 4. Visit an office marker and rent or buy your first office.
@@ -35,12 +35,12 @@ The shortest reliable opening sequence is:
 
 These folder roles matter when you install content:
 
-- `LSOL_Config/` is the active base runtime content root.
-- `LSOL_Addons/` is the active packaged add-on root.
-- `LSOL_Config/missions/` is the active loose mission-pack folder.
+- `scripts/LSOL/LSOL_Config/` is the active base runtime content root.
+- `scripts/LSOL/LSOL_Addons/` is the active packaged add-on root.
+- `scripts/LSOL/LSOL_Config/missions/` is the active loose mission-pack folder.
 - Root `configs/` and root `missions/` are legacy reference folders and are not runtime-loaded.
 
-If you only remember one rule: place live content beside `LSOL.ini`, not in the repository's legacy reference folders.
+If you only remember one rule: place live content under `scripts/LSOL/`, not in the repository's legacy reference folders.
 
 ## Default Controls
 

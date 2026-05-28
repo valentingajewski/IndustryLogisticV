@@ -14,12 +14,27 @@ The built-in rotating board can generate contracts such as:
 
 These are tied to your company state, district presence, corridor access, and fleet capability.
 
+## Mission Board Versus Dispatch
+
+The mission board is not the same thing as the `Dispatch` page in the `F8` Company Hub.
+
+Use the mission board when you want authored or rotating mission-style contracts.
+
+Use Dispatch when you want:
+
+- permit-free Quick Jobs
+- Freight Market side contracts
+- accepted side-contract tracking
+- World Dispatch policy and diagnostics controls
+
+If you are looking for ambient freight behavior or short side-haul contract flow, start in Dispatch, not in the mission board.
+
 ## Optional Mission Packs
 
 On top of the built-in board, LSOL can load mission XML from two live runtime paths:
 
-- `LSOL_Config/missions/*.xml`
-- `LSOL_Addons/*/content/missions/*.xml`
+- `scripts/LSOL/LSOL_Config/missions/*.xml`
+- `scripts/LSOL/LSOL_Addons/*/content/missions/*.xml`
 
 Those mission packs load automatically on startup.
 
@@ -57,8 +72,8 @@ That includes both built-in rotating content and loaded mission packs.
 
 Use only the live runtime paths:
 
-- loose missions: `LSOL_Config/missions/`
-- packaged missions: `LSOL_Addons/<package-id>/content/missions/`
+- loose missions: `scripts/LSOL/LSOL_Config/missions/`
+- packaged missions: `scripts/LSOL/LSOL_Addons/<package-id>/content/missions/`
 
 The repository root `missions/` folder is legacy reference content only.
 

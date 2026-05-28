@@ -8,11 +8,11 @@ If you want one long-running company, the default path is enough. If you want se
 
 Default save:
 
-- `LSOL.state.xml`
+- `scripts/LSOL/LSOL.state.xml`
 
 Named saves:
 
-- `LSOLSaves/<name>.state.xml`
+- `scripts/LSOL/LSOLSaves/<name>.state.xml`
 
 Both live in the same runtime area as your active LSOL install. Legacy `<name>.state.ini` files can still be loaded if no XML save exists for that slot.
 

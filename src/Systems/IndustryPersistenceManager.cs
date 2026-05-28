@@ -541,6 +541,10 @@ namespace LSOL.Systems
                     Commodity = CommodityCatalog.Normalize(commodityKey),
                     PriceMultiplier = Math.Max(1f, ParseFloat(ini.GetString(section, "PriceMultiplier", "1"), 1f)),
                     RemainingScarcityMs = Math.Max(0, ParseInt(ini.GetString(section, "RemainingScarcityMs", "0"), 0)),
+                    PendingSinkDemandTons = Math.Max(0f, ParseFloat(ini.GetString(section, "PendingSinkDemandTons", "0"), 0f)),
+                    PendingDeliveryTons = Math.Max(0f, ParseFloat(ini.GetString(section, "PendingDeliveryTons", "0"), 0f)),
+                    DemandMomentum = Math.Max(0f, ParseFloat(ini.GetString(section, "DemandMomentum", "0"), 0f)),
+                    DeliveryMomentum = Math.Max(0f, ParseFloat(ini.GetString(section, "DeliveryMomentum", "0"), 0f)),
                 });
                 hasMarket = true;
             }
@@ -708,6 +712,10 @@ namespace LSOL.Systems
                 writer.WriteLine("[Market:Commodity:{0}]", CommodityCatalog.Normalize(entry.Commodity));
                 writer.WriteLine("PriceMultiplier={0}", FormatFloat(Math.Max(1f, entry.PriceMultiplier)));
                 writer.WriteLine("RemainingScarcityMs={0}", Math.Max(0, entry.RemainingScarcityMs).ToString(CultureInfo.InvariantCulture));
+                writer.WriteLine("PendingSinkDemandTons={0}", FormatFloat(Math.Max(0f, entry.PendingSinkDemandTons)));
+                writer.WriteLine("PendingDeliveryTons={0}", FormatFloat(Math.Max(0f, entry.PendingDeliveryTons)));
+                writer.WriteLine("DemandMomentum={0}", FormatFloat(Math.Max(0f, entry.DemandMomentum)));
+                writer.WriteLine("DeliveryMomentum={0}", FormatFloat(Math.Max(0f, entry.DeliveryMomentum)));
                 writer.WriteLine();
             }
         }

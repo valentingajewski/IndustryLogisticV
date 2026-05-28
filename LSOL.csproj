@@ -37,14 +37,32 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="LSOL_Config\**\*">
+    <None Update="LSOL.ini">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
-  <!-- Runtime output ships LSOL_Config only; archived root configs/ and missions/ stay repo-side. -->
-  <Target Name="RemoveLegacyRuntimeConfigFromOutput" AfterTargets="Build">
+  <!-- Runtime output keeps LSOL.dll and LSOL.ini at the root, while LSOL content lives under LSOL\. -->
+  <Target Name="PrepareNestedLsolRuntimeOutput" AfterTargets="Build">
+    <MakeDir Directories="$(OutDir)LSOL" />
+    <MakeDir Directories="$(OutDir)LSOL\LSOL_Config" />
+    <MakeDir Directories="$(OutDir)LSOL\LSOL_Addons" />
+    <MakeDir Directories="$(OutDir)LSOL\LSOLSaves" />
     <RemoveDir Directories="$(OutDir)missions" Condition="Exists('$(OutDir)missions')" />
     <RemoveDir Directories="$(OutDir)configs" Condition="Exists('$(OutDir)configs')" />
+    <RemoveDir Directories="$(OutDir)LSOL_Config" Condition="Exists('$(OutDir)LSOL_Config')" />
+    <RemoveDir Directories="$(OutDir)LSOL_Addons" Condition="Exists('$(OutDir)LSOL_Addons')" />
+    <RemoveDir Directories="$(OutDir)LSOL\LSOL_Config\LSOL_Config" Condition="Exists('$(OutDir)LSOL\LSOL_Config\LSOL_Config')" />
+    <RemoveDir Directories="$(OutDir)LSOL\LSOL_Addons\LSOL_Addons" Condition="Exists('$(OutDir)LSOL\LSOL_Addons\LSOL_Addons')" />
+    <ItemGroup>
+      <_LsolRuntimeConfigFiles Include="LSOL_Config\**\*" />
+      <_LsolRuntimeAddonFiles Include="LSOL_Addons\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_LsolRuntimeConfigFiles)"
+          DestinationFiles="@(_LsolRuntimeConfigFiles->'$(OutDir)LSOL\%(Identity)')"
+          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(_LsolRuntimeAddonFiles)"
+          DestinationFiles="@(_LsolRuntimeAddonFiles->'$(OutDir)LSOL\%(Identity)')"
+          SkipUnchangedFiles="true" />
   </Target>
 </Project>

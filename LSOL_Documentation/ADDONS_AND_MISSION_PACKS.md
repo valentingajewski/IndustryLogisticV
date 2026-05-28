@@ -6,10 +6,10 @@ The important thing is understanding which folders are actually live at runtime.
 
 ## Live Runtime Paths
 
-LSOL currently loads extra content from two places beside `LSOL.ini`:
+LSOL currently loads extra content from two places under `scripts/LSOL/`:
 
-- `LSOL_Config/` for base loose XML content
-- `LSOL_Addons/` for packaged add-ons with `addon.xml`
+- `scripts/LSOL/LSOL_Config/` for base loose XML content
+- `scripts/LSOL/LSOL_Addons/` for packaged add-ons with `addon.xml`
 
 If a pack is not in one of those runtime roots, LSOL will not use it.
 
@@ -17,7 +17,7 @@ If a pack is not in one of those runtime roots, LSOL will not use it.
 
 Loose mission packs are simple `.xml` files placed in:
 
-- `LSOL_Config/missions/`
+- `scripts/LSOL/LSOL_Config/missions/`
 
 This is the easiest way to add standalone mission content.
 
@@ -25,7 +25,7 @@ This is the easiest way to add standalone mission content.
 
 Packaged add-ons live in:
 
-- `LSOL_Addons/<package-id>/`
+- `scripts/LSOL/LSOL_Addons/<package-id>/`
 
 Each package needs its own `addon.xml` manifest.
 
