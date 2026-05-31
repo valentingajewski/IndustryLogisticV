@@ -3020,8 +3020,7 @@ namespace LSOL.Systems
                 return CommercialVehiclePurchaseEntitlementFamily.Mixer;
             }
 
-            if (string.Equals(modelName, "tiptruck", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(modelName, "tiptruck2", StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(modelName, "tiptruck", StringComparison.OrdinalIgnoreCase))
             {
                 return CommercialVehiclePurchaseEntitlementFamily.Tiptruck;
             }

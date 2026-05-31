@@ -135,7 +135,34 @@ namespace LSOL.Tests.Systems
 
             var nextQuote = manager.GetCommercialVehiclePurchaseQuote(tiptruck, null);
             Assert.IsFalse(nextQuote.UsesFirstFreeEntitlement);
+            Assert.AreEqual(CommercialVehiclePurchaseEntitlementFamily.Tiptruck, nextQuote.EntitlementFamily);
             Assert.AreEqual(20000f, nextQuote.EffectivePrice, 0.01f);
+        }
+
+        [TestMethod]
+        public void GetCommercialVehiclePurchaseQuote_Tiptruck2NeverUsesFirstFreeEntitlement()
+        {
+            var manager = CreatePropertyManager(CreateOffice("alpha", 1));
+            manager.ApplySnapshot(
+                new PropertyOwnershipPersistenceSnapshot
+                {
+                    ActiveOfficeId = "alpha",
+                    Offices =
+                    {
+                        new OfficeOwnershipPersistenceEntry { OfficeId = "alpha", IsOwned = true, LastChargedWeekIndex = 0 },
+                    },
+                },
+                0);
+
+            var tiptruck2 = CreateCommercialVehicle("tiptruck2", "Tipper", 24000f, 0f);
+
+            var quote = manager.GetCommercialVehiclePurchaseQuote(tiptruck2, null);
+
+            Assert.IsNotNull(quote);
+            Assert.IsFalse(quote.UsesFirstFreeEntitlement);
+            Assert.AreEqual(CommercialVehiclePurchaseEntitlementFamily.None, quote.EntitlementFamily);
+            Assert.AreEqual(24000f, quote.StandardPrice, 0.01f);
+            Assert.AreEqual(24000f, quote.EffectivePrice, 0.01f);
         }
 
         [TestMethod]
@@ -153,7 +180,7 @@ namespace LSOL.Tests.Systems
                 },
                 0);
 
-            var tiptruck = CreateCommercialVehicle("tiptruck2", "Tipper", 20000f, 600f);
+            var tiptruck = CreateCommercialVehicle("tiptruck", "Tipper", 20000f, 600f);
             var balance = 0f;
             OwnedCommercialVehiclePersistenceEntry rentedVehicle;
             string message;
@@ -163,6 +190,7 @@ namespace LSOL.Tests.Systems
 
             var purchaseQuote = manager.GetCommercialVehiclePurchaseQuote(tiptruck, null);
             Assert.IsTrue(purchaseQuote.UsesFirstFreeEntitlement);
+            Assert.AreEqual(CommercialVehiclePurchaseEntitlementFamily.Tiptruck, purchaseQuote.EntitlementFamily);
             Assert.AreEqual(0f, purchaseQuote.EffectivePrice, 0.01f);
         }
 
