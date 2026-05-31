@@ -81,6 +81,24 @@ namespace LSOL.Tests.UI
                 invoked);
         }
 
+        [TestMethod]
+        public void BuildOfficeDetailPage_MarkerOperationsPointsNpcHiringToConstructionSiteCabin()
+        {
+            var store = CreateStore();
+            var shell = new TabletShellController(new ControlBindings(), store);
+            var context = new TabletShellContext(shell, new TabletStateSnapshot { Balance = 50000f });
+            var app = new PropertyPortfolioTabletApp(new PropertyPortfolioTabletActions());
+
+            var page = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "office-detail", "alpha-office"));
+            var markerOperations = FindItem(page, "Marker Operations");
+
+            Assert.IsNotNull(markerOperations);
+
+            var detail = markerOperations.DetailFactory != null ? markerOperations.DetailFactory() ?? string.Empty : string.Empty;
+            StringAssert.Contains(detail, "Construction Site Cabin");
+            Assert.IsFalse(detail.Contains("Hire NPC remain on the office marker menu"));
+        }
+
         private static TabletStateStore CreateStore()
         {
             var config = ModConfig.Load(Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config"));

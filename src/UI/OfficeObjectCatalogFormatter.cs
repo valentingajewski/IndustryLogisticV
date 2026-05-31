@@ -73,6 +73,11 @@ namespace LSOL.UI
                 return string.Empty;
             }
 
+            if (definition.Function == OfficeObjectFunction.Npc && definition.InteractionType == OfficeFacilityInteractionType.HireNpc)
+            {
+                return "Buy now, haul it from the port, then place it at the active office to open Hire NPC there.";
+            }
+
             if (definition.RequiresRoomAnchor)
             {
                 return definition.IsFunctional
@@ -187,7 +192,7 @@ namespace LSOL.UI
                 case OfficeFacilityInteractionType.OfficeSummary:
                     return "Interaction: office summary";
                 case OfficeFacilityInteractionType.HireNpc:
-                    return "Interaction: staffing and route planning";
+                    return "Interaction: Hire NPC and route planning";
                 case OfficeFacilityInteractionType.RepairVehicle:
                     return "Interaction: repair access";
                 case OfficeFacilityInteractionType.FuelManagement:

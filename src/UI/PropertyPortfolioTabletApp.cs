@@ -281,7 +281,7 @@ namespace LSOL.UI
                     office.AssignmentSummary),
                 TabletUiHelpers.CreateInfoItem(
                     "Marker Operations",
-                    "Garage, office objects, fuel management, repairs, and Hire NPC remain on the office marker menu.")
+                    "Garage, office objects, fuel management, and repairs remain on the office marker menu. Use a placed Construction Site Cabin for Hire NPC.")
             };
 
             var hasTransferRental = summary.Offices.Any(entry => !string.Equals(entry.OfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase) && entry.IsRented && !entry.IsOwned);

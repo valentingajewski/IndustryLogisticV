@@ -389,6 +389,86 @@ namespace LSOL.Tests.Systems
             Assert.AreEqual("dispatch-main", placedEntry.AssignedFacilityAnchorId);
         }
 
+        [TestMethod]
+        public void PlacedConstructionSiteCabin_ContributesNpcCapacity()
+        {
+            var manager = CreatePropertyManager(
+                new[]
+                {
+                    CreateOffice("alpha", "Alpha Yard", 100f, 2),
+                },
+                new[]
+                {
+                    new OfficeObjectDefinition
+                    {
+                        ObjectId = 2,
+                        DisplayName = "Construction Site Cabin",
+                        Function = OfficeObjectFunction.Npc,
+                        Capacity = 3f,
+                        InteractionType = OfficeFacilityInteractionType.HireNpc,
+                        PerOfficeLimit = 4,
+                        Price = 25000f,
+                    },
+                });
+            var balance = 50000f;
+
+            manager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry { OfficeId = "alpha", IsOwned = true, LastChargedWeekIndex = 0 },
+                },
+            }, 0);
+
+            OfficeObjectPersistenceEntry purchasedEntry;
+            Assert.IsTrue(manager.TryPurchaseOfficeObject("alpha", 2, ref balance, out purchasedEntry, out _));
+
+            OfficeObjectPersistenceEntry placedEntry;
+            Assert.IsTrue(manager.TryPlaceOfficeObject(purchasedEntry.InstanceId, new Vector3(1f, 2f, 3f), Vector3.Zero, out placedEntry, out _));
+            Assert.AreEqual(3f, manager.GetOfficeObjectFunctionCapacity("alpha", OfficeObjectFunction.Npc), 0.01f);
+        }
+
+        [TestMethod]
+        public void ApplySnapshot_WithRemovedBaseOfficeObjects_PrunesInvalidEntries()
+        {
+            var manager = CreatePropertyManager(
+                new[]
+                {
+                    CreateOffice("alpha", "Alpha Yard", 100f, 2),
+                },
+                new[]
+                {
+                    new OfficeObjectDefinition
+                    {
+                        ObjectId = 2,
+                        DisplayName = "Construction Site Cabin",
+                        Function = OfficeObjectFunction.Npc,
+                        Capacity = 3f,
+                    },
+                });
+
+            manager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry { OfficeId = "alpha", IsOwned = true, LastChargedWeekIndex = 0 },
+                },
+                OfficeObjects =
+                {
+                    new OfficeObjectPersistenceEntry { InstanceId = "removed-11", OfficeId = "alpha", DefinitionId = 11, IsPlaced = true, Position = new Vector3(1f, 1f, 1f) },
+                    new OfficeObjectPersistenceEntry { InstanceId = "removed-12", OfficeId = "alpha", DefinitionId = 12, IsPlaced = true, Position = new Vector3(2f, 2f, 2f) },
+                    new OfficeObjectPersistenceEntry { InstanceId = "removed-13", OfficeId = "alpha", DefinitionId = 13, IsPlaced = true, Position = new Vector3(3f, 3f, 3f) },
+                    new OfficeObjectPersistenceEntry { InstanceId = "cabin", OfficeId = "alpha", DefinitionId = 2, IsPlaced = true, Position = new Vector3(4f, 4f, 4f) },
+                },
+            }, 0);
+
+            var officeObjects = manager.GetOfficeObjects("alpha", true).ToList();
+            Assert.AreEqual(1, officeObjects.Count);
+            Assert.AreEqual(2, officeObjects[0].DefinitionId);
+        }
+
         private static PropertyManager CreatePropertyManager(OfficeDefinition[] offices, OfficeObjectDefinition[] officeObjects)
         {
             var config = new ModConfig();

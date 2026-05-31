@@ -12,9 +12,65 @@ using WinForms = System.Windows.Forms;
 
 namespace LSOL.Systems
 {
+    internal static class OfficeObjectPlacementResolver
+    {
+        public static bool ShouldGroundPlacement(OfficeObjectPlacementContext placementContext, bool anchorUsed)
+        {
+            return !anchorUsed && placementContext != OfficeObjectPlacementContext.Room;
+        }
+
+        public static Vector3 ResolveFinalPosition(
+            OfficeObjectPlacementContext placementContext,
+            bool anchorUsed,
+            Vector3 requestedPosition,
+            Vector3 groundedPosition)
+        {
+            return ShouldGroundPlacement(placementContext, anchorUsed)
+                ? groundedPosition
+                : requestedPosition;
+        }
+
+        public static bool NeedsPlacementRepair(Vector3 persistedPosition, Vector3 resolvedPosition, float tolerance)
+        {
+            var clampedTolerance = Math.Max(0.0001f, tolerance);
+            return persistedPosition.DistanceToSquared(resolvedPosition) > clampedTolerance * clampedTolerance;
+        }
+    }
+
+    internal static class OfficeObjectAmbientStaffResolver
+    {
+        private const float AmbientStaffSideSpacing = 0.75f;
+        private const float AmbientStaffMinimumBackwardOffset = 0.85f;
+        private const float AmbientStaffBackwardClearance = 0.15f;
+
+        public static float ResolveBackwardOffset(Vector3 modelMin, Vector3 modelMax)
+        {
+            var backwardExtent = Math.Max(Math.Abs(modelMin.Y), Math.Abs(modelMax.Y));
+            return Math.Max(AmbientStaffMinimumBackwardOffset, backwardExtent + AmbientStaffBackwardClearance);
+        }
+
+        public static Vector3 BuildPosition(Vector3 origin, float heading, int index, int staffCount, float backwardOffset)
+        {
+            var radians = heading * (float)Math.PI / 180f;
+            var forward = new Vector3(-(float)Math.Sin(radians), (float)Math.Cos(radians), 0f);
+            if (forward.LengthSquared() <= 0.0001f)
+            {
+                forward = new Vector3(0f, 1f, 0f);
+            }
+            else
+            {
+                forward = forward.Normalized;
+            }
+
+            var right = new Vector3(-forward.Y, forward.X, 0f);
+            var centeredIndex = index - ((staffCount - 1) * 0.5f);
+            return origin + (right * (centeredIndex * AmbientStaffSideSpacing)) - (forward * backwardOffset);
+        }
+    }
+
     public sealed class OfficeObjectManager
     {
-        private const string PlacementControlsHint = "NUMPAD 8/2/4/6 move | PGUP/PGDN height | NUMPAD 7/9 rotate | ENTER place | BACKSPACE cancel";
+        private const string PlacementControlsHint = "NUMPAD 8/2/4/6 move | NUMPAD 7/9 rotate | ENTER place | BACKSPACE cancel";
         private const float PreviewForwardDistance = 2.85f;
         private const float PreviewRightDistance = 1.1f;
         private const float OfficeStreamingDistance = 180f;
@@ -22,8 +78,8 @@ namespace LSOL.Systems
         private const float PlacementRotationStep = 15f;
         private const float PlacementContinuousRotationStep = 2f;
         private const float PlacementHorizontalMoveStep = 0.12f;
-        private const float PlacementVerticalMoveStep = 0.08f;
         private const float PlacementPadding = 0.2f;
+        private const float PlacementRepairTolerance = 0.02f;
         private const float HaulUnloadDistance = 6f;
         private const float FuelDeliveryPriceMultiplier = 1.05f;
         private const float ServiceArrivalDistance = 18f;
@@ -1105,6 +1161,23 @@ namespace LSOL.Systems
                     continue;
                 }
 
+                Vector3 resolvedPosition;
+                Vector3 resolvedRotation;
+                bool allowGroundSettle;
+                if (!TryResolveFinalOfficeObjectPlacement(office, entry, definition, entry.Position, entry.Rotation.Z, true, out resolvedPosition, out resolvedRotation, out allowGroundSettle))
+                {
+                    continue;
+                }
+
+                if (OfficeObjectPlacementResolver.NeedsPlacementRepair(entry.Position, resolvedPosition, PlacementRepairTolerance))
+                {
+                    OfficeObjectPersistenceEntry updatedEntry;
+                    if (_propertyManager.TryUpdateOfficeObjectPlacement(entry.InstanceId, resolvedPosition, resolvedRotation, entry.AssignedFacilityAnchorId, out updatedEntry))
+                    {
+                        entry = updatedEntry;
+                    }
+                }
+
                 AddFacilityRuntime(office, entry, definition, desiredInteractionPoints, desiredStaffSpecs);
 
                 Prop existing;
@@ -1113,7 +1186,7 @@ namespace LSOL.Systems
                     continue;
                 }
 
-                var prop = CreatePlacedProp(definition, entry.Position, entry.Rotation);
+                var prop = CreatePlacedProp(definition, resolvedPosition, resolvedRotation, allowGroundSettle);
                 if (prop != null && prop.Exists())
                 {
                     _spawnedProps[entry.InstanceId] = prop;
@@ -1164,12 +1237,13 @@ namespace LSOL.Systems
             var staffCount = definition.AmbientStaffRole == OfficeAmbientStaffRole.None
                 ? 0
                 : Math.Max(1, definition.AmbientStaffCount);
+            var ambientStaffBackwardOffset = ResolveAmbientStaffBackwardOffset(definition);
             for (int i = 0; i < staffCount; i++)
             {
                 staffSpecs.Add(new AmbientStaffSpec
                 {
                     StaffId = BuildAmbientStaffId(entry.InstanceId, i),
-                    Position = BuildAmbientStaffPosition(position, heading, i, staffCount),
+                    Position = BuildAmbientStaffPosition(position, heading, i, staffCount, ambientStaffBackwardOffset),
                     Heading = heading,
                     Role = definition.AmbientStaffRole,
                     ScenarioName = ResolveAmbientScenarioName(scenarioName, definition.AmbientStaffRole),
@@ -1181,7 +1255,7 @@ namespace LSOL.Systems
         {
             position = entry != null ? entry.Position : Vector3.Zero;
             heading = entry != null ? NormalizeHeading(entry.Rotation.Z) : 0f;
-            interactionRadius = DefaultFacilityInteractionRadius;
+            interactionRadius = GetDefaultFacilityInteractionRadius(definition);
             label = definition != null ? definition.DisplayName ?? string.Empty : string.Empty;
             scenarioName = definition != null ? definition.AmbientScenarioName ?? string.Empty : string.Empty;
 
@@ -1197,7 +1271,7 @@ namespace LSOL.Systems
                 {
                     position = anchor.Position;
                     heading = NormalizeHeading(anchor.Heading);
-                    interactionRadius = anchor.InteractionRadius > 0.05f ? anchor.InteractionRadius : DefaultFacilityInteractionRadius;
+                    interactionRadius = anchor.InteractionRadius > 0.05f ? anchor.InteractionRadius : GetDefaultFacilityInteractionRadius(definition);
                     if (!string.IsNullOrWhiteSpace(anchor.Label))
                     {
                         label = anchor.Label;
@@ -1213,6 +1287,19 @@ namespace LSOL.Systems
             return entry.IsPlaced
                 && (definition.InteractionType != OfficeFacilityInteractionType.None || definition.AmbientStaffRole != OfficeAmbientStaffRole.None)
                 && position.LengthSquared() > 0.01f;
+        }
+
+        private static float GetDefaultFacilityInteractionRadius(OfficeObjectDefinition definition)
+        {
+            switch (definition != null ? definition.Size : OfficeObjectSize.Medium)
+            {
+                case OfficeObjectSize.Small:
+                    return 2.0f;
+                case OfficeObjectSize.Big:
+                    return 3.2f;
+                default:
+                    return DefaultFacilityInteractionRadius;
+            }
         }
 
         private void SyncAmbientStaff(IEnumerable<AmbientStaffSpec> desiredStaffSpecs)
@@ -1250,12 +1337,21 @@ namespace LSOL.Systems
             return string.Format(CultureInfo.InvariantCulture, "{0}:staff:{1}", instanceId ?? string.Empty, index);
         }
 
-        private static Vector3 BuildAmbientStaffPosition(Vector3 origin, float heading, int index, int staffCount)
+        private float ResolveAmbientStaffBackwardOffset(OfficeObjectDefinition definition)
         {
-            var forward = GetFlatDirectionFromHeading(heading);
-            var right = new Vector3(-forward.Y, forward.X, 0f);
-            var centeredIndex = index - ((staffCount - 1) * 0.5f);
-            return origin + (right * (centeredIndex * 0.75f)) - (forward * 0.35f);
+            Vector3 min;
+            Vector3 max;
+            if (definition != null && TryGetModelDimensions(new Model(definition.ModelHash), out min, out max))
+            {
+                return OfficeObjectAmbientStaffResolver.ResolveBackwardOffset(min, max);
+            }
+
+            return OfficeObjectAmbientStaffResolver.ResolveBackwardOffset(Vector3.Zero, Vector3.Zero);
+        }
+
+        private static Vector3 BuildAmbientStaffPosition(Vector3 origin, float heading, int index, int staffCount, float backwardOffset)
+        {
+            return OfficeObjectAmbientStaffResolver.BuildPosition(origin, heading, index, staffCount, backwardOffset);
         }
 
         private static string ResolveAmbientScenarioName(string scenarioName, OfficeAmbientStaffRole role)
@@ -1308,7 +1404,7 @@ namespace LSOL.Systems
                 case OfficeFacilityInteractionType.OfficeSummary:
                     return string.IsNullOrWhiteSpace(label) ? "review the office facilities" : string.Format("review {0}", label);
                 case OfficeFacilityInteractionType.HireNpc:
-                    return string.IsNullOrWhiteSpace(label) ? "open dispatch staffing" : string.Format("open staffing at {0}", label);
+                    return string.IsNullOrWhiteSpace(label) ? "open Hire NPC staffing" : string.Format("open Hire NPC at {0}", label);
                 case OfficeFacilityInteractionType.RepairVehicle:
                     return string.IsNullOrWhiteSpace(label) ? "manage maintenance repairs" : string.Format("manage repairs at {0}", label);
                 case OfficeFacilityInteractionType.FuelManagement:
@@ -2234,7 +2330,54 @@ namespace LSOL.Systems
             _previewIsPlacement = false;
         }
 
-        private Prop CreatePlacedProp(OfficeObjectDefinition definition, Vector3 position, Vector3 rotation)
+        private bool TryResolveFinalOfficeObjectPlacement(
+            OfficeDefinition office,
+            OfficeObjectPersistenceEntry entry,
+            OfficeObjectDefinition definition,
+            Vector3 requestedPosition,
+            float heading,
+            bool allowAnchorOverride,
+            out Vector3 position,
+            out Vector3 rotation,
+            out bool allowGroundSettle)
+        {
+            position = requestedPosition;
+            rotation = new Vector3(0f, 0f, NormalizeHeading(heading));
+            allowGroundSettle = false;
+
+            if (definition == null)
+            {
+                return false;
+            }
+
+            OfficeFacilityAnchorDefinition anchor = null;
+            if (allowAnchorOverride
+                && office != null
+                && entry != null
+                && !string.IsNullOrWhiteSpace(entry.AssignedFacilityAnchorId))
+            {
+                anchor = _propertyManager.GetOfficeFacilityAnchor(office.OfficeId, entry.AssignedFacilityAnchorId);
+            }
+
+            var anchorUsed = anchor != null;
+            if (anchorUsed)
+            {
+                position = anchor.Position;
+                rotation = new Vector3(0f, 0f, NormalizeHeading(anchor.Heading));
+            }
+
+            allowGroundSettle = OfficeObjectPlacementResolver.ShouldGroundPlacement(definition.PlacementContext, anchorUsed);
+            if (!allowGroundSettle)
+            {
+                return true;
+            }
+
+            var groundedPosition = SnapPlacementHeight(position, definition, office);
+            position = OfficeObjectPlacementResolver.ResolveFinalPosition(definition.PlacementContext, anchorUsed, position, groundedPosition);
+            return true;
+        }
+
+        private Prop CreatePlacedProp(OfficeObjectDefinition definition, Vector3 position, Vector3 rotation, bool allowGroundSettle)
         {
             if (definition == null)
             {
@@ -2255,6 +2398,11 @@ namespace LSOL.Systems
             }
 
             prop.IsPersistent = true;
+            if (allowGroundSettle)
+            {
+                TryPlacePropOnGround(prop);
+            }
+
             prop.Heading = rotation.Z;
             try
             {
@@ -2317,6 +2465,12 @@ namespace LSOL.Systems
         {
             if (entry != null && entry.IsPlaced && entry.Position.LengthSquared() > 0.01f)
             {
+                Vector3 resolvedPosition;
+                if (TryResolveFinalOfficeObjectPlacement(office, entry, definition, entry.Position, entry.Rotation.Z, true, out resolvedPosition, out _, out _))
+                {
+                    return resolvedPosition;
+                }
+
                 return entry.Position;
             }
 
@@ -2383,16 +2537,6 @@ namespace LSOL.Systems
                 _placement.Position -= right * PlacementHorizontalMoveStep;
             }
 
-            if (Game.IsKeyPressed(WinForms.Keys.PageUp))
-            {
-                _placement.Position += new Vector3(0f, 0f, PlacementVerticalMoveStep);
-            }
-
-            if (Game.IsKeyPressed(WinForms.Keys.PageDown))
-            {
-                _placement.Position -= new Vector3(0f, 0f, PlacementVerticalMoveStep);
-            }
-
             if (Game.IsKeyPressed(WinForms.Keys.NumPad7))
             {
                 _placement.Heading = NormalizeHeading(_placement.Heading + PlacementContinuousRotationStep);
@@ -2428,7 +2572,11 @@ namespace LSOL.Systems
                 return false;
             }
 
-            rotation = new Vector3(0f, 0f, NormalizeHeading(heading));
+            if (!TryResolveFinalOfficeObjectPlacement(office, null, definition, candidatePosition, heading, false, out position, out rotation, out _))
+            {
+                error = "Office object definition unavailable.";
+                return false;
+            }
 
             if (!IsWithinOfficePlacementBounds(position, office, true))
             {

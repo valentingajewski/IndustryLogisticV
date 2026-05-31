@@ -78,21 +78,34 @@ namespace LSOL.Tests.UI
         {
             var definition = new OfficeObjectDefinition
             {
-                DisplayName = "Dispatch Console",
+                DisplayName = "Construction Site Cabin",
                 Function = OfficeObjectFunction.Npc,
-                Capacity = 2f,
-                PlacementContext = OfficeObjectPlacementContext.Either,
-                AnchorType = OfficeFacilityAnchorType.DispatchDesk,
+                Capacity = 3f,
                 InteractionType = OfficeFacilityInteractionType.HireNpc,
-                AmbientStaffRole = OfficeAmbientStaffRole.Dispatcher,
+                AmbientStaffRole = OfficeAmbientStaffRole.SupportWorker,
                 AmbientStaffCount = 1,
-                RequiresOwnedOffice = true,
-                Price = 18000f,
+                PerOfficeLimit = 4,
+                Price = 25000f,
             };
 
             Assert.AreEqual(
-                "Function: hired NPC support | Capacity: supports 2 hired NPCs | Placement: dispatch desk or yard fallback | Interaction: staffing and route planning | Staff: 1 dispatcher | Access: owned office only | Limit: no office cap | Haul: required from port before placement | Price: $18,000.00 | Placed: 0 | Pending: 0",
+                "Function: hired NPC support | Capacity: supports 3 hired NPCs | Limit: 4 per office | Interaction: Hire NPC and route planning | Staff: 1 support worker | Haul: required from port before placement | Price: $25,000.00 | Placed: 0 | Pending: 0",
                 OfficeObjectCatalogFormatter.BuildDetail(definition, 0, 0));
+        }
+
+        [TestMethod]
+        public void BuildPurchaseActionDetail_ForNpcHiringModule_PointsToPlacedOfficeUse()
+        {
+            var definition = new OfficeObjectDefinition
+            {
+                DisplayName = "Construction Site Cabin",
+                Function = OfficeObjectFunction.Npc,
+                InteractionType = OfficeFacilityInteractionType.HireNpc,
+            };
+
+            Assert.AreEqual(
+                "Buy now, haul it from the port, then place it at the active office to open Hire NPC there.",
+                OfficeObjectCatalogFormatter.BuildPurchaseActionDetail(definition));
         }
 
         [TestMethod]

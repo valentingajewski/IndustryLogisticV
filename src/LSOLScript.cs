@@ -3587,37 +3587,6 @@ namespace LSOL
             _officeMenu.SetItems(BuildOfficeMenuItems());
         }
 
-        private string CurrentNpcHiringDetail()
-        {
-            var routeCount = _npcLogisticsManager.Contracts.Count;
-            if (_npcRouteLimit <= 0)
-            {
-                return routeCount > 0
-                    ? string.Format("Hiring new NPCs is disabled. {0} active logistics route{1} can still be managed.", routeCount, routeCount == 1 ? string.Empty : "s")
-                    : "Hiring new NPCs is disabled in Options.";
-            }
-
-            var hireBlockedReason = GetNpcHiringBlockedReason();
-            if (!string.IsNullOrWhiteSpace(hireBlockedReason))
-            {
-                return hireBlockedReason;
-            }
-
-            if (_officeNpcLimitDifficultyEnabled)
-            {
-                var capacity = GetActiveOfficeNpcCapacity();
-                return string.Format(
-                    "{0} hired NPC{1} active | Capacity {2}. Open the tablet-style dispatch manager.",
-                    routeCount,
-                    routeCount == 1 ? string.Empty : "s",
-                    Math.Max(0, capacity));
-            }
-
-            return routeCount == 1
-                ? "1 active logistics route. Open the tablet-style NPC manager."
-                : string.Format("{0} active logistics routes. Open the tablet-style NPC manager.", routeCount);
-        }
-
         private string GetNpcHiringBlockedReason()
         {
             string reason;
@@ -3640,7 +3609,7 @@ namespace LSOL
             var capacity = GetActiveOfficeNpcCapacity();
             if (capacity <= 0)
             {
-                return "Install an NPC operations module at the active office to hire NPCs.";
+                return "Place a Construction Site Cabin at the active office to hire NPCs.";
             }
 
             var hiredNpcCount = _npcLogisticsManager.Contracts.Count;

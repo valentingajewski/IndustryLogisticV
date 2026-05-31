@@ -1163,12 +1163,6 @@ namespace LSOL
                     DetailFactory = BuildOfficeRepairDetail,
                     OnActivate = RepairVehicleAtOffice,
                 });
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Hire NPC",
-                    DetailFactory = CurrentNpcHiringDetail,
-                    OnActivate = OpenNpcHiringMenu,
-                });
             }
 
             return items;

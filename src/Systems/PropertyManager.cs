@@ -1775,20 +1775,13 @@ namespace LSOL.Systems
             placedEntry = null;
             message = string.Empty;
 
-            var entry = GetOfficeObject(instanceId);
-            if (entry == null)
+            if (!TryUpdateOfficeObjectPlacement(instanceId, position, rotation, assignedFacilityAnchorId, out placedEntry))
             {
                 message = "Office object record not found.";
                 return false;
             }
 
-            entry.Position = position;
-            entry.Rotation = rotation;
-            entry.AssignedFacilityAnchorId = assignedFacilityAnchorId ?? string.Empty;
-            entry.IsPlaced = true;
-            placedEntry = entry;
-
-            var definition = GetOfficeObjectDefinition(entry.DefinitionId);
+            var definition = GetOfficeObjectDefinition(placedEntry.DefinitionId);
             message = string.Format("Placed {0}.", definition != null ? definition.DisplayName : "office object");
             return true;
         }
@@ -1796,6 +1789,21 @@ namespace LSOL.Systems
         public bool TryPlaceOfficeObject(string instanceId, Vector3 position, Vector3 rotation, out OfficeObjectPersistenceEntry placedEntry, out string message)
         {
             return TryPlaceOfficeObject(instanceId, position, rotation, string.Empty, out placedEntry, out message);
+        }
+
+        public bool TryUpdateOfficeObjectPlacement(string instanceId, Vector3 position, Vector3 rotation, string assignedFacilityAnchorId, out OfficeObjectPersistenceEntry updatedEntry)
+        {
+            updatedEntry = GetOfficeObject(instanceId);
+            if (updatedEntry == null)
+            {
+                return false;
+            }
+
+            updatedEntry.Position = position;
+            updatedEntry.Rotation = rotation;
+            updatedEntry.AssignedFacilityAnchorId = assignedFacilityAnchorId ?? string.Empty;
+            updatedEntry.IsPlaced = true;
+            return true;
         }
 
         public bool TryUpdateOfficeObjectStoredResourceAmount(string instanceId, float amount, out OfficeObjectPersistenceEntry updatedEntry)
