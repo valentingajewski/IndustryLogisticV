@@ -75,6 +75,17 @@
       <Slot x="0.5" y="-3.5" z="0.8" heading="170" pitch="" roll="" />
 
     </LooseCargo>
+    <LooseCargo commodities="Crops" objectKey="Crops" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="6" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
+      <Slot x="-0.6" y="-0.8" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="0.5" y="-0.8" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.6" y="-3" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="0.5" y="-3" z="0" heading="0" pitch="0" roll="0" />
+
+      <Slot x="-0.6" y="-0.8" z="1" heading="0" pitch="0" roll="0" />
+      <Slot x="0.5" y="-0.8" z="1" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.6" y="-3" z="1" heading="0" pitch="0" roll="0" />
+      <Slot x="0.5" y="-3" z="1" heading="0" pitch="0" roll="0" />
+    </LooseCargo>
   </Vehicle>
   <Vehicle model="tiptruck" name="Tipper (4 Wheels)" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
     <LooseCargo commodities="Coal,Gravel,Ore" objectKey="Gravel" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="10" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
@@ -89,6 +100,12 @@
       <Slot x="" y="" z="" heading="" pitch="" roll="" />
       <Slot x="" y="" z="" heading="" pitch="" roll="" />
     </LooseCargo>
+    <LooseCargo commodities="Crops" objectKey="Crops" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="4" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
+      <Slot x="-0.45" y="-0.6" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="0.45" y="-0.6" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.45" y="-2.4" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="0.45" y="-2.4" z="0" heading="0" pitch="0" roll="0" />
+    </LooseCargo>
   </Vehicle>
   <Vehicle model="tiptruck2" name="Tipper (6 Wheels)" objectKey="" centerX="0.00" centerY="-0.90" centerZ="1.00" maxLine="1" maxRow="1" enabled="false">
     <LooseCargo commodities="Coal,Gravel,Ore" objectKey="Gravel" centerX="" centerY="" centerZ="" maxPropCount="10" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
@@ -102,6 +119,12 @@
       <Slot x="" y="" z="" heading="" pitch="" roll="" />
       <Slot x="" y="" z="" heading="" pitch="" roll="" />
       <Slot x="" y="" z="" heading="" pitch="" roll="" />
+    </LooseCargo>
+    <LooseCargo commodities="Crops" objectKey="Crops" centerX="0.00" centerY="-0.90" centerZ="0.04" maxPropCount="4" spreadX="0.72" spreadY="0.48" yawJitter="18" pitchJitter="4" rollJitter="4">
+      <Slot x="-0.5" y="-0.6" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="0.5" y="-0.6" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="-0.5" y="-2.5" z="0" heading="0" pitch="0" roll="0" />
+      <Slot x="0.5" y="-2.5" z="0" heading="0" pitch="0" roll="0" />
     </LooseCargo>
   </Vehicle>
 </VehiclesObjects>

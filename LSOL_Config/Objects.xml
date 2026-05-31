@@ -27,4 +27,5 @@
   <Group key="Omega" models="prop_boxpile_06b" />
   <Group key="Steel" models="prop_pipes_04a" />
   <Group key="Gravel" models="csx_rvrbldr_smla_" />
+  <Group key="Crops" models="prop_haybale_02" />
 </Objects>
