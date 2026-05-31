@@ -77,3 +77,27 @@ These two files stay outside this folder because they are primarily for content 
 
 - [../LSOL_Addons/README.md](../LSOL_Addons/README.md)
 - [../LSOL_Config/missions/README.md](../LSOL_Config/missions/README.md)
+
+<!-- GENERATED SITE DOCS:START -->
+## Catalog Reference Docs
+
+Grouped catalog reference docs now live alongside the player guides in these generated folders:
+
+- [Industries/Industries.md](Industries/Industries.md): 28 entries covering roles Raw Producers, Processing Plants, Manufacturing Plants, Recycling Hubs, Special Plants
+- [Sites/GasStations.md](Sites/GasStations.md): 25 entries covering roles Gas Stations
+- [Sites/OperationalSites.md](Sites/OperationalSites.md): 12 entries covering roles Warehouses, Construction Site Sinks
+- [Stores/Stores.md](Stores/Stores.md): 15 entries covering roles Stores
+
+Folder indexes:
+
+- [Industries/README.md](Industries/README.md)
+- [Sites/README.md](Sites/README.md)
+- [Stores/README.md](Stores/README.md)
+
+Source-of-truth and helper files:
+
+- Primary runtime catalog: `../LSOL_Config/Sites.xml`
+- Legacy/reference-only helpers: `../configs/Sites.csv`, `../configs/Industries.ini`, and `../configs/Stores.ini`
+
+These generated grouped reference sheets are intended for catalog lookup and side-by-side comparison. The hand-written player guides in this folder remain the main gameplay documentation.
+<!-- GENERATED SITE DOCS:END -->
