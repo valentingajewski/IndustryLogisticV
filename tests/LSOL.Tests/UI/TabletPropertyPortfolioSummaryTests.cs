@@ -56,8 +56,6 @@ namespace LSOL.Tests.UI
                     {
                         OfficeId = "bravo-office",
                         IsRented = true,
-                        IsAccessSuspended = true,
-                        OutstandingRent = 250f,
                         LastChargedWeekIndex = 0,
                     },
                 },
@@ -130,24 +128,25 @@ namespace LSOL.Tests.UI
             Assert.AreEqual(1, summary.RentedOfficeCount);
             Assert.AreEqual(1, summary.OwnedApartmentCount);
             Assert.AreEqual(1, summary.RentedApartmentCount);
-            Assert.AreEqual(430f, summary.TotalArrears, 0.01f);
-            Assert.AreEqual(120f, summary.UpcomingWeeklyRent, 0.01f);
+            Assert.AreEqual(180f, summary.TotalArrears, 0.01f);
+            Assert.AreEqual(250f, summary.UpcomingWeeklyRent, 0.01f);
 
             var activeOffice = summary.Offices.Single(entry => entry.OfficeId == "alpha-office");
             Assert.IsTrue(activeOffice.IsActive);
             Assert.AreEqual("Owned", activeOffice.StatusLabel);
             Assert.AreEqual(120f, activeOffice.WeeklyRent, 0.01f);
-            Assert.AreEqual(10080, activeOffice.DueInMinutes);
+            Assert.AreEqual(int.MaxValue, activeOffice.DueInMinutes);
             Assert.AreEqual(1, activeOffice.ActiveGarageVehicleCount);
             Assert.AreEqual(1, activeOffice.ReserveVehicleCount);
+            StringAssert.Contains(activeOffice.BillDetail, "No rent due");
             StringAssert.Contains(activeOffice.AssignmentSummary, "Active garage 1/1");
 
             var overdueOffice = summary.Offices.Single(entry => entry.OfficeId == "bravo-office");
-            Assert.AreEqual("Arrears", overdueOffice.StatusLabel);
-            Assert.IsTrue(overdueOffice.HasArrears);
-            Assert.AreEqual(250f, overdueOffice.ArrearsAmount, 0.01f);
-            Assert.AreEqual(0, overdueOffice.DueInMinutes);
-            StringAssert.Contains(overdueOffice.BillDetail, "Due now");
+            Assert.AreEqual("Rented", overdueOffice.StatusLabel);
+            Assert.IsFalse(overdueOffice.HasArrears);
+            Assert.AreEqual(0f, overdueOffice.ArrearsAmount, 0.01f);
+            Assert.AreEqual(10080, overdueOffice.DueInMinutes);
+            StringAssert.Contains(overdueOffice.BillDetail, "Due next week");
 
             var ownedApartment = summary.Apartments.Single(entry => entry.InteriorId == "alpha-home");
             Assert.IsTrue(ownedApartment.IsActive);
@@ -166,12 +165,86 @@ namespace LSOL.Tests.UI
             Assert.AreEqual("PINKCAGE", motel.MotelIgName);
             Assert.AreEqual(75f, motel.NightlyRestPrice, 0.01f);
 
-            Assert.AreEqual(3, propertyBills.Count, "Portfolio property billing should match the same office/apartment bill scan used by Budget.");
-            Assert.IsTrue(propertyBills.Any(entry => entry.Label == "Alpha Office" && entry.Amount == 120f && entry.DueInMinutes == 10080));
-            Assert.IsTrue(propertyBills.Any(entry => entry.Label == "Bravo Office" && entry.Amount == 250f && entry.DueInMinutes == 0));
+            Assert.AreEqual(2, propertyBills.Count, "Portfolio property billing should match the same office/apartment bill scan used by Budget.");
+            Assert.IsTrue(propertyBills.Any(entry => entry.Label == "Bravo Office" && entry.Amount == 250f && entry.DueInMinutes == 10080));
             Assert.IsTrue(propertyBills.Any(entry => entry.Label == "Del Perro Flat" && entry.Amount == 180f && entry.DueInMinutes == 0));
+            Assert.IsFalse(propertyBills.Any(entry => entry.Label == "Alpha Office"), "Owned offices must remain rent-free after purchase.");
             Assert.IsFalse(propertyBills.Any(entry => entry.Label == "Alta Loft"), "Owned apartments must remain rent-free.");
             Assert.IsFalse(propertyBills.Any(entry => entry.Label == "Pink Cage Motel"), "Motels remain rest-only and must not become billed properties.");
+        }
+
+        [TestMethod]
+        public void GetPropertyPortfolioSummary_RentedOfficeArrearsStayDueNow()
+        {
+            var config = ModConfig.Load(Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config"));
+            SetProperty(config, nameof(ModConfig.OfficeDefinitions), new[]
+            {
+                CreateOffice("bravo-office", "Bravo Office", "Vespucci", 2500f, 250f, 2),
+            }.ToList());
+
+            var industryManager = new IndustryManager(config);
+            var fleetManager = new FleetManager(config);
+            var fuelSystem = new VehicleFuelSystem(fleetManager, null);
+            var globalMarket = new GlobalMarketManager(0);
+            var propertyManager = new PropertyManager(config);
+            propertyManager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry
+                    {
+                        OfficeId = "bravo-office",
+                        IsRented = true,
+                        IsAccessSuspended = true,
+                        OutstandingRent = 250f,
+                        LastChargedWeekIndex = 0,
+                    },
+                },
+            }, 0);
+
+            var store = new TabletStateStore(
+                industryManager,
+                fleetManager,
+                fuelSystem,
+                globalMarket,
+                null,
+                null,
+                propertyManager,
+                null,
+                null,
+                null,
+                () => 0,
+                null,
+                null,
+                () => 50000f,
+                () => VehicleCargoType.Unknown,
+                _ => GTA.Math.Vector3.Zero,
+                () => false,
+                () => string.Empty,
+                () => 0,
+                () => 0,
+                () => 0,
+                null,
+                null,
+                null);
+
+            var summary = store.GetPropertyPortfolioSummary();
+            var propertyBills = store.GetUpcomingBills()
+                .Where(entry => entry.Category == CompanyFinanceCategory.OfficeRent)
+                .ToList();
+
+            Assert.AreEqual(250f, summary.TotalArrears, 0.01f);
+            Assert.AreEqual(0f, summary.UpcomingWeeklyRent, 0.01f);
+
+            var office = summary.Offices.Single(entry => entry.OfficeId == "bravo-office");
+            Assert.AreEqual("Arrears", office.StatusLabel);
+            Assert.IsTrue(office.HasArrears);
+            Assert.AreEqual(250f, office.ArrearsAmount, 0.01f);
+            Assert.AreEqual(0, office.DueInMinutes);
+            StringAssert.Contains(office.BillDetail, "Due now");
+
+            Assert.AreEqual(1, propertyBills.Count);
+            Assert.IsTrue(propertyBills.Any(entry => entry.Label == "Bravo Office" && entry.Amount == 250f && entry.DueInMinutes == 0));
         }
 
         private static OfficeDefinition CreateOffice(string officeId, string displayName, string districtName, float purchasePrice, float weeklyRent, int maxCommercialVehicles)

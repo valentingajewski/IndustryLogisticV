@@ -1323,7 +1323,7 @@ namespace LSOL.UI
                         ArrearsAmount = state != null ? Math.Max(0f, state.OutstandingRent) : 0f,
                         WeeklyRent = Math.Max(0f, office.WeeklyOfficeRent),
                         PurchasePrice = Math.Max(0f, office.OfficePrice),
-                        DueInMinutes = bill != null ? Math.Max(0, bill.DueInMinutes) : (hasAccess && Math.Max(0f, office.WeeklyOfficeRent) > 0.01f ? InGameMinutesPerWeek : int.MaxValue),
+                        DueInMinutes = bill != null ? Math.Max(0, bill.DueInMinutes) : (hasAccess && !IsOwnedOffice(state) && Math.Max(0f, office.WeeklyOfficeRent) > 0.01f ? InGameMinutesPerWeek : int.MaxValue),
                         BillDetail = BuildOfficePortfolioBillDetail(office, state, bill),
                         ActiveGarageVehicleCount = isActive ? activeGarageVehicleCount : 0,
                         ReserveVehicleCount = isActive ? reserveVehicleCount : 0,
@@ -3123,7 +3123,7 @@ namespace LSOL.UI
             foreach (var office in _propertyManager.Offices.Where(entry => entry != null))
             {
                 var state = _propertyManager.GetOfficeState(office.OfficeId);
-                if (state == null || (!state.IsOwned && !state.IsRented))
+                if (state == null || IsOwnedOffice(state) || !state.IsRented)
                 {
                     continue;
                 }
@@ -3352,7 +3352,7 @@ namespace LSOL.UI
                     bill.DueInMinutes <= 0 ? "Due now" : "Due next week");
             }
 
-            return state.IsOwned
+            return IsOwnedOffice(state)
                 ? "Owned access. No rent due."
                 : string.Format("Weekly rent {0}", ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.WeeklyOfficeRent : 0f)));
         }
@@ -3411,6 +3411,11 @@ namespace LSOL.UI
                 activeGarageVehicleCount,
                 capacity,
                 reserveVehicleCount);
+        }
+
+        private static bool IsOwnedOffice(OfficeOwnershipPersistenceEntry state)
+        {
+            return state != null && state.IsOwned;
         }
 
         private static bool IsOwnedApartment(ApartmentOwnershipPersistenceEntry state)

@@ -63,6 +63,45 @@ namespace LSOL.Tests.UI
             CollectionAssert.Contains(captions, "Repair Vehicle");
         }
 
+        [TestMethod]
+        public void BuildOfficeMenuSubtitle_OwnedOfficeShowsPermanentAccess()
+        {
+            var office = new OfficeDefinition
+            {
+                OfficeId = "alpha",
+                SiteName = "Alpha Yard",
+                DistrictName = "Downtown",
+                OfficePrice = 1200f,
+                WeeklyOfficeRent = 120f,
+                MaxCommercialVehicles = 2,
+            };
+
+            var config = new ModConfig();
+            SetProperty(config, nameof(ModConfig.OfficeDefinitions), new[] { office }.ToList());
+            SetProperty(config, nameof(ModConfig.OfficeObjectDefinitions), new List<OfficeObjectDefinition>());
+
+            var propertyManager = new PropertyManager(config);
+            propertyManager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry { OfficeId = "alpha", IsOwned = true, LastChargedWeekIndex = 0 },
+                },
+            }, 0);
+
+            var script = (LSOLScript)FormatterServices.GetUninitializedObject(typeof(LSOLScript));
+            SetField(script, "_propertyManager", propertyManager);
+            SetField(script, "_menuOffice", office);
+
+            var method = typeof(LSOLScript).GetMethod("BuildOfficeMenuSubtitle", BindingFlags.Instance | BindingFlags.NonPublic);
+            Assert.IsNotNull(method);
+
+            var subtitle = (string)method.Invoke(script, null);
+
+            Assert.AreEqual("Owned | Permanent access | No rent due", subtitle);
+        }
+
         private static void SetField(object target, string fieldName, object value)
         {
             var field = typeof(LSOLScript).GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);

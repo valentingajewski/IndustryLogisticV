@@ -1033,7 +1033,18 @@ namespace LSOL
                     : officeState.IsOwned
                         ? "Owned"
                         : "Rented";
-            return string.Format("{0} | Rent {1} | Buy {2}", stateLabel, ModFormatting.FormatMoney(_menuOffice.WeeklyOfficeRent), ModFormatting.FormatMoney(_menuOffice.OfficePrice));
+            if (officeState != null && officeState.IsOwned && !officeState.IsAccessSuspended && officeState.OutstandingRent <= 0.01f)
+            {
+                return string.Format("{0} | Permanent access | No rent due", stateLabel);
+            }
+
+            return string.Format(
+                officeState != null && officeState.IsRented && !officeState.IsOwned
+                    ? "{0} | Weekly rent {1} | Buy {2}"
+                    : "{0} | Rent {1} | Buy {2}",
+                stateLabel,
+                ModFormatting.FormatMoney(_menuOffice.WeeklyOfficeRent),
+                ModFormatting.FormatMoney(_menuOffice.OfficePrice));
         }
 
         private IEnumerable<OfficeMenuItem> BuildOfficeMenuItems()
