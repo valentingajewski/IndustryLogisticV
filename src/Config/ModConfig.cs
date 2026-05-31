@@ -34,10 +34,11 @@ namespace LSOL.Config
         public Dictionary<string, DistrictConfig> DistrictConfigs { get; private set; }
         public List<string> ValidationMessages { get; private set; }
 
-        public static ModConfig Load(string configDirectory, LsolAddonCatalog addonCatalog = null)
+        public static ModConfig Load(string configDirectory, LsolAddonCatalog addonCatalog = null, string iniPath = null)
         {
             var coreValidationMessages = new List<string>();
             var coreConfig = XmlConfigImport.LoadCoreConfig(configDirectory, coreValidationMessages);
+            var controls = ControlBindings.LoadFromIni(IniFile.Load(iniPath), coreConfig.Controls ?? new ControlBindings());
             var externalCatalog = ExternalConfigCatalog.Load(configDirectory, addonCatalog);
             CommodityCatalog.Configure(externalCatalog.ResourceGroups, externalCatalog.ResourcesByCommodity.Values);
             externalCatalog.ValidationMessages.InsertRange(0, coreValidationMessages);
@@ -51,7 +52,7 @@ namespace LSOL.Config
                 MainOfficePosition = coreConfig.MainOfficePosition,
                 VehicleSpawnPosition = coreConfig.VehicleSpawnPosition,
                 VehicleSpawnHeading = coreConfig.VehicleSpawnHeading,
-                Controls = coreConfig.Controls ?? new ControlBindings(),
+                Controls = controls,
                 CommodityBasePrices = new Dictionary<string, float>(externalCatalog.CommodityBasePrices, StringComparer.OrdinalIgnoreCase),
                 ExternalCatalog = externalCatalog,
                 IndustryConfigs = new Dictionary<string, IndustryConfig>(StringComparer.OrdinalIgnoreCase),

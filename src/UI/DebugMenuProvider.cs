@@ -42,6 +42,8 @@ namespace LSOL.UI
         public Action DecreaseDistrictReputation { get; set; }
         public Action AddSelectedResourceToNearbyIndustry { get; set; }
         public Action DeleteResolvedVehicleCargo { get; set; }
+        public Action EmptyResolvedVehicleFuelTank { get; set; }
+        public Action FillResolvedVehicleFuelTank { get; set; }
         public Action DeleteCurrentVehicle { get; set; }
         public Action FillNearbyIndustryInputs { get; set; }
         public Action EmptyNearbyIndustryInputs { get; set; }
@@ -78,7 +80,17 @@ namespace LSOL.UI
             menu.Title = "Debug";
             menu.Subtitle = "ALT + W (Debugger attached)";
 
-            menu.SetItems(new[]
+            menu.SetItems(BuildRootItems(callbacks));
+        }
+
+        internal IReadOnlyList<MenuItem> BuildRootItems(DebugMenuCallbacks callbacks)
+        {
+            if (callbacks == null)
+            {
+                throw new ArgumentNullException("callbacks");
+            }
+
+            return new[]
             {
                 new MenuItem
                 {
@@ -175,6 +187,18 @@ namespace LSOL.UI
                 },
                 new MenuItem
                 {
+                    CaptionFactory = () => "Empty fuel tank",
+                    DetailFactory = () => "Sets the resolved powered vehicle fuel to 0L and applies the out-of-fuel state.",
+                    OnActivate = callbacks.EmptyResolvedVehicleFuelTank,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "Fill fuel tank",
+                    DetailFactory = () => "Refills the resolved powered vehicle to max capacity and restores drivability.",
+                    OnActivate = callbacks.FillResolvedVehicleFuelTank,
+                },
+                new MenuItem
+                {
                     CaptionFactory = () => "Delete current vehicle",
                     DetailFactory = () => "Deletes your current vehicle and its attached trailer if present.",
                     OnActivate = callbacks.DeleteCurrentVehicle,
@@ -214,7 +238,7 @@ namespace LSOL.UI
                     CaptionFactory = () => "Close",
                     OnActivate = callbacks.CloseMenu,
                 },
-            });
+            };
         }
 
         public void PopulateMissionMenu(LemonMenu menu, DebugMissionMenuCallbacks callbacks)

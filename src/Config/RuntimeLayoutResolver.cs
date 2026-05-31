@@ -50,6 +50,11 @@ namespace LSOL.Config
             get { return Combine(RuntimeDirectory, RuntimeLayoutResolver.SavegamesDirectoryName); }
         }
 
+        public string SettingsFilePath
+        {
+            get { return Combine(ScriptsDirectory, RuntimeLayoutResolver.SettingsFileName); }
+        }
+
         private static string Combine(string root, string name)
         {
             return string.IsNullOrWhiteSpace(root)
@@ -66,6 +71,7 @@ namespace LSOL.Config
         public const string AddonsDirectoryName = "LSOL_Addons";
         public const string SavegamesDirectoryName = "LSOLSaves";
         public const string StateFileName = "LSOL.state.xml";
+        public const string SettingsFileName = "LSOL.ini";
 
         public const string PreferredRuntimeDirectoryDisplayPath = "scripts/LSOL";
         public const string PreferredConfigDirectoryDisplayPath = "scripts/LSOL/LSOL_Config";

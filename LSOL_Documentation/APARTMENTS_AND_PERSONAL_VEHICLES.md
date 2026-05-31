@@ -73,5 +73,5 @@ If money is tight, grow the commercial company first. Apartments are valuable, b
 
 ## Read Next
 
-- [OFFICES_GARAGES_AND_SUPPORT_SITES.md](OFFICES_GARAGES_AND_SUPPORT_SITES.md)
-- [SAVES_AND_PROFILES.md](SAVES_AND_PROFILES.md)
+- OFFICES_GARAGES_AND_SUPPORT_SITES
+- SAVES_AND_PROFILES.md

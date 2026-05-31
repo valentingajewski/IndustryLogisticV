@@ -605,7 +605,8 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (!state.IsRented && state.OutstandingRent > 0.01f)
+            var wasRental = state.IsRented;
+            if (!wasRental && state.OutstandingRent > 0.01f)
             {
                 message = string.Format("Settle {0} in outstanding rent before purchasing {1}.", ModFormatting.FormatMoney(state.OutstandingRent), definition.DisplayName);
                 return false;
@@ -623,14 +624,20 @@ namespace LSOL.Systems
             state.IsRented = false;
             state.IsAccessSuspended = false;
             state.OutstandingRent = 0f;
-            state.LastChargedWeekIndex = GetWeekIndex(currentInGameMinute);
-            if (string.IsNullOrWhiteSpace(_state.ActiveOfficeId))
+            state.LastChargedWeekIndex = -1;
+
+            var relinquishedRentals = RelinquishOtherOfficeRentals(definition.OfficeId, false);
+            _state.ActiveOfficeId = definition.OfficeId;
+            TransferCommercialVehiclesToActiveOffice();
+
+            message = wasRental
+                ? string.Format("Purchased {0} for {1}. Rental access was converted to owned access.", definition.DisplayName, ModFormatting.FormatMoney(definition.OfficePrice))
+                : string.Format("Purchased {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(definition.OfficePrice));
+            if (relinquishedRentals.Count > 0)
             {
-                _state.ActiveOfficeId = definition.OfficeId;
+                message += string.Format(" Relinquished rental{0} at {1}.", relinquishedRentals.Count == 1 ? string.Empty : "s", string.Join(", ", relinquishedRentals));
             }
 
-            NormalizeCommercialGarageAssignments();
-            message = string.Format("Purchased {0} for {1}.", definition.DisplayName, ModFormatting.FormatMoney(definition.OfficePrice));
             return true;
         }
 
@@ -2236,8 +2243,23 @@ namespace LSOL.Systems
 
         private void ProcessOfficeWeeklyCharge(OfficeDefinition definition, OfficeOwnershipPersistenceEntry state, int currentWeekIndex, ref float balance, List<string> messages)
         {
-            if (definition == null || state == null || (!state.IsOwned && !state.IsRented))
+            if (definition == null || state == null)
             {
+                return;
+            }
+
+            if (state.IsOwned)
+            {
+                state.IsRented = false;
+                state.IsAccessSuspended = false;
+                state.OutstandingRent = 0f;
+                state.LastChargedWeekIndex = -1;
+                return;
+            }
+
+            if (!IsRentalOnlyOfficeAccess(state))
+            {
+                state.LastChargedWeekIndex = -1;
                 return;
             }
 
@@ -2403,9 +2425,23 @@ namespace LSOL.Systems
             for (int i = 0; i < _state.Offices.Count; i++)
             {
                 var state = _state.Offices[i];
-                if (state != null && state.IsOwned && state.IsRented)
+                if (state == null)
+                {
+                    continue;
+                }
+
+                if (state.IsOwned)
                 {
                     state.IsRented = false;
+                    state.IsAccessSuspended = false;
+                    state.OutstandingRent = 0f;
+                    state.LastChargedWeekIndex = -1;
+                    continue;
+                }
+
+                if (!state.IsRented)
+                {
+                    state.LastChargedWeekIndex = -1;
                 }
             }
 
@@ -2477,9 +2513,14 @@ namespace LSOL.Systems
 
             for (int i = 0; i < _state.Offices.Count; i++)
             {
-                if (_state.Offices[i] != null && _state.Offices[i].LastChargedWeekIndex < 0)
+                var office = _state.Offices[i];
+                if (IsRentalOnlyOfficeAccess(office) && office.LastChargedWeekIndex < 0)
                 {
-                    _state.Offices[i].LastChargedWeekIndex = currentWeekIndex;
+                    office.LastChargedWeekIndex = currentWeekIndex;
+                }
+                else if (office != null && !IsRentalOnlyOfficeAccess(office))
+                {
+                    office.LastChargedWeekIndex = -1;
                 }
             }
 

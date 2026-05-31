@@ -208,13 +208,14 @@ namespace LSOL
         {
             _isConstructing = true;
             var runtimeLayout = ResolveRuntimeLayout();
+            var iniPath = runtimeLayout.SettingsFilePath;
             _configDirectory = runtimeLayout.ConfigDirectory;
             _defaultIndustryStatePath = runtimeLayout.DefaultStatePath;
             _savegamesDirectoryPath = runtimeLayout.SavegamesDirectory;
             _industryStatePath = _defaultIndustryStatePath;
             _difficultyTemplateStore = new DifficultySettingsTemplateStore(Path.Combine(_configDirectory, "DifficultyTemplates.xml"));
             _addonCatalog = LsolAddonCatalog.Load(_configDirectory);
-            _config = ModConfig.Load(_configDirectory, _addonCatalog);
+            _config = ModConfig.Load(_configDirectory, _addonCatalog, iniPath);
             _controls = _config.Controls ?? new ControlBindings();
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
@@ -3414,6 +3415,8 @@ namespace LSOL
                 DecreaseDistrictReputation = () => AdjustDebugDistrictReputation(-1f),
                 AddSelectedResourceToNearbyIndustry = AddSelectedDebugResourceToNearbyIndustry,
                 DeleteResolvedVehicleCargo = DeleteResolvedVehicleCargo,
+                EmptyResolvedVehicleFuelTank = EmptyResolvedVehicleFuelTank,
+                FillResolvedVehicleFuelTank = FillResolvedVehicleFuelTank,
                 DeleteCurrentVehicle = DeleteCurrentVehicle,
                 FillNearbyIndustryInputs = FillNearbyIndustryInputs,
                 EmptyNearbyIndustryInputs = EmptyNearbyIndustryInputs,
@@ -4549,6 +4552,40 @@ namespace LSOL
             ShowStatus(string.Format("Cleared cargo from {0}.", cargoVehicle.DisplayName));
         }
 
+        private void EmptyResolvedVehicleFuelTank()
+        {
+            VehicleFuelTelemetry telemetry;
+            if (!TryGetResolvedDebugFuelTelemetry(out telemetry))
+            {
+                ShowStatus("No fuel-capable vehicle found nearby.");
+                return;
+            }
+
+            var currentLiters = _vehicleFuelSystem.SetFuelLiters(telemetry.PoweredVehicle, 0f);
+            ShowStatus(string.Format(
+                "Emptied fuel tank on {0} ({1:0}/{2:0}L).",
+                GetResolvedDebugFuelVehicleName(telemetry),
+                currentLiters,
+                telemetry.CapacityLiters));
+        }
+
+        private void FillResolvedVehicleFuelTank()
+        {
+            VehicleFuelTelemetry telemetry;
+            if (!TryGetResolvedDebugFuelTelemetry(out telemetry))
+            {
+                ShowStatus("No fuel-capable vehicle found nearby.");
+                return;
+            }
+
+            var currentLiters = _vehicleFuelSystem.SetFuelLiters(telemetry.PoweredVehicle, telemetry.CapacityLiters);
+            ShowStatus(string.Format(
+                "Filled fuel tank on {0} ({1:0}/{2:0}L).",
+                GetResolvedDebugFuelVehicleName(telemetry),
+                currentLiters,
+                telemetry.CapacityLiters));
+        }
+
         private void DeleteCurrentVehicle()
         {
             CancelPendingTransferForDebug();
@@ -4582,6 +4619,43 @@ namespace LSOL
             ShowStatus(hadAttachedTrailer
                 ? "Deleted current vehicle and its trailer."
                 : "Deleted current vehicle.");
+        }
+
+        private bool TryGetResolvedDebugFuelTelemetry(out VehicleFuelTelemetry telemetry)
+        {
+            telemetry = null;
+
+            var player = Game.Player.Character;
+            if (player == null || !player.Exists())
+            {
+                return false;
+            }
+
+            telemetry = _vehicleFuelSystem.GetActiveTelemetry(player);
+            return telemetry != null
+                && telemetry.PoweredVehicle != null
+                && telemetry.PoweredVehicle.Exists()
+                && telemetry.CapacityLiters > 0.001f;
+        }
+
+        private static string GetResolvedDebugFuelVehicleName(VehicleFuelTelemetry telemetry)
+        {
+            if (telemetry == null)
+            {
+                return "vehicle";
+            }
+
+            if (telemetry.PoweredVehicleDefinition != null && !string.IsNullOrWhiteSpace(telemetry.PoweredVehicleDefinition.DisplayName))
+            {
+                return telemetry.PoweredVehicleDefinition.DisplayName;
+            }
+
+            if (telemetry.PoweredVehicle != null && telemetry.PoweredVehicle.Exists() && !string.IsNullOrWhiteSpace(telemetry.PoweredVehicle.DisplayName))
+            {
+                return telemetry.PoweredVehicle.DisplayName;
+            }
+
+            return "vehicle";
         }
 
         private void FillNearbyIndustryInputs()

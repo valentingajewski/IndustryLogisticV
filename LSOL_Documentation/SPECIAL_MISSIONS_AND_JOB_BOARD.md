@@ -79,5 +79,5 @@ The repository root `missions/` folder is legacy reference content only.
 
 ## Read Next
 
-- [ADDONS_AND_MISSION_PACKS.md](ADDONS_AND_MISSION_PACKS.md)
-- [SAVES_AND_PROFILES.md](SAVES_AND_PROFILES.md)
+- ADDONS_AND_MISSION_PACKS
+- SAVES_AND_PROFILES

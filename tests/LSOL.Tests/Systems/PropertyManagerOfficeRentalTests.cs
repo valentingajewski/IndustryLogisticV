@@ -72,6 +72,104 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void TryPurchaseOffice_OwnedAccessDoesNotGenerateWeeklyOfficeRent()
+        {
+            var manager = CreatePropertyManager(CreateOffice("alpha", "Alpha Yard", 100f, 2));
+            var balance = 5000f;
+
+            Assert.IsTrue(manager.TryPurchaseOffice("alpha", ref balance, 0, out _));
+
+            var state = manager.GetOfficeState("alpha");
+            Assert.IsNotNull(state);
+            Assert.AreEqual("alpha", manager.ActiveOfficeId);
+            Assert.IsTrue(state.IsOwned);
+            Assert.IsFalse(state.IsRented);
+            Assert.IsFalse(state.IsAccessSuspended);
+            Assert.AreEqual(0f, state.OutstandingRent, 0.01f);
+            Assert.AreEqual(-1, state.LastChargedWeekIndex);
+            Assert.AreEqual(4000f, balance, 0.01f);
+
+            var messages = manager.ProcessWeeklyCharges(MinutesPerWeek, ref balance);
+
+            Assert.AreEqual(4000f, balance, 0.01f);
+            Assert.AreEqual(0, messages.Count);
+            Assert.AreEqual(0f, state.OutstandingRent, 0.01f);
+            Assert.AreEqual(-1, state.LastChargedWeekIndex);
+        }
+
+        [TestMethod]
+        public void TryPurchaseOffice_WhenOfficeIsRented_ConvertsRentalToOwnedAndStopsFutureRent()
+        {
+            var manager = CreatePropertyManager(CreateOffice("alpha", "Alpha Yard", 100f, 2));
+            var balance = 2500f;
+
+            Assert.IsTrue(manager.TryRentOffice("alpha", ref balance, 0, out _));
+            Assert.IsTrue(manager.TryPurchaseOffice("alpha", ref balance, 0, out var message));
+
+            var state = manager.GetOfficeState("alpha");
+            Assert.IsNotNull(state);
+            Assert.IsTrue(state.IsOwned);
+            Assert.IsFalse(state.IsRented);
+            Assert.IsFalse(state.IsAccessSuspended);
+            Assert.AreEqual(0f, state.OutstandingRent, 0.01f);
+            Assert.AreEqual(-1, state.LastChargedWeekIndex);
+            Assert.AreEqual(1400f, balance, 0.01f);
+            StringAssert.Contains(message, "converted to owned access");
+
+            var messages = manager.ProcessWeeklyCharges(MinutesPerWeek, ref balance);
+
+            Assert.AreEqual(1400f, balance, 0.01f);
+            Assert.AreEqual(0, messages.Count);
+        }
+
+        [TestMethod]
+        public void TryPurchaseOffice_WhenAnotherOfficeIsRented_RelinquishesPreviousRentalAndStopsPreviousOfficeBilling()
+        {
+            var manager = CreatePropertyManager(
+                CreateOffice("alpha", "Alpha Yard", 100f, 1),
+                CreateOffice("bravo", "Bravo Yard", 200f, 2));
+            manager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                CommercialVehicles =
+                {
+                    new OwnedCommercialVehiclePersistenceEntry
+                    {
+                        AssetId = "truck-1",
+                        DisplayName = "Truck 1",
+                        AssignedOfficeId = "alpha",
+                        IsRental = true,
+                        InActiveGarage = true,
+                    },
+                },
+            }, 0);
+            var balance = 4000f;
+
+            Assert.IsTrue(manager.TryRentOffice("alpha", ref balance, 0, out _));
+            Assert.IsTrue(manager.TryPurchaseOffice("bravo", ref balance, 0, out _));
+
+            var alphaState = manager.GetOfficeState("alpha");
+            var bravoState = manager.GetOfficeState("bravo");
+
+            Assert.IsNotNull(alphaState);
+            Assert.IsNotNull(bravoState);
+            Assert.IsFalse(alphaState.IsOwned);
+            Assert.IsFalse(alphaState.IsRented);
+            Assert.AreEqual(0f, alphaState.OutstandingRent, 0.01f);
+            Assert.AreEqual(-1, alphaState.LastChargedWeekIndex);
+            Assert.IsTrue(bravoState.IsOwned);
+            Assert.IsFalse(bravoState.IsRented);
+            Assert.AreEqual("bravo", manager.ActiveOfficeId);
+            Assert.AreEqual("bravo", manager.CommercialVehicles.Single().AssignedOfficeId);
+            Assert.AreEqual(1900f, balance, 0.01f);
+
+            var messages = manager.ProcessWeeklyCharges(MinutesPerWeek, ref balance);
+
+            Assert.AreEqual(1900f, balance, 0.01f);
+            Assert.IsFalse(messages.Any(message => message.Contains("Alpha Yard")));
+            Assert.IsFalse(messages.Any(message => message.Contains("Bravo Yard")));
+        }
+
+        [TestMethod]
         public void TryActivateOffice_RelinquishesPreviousRentalAndTransfersCommercialVehicles()
         {
             var manager = CreatePropertyManager(
@@ -164,6 +262,49 @@ namespace LSOL.Tests.Systems
             Assert.IsFalse(alphaState.IsAccessSuspended);
             Assert.AreEqual(0f, alphaState.OutstandingRent, 0.01f);
             Assert.IsTrue(bravoState.IsRented);
+        }
+
+        [TestMethod]
+        public void ApplySnapshot_WithOwnedOfficeLegacyRentState_ClearsBogusOwnedOfficeArrears()
+        {
+            var manager = CreatePropertyManager(CreateOffice("alpha", "Alpha Yard", 100f, 2));
+            manager.ApplySnapshot(new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry
+                    {
+                        OfficeId = "alpha",
+                        IsOwned = true,
+                        IsRented = true,
+                        IsAccessSuspended = true,
+                        OutstandingRent = 275f,
+                        LastChargedWeekIndex = 3,
+                    },
+                },
+            }, 0);
+
+            var state = manager.GetOfficeState("alpha");
+
+            Assert.IsNotNull(state);
+            Assert.AreEqual("alpha", manager.ActiveOfficeId);
+            Assert.IsTrue(state.IsOwned);
+            Assert.IsFalse(state.IsRented);
+            Assert.IsFalse(state.IsAccessSuspended);
+            Assert.AreEqual(0f, state.OutstandingRent, 0.01f);
+            Assert.AreEqual(-1, state.LastChargedWeekIndex);
+
+            var balance = 0f;
+            var messages = manager.ProcessWeeklyCharges(MinutesPerWeek, ref balance);
+
+            Assert.AreEqual(0f, balance, 0.01f);
+            Assert.AreEqual(0, messages.Count);
+            Assert.IsTrue(state.IsOwned);
+            Assert.IsFalse(state.IsRented);
+            Assert.IsFalse(state.IsAccessSuspended);
+            Assert.AreEqual(0f, state.OutstandingRent, 0.01f);
+            Assert.AreEqual(-1, state.LastChargedWeekIndex);
         }
 
         [TestMethod]

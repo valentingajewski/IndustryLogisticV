@@ -112,11 +112,11 @@ Successes tracks milestone progress and your late-game identity layer. It become
 
 These two pages deserve their own guide because they work together closely.
 
-Read [COMPANY_MAP_AND_ROUTE_PLANNER.md](COMPANY_MAP_AND_ROUTE_PLANNER.md) for the details.
+Read COMPANY_MAP_AND_ROUTE_PLANNER for the details.
 
 
 ## Read Next
 
-- [COMPANY_MAP_AND_ROUTE_PLANNER.md](COMPANY_MAP_AND_ROUTE_PLANNER.md)
-- [SUCCESSES_PRESTIGE_AND_DOCTRINE.md](SUCCESSES_PRESTIGE_AND_DOCTRINE.md)
-- [SAVES_AND_PROFILES.md](SAVES_AND_PROFILES.md)
+- COMPANY_MAP_AND_ROUTE_PLANNER
+- SUCCESSES_PRESTIGE_AND_DOCTRINE
+- SAVES_AND_PROFILES

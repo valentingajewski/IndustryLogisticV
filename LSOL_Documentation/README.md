@@ -10,12 +10,12 @@ This folder is the player-first documentation set. It is organized by the system
 
 If you are new to LSOL, read these in order:
 
-1. [INSTALLATION_AND_FIRST_STEPS.md](INSTALLATION_AND_FIRST_STEPS.md)
-2. [INDUSTRY_SITES_AND_DELIVERIES.md](INDUSTRY_SITES_AND_DELIVERIES.md)
-3. [OFFICES_GARAGES_AND_SUPPORT_SITES.md](OFFICES_GARAGES_AND_SUPPORT_SITES.md)
-4. [COMMERCIAL_VEHICLES_FUEL_AND_CARGO.md](COMMERCIAL_VEHICLES_FUEL_AND_CARGO.md)
-5. [DISTRICTS_AND_CORRIDORS.md](DISTRICTS_AND_CORRIDORS.md)
-6. [NPC_LOGISTICS_AND_WORLD_DISPATCH.md](NPC_LOGISTICS_AND_WORLD_DISPATCH.md)
+1. INSTALLATION_AND_FIRST_STEPS
+2. INDUSTRY_SITES_AND_DELIVERIES
+3. OFFICES_GARAGES_AND_SUPPORT_SITES
+4. COMMERCIAL_VEHICLES_FUEL_AND_CARGO
+5. DISTRICTS_AND_CORRIDORS
+6. NPC_LOGISTICS_AND_WORLD_DISPATCH
 
 ## Quick Start
 
@@ -57,19 +57,19 @@ These are the shipped defaults:
 
 ## Documentation Map
 
-- [INSTALLATION_AND_FIRST_STEPS.md](INSTALLATION_AND_FIRST_STEPS.md): install layout, first launch, controls, and your first playable session
-- [INDUSTRY_SITES_AND_DELIVERIES.md](INDUSTRY_SITES_AND_DELIVERIES.md): site types, permits, ownership, tablets, upgrades, and delivery flow
-- [DISTRICTS_AND_CORRIDORS.md](DISTRICTS_AND_CORRIDORS.md): district growth, reputation, charters, support sites, and corridor progression
-- [OFFICES_GARAGES_AND_SUPPORT_SITES.md](OFFICES_GARAGES_AND_SUPPORT_SITES.md): offices, commercial garages, office objects, depots, and support-site specialization
-- [COMMERCIAL_VEHICLES_FUEL_AND_CARGO.md](COMMERCIAL_VEHICLES_FUEL_AND_CARGO.md): truck buying, deployment, fuel, cargo condition, maintenance, and resale pressure
-- [APARTMENTS_AND_PERSONAL_VEHICLES.md](APARTMENTS_AND_PERSONAL_VEHICLES.md): apartment ownership or rental, personal garages, motels, and personal cars
-- [NPC_LOGISTICS_AND_WORLD_DISPATCH.md](NPC_LOGISTICS_AND_WORLD_DISPATCH.md): hiring drivers, route automation, district and corridor blockers, and ambient dispatch
-- [COMPANY_HUB_AND_MANAGEMENT_APPS.md](COMPANY_HUB_AND_MANAGEMENT_APPS.md): what the F7 and F8 interfaces do and when to use each one
-- [COMPANY_MAP_AND_ROUTE_PLANNER.md](COMPANY_MAP_AND_ROUTE_PLANNER.md): metro-style district map, planner overlays, route ranking, and map handoffs
-- [SPECIAL_MISSIONS_AND_JOB_BOARD.md](SPECIAL_MISSIONS_AND_JOB_BOARD.md): built-in rotating contracts and optional mission-pack content
-- [SAVES_AND_PROFILES.md](SAVES_AND_PROFILES.md): default saves, named slots, save files, and what persists
-- [SUCCESSES_PRESTIGE_AND_DOCTRINE.md](SUCCESSES_PRESTIGE_AND_DOCTRINE.md): late-game identity, HQ progression, and doctrine-driven play
-- [ADDONS_AND_MISSION_PACKS.md](ADDONS_AND_MISSION_PACKS.md): how players install loose mission packs and packaged add-ons safely
+- INSTALLATION_AND_FIRST_STEPS: install layout, first launch, controls, and your first playable session
+- INDUSTRY_SITES_AND_DELIVERIES: site types, permits, ownership, tablets, upgrades, and delivery flow
+- DISTRICTS_AND_CORRIDORS: district growth, reputation, charters, support sites, and corridor progression
+- OFFICES_GARAGES_AND_SUPPORT_SITES: offices, commercial garages, office objects, depots, and support-site specialization
+- COMMERCIAL_VEHICLES_FUEL_AND_CARGO: truck buying, deployment, fuel, cargo condition, maintenance, and resale pressure
+- APARTMENTS_AND_PERSONAL_VEHICLES: apartment ownership or rental, personal garages, motels, and personal cars
+- NPC_LOGISTICS_AND_WORLD_DISPATCH: hiring drivers, route automation, district and corridor blockers, and ambient dispatch
+- COMPANY_HUB_AND_MANAGEMENT_APPS: what the F7 and F8 interfaces do and when to use each one
+- COMPANY_MAP_AND_ROUTE_PLANNER: metro-style district map, planner overlays, route ranking, and map handoffs
+- SPECIAL_MISSIONS_AND_JOB_BOARD: built-in rotating contracts and optional mission-pack content
+- SAVES_AND_PROFILES: default saves, named slots, save files, and what persists
+- SUCCESSES_PRESTIGE_AND_DOCTRINE: late-game identity, HQ progression, and doctrine-driven play
+- ADDONS_AND_MISSION_PACKS: how players install loose mission packs and packaged add-ons safely
 
 ## Authoring References
 

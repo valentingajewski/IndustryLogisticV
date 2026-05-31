@@ -64,10 +64,10 @@ If you are installing content made by someone else, you usually do not need the 
 
 If you do want the full file-format rules, read:
 
-- [../LSOL_Addons/README.md](../LSOL_Addons/README.md)
-- [../LSOL_Config/missions/README.md](../LSOL_Config/missions/README.md)
+- ../LSOL_Addons/README.md
+- ../LSOL_Config/missions/README.md
 
 ## Read Next
 
-- [SPECIAL_MISSIONS_AND_JOB_BOARD.md](SPECIAL_MISSIONS_AND_JOB_BOARD.md)
-- [INSTALLATION_AND_FIRST_STEPS.md](INSTALLATION_AND_FIRST_STEPS.md)
+- SPECIAL_MISSIONS_AND_JOB_BOARD
+- INSTALLATION_AND_FIRST_STEPS

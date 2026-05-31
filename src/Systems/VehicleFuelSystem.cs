@@ -276,6 +276,28 @@ namespace LSOL.Systems
             return addedLiters;
         }
 
+        public float SetFuelLiters(Vehicle poweredVehicle, float liters)
+        {
+            var state = GetOrCreateState(poweredVehicle);
+            if (state == null)
+            {
+                return 0f;
+            }
+
+            var clampedLiters = Math.Max(0f, Math.Min(state.CapacityLiters, liters));
+            state.CurrentFuelLiters = clampedLiters;
+            state.OutOfFuelMessageShown = clampedLiters <= 0.001f;
+
+            if (poweredVehicle != null && poweredVehicle.Exists())
+            {
+                state.LastObservedPosition = poweredVehicle.Position;
+                state.HasLastObservedPosition = true;
+            }
+
+            ApplyPropulsionState(poweredVehicle, state);
+            return state.CurrentFuelLiters;
+        }
+
         public void CleanupStates()
         {
             var removeHandles = new List<int>();
