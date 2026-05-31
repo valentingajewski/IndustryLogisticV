@@ -2436,6 +2436,7 @@ namespace LSOL.Systems
         private sealed class TrailerDeliveryRuntime : ActiveSpecialMissionRuntime
         {
             private const string TrailerRole = "Trailer";
+            private const string TruckRole = "Truck";
             private const string DestinationZone = "Destination";
             private const string CleanupAreaZone = "CleanupArea";
 
@@ -2450,7 +2451,7 @@ namespace LSOL.Systems
             {
                 _vehicles = new Dictionary<string, Vehicle>(StringComparer.OrdinalIgnoreCase);
                 _stage = TrailerDeliveryStage.CollectTrailer;
-                TrySpawnTrailer();
+                TrySpawnMissionVehicles();
 
                 if (!string.IsNullOrWhiteSpace(InitializationError))
                 {
@@ -2567,11 +2568,47 @@ namespace LSOL.Systems
                 _vehicles.Clear();
             }
 
-            private void TrySpawnTrailer()
+            private void TrySpawnMissionVehicles()
             {
-                if (!Definition.TryGetVehicle(TrailerRole, out var spawn))
+                TrySpawnVehicleRole(TrailerRole, true);
+                if (!string.IsNullOrWhiteSpace(InitializationError))
                 {
-                    InitializationError = string.Format("Mission '{0}' is missing trailer spawn data.", Definition.Name);
+                    return;
+                }
+
+                TrySpawnVehicleRole(TruckRole, false);
+                if (!string.IsNullOrWhiteSpace(InitializationError))
+                {
+                    return;
+                }
+
+                if (!TryAttachConfiguredTruckRole(
+                    Definition,
+                    heading =>
+                    {
+                        var truck = GetTruck();
+                        var trailer = GetTrailer();
+                        return truck != null
+                            && truck.Exists()
+                            && trailer != null
+                            && trailer.Exists()
+                            && Owner._fleetManager.TryAttachVehicleToTrailer(truck, trailer, heading);
+                    },
+                    out var attachError))
+                {
+                    InitializationError = attachError;
+                }
+            }
+
+            private void TrySpawnVehicleRole(string roleId, bool required)
+            {
+                if (!Definition.TryGetVehicle(roleId, out var spawn))
+                {
+                    if (required)
+                    {
+                        InitializationError = string.Format("Mission '{0}' is missing vehicle role '{1}'.", Definition.Name, roleId);
+                    }
+
                     return;
                 }
 
@@ -2579,19 +2616,50 @@ namespace LSOL.Systems
                     || vehicle == null
                     || !vehicle.Exists())
                 {
-                    InitializationError = string.Format("Could not spawn mission trailer '{0}'.", spawn.ModelName);
+                    InitializationError = string.Format("Could not spawn mission vehicle '{0}'.", spawn.ModelName);
                     return;
                 }
 
                 vehicle.IsPersistent = true;
-                _vehicles[TrailerRole] = vehicle;
+                _vehicles[roleId] = vehicle;
             }
 
             private void ApplyCheckpointLayout()
             {
                 if (_stage == TrailerDeliveryStage.LeaveQuarryArea)
                 {
-                    PositionTrailerAtZone(DestinationZone);
+                    if (HasConfiguredTruckRole(Definition))
+                    {
+                        if (!TryGetZone(DestinationZone, out var destinationZone))
+                        {
+                            InitializationError = string.Format("Mission '{0}' is missing zone '{1}'.", Definition.Name, DestinationZone);
+                            return;
+                        }
+
+                        if (!TryPositionConfiguredTruckTrailerPairAtZone(
+                            Definition,
+                            destinationZone.Position,
+                            (position, heading) => PositionVehicle(TrailerRole, position, heading),
+                            (position, heading) => PositionVehicle(TruckRole, position, heading),
+                            heading =>
+                            {
+                                var truck = GetTruck();
+                                var trailer = GetTrailer();
+                                return truck != null
+                                    && truck.Exists()
+                                    && trailer != null
+                                    && trailer.Exists()
+                                    && Owner._fleetManager.TryAttachVehicleToTrailer(truck, trailer, heading);
+                            },
+                            out var attachError))
+                        {
+                            InitializationError = attachError;
+                        }
+                    }
+                    else
+                    {
+                        PositionTrailerAtZone(DestinationZone);
+                    }
                 }
             }
 
@@ -2621,8 +2689,8 @@ namespace LSOL.Systems
                 switch (_stage)
                 {
                     case TrailerDeliveryStage.CollectTrailer:
-                        CurrentObjective = "Collect the heavy machinery trailer";
-                        CurrentDetail = "Bring a suitable tractor, hook the armytrailer2, and prepare the quarry run.";
+                        CurrentObjective = BuildCollectStageObjective(Definition);
+                        CurrentDetail = BuildCollectStageDetail(Definition);
                         break;
                     case TrailerDeliveryStage.DeliverTrailer:
                         CurrentObjective = "Deliver heavy machinery to the quarry";
@@ -2641,7 +2709,7 @@ namespace LSOL.Systems
                 switch (_stage)
                 {
                     case TrailerDeliveryStage.CollectTrailer:
-                        DrawVehicleMarker(trailer, Color.FromArgb(195, 82, 196, 235));
+                        DrawVehicleMarker(GetCollectionTargetVehicle(), Color.FromArgb(195, 82, 196, 235));
                         break;
                     case TrailerDeliveryStage.DeliverTrailer:
                         DrawVehicleMarker(trailer, Color.FromArgb(195, 226, 187, 92));
@@ -2658,7 +2726,7 @@ namespace LSOL.Systems
                 switch (_stage)
                 {
                     case TrailerDeliveryStage.CollectTrailer:
-                        return GetTrailerPosition();
+                        return GetCollectionTargetPosition();
                     case TrailerDeliveryStage.DeliverTrailer:
                         return GetZonePosition(DestinationZone);
                     default:
@@ -2730,12 +2798,61 @@ namespace LSOL.Systems
                 TryPlaceVehicleOnGround(trailer);
             }
 
+            private void PositionVehicle(string roleId, Vector3 position, float heading)
+            {
+                var vehicle = GetVehicle(roleId);
+                if (vehicle == null || !vehicle.Exists())
+                {
+                    return;
+                }
+
+                vehicle.Position = position;
+                vehicle.Heading = heading;
+                TryPlaceVehicleOnGround(vehicle);
+            }
+
+            private Vehicle GetCollectionTargetVehicle()
+            {
+                if (HasConfiguredTruckRole(Definition))
+                {
+                    var truck = GetTruck();
+                    if (truck != null && truck.Exists())
+                    {
+                        return truck;
+                    }
+                }
+
+                return GetTrailer();
+            }
+
+            private Vector3 GetCollectionTargetPosition()
+            {
+                var vehicle = GetCollectionTargetVehicle();
+                return vehicle != null && vehicle.Exists()
+                    ? vehicle.Position
+                    : Vector3.Zero;
+            }
+
+            private Vehicle GetTruck()
+            {
+                return GetVehicle(TruckRole);
+            }
+
+            private Vehicle GetVehicle(string roleId)
+            {
+                if (string.IsNullOrWhiteSpace(roleId))
+                {
+                    return null;
+                }
+
+                return _vehicles.TryGetValue(roleId, out var vehicle)
+                    ? vehicle
+                    : null;
+            }
+
             private Vehicle GetTrailer()
             {
-                Vehicle trailer;
-                return _vehicles.TryGetValue(TrailerRole, out trailer)
-                    ? trailer
-                    : null;
+                return GetVehicle(TrailerRole);
             }
 
             private Vector3 GetTrailerPosition()
@@ -2751,6 +2868,106 @@ namespace LSOL.Systems
                 return TryGetZone(zoneId, out var zone)
                     ? zone.Position
                     : Vector3.Zero;
+            }
+
+            private static bool HasConfiguredTruckRole(SpecialMissionDefinition definition)
+            {
+                return definition != null && definition.TryGetVehicle(TruckRole, out var _);
+            }
+
+            private static bool TryAttachConfiguredTruckRole(
+                SpecialMissionDefinition definition,
+                Func<float, bool> attachTruckToTrailer,
+                out string error)
+            {
+                error = string.Empty;
+                if (!HasConfiguredTruckRole(definition))
+                {
+                    return true;
+                }
+
+                var heading = ResolveRoleHeading(definition, TruckRole, ResolveRoleHeading(definition, TrailerRole, 0f));
+                if (attachTruckToTrailer != null && attachTruckToTrailer(heading))
+                {
+                    return true;
+                }
+
+                error = BuildTruckAttachFailureMessage(definition);
+                return false;
+            }
+
+            private static bool TryPositionConfiguredTruckTrailerPairAtZone(
+                SpecialMissionDefinition definition,
+                Vector3 zonePosition,
+                Action<Vector3, float> positionTrailer,
+                Action<Vector3, float> positionTruck,
+                Func<float, bool> attachTruckToTrailer,
+                out string error)
+            {
+                error = string.Empty;
+                if (!HasConfiguredTruckRole(definition))
+                {
+                    return true;
+                }
+
+                if (!definition.TryGetVehicle(TrailerRole, out var trailerSpawn)
+                    || !definition.TryGetVehicle(TruckRole, out var truckSpawn))
+                {
+                    error = BuildTruckAttachFailureMessage(definition);
+                    return false;
+                }
+
+                positionTrailer?.Invoke(zonePosition, trailerSpawn.Heading);
+                positionTruck?.Invoke(zonePosition + (truckSpawn.Position - trailerSpawn.Position), truckSpawn.Heading);
+                return TryAttachConfiguredTruckRole(definition, attachTruckToTrailer, out error);
+            }
+
+            private static string BuildCollectStageObjective(SpecialMissionDefinition definition)
+            {
+                return HasConfiguredTruckRole(definition)
+                    ? "Get in the waiting tractor"
+                    : "Collect the heavy machinery trailer";
+            }
+
+            private static string BuildCollectStageDetail(SpecialMissionDefinition definition)
+            {
+                if (HasConfiguredTruckRole(definition))
+                {
+                    return "Get in the waiting tractor and haul the heavy-machinery trailer to the quarry.";
+                }
+
+                return string.Format(
+                    "Bring a suitable tractor, hook the {0}, and prepare the quarry run.",
+                    ResolveRoleModelName(definition, TrailerRole, "mission trailer"));
+            }
+
+            private static float ResolveRoleHeading(SpecialMissionDefinition definition, string roleId, float fallbackHeading)
+            {
+                return definition != null && definition.TryGetVehicle(roleId, out var spawn)
+                    ? spawn.Heading
+                    : fallbackHeading;
+            }
+
+            private static string ResolveRoleModelName(SpecialMissionDefinition definition, string roleId, string fallbackLabel)
+            {
+                if (definition != null && definition.TryGetVehicle(roleId, out var spawn) && !string.IsNullOrWhiteSpace(spawn.ModelName))
+                {
+                    return spawn.ModelName;
+                }
+
+                return fallbackLabel;
+            }
+
+            private static string BuildTruckAttachFailureMessage(SpecialMissionDefinition definition)
+            {
+                var missionName = definition != null && !string.IsNullOrWhiteSpace(definition.Name)
+                    ? definition.Name
+                    : "Trailer delivery";
+                return string.Format(
+                    "Mission '{0}' could not attach spawned truck '{1}' to trailer '{2}'.",
+                    missionName,
+                    ResolveRoleModelName(definition, TruckRole, "truck"),
+                    ResolveRoleModelName(definition, TrailerRole, "trailer"));
             }
 
             private static bool IsPlayerTowingMissionTrailer(Ped player, Vehicle trailer)

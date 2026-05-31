@@ -124,7 +124,7 @@ namespace LSOL.Tests.Config
                 Directory.CreateDirectory(missionDirectory);
                 File.WriteAllText(
                     Path.Combine(missionDirectory, "unit-test.xml"),
-                    "<Mission id=\"unit.test.mission\" type=\"TrailerDelivery\" name=\"Unit Test Mission\" reward=\"1250\"><Vehicles><Vehicle role=\"Trailer\" model=\"trailersmall\" x=\"1\" y=\"2\" z=\"3\" /></Vehicles><Zones><Zone id=\"Destination\" x=\"10\" y=\"20\" z=\"30\" radius=\"12\" /></Zones></Mission>");
+                    "<Mission id=\"unit.test.mission\" type=\"TrailerDelivery\" name=\"Unit Test Mission\" reward=\"1250\"><Vehicles><Vehicle role=\"Trailer\" model=\"trailersmall\" x=\"1\" y=\"2\" z=\"3\" /><Vehicle role=\"Truck\" model=\"packer\" x=\"17\" y=\"2\" z=\"3\" /></Vehicles><Zones><Zone id=\"Destination\" x=\"10\" y=\"20\" z=\"30\" radius=\"12\" /></Zones></Mission>");
 
                 var catalog = SpecialMissionCatalog.Load(configDirectory);
 

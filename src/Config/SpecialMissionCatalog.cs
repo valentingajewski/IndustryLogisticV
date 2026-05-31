@@ -285,7 +285,16 @@ namespace LSOL.Config
             else if (definition.Type == SpecialMissionType.TrailerDelivery)
             {
                 ValidateRole(definition, label, messages, "Trailer");
+                ValidateOptionalRole(definition, label, messages, "Truck");
                 ValidateZone(definition, label, messages, "Destination");
+            }
+        }
+
+        private static void ValidateOptionalRole(SpecialMissionDefinition definition, string label, ICollection<string> messages, string roleId)
+        {
+            if (definition != null && definition.TryGetVehicle(roleId, out var _))
+            {
+                ValidateRole(definition, label, messages, roleId);
             }
         }
 

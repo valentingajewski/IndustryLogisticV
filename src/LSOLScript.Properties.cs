@@ -1223,7 +1223,7 @@ namespace LSOL
             var interactiveFacilities = placedDefinitions.Count(definition => definition.InteractionType != OfficeFacilityInteractionType.None);
             var staffedPosts = placedDefinitions.Sum(definition => definition.AmbientStaffRole == OfficeAmbientStaffRole.None ? 0 : Math.Max(1, definition.AmbientStaffCount));
             var catalogCount = _propertyManager.OfficeObjectCatalog.Count;
-            return string.Format("Catalog {0} | Placed {1} | Pending placement {2} | Facilities {3} | Staff {4}", catalogCount, placed, pending, interactiveFacilities, staffedPosts);
+            return string.Format("Catalog {0} | Placed {1}", catalogCount, placed);
         }
 
         private string BuildOfficeFuelManagementSummary()

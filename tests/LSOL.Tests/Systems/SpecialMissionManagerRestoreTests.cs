@@ -257,6 +257,103 @@ namespace LSOL.Tests.Systems
             StringAssert.Contains(message, "loading checkpoint");
         }
 
+        [TestMethod]
+        public void TrailerDeliveryRuntime_WithTruckRole_AttachesSpawnedPairAndUsesWaitingTractorCopy()
+        {
+            var definition = CreateTrailerDeliveryDefinition(includeTruck: true);
+            var attachCalled = false;
+            var attachHeading = 0f;
+
+            var success = InvokeTryAttachConfiguredTruckRole(
+                definition,
+                heading =>
+                {
+                    attachCalled = true;
+                    attachHeading = heading;
+                    return true;
+                },
+                out var error);
+
+            Assert.IsTrue(success);
+            Assert.IsTrue(attachCalled);
+            Assert.AreEqual(90f, attachHeading, 0.01f);
+            Assert.AreEqual(string.Empty, error);
+            Assert.AreEqual("Get in the waiting tractor", InvokeBuildTrailerCollectStageObjective(definition));
+            Assert.AreEqual(
+                "Get in the waiting tractor and haul the heavy-machinery trailer to the quarry.",
+                InvokeBuildTrailerCollectStageDetail(definition));
+        }
+
+        [TestMethod]
+        public void TrailerDeliveryRuntime_TrailerOnlyMission_PreservesBringYourOwnTractorBehavior()
+        {
+            var definition = CreateTrailerDeliveryDefinition(includeTruck: false);
+            var attachCalled = false;
+
+            var success = InvokeTryAttachConfiguredTruckRole(
+                definition,
+                heading =>
+                {
+                    attachCalled = true;
+                    return true;
+                },
+                out var error);
+
+            Assert.IsTrue(success);
+            Assert.IsFalse(attachCalled);
+            Assert.AreEqual(string.Empty, error);
+            Assert.AreEqual("Collect the heavy machinery trailer", InvokeBuildTrailerCollectStageObjective(definition));
+            StringAssert.Contains(InvokeBuildTrailerCollectStageDetail(definition), "Bring a suitable tractor");
+            StringAssert.Contains(InvokeBuildTrailerCollectStageDetail(definition), "armytrailer2");
+        }
+
+        [TestMethod]
+        public void TrailerDeliveryRuntime_RestoreCheckpointLayout_WithTruckRole_RebuildsAttachedPair()
+        {
+            var definition = CreateTrailerDeliveryDefinition(includeTruck: true);
+            var restoredTrailerPosition = Vector3.Zero;
+            var restoredTruckPosition = Vector3.Zero;
+            var restoredTrailerHeading = 0f;
+            var restoredTruckHeading = 0f;
+            var attachCalled = false;
+            var attachHeading = 0f;
+            var destination = new Vector3(400f, 500f, 6f);
+
+            var success = InvokeTryPositionConfiguredTruckTrailerPairAtZone(
+                definition,
+                destination,
+                (position, heading) =>
+                {
+                    restoredTrailerPosition = position;
+                    restoredTrailerHeading = heading;
+                },
+                (position, heading) =>
+                {
+                    restoredTruckPosition = position;
+                    restoredTruckHeading = heading;
+                },
+                heading =>
+                {
+                    attachCalled = true;
+                    attachHeading = heading;
+                    return true;
+                },
+                out var error);
+
+            Assert.IsTrue(success);
+            Assert.IsTrue(attachCalled);
+            Assert.AreEqual(string.Empty, error);
+            Assert.AreEqual(destination.X, restoredTrailerPosition.X, 0.01f);
+            Assert.AreEqual(destination.Y, restoredTrailerPosition.Y, 0.01f);
+            Assert.AreEqual(destination.Z, restoredTrailerPosition.Z, 0.01f);
+            Assert.AreEqual(90f, restoredTrailerHeading, 0.01f);
+            Assert.AreEqual(416f, restoredTruckPosition.X, 0.01f);
+            Assert.AreEqual(500f, restoredTruckPosition.Y, 0.01f);
+            Assert.AreEqual(6f, restoredTruckPosition.Z, 0.01f);
+            Assert.AreEqual(90f, restoredTruckHeading, 0.01f);
+            Assert.AreEqual(90f, attachHeading, 0.01f);
+        }
+
         private static bool InvokeApplyRestoreCheckpointPolicy(
             ActiveSpecialMissionPersistenceSnapshot snapshot,
             out int stageIndex,
@@ -301,6 +398,91 @@ namespace LSOL.Tests.Systems
         {
             var runtimeType = typeof(SpecialMissionManager).GetNestedType("HandlerContainerTransferRuntime", BindingFlags.NonPublic);
             Assert.IsNotNull(runtimeType, "HandlerContainerTransferRuntime");
+            return runtimeType;
+        }
+
+        private static bool InvokeTryAttachConfiguredTruckRole(
+            SpecialMissionDefinition definition,
+            Func<float, bool> attachTruckToTrailer,
+            out string error)
+        {
+            var method = GetTrailerDeliveryRuntimeType().GetMethod(
+                "TryAttachConfiguredTruckRole",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[]
+                {
+                    typeof(SpecialMissionDefinition),
+                    typeof(Func<float, bool>),
+                    typeof(string).MakeByRefType(),
+                },
+                null);
+            Assert.IsNotNull(method, "TryAttachConfiguredTruckRole");
+
+            var arguments = new object[] { definition, attachTruckToTrailer, string.Empty };
+            var success = (bool)method.Invoke(null, arguments);
+            error = (string)arguments[2];
+            return success;
+        }
+
+        private static bool InvokeTryPositionConfiguredTruckTrailerPairAtZone(
+            SpecialMissionDefinition definition,
+            Vector3 zonePosition,
+            Action<Vector3, float> positionTrailer,
+            Action<Vector3, float> positionTruck,
+            Func<float, bool> attachTruckToTrailer,
+            out string error)
+        {
+            var method = GetTrailerDeliveryRuntimeType().GetMethod(
+                "TryPositionConfiguredTruckTrailerPairAtZone",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[]
+                {
+                    typeof(SpecialMissionDefinition),
+                    typeof(Vector3),
+                    typeof(Action<Vector3, float>),
+                    typeof(Action<Vector3, float>),
+                    typeof(Func<float, bool>),
+                    typeof(string).MakeByRefType(),
+                },
+                null);
+            Assert.IsNotNull(method, "TryPositionConfiguredTruckTrailerPairAtZone");
+
+            var arguments = new object[] { definition, zonePosition, positionTrailer, positionTruck, attachTruckToTrailer, string.Empty };
+            var success = (bool)method.Invoke(null, arguments);
+            error = (string)arguments[5];
+            return success;
+        }
+
+        private static string InvokeBuildTrailerCollectStageObjective(SpecialMissionDefinition definition)
+        {
+            var method = GetTrailerDeliveryRuntimeType().GetMethod(
+                "BuildCollectStageObjective",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(SpecialMissionDefinition) },
+                null);
+            Assert.IsNotNull(method, "BuildCollectStageObjective");
+            return method.Invoke(null, new object[] { definition }) as string;
+        }
+
+        private static string InvokeBuildTrailerCollectStageDetail(SpecialMissionDefinition definition)
+        {
+            var method = GetTrailerDeliveryRuntimeType().GetMethod(
+                "BuildCollectStageDetail",
+                BindingFlags.Static | BindingFlags.NonPublic,
+                null,
+                new[] { typeof(SpecialMissionDefinition) },
+                null);
+            Assert.IsNotNull(method, "BuildCollectStageDetail");
+            return method.Invoke(null, new object[] { definition }) as string;
+        }
+
+        private static System.Type GetTrailerDeliveryRuntimeType()
+        {
+            var runtimeType = typeof(SpecialMissionManager).GetNestedType("TrailerDeliveryRuntime", BindingFlags.NonPublic);
+            Assert.IsNotNull(runtimeType, "TrailerDeliveryRuntime");
             return runtimeType;
         }
 
@@ -382,6 +564,45 @@ namespace LSOL.Tests.Systems
             var definitions = field.GetValue(manager) as Dictionary<string, SpecialMissionDefinition>;
             Assert.IsNotNull(definitions, "Definitions dictionary");
             definitions[definition.Id] = definition;
+        }
+
+        private static SpecialMissionDefinition CreateTrailerDeliveryDefinition(bool includeTruck)
+        {
+            var definition = new SpecialMissionDefinition
+            {
+                Id = includeTruck ? "quarry_heavy_machinery" : "legacy_trailer_delivery",
+                Type = SpecialMissionType.TrailerDelivery,
+                Category = "Quarry Operations",
+                Name = "Quarry Heavy Machinery Haul",
+            };
+
+            definition.Vehicles["Trailer"] = new SpecialMissionVehicleSpawn
+            {
+                RoleId = "Trailer",
+                ModelName = "armytrailer2",
+                Position = new Vector3(100f, 200f, 5f),
+                Heading = 90f,
+            };
+
+            if (includeTruck)
+            {
+                definition.Vehicles["Truck"] = new SpecialMissionVehicleSpawn
+                {
+                    RoleId = "Truck",
+                    ModelName = "packer",
+                    Position = new Vector3(116f, 200f, 5f),
+                    Heading = 90f,
+                };
+            }
+
+            definition.Zones["Destination"] = new SpecialMissionZone
+            {
+                ZoneId = "Destination",
+                Position = new Vector3(400f, 500f, 6f),
+                Radius = 24f,
+            };
+
+            return definition;
         }
     }
 }

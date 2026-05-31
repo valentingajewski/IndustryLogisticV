@@ -1,6 +1,7 @@
-﻿<Mission id="quarry_heavy_machinery" type="trailer_delivery" category="Quarry Operations" name="Quarry Heavy Machinery Haul" summary="Recover a parked heavy-machinery trailer at the port and tow it up to the Grand Senora quarry." description="A heavy-machinery lowboy has been staged down at the docks and needs to reach the quarry yard intact. Bring your own road tractor, hook the armytrailer2, deliver it into the quarry drop zone, then clear the area so yard crews can take possession." reward="30000" repeatable="true" repeatCooldownInGameMonths="1" availabilityDelayInGameWeeks="1">
+﻿<Mission id="quarry_heavy_machinery" type="trailer_delivery" category="Quarry Operations" name="Quarry Heavy Machinery Haul" summary="Take the waiting quarry tractor and haul the staged heavy-machinery trailer up to the Grand Senora quarry." description="A heavy-machinery lowboy is already coupled to a waiting road tractor at the docks and needs to reach the quarry yard intact. Take the staged packer, haul the armytrailer2 into the quarry drop zone, then clear the area so yard crews can take possession." reward="30000" repeatable="true" repeatCooldownInGameMonths="1" availabilityDelayInGameWeeks="1">
   <Vehicles>
     <Vehicle role="Trailer" model="armytrailer2" x="1274.28" y="-3185.45" z="5.41" heading="90" required="true" />
+    <Vehicle role="Truck" model="packer" x="1266.76" y="-3186.69" z="5.90" heading="90" required="true" />
   </Vehicles>
   <Zones>
     <Zone id="Destination" x="2707" y="2755.62" z="37.36" radius="24" />
