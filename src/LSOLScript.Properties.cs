@@ -1145,7 +1145,7 @@ namespace LSOL
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Worker Model: < {0} >", _workerSpawnController.SelectedWorkerDisplayName),
+                    CaptionFactory = () => string.Format("Player Model: < {0} >", _workerSpawnController.SelectedWorkerDisplayName),
                     OnLeft = () => ChangeWorkerIndex(-1),
                     OnRight = () => ChangeWorkerIndex(1),
                     OnActivate = ApplyWorkerModel,

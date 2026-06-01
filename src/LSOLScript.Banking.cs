@@ -191,6 +191,7 @@ namespace LSOL
             CloseAllMenus();
             RebuildBankMenuItems();
             _bankMenu.Open();
+            _startingGuidesController.NotifyBankVisited();
         }
 
         private void RebuildBankMenuItems()

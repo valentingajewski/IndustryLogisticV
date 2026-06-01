@@ -119,6 +119,7 @@ namespace LSOL
         private readonly TabletStateStore _tabletStateStore;
         private readonly TabletShellController _tabletShellController;
         private readonly CompanyMapController _companyMapController;
+        private readonly StartingGuidesController _startingGuidesController;
         private readonly VehicleSpawnController _vehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
         private readonly Dictionary<string, Blip> _commercialVehicleBlips;
@@ -194,6 +195,7 @@ namespace LSOL
         private bool _pendingVehicleFuelDifficultyEnabled;
         private bool _cargoWeightPowerDifficultyEnabled;
         private bool _pendingCargoWeightPowerDifficultyEnabled;
+        private bool _pendingStartingGuidesEnabled;
         private bool _cruiseControlEnabled;
         private float _cruiseControlTargetSpeedMps;
         private bool _isConstructing;
@@ -558,6 +560,16 @@ namespace LSOL
                 HandleTabletUpgradeModuleRequested,
                 HandleTabletVehicleSpawnerRequested,
                 PurchaseIndustryFromTablet));
+            _startingGuidesController = new StartingGuidesController(
+                _industryManager,
+                _propertyManager,
+                _fleetManager,
+                _playerContractsManager,
+                _playerSuccessTracker,
+                GetGroundPosition,
+                () => GetGroundPosition(_mainOfficeMarkerSeed),
+                GetIndustryMarkerPosition,
+                () => AnyMenuOpen);
 
             _keyCooldownUntil = new Dictionary<WinForms.Keys, int>();
             _heldKeys = new HashSet<WinForms.Keys>();
@@ -656,6 +668,8 @@ namespace LSOL
 
             if (!_modMechanicsEnabled)
             {
+                _startingGuidesController.Update(player, gameTime);
+                _startingGuidesController.Draw();
                 DrawOpenMenus();
 
                 return;
@@ -726,6 +740,7 @@ namespace LSOL
                 gameTime);
             UpdatePersonalDealershipPreview();
             SyncPlayerSuccessBalance(true, true);
+            _startingGuidesController.Update(player, gameTime);
 
             DrawMarkers(player);
             _cargoTransferController.Update(gameTime, DrawProgressBar);
@@ -736,6 +751,7 @@ namespace LSOL
             }
 
             DrawAmbientClockHud();
+            _startingGuidesController.Draw();
 
             DrawOpenMenus();
             DrawTabletShell();
@@ -2130,8 +2146,20 @@ namespace LSOL
             _newSaveSetupMenu.Title = Text(ModTextKey.MenuDifficultyTitle);
             _newSaveSetupMenu.Subtitle = Text(ModTextKey.MenuNewSaveSetupSubtitle, _pendingSaveName);
             var items = new List<OfficeMenuItem>();
+            var coreItems = BuildDifficultyMenuCoreItems(DifficultyProfileTarget.Pending);
+            var startingGuidesItem = CreateDifficultyCheckboxMenuItem(
+                ModTextKey.RowStartingGuides,
+                () => Text(ModTextKey.DetailStartingGuides),
+                () => _pendingStartingGuidesEnabled,
+                TogglePendingStartingGuidesSetting);
+            var npcWeeklyWagesIndex = coreItems.FindIndex(item =>
+                item != null
+                && item.CaptionFactory != null
+                && string.Equals(item.CaptionFactory(), CurrentPendingNpcWeeklyWageDifficultyCaption(), StringComparison.Ordinal));
+
             items.AddRange(BuildDifficultyMenuRootItems(DifficultyProfileTarget.Pending));
-            items.AddRange(BuildDifficultyMenuCoreItems(DifficultyProfileTarget.Pending));
+            coreItems.Insert(npcWeeklyWagesIndex >= 0 ? npcWeeklyWagesIndex + 1 : coreItems.Count, startingGuidesItem);
+            items.AddRange(coreItems);
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => Text(ModTextKey.RowCreateSave),
@@ -2144,6 +2172,11 @@ namespace LSOL
                 OnActivate = CancelNewSaveSetup,
             });
             _newSaveSetupMenu.SetItems(items);
+        }
+
+        private void TogglePendingStartingGuidesSetting()
+        {
+            _pendingStartingGuidesEnabled = !_pendingStartingGuidesEnabled;
         }
 
         private void RebuildSaveSlotsMenuItems()
@@ -3329,6 +3362,7 @@ namespace LSOL
 
             var markerPosition = GetIndustryMarkerPosition(industry);
             Function.Call(Hash.SET_NEW_WAYPOINT, markerPosition.X, markerPosition.Y);
+            _startingGuidesController.NotifyIndustryGpsSet(industry.Id);
             ShowStatus(string.Format("GPS route added to {0}.", industry.Name), 4000);
         }
 
@@ -5204,7 +5238,9 @@ namespace LSOL
                     payoutContext != null ? payoutContext.PlayerContractId : null,
                     payoutContext != null ? payoutContext.ShipperKey : null,
                     payoutContext != null ? payoutContext.DistrictName : null),
-                RecordPlayerSuccessDeliveryProgress);
+                RecordPlayerSuccessDeliveryProgress,
+                (destinationIndustry, unloadedVehicle, commodity, completedDelivery, completedContract) =>
+                    _startingGuidesController.NotifyUnloadCompleted(destinationIndustry, unloadedVehicle, commodity, completedDelivery, completedContract));
         }
 
         private void HandleTabletUpgradeModuleRequested(Industry industry, IndustryUpgradeModule module)

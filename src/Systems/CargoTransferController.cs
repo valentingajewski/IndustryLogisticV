@@ -248,7 +248,8 @@ namespace LSOL.Systems
             bool omegaOnly,
             Action beforeStart,
             Action<float, CargoTransferProfitContext> addProfit,
-            Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
+            Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null,
+            Action<Industry, Vehicle, string, bool, bool> onUnloadCompleted = null)
         {
             if (cargoState.IsEmpty)
             {
@@ -352,6 +353,7 @@ namespace LSOL.Systems
                             }
 
                             _showStatus(contractResult.Message);
+                            onUnloadCompleted?.Invoke(industry, cargoVehicle, commodity, contractResult.ContractCompleted, contractResult.ContractCompleted);
                         }
                         else
                         {
@@ -410,6 +412,8 @@ namespace LSOL.Systems
                                     ModFormatting.FormatSignedMoney(revenue),
                                     ModFormatting.FormatPercent(conditionRatio * 100f)));
                             }
+
+                            onUnloadCompleted?.Invoke(industry, cargoVehicle, commodity, completedDelivery, false);
                         }
                     }
                     finally
@@ -569,7 +573,8 @@ namespace LSOL.Systems
             VehicleCargoState cargoState,
             Action beforeStart,
             Action<float, CargoTransferProfitContext> addProfit,
-            Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null)
+            Action<Industry, string, float, string, string, bool, bool> recordDeliveryProgress = null,
+            Action<Industry, Vehicle, string, bool, bool> onUnloadCompleted = null)
         {
             PlayerContractTransferContext contractContext = null;
             string contractMessage = string.Empty;
@@ -656,6 +661,7 @@ namespace LSOL.Systems
                             }
 
                             _showStatus(contractResult.Message);
+                            onUnloadCompleted?.Invoke(industry, cargoVehicle, commodity, contractResult.ContractCompleted, contractResult.ContractCompleted);
                         }
                         else
                         {
@@ -702,6 +708,8 @@ namespace LSOL.Systems
                             {
                                 _showStatus(string.Format("Unloaded {0} {1}. Profit {2}", ModFormatting.FormatTons(accepted), commodity, ModFormatting.FormatSignedMoney(revenue)));
                             }
+
+                            onUnloadCompleted?.Invoke(industry, cargoVehicle, commodity, completedDelivery, false);
                         }
                     }
                     finally

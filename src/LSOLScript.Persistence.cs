@@ -107,6 +107,7 @@ namespace LSOL
 
             _pendingSaveName = saveName;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
+            _pendingStartingGuidesEnabled = false;
             SyncPendingDifficultyProfileFromLive();
 
             _savingOptionsMenu.Close();
@@ -141,6 +142,7 @@ namespace LSOL
             _currentStartingBalance = _profit;
             _playerSuccessTracker.ResetForNewSave(_profit);
             SyncPlayerSuccessBalance(false);
+            _startingGuidesController.BeginNewSave(_pendingStartingGuidesEnabled);
 
             if (!TrySaveIndustryPersistenceToPath(filePath))
             {
@@ -149,9 +151,17 @@ namespace LSOL
 
             var createdSaveName = _pendingSaveName;
             _pendingSaveName = string.Empty;
+            _pendingStartingGuidesEnabled = false;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             SyncPendingDifficultyProfileFromLive();
-            ReturnToSavingOptionsMenu();
+            if (_startingGuidesController.IsActive)
+            {
+                CloseAllMenus();
+            }
+            else
+            {
+                ReturnToSavingOptionsMenu();
+            }
             ShowStatus(Text(ModTextKey.DetailSaveCreated, createdSaveName), 4000);
         }
 
@@ -285,6 +295,7 @@ namespace LSOL
                     _currentStartingBalance = DefaultStartingBalance;
                     _playerSuccessTracker.ResetForNewSave(_profit);
                     SyncPlayerSuccessBalance(false);
+                    _startingGuidesController.Reset();
                 }
 
                 _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
@@ -455,6 +466,7 @@ namespace LSOL
                 PlayerStatistics = _playerSuccessTracker.CreatePersistenceSnapshot(),
                 PlayerContracts = _playerContractsManager.CreatePersistenceSnapshot(),
                 AlertRules = EnsureAlertRules(),
+                StartingGuides = _startingGuidesController != null ? _startingGuidesController.CreatePersistenceSnapshot() : null,
             };
             CaptureLiveDifficultyProfile().ApplyToMetadata(metadata);
             return metadata;
@@ -491,9 +503,14 @@ namespace LSOL
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             SyncPendingDifficultyProfileFromLive();
+            _pendingStartingGuidesEnabled = false;
             _alertRules = metadata != null && metadata.AlertRules != null
                 ? metadata.AlertRules
                 : new AlertRulesPersistenceSnapshot();
+            if (_startingGuidesController != null)
+            {
+                _startingGuidesController.ApplyPersistenceSnapshot(metadata != null ? metadata.StartingGuides : null);
+            }
             ResetAlertRuleRuntimeState(Game.GameTime, true);
             ApplyDifficultySettingsToSystems();
             var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;

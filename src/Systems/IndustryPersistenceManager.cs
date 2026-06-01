@@ -294,6 +294,11 @@ namespace LSOL.Systems
                 persistenceVersion = 27;
             }
 
+            if (metadata != null && HasStartingGuidesData(metadata.StartingGuides))
+            {
+                persistenceVersion = 28;
+            }
+
             writer.WriteLine(
                 "Version={0}",
                 persistenceVersion);
@@ -328,6 +333,11 @@ namespace LSOL.Systems
                 writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
             }
             writer.WriteLine();
+
+            if (metadata != null && HasStartingGuidesData(metadata.StartingGuides))
+            {
+                WriteStartingGuidesSnapshot(writer, metadata.StartingGuides);
+            }
 
             foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
             {
@@ -504,12 +514,14 @@ namespace LSOL.Systems
             metadata.PlayerStatistics = ReadPlayerStatisticsSnapshot(ini);
             metadata.PlayerContracts = ReadPlayerContractsSnapshot(ini);
             metadata.AlertRules = ReadAlertRulesSnapshot(ini);
+            metadata.StartingGuides = ReadStartingGuidesSnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
                 || HasPlayerStatisticsData(metadata.PlayerStatistics)
                 || HasPlayerContractsData(metadata.PlayerContracts)
-                || HasAlertRulesData(metadata.AlertRules);
+                || HasAlertRulesData(metadata.AlertRules)
+                || HasStartingGuidesData(metadata.StartingGuides);
             return metadata;
         }
 
@@ -3694,6 +3706,44 @@ namespace LSOL.Systems
 
             public string Value { get; private set; }
         }
+
+        private static bool HasStartingGuidesData(StartingGuidesPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WriteStartingGuidesSnapshot(StreamWriter writer, StartingGuidesPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[StartingGuides]");
+            writer.WriteLine("Enabled={0}", snapshot.Enabled ? "true" : "false");
+            writer.WriteLine("IntroSequenceCompleted={0}", snapshot.IntroSequenceCompleted ? "true" : "false");
+            writer.WriteLine("CurrentTaskIndex={0}", Math.Max(0, snapshot.CurrentTaskIndex));
+            writer.WriteLine("IsCompleted={0}", snapshot.IsCompleted ? "true" : "false");
+            writer.WriteLine();
+        }
+
+        private static StartingGuidesPersistenceSnapshot ReadStartingGuidesSnapshot(IniFile ini)
+        {
+            if (ini == null || !ini.HasSection("StartingGuides"))
+            {
+                return null;
+            }
+
+            var snapshot = new StartingGuidesPersistenceSnapshot
+            {
+                Enabled = ini.GetBool("StartingGuides", "Enabled", false),
+                IntroSequenceCompleted = ini.GetBool("StartingGuides", "IntroSequenceCompleted", false),
+                CurrentTaskIndex = ParseInt(ini.GetString("StartingGuides", "CurrentTaskIndex", "0"), 0),
+                IsCompleted = ini.GetBool("StartingGuides", "IsCompleted", false),
+            };
+
+            return snapshot.HasData ? snapshot : null;
+        }
     }
 
     public sealed class IndustryPersistenceLoadResult
@@ -3734,5 +3784,6 @@ namespace LSOL.Systems
         public PlayerStatisticsPersistenceSnapshot PlayerStatistics { get; set; }
         public PlayerContractsPersistenceSnapshot PlayerContracts { get; set; }
         public AlertRulesPersistenceSnapshot AlertRules { get; set; }
+        public StartingGuidesPersistenceSnapshot StartingGuides { get; set; }
     }
 }
