@@ -12,10 +12,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="ScriptHookVDotNet">
-      <HintPath>scripthookdotnet\ScriptHookVDotNet.asi</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="ScriptHookVDotNet3">
       <HintPath>scripthookdotnet\ScriptHookVDotNet3.dll</HintPath>
       <Private>false</Private>
