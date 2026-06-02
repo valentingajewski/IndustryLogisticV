@@ -56,12 +56,12 @@ namespace LSOL.UI
             var focusStatus = doctrines.FirstOrDefault(status => status != null && status.Doctrine == focusDoctrine);
 
             items.Add(TabletUiHelpers.CreateInfoItem(
-                "Progress",
-                string.Format("{0}/{1} unlocked", unlockedCount, totalCount),
+                LocalizedText.GetOrDefault("tablet.successes.progress", "Progress"),
+                LocalizedText.FormatOrDefault("tablet.successes.unlockedCount", "{0}/{1} unlocked", unlockedCount, totalCount),
                 totalCount > 0 ? (float?)unlockedCount / totalCount : null));
 
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Current Doctrine",
+                LocalizedText.GetOrDefault("tablet.successes.currentDoctrine", "Current Doctrine"),
                 TabletEndgameStatusFormatter.BuildStatusDetail(endgame),
                 () =>
                 {
@@ -76,7 +76,7 @@ namespace LSOL.UI
                 "DOC"));
 
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Prestige",
+                LocalizedText.GetOrDefault("tablet.successes.prestige", "Prestige"),
                 TabletEndgameStatusFormatter.BuildPrestigeSummaryDetail(endgame),
                 () =>
                 {
@@ -91,7 +91,7 @@ namespace LSOL.UI
                 "PRS"));
 
             items.Add(TabletUiHelpers.CreateInfoItem(
-                "Steering",
+                LocalizedText.GetOrDefault("tablet.successes.steering", "Steering"),
                 TabletEndgameStatusFormatter.BuildSteeringDetail(endgame),
                 focusStatus != null ? (float?)focusStatus.ProgressRatio : null));
 
@@ -106,7 +106,7 @@ namespace LSOL.UI
                 var capturedDoctrine = doctrine;
                 items.Add(TabletUiHelpers.CreateActionItem(
                     capturedDoctrine.IsActive
-                        ? string.Format("{0} [ACTIVE]", capturedDoctrine.Name ?? string.Empty)
+                        ? LocalizedText.FormatOrDefault("tablet.successes.doctrineActive", "{0} [ACTIVE]", capturedDoctrine.Name ?? string.Empty)
                         : capturedDoctrine.Name ?? string.Empty,
                     TabletEndgameStatusFormatter.BuildDoctrineListDetail(capturedDoctrine),
                     () =>
@@ -143,18 +143,23 @@ namespace LSOL.UI
             }
 
             items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the company hub.", () => context.GoBack(), "BACK"));
+            items[items.Count - 1].CaptionFactory = () => LocalizedText.GetOrDefault("tablet.common.back", "Back");
+            items[items.Count - 1].DetailFactory = () => LocalizedText.GetOrDefault("tablet.successes.backHub", "Return to the company hub.");
 
             return new TabletShellPage
             {
-                Title = "Successes",
-                Subtitle = string.Format(
+                Title = LocalizedText.GetOrDefault("tablet.successes.title", "Successes"),
+                Subtitle = LocalizedText.FormatOrDefault(
+                    "tablet.successes.subtitle",
                     "{0}/{1} unlocked | Prestige {2:0} | HQ {3}",
                     unlockedCount,
                     totalCount,
                     endgame.PrestigeScore,
-                    endgame.HasLandmarkHeadquarters ? "Online" : "Offline"),
+                    endgame.HasLandmarkHeadquarters
+                        ? LocalizedText.GetOrDefault("tablet.common.online", "Online")
+                        : LocalizedText.GetOrDefault("tablet.common.offline", "Offline")),
                 HeaderRightText = string.Format("{0}/{1}", unlockedCount, totalCount),
-                FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
+                FooterText = LocalizedText.GetOrDefault("tablet.successes.footer", "Arrow Keys Navigate | Enter Select | Backspace/Esc Back"),
                 WidthScale = 0.94f,
                 CaptionScale = 0.44f,
                 DetailScale = 0.27f,
@@ -180,20 +185,22 @@ namespace LSOL.UI
 
             if (status == null)
             {
-                items.Add(TabletUiHelpers.CreateInfoItem("Status", "Doctrine state unavailable."));
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    LocalizedText.GetOrDefault("tablet.successes.status", "Status"),
+                    LocalizedText.GetOrDefault("tablet.successes.doctrineUnavailable", "Doctrine state unavailable.")));
             }
             else
             {
-                items.Add(TabletUiHelpers.CreateInfoItem("Status", TabletEndgameStatusFormatter.BuildDoctrineDetail(status), status.ProgressRatio));
+                items.Add(TabletUiHelpers.CreateInfoItem(LocalizedText.GetOrDefault("tablet.successes.status", "Status"), TabletEndgameStatusFormatter.BuildDoctrineDetail(status), status.ProgressRatio));
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    "Doctrine Effect",
+                    LocalizedText.GetOrDefault("tablet.successes.doctrineEffect", "Doctrine Effect"),
                     TabletEndgameStatusFormatter.BuildDoctrineEffectsDetail(status),
                     status.Tier > 0 ? (float?)Math.Min(1f, Math.Max(status.EffectiveTier, status.Tier) / 4f) : 0f));
                 items.Add(TabletUiHelpers.CreateInfoItem(
-                    "Lead Rule",
+                    LocalizedText.GetOrDefault("tablet.successes.leadRule", "Lead Rule"),
                     endgame.DoctrineLead != null && !string.IsNullOrWhiteSpace(endgame.DoctrineLead.TieBreakSummary)
                         ? endgame.DoctrineLead.TieBreakSummary
-                        : "Lead order: tier, then progress, then Industrial > Territorial > Service."));
+                        : LocalizedText.GetOrDefault("tablet.successes.leadRuleFallback", "Lead order: tier, then progress, then Industrial > Territorial > Service.")));
 
                 foreach (var component in status.ProgressComponents ?? Array.Empty<CompanyDoctrineProgressComponent>())
                 {
@@ -210,22 +217,32 @@ namespace LSOL.UI
                 }
             }
 
-            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Successes overview.", () =>
-            {
-                if (context != null)
+            items.Add(TabletUiHelpers.CreateNavigationItem(
+                LocalizedText.GetOrDefault("tablet.common.back", "Back"),
+                LocalizedText.GetOrDefault("tablet.successes.backOverview", "Return to the Successes overview."),
+                () =>
                 {
-                    context.GoBack();
-                }
-            }, "BACK"));
+                    if (context != null)
+                    {
+                        context.GoBack();
+                    }
+                },
+                "BACK"));
 
             return new TabletShellPage
             {
-                Title = status != null ? status.Name ?? "Doctrine" : "Doctrine",
+                Title = status != null ? status.Name ?? LocalizedText.GetOrDefault("tablet.successes.doctrineTitle", "Doctrine") : LocalizedText.GetOrDefault("tablet.successes.doctrineTitle", "Doctrine"),
                 Subtitle = status != null
-                    ? string.Format("{0} | Progress {1:0}%", status.IsActive ? "Live doctrine" : "Doctrine track", Math.Max(0f, status.ProgressRatio) * 100f)
-                    : "Doctrine state unavailable",
+                    ? LocalizedText.FormatOrDefault(
+                        "tablet.successes.doctrineSubtitle",
+                        "{0} | Progress {1:0}%",
+                        status.IsActive
+                            ? LocalizedText.GetOrDefault("tablet.successes.liveDoctrine", "Live doctrine")
+                            : LocalizedText.GetOrDefault("tablet.successes.doctrineTrack", "Doctrine track"),
+                        Math.Max(0f, status.ProgressRatio) * 100f)
+                    : LocalizedText.GetOrDefault("tablet.successes.doctrineUnavailable", "Doctrine state unavailable"),
                 HeaderRightText = status != null ? string.Format("{0:0}%", Math.Max(0f, status.ProgressRatio) * 100f) : string.Empty,
-                FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
+                FooterText = LocalizedText.GetOrDefault("tablet.successes.footer", "Arrow Keys Navigate | Enter Select | Backspace/Esc Back"),
                 WidthScale = 0.94f,
                 CaptionScale = 0.44f,
                 DetailScale = 0.27f,
@@ -244,7 +261,7 @@ namespace LSOL.UI
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateInfoItem(
-                    "Prestige Total",
+                    LocalizedText.GetOrDefault("tablet.successes.prestigeTotal", "Prestige Total"),
                     TabletEndgameStatusFormatter.BuildPrestigeBreakdownDetail(endgame),
                     endgame.PrestigeScore > 0.001f ? (float?)(endgame.PrestigeScore / 100f) : 0f),
             };
@@ -263,20 +280,28 @@ namespace LSOL.UI
                     capturedComponent.MaxScore > 0.0005f ? (float?)(capturedComponent.Score / capturedComponent.MaxScore) : 0f));
             }
 
-            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the Successes overview.", () =>
-            {
-                if (context != null)
+            items.Add(TabletUiHelpers.CreateNavigationItem(
+                LocalizedText.GetOrDefault("tablet.common.back", "Back"),
+                LocalizedText.GetOrDefault("tablet.successes.backOverview", "Return to the Successes overview."),
+                () =>
                 {
-                    context.GoBack();
-                }
-            }, "BACK"));
+                    if (context != null)
+                    {
+                        context.GoBack();
+                    }
+                },
+                "BACK"));
 
             return new TabletShellPage
             {
-                Title = "Prestige",
-                Subtitle = string.Format("Current {0:0}/100 | Peak {1:0}", Math.Max(0f, endgame.PrestigeScore), Math.Max(Math.Max(0f, endgame.PrestigeScore), Math.Max(0f, endgame.HighestPrestigeScore))),
+                Title = LocalizedText.GetOrDefault("tablet.successes.prestige", "Prestige"),
+                Subtitle = LocalizedText.FormatOrDefault(
+                    "tablet.successes.prestigeSubtitle",
+                    "Current {0:0}/100 | Peak {1:0}",
+                    Math.Max(0f, endgame.PrestigeScore),
+                    Math.Max(Math.Max(0f, endgame.PrestigeScore), Math.Max(0f, endgame.HighestPrestigeScore))),
                 HeaderRightText = string.Format("{0:0}", Math.Max(0f, endgame.PrestigeScore)),
-                FooterText = "Arrow Keys Navigate | Enter Select | Backspace/Esc Back",
+                FooterText = LocalizedText.GetOrDefault("tablet.successes.footer", "Arrow Keys Navigate | Enter Select | Backspace/Esc Back"),
                 WidthScale = 0.94f,
                 CaptionScale = 0.44f,
                 DetailScale = 0.27f,
@@ -295,7 +320,7 @@ namespace LSOL.UI
 
             if (status.IsUnlocked)
             {
-                return string.Format("{0}\nUnlocked", status.Description ?? string.Empty);
+                return LocalizedText.FormatOrDefault("tablet.successes.detailUnlocked", "{0}\nUnlocked", status.Description ?? string.Empty);
             }
 
             if (string.IsNullOrWhiteSpace(status.ProgressText))
@@ -303,7 +328,7 @@ namespace LSOL.UI
                 return status.Description ?? string.Empty;
             }
 
-            return string.Format("{0}\nProgress: {1}", status.Description ?? string.Empty, status.ProgressText);
+            return LocalizedText.FormatOrDefault("tablet.successes.detailProgress", "{0}\nProgress: {1}", status.Description ?? string.Empty, status.ProgressText);
         }
 
         private static CompanyDoctrine ResolveFocusDoctrine(CompanyEndgameSummary endgame, IReadOnlyList<CompanyDoctrineStatus> doctrines)

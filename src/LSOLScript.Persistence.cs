@@ -190,6 +190,7 @@ namespace LSOL
 
             _industryStatePath = entry.FilePath;
             ApplyLoadedPersistenceMetadata(loadResult.Metadata, true);
+            ResetCareerAutosaveState();
             ReturnToSavingOptionsMenu();
             ShowStatus(Text(ModTextKey.DetailSaveLoaded, entry.DisplayName), 4000);
         }
@@ -243,40 +244,42 @@ namespace LSOL
                     File.Delete(existingPath);
                 }
             }
-            catch (IOException ex)
+            catch (IOException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
+                ShowPersistenceFailure("Delete selected save");
                 return;
             }
-            catch (UnauthorizedAccessException ex)
+            catch (UnauthorizedAccessException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
+                ShowPersistenceFailure("Delete selected save");
                 return;
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
+                ShowPersistenceFailure("Delete selected save");
                 return;
             }
-            catch (InvalidDataException ex)
+            catch (InvalidDataException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
+                ShowPersistenceFailure("Delete selected save");
                 return;
             }
-            catch (NotSupportedException ex)
+            catch (NotSupportedException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Delete selected save", ex));
+                ShowPersistenceFailure("Delete selected save");
                 return;
             }
 
             if (deletedActiveSave)
             {
                 _industryStatePath = _defaultIndustryStatePath;
+                ResetCareerAutosaveState();
 
                 IndustryPersistenceLoadResult loadResult;
                 if (TryLoadIndustryPersistenceFromPath(_defaultIndustryStatePath, false, out loadResult))
                 {
                     ApplyLoadedPersistenceMetadata(loadResult.Metadata, false);
+                    ResetCareerAutosaveState();
                 }
                 else
                 {
@@ -296,6 +299,7 @@ namespace LSOL
                     _playerSuccessTracker.ResetForNewSave(_profit);
                     SyncPlayerSuccessBalance(false);
                     _startingGuidesController.Reset();
+                    ResetCareerAutosaveState();
                 }
 
                 _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
@@ -335,6 +339,7 @@ namespace LSOL
             }
 
             ApplyLoadedPersistenceMetadata(loadResult.Metadata, IsNamedSavePath(_industryStatePath));
+            ResetCareerAutosaveState();
 
             if (loadResult.RestoredCount > 0)
             {
@@ -358,6 +363,58 @@ namespace LSOL
             TrySaveIndustryPersistenceToPath(_industryStatePath);
         }
 
+        private void RequestCareerAutosave()
+        {
+            if (!ShouldAutosaveCareerState())
+            {
+                return;
+            }
+
+            _careerAutosaveScheduler.RequestSave(Game.GameTime);
+        }
+
+        private void QueuePeriodicCareerAutosave(int gameTime)
+        {
+            if (!ShouldAutosaveCareerState())
+            {
+                return;
+            }
+
+            _careerAutosaveScheduler.TryRequestPeriodicCheckpoint(gameTime);
+        }
+
+        private void ProcessPendingCareerAutosave(int gameTime)
+        {
+            if (!ShouldAutosaveCareerState() || !_careerAutosaveScheduler.IsSaveDue(gameTime))
+            {
+                return;
+            }
+
+            if (TrySaveIndustryPersistenceToPath(_industryStatePath, false))
+            {
+                return;
+            }
+
+            _careerAutosaveScheduler.MarkSaveFailed(gameTime);
+        }
+
+        private void ResetCareerAutosaveState()
+        {
+            _careerAutosaveScheduler.Reset(Game.GameTime);
+        }
+
+        private bool ShouldAutosaveCareerState()
+        {
+            return _industryPersistenceEnabled
+                && _modMechanicsEnabled
+                && IsNamedSavePath(_industryStatePath);
+        }
+
+        private void ShowPersistenceFailure(string action)
+        {
+            ShowStatus(ModDiagnostics.FormatFailure(action, null));
+        }
+
         private bool TryLoadIndustryPersistenceFromPath(string filePath, bool notifyWhenNoData, out IndustryPersistenceLoadResult loadResult)
         {
             loadResult = null;
@@ -376,39 +433,43 @@ namespace LSOL
                     ShowStatus(Text(ModTextKey.DetailNoSavedState));
                 }
             }
-            catch (IOException ex)
+            catch (IOException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+                ShowPersistenceFailure("Load industry persistence data");
             }
-            catch (UnauthorizedAccessException ex)
+            catch (UnauthorizedAccessException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+                ShowPersistenceFailure("Load industry persistence data");
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+                ShowPersistenceFailure("Load industry persistence data");
             }
-            catch (InvalidDataException ex)
+            catch (InvalidDataException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+                ShowPersistenceFailure("Load industry persistence data");
             }
-            catch (NotSupportedException ex)
+            catch (NotSupportedException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+                ShowPersistenceFailure("Load industry persistence data");
             }
-            catch (XmlException ex)
+            catch (XmlException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Load industry persistence data", ex));
+                ShowPersistenceFailure("Load industry persistence data");
             }
 
             return false;
         }
 
-        private bool TrySaveIndustryPersistenceToPath(string filePath)
+        private bool TrySaveIndustryPersistenceToPath(string filePath, bool notifyOnFailure = true)
         {
             if (string.IsNullOrWhiteSpace(filePath))
             {
-                ShowStatus(Text(ModTextKey.DetailNoSavePath));
+                if (notifyOnFailure)
+                {
+                    ShowStatus(Text(ModTextKey.DetailNoSavePath));
+                }
+
                 return false;
             }
 
@@ -421,26 +482,43 @@ namespace LSOL
                 }
 
                 IndustryPersistenceManager.Save(filePath, _industryManager.Industries, BuildCurrentPersistenceMetadata(), _territoryManager.CreateSnapshot());
+                _careerAutosaveScheduler.MarkSaved(Game.GameTime);
                 return true;
             }
-            catch (IOException ex)
+            catch (IOException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Save industry persistence data", ex));
+                if (notifyOnFailure)
+                {
+                    ShowPersistenceFailure("Save industry persistence data");
+                }
+
                 return false;
             }
-            catch (UnauthorizedAccessException ex)
+            catch (UnauthorizedAccessException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Save industry persistence data", ex));
+                if (notifyOnFailure)
+                {
+                    ShowPersistenceFailure("Save industry persistence data");
+                }
+
                 return false;
             }
-            catch (ArgumentException ex)
+            catch (ArgumentException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Save industry persistence data", ex));
+                if (notifyOnFailure)
+                {
+                    ShowPersistenceFailure("Save industry persistence data");
+                }
+
                 return false;
             }
-            catch (NotSupportedException ex)
+            catch (NotSupportedException)
             {
-                ShowStatus(ModDiagnostics.FormatFailure("Save industry persistence data", ex));
+                if (notifyOnFailure)
+                {
+                    ShowPersistenceFailure("Save industry persistence data");
+                }
+
                 return false;
             }
         }

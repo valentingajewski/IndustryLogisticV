@@ -18,7 +18,7 @@ namespace LSOL.UI
         Turkish = 9,
     }
 
-    internal static class ModTextKey
+    internal static partial class ModTextKey
     {
         public const string CommonOn = "common.on";
         public const string CommonOff = "common.off";
@@ -418,6 +418,8 @@ namespace LSOL.UI
             Add(translations, ModTextKey.ValueColorblindDeuteranopia, "Deuteranopia", "Deutéranopie", "Deuteranopia", "Deuteranopía", "Дейтеранопия", "2型色覚", "绿色盲", "ड्यूटेरानोपिया", "Deuteranopia", "Döteranopi");
             Add(translations, ModTextKey.ValueColorblindProtanopia, "Protanopia", "Protanopie", "Protanopia", "Protanopía", "Протанопия", "1型色覚", "红色盲", "प्रोटैनोपिया", "Protanopia", "Protanopi");
             Add(translations, ModTextKey.ValueColorblindTritanopia, "Tritanopia", "Tritanopie", "Tritanopia", "Tritanopía", "Тританопия", "3型色覚", "蓝黄色盲", "ट्राइटैनोपिया", "Tritanopia", "Tritanopi");
+
+            TabletLocalizationCatalog.AddTranslations(translations);
 
             return translations;
         }

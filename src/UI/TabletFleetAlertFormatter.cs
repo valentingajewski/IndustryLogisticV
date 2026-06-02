@@ -96,8 +96,8 @@ namespace LSOL.UI
             {
                 rows.Add(new TabletFleetAlertRow
                 {
-                    Caption = "Alert Center",
-                    Detail = "No low-fuel, inspection, or condition issues detected.",
+                    Caption = LocalizedText.GetOrDefault("tablet.fleetAlerts.center", "Alert Center"),
+                    Detail = LocalizedText.GetOrDefault("tablet.fleetAlerts.none", "No low-fuel, inspection, or condition issues detected."),
                     IsAlert = false,
                 });
             }
@@ -120,30 +120,32 @@ namespace LSOL.UI
                 return null;
             }
 
-            var vehicleLabel = ResolveVehicleLabel(summary.ActiveVehicleName, "Active unit");
+            var vehicleLabel = ResolveVehicleLabel(summary.ActiveVehicleName, LocalizedText.GetOrDefault("tablet.fleetAlerts.activeUnit", "Active unit"));
             if (summary.FuelIsEmpty)
             {
                 return new TabletFleetAlertRow
                 {
-                    Caption = "Fuel Critical",
-                    Detail = string.Format(CultureInfo.InvariantCulture, "{0} is out of fuel. Refuel it now before dispatch stalls.", vehicleLabel),
+                    Caption = LocalizedText.GetOrDefault("tablet.fleetAlerts.fuelCritical", "Fuel Critical"),
+                    Detail = LocalizedText.FormatOrDefault("tablet.fleetAlerts.fuelCriticalDetail", "{0} is out of fuel. Refuel it now before dispatch stalls.", vehicleLabel),
                     IsAlert = true,
                 };
             }
 
             return new TabletFleetAlertRow
             {
-                Caption = IsFuelUrgent(fuelRatio) ? "Fuel Urgent" : "Fuel Watch",
-                Detail = string.Format(
-                    CultureInfo.InvariantCulture,
+                Caption = IsFuelUrgent(fuelRatio)
+                    ? LocalizedText.GetOrDefault("tablet.fleetAlerts.fuelUrgent", "Fuel Urgent")
+                    : LocalizedText.GetOrDefault("tablet.fleetAlerts.fuelWatch", "Fuel Watch"),
+                Detail = LocalizedText.FormatOrDefault(
+                    "tablet.fleetAlerts.fuelDetail",
                     "{0} at {1:0}% fuel ({2:0}/{3:0}L). {4}",
                     vehicleLabel,
                     fuelRatio * 100f,
                     Math.Max(0f, summary.FuelCurrentLiters),
                     Math.Max(0f, summary.FuelCapacityLiters),
                     IsFuelUrgent(fuelRatio)
-                        ? "Refuel before the next run."
-                        : "Top it up before a longer lane."),
+                        ? LocalizedText.GetOrDefault("tablet.fleetAlerts.fuelUrgentAction", "Refuel before the next run.")
+                        : LocalizedText.GetOrDefault("tablet.fleetAlerts.fuelWatchAction", "Top it up before a longer lane.")),
                 IsAlert = true,
             };
         }
@@ -163,19 +165,19 @@ namespace LSOL.UI
             if (overdueCount == 1)
             {
                 detail = !string.IsNullOrWhiteSpace(vehicleLabel) && overdueWeeks > 0
-                    ? string.Format(CultureInfo.InvariantCulture, "{0} is {1}w overdue. Rotate it through repair before weekly maintenance.", vehicleLabel, overdueWeeks)
-                    : "1 unit is overdue. Rotate it through repair before weekly maintenance.";
+                    ? LocalizedText.FormatOrDefault("tablet.fleetAlerts.inspectionSingleWithVehicle", "{0} is {1}w overdue. Rotate it through repair before weekly maintenance.", vehicleLabel, overdueWeeks)
+                    : LocalizedText.GetOrDefault("tablet.fleetAlerts.inspectionSingle", "1 unit is overdue. Rotate it through repair before weekly maintenance.");
             }
             else
             {
                 detail = !string.IsNullOrWhiteSpace(vehicleLabel) && overdueWeeks > 0
-                    ? string.Format(CultureInfo.InvariantCulture, "{0} units overdue; worst {1} {2}w late. Rotate them through repair before weekly maintenance.", overdueCount, vehicleLabel, overdueWeeks)
-                    : string.Format(CultureInfo.InvariantCulture, "{0} units overdue. Rotate them through repair before weekly maintenance.", overdueCount);
+                    ? LocalizedText.FormatOrDefault("tablet.fleetAlerts.inspectionManyWithVehicle", "{0} units overdue; worst {1} {2}w late. Rotate them through repair before weekly maintenance.", overdueCount, vehicleLabel, overdueWeeks)
+                    : LocalizedText.FormatOrDefault("tablet.fleetAlerts.inspectionMany", "{0} units overdue. Rotate them through repair before weekly maintenance.", overdueCount);
             }
 
             return new TabletFleetAlertRow
             {
-                Caption = "Inspection Overdue",
+                Caption = LocalizedText.GetOrDefault("tablet.fleetAlerts.inspectionCaption", "Inspection Overdue"),
                 Detail = detail,
                 IsAlert = true,
             };
@@ -196,19 +198,19 @@ namespace LSOL.UI
             if (conditionCount == 1)
             {
                 detail = !string.IsNullOrWhiteSpace(vehicleLabel)
-                    ? string.Format(CultureInfo.InvariantCulture, "{0} down to {1:0}% condition. Repair it before the next route.", vehicleLabel, lowestConditionPercent)
-                    : string.Format(CultureInfo.InvariantCulture, "1 unit down to {0:0}% condition. Repair it before the next route.", lowestConditionPercent);
+                    ? LocalizedText.FormatOrDefault("tablet.fleetAlerts.conditionSingleWithVehicle", "{0} down to {1:0}% condition. Repair it before the next route.", vehicleLabel, lowestConditionPercent)
+                    : LocalizedText.FormatOrDefault("tablet.fleetAlerts.conditionSingle", "1 unit down to {0:0}% condition. Repair it before the next route.", lowestConditionPercent);
             }
             else
             {
                 detail = !string.IsNullOrWhiteSpace(vehicleLabel)
-                    ? string.Format(CultureInfo.InvariantCulture, "{0} units under {1:0}%; worst {2} {3:0}% condition. Cycle them through the hub.", conditionCount, ConditionAlertThresholdPercent, vehicleLabel, lowestConditionPercent)
-                    : string.Format(CultureInfo.InvariantCulture, "{0} units under {1:0}% condition. Cycle them through the hub.", conditionCount, ConditionAlertThresholdPercent);
+                    ? LocalizedText.FormatOrDefault("tablet.fleetAlerts.conditionManyWithVehicle", "{0} units under {1:0}%; worst {2} {3:0}% condition. Cycle them through the hub.", conditionCount, ConditionAlertThresholdPercent, vehicleLabel, lowestConditionPercent)
+                    : LocalizedText.FormatOrDefault("tablet.fleetAlerts.conditionMany", "{0} units under {1:0}% condition. Cycle them through the hub.", conditionCount, ConditionAlertThresholdPercent);
             }
 
             return new TabletFleetAlertRow
             {
-                Caption = "Condition Alert",
+                Caption = LocalizedText.GetOrDefault("tablet.fleetAlerts.conditionCaption", "Condition Alert"),
                 Detail = detail,
                 IsAlert = true,
             };

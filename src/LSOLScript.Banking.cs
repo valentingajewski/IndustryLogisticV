@@ -91,6 +91,7 @@ namespace LSOL
             {
                 _profit = updatedBalance;
                 _tabletStateStore.MarkAllDirty();
+                RequestCareerAutosave();
             }
 
             if (messages.Count > 0)

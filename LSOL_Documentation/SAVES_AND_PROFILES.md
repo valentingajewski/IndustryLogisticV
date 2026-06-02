@@ -25,7 +25,15 @@ From there you can:
 - create a new save
 - load a save
 - delete a save
-- manually save the current game
+- manually save the current game for an immediate checkpoint
+
+## Named Save Autosave
+
+Named saves now auto-update in the background during key career events such as completed deliveries, contract or mission state changes, weekly finance ticks, and periodic runtime checkpoints.
+
+The Save game action still exists if you want to force an immediate write before swapping slots or testing something risky.
+
+The default `LSOL.state.xml` path keeps its existing fallback role. Runtime autosave targets the active named save only.
 
 ![image](../doc_images/f7_save.JPG)
 

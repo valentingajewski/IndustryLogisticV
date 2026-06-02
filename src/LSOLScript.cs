@@ -85,6 +85,7 @@ namespace LSOL
         private readonly PropertyManager _propertyManager;
         private readonly CompanyFinanceTracker _financeTracker;
         private readonly BankLoanManager _bankLoanManager;
+        private readonly CareerAutosaveScheduler _careerAutosaveScheduler;
         private readonly PlayerSuccessTracker _playerSuccessTracker;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
@@ -224,6 +225,7 @@ namespace LSOL
             _propertyManager = new PropertyManager(_config);
             _financeTracker = new CompanyFinanceTracker();
             _bankLoanManager = new BankLoanManager(_config.BankDefinitions, _financeTracker);
+            _careerAutosaveScheduler = new CareerAutosaveScheduler();
             _propertyManager.ConfigureFinanceTracking(_financeTracker, GetCurrentInGameWeekMinute);
             _vehicleFuelSystem = new VehicleFuelSystem(_fleetManager, message => ShowStatus(message));
             _vehicleLoadPowerService = new VehicleLoadPowerService(_fleetManager);

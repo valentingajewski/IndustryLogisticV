@@ -82,8 +82,8 @@ namespace LSOL.UI
         public static MenuItem CreateGraphTimeframeSelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Timeframe: < {0} >", context != null ? context.StateStore.SelectedGraphTimeframe.ToDisplayLabel() : TabletGraphTimeframe.ThirtyMinutes.ToDisplayLabel()),
-                () => detail ?? "Left/right changes the graph window. Enter advances.",
+                () => LocalizedText.Format(ModTextKey.TabletSelectorTimeframeCaption, context != null ? context.StateStore.SelectedGraphTimeframe.ToDisplayLabel() : TabletGraphTimeframe.ThirtyMinutes.ToDisplayLabel()),
+                () => detail ?? LocalizedText.Get(ModTextKey.TabletSelectorTimeframeDetail),
                 () =>
                 {
                     if (context == null)
@@ -120,8 +120,8 @@ namespace LSOL.UI
         public static MenuItem CreateCommoditySelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Trend Resource: < {0} >", context != null ? context.StateStore.SelectedTrendCommodity : "None"),
-                () => detail ?? "Left/right changes the graph resource. Enter advances.",
+                () => LocalizedText.Format(ModTextKey.TabletSelectorTrendResourceCaption, context != null ? context.StateStore.SelectedTrendCommodity : LocalizedText.Get(ModTextKey.TabletSelectorTrendResourceNone)),
+                () => detail ?? LocalizedText.Get(ModTextKey.TabletSelectorTrendResourceDetail),
                 () =>
                 {
                     if (context == null)
@@ -158,8 +158,8 @@ namespace LSOL.UI
         public static MenuItem CreateRoutePlannerSortSelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Sort: < {0} >", context != null ? FormatRoutePlannerSortMode(context.StateStore.SelectedRoutePlannerSortMode) : FormatRoutePlannerSortMode(RoutePlannerSortMode.Optimizer)),
-                () => detail ?? "Left/right changes the planner ranking order.",
+                () => LocalizedText.Format(ModTextKey.TabletSelectorRoutePlannerSortCaption, context != null ? FormatRoutePlannerSortMode(context.StateStore.SelectedRoutePlannerSortMode) : FormatRoutePlannerSortMode(RoutePlannerSortMode.Optimizer)),
+                () => detail ?? LocalizedText.Get(ModTextKey.TabletSelectorRoutePlannerSortDetail),
                 () =>
                 {
                     if (context == null)
@@ -196,8 +196,8 @@ namespace LSOL.UI
         public static MenuItem CreateRoutePlannerAvailabilitySelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Lane Filter: < {0} >", context != null ? FormatRoutePlannerAvailabilityFilter(context.StateStore.SelectedRoutePlannerAvailabilityFilterMode) : FormatRoutePlannerAvailabilityFilter(RoutePlannerAvailabilityFilterMode.All)),
-                () => detail ?? "Left/right filters planner lanes by availability and live contract state.",
+                () => LocalizedText.Format(ModTextKey.TabletSelectorRoutePlannerAvailabilityCaption, context != null ? FormatRoutePlannerAvailabilityFilter(context.StateStore.SelectedRoutePlannerAvailabilityFilterMode) : FormatRoutePlannerAvailabilityFilter(RoutePlannerAvailabilityFilterMode.All)),
+                () => detail ?? LocalizedText.Get(ModTextKey.TabletSelectorRoutePlannerAvailabilityDetail),
                 () =>
                 {
                     if (context == null)
@@ -234,8 +234,8 @@ namespace LSOL.UI
         public static MenuItem CreateRoutePlannerCommoditySelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("Commodity: < {0} >", context != null && !string.IsNullOrWhiteSpace(context.StateStore.SelectedRoutePlannerCommodityFilter) ? context.StateStore.SelectedRoutePlannerCommodityFilter : "Any"),
-                () => detail ?? "Left/right narrows the planner to one commodity family.",
+                () => LocalizedText.Format(ModTextKey.TabletSelectorRoutePlannerCommodityCaption, context != null && !string.IsNullOrWhiteSpace(context.StateStore.SelectedRoutePlannerCommodityFilter) ? context.StateStore.SelectedRoutePlannerCommodityFilter : LocalizedText.Get(ModTextKey.TabletSelectorRoutePlannerCommodityAny)),
+                () => detail ?? LocalizedText.Get(ModTextKey.TabletSelectorRoutePlannerCommodityDetail),
                 () =>
                 {
                     if (context == null)
@@ -272,8 +272,8 @@ namespace LSOL.UI
         public static MenuItem CreateRoutePlannerDistrictSelectorItem(TabletShellContext context, string detail = null)
         {
             return CreateSelectorItem(
-                () => string.Format("District: < {0} >", context != null && !string.IsNullOrWhiteSpace(context.StateStore.SelectedRoutePlannerDistrictFilter) ? context.StateStore.SelectedRoutePlannerDistrictFilter : "All"),
-                () => detail ?? "Left/right narrows the planner to districts touched by the lane.",
+                () => LocalizedText.Format(ModTextKey.TabletSelectorRoutePlannerDistrictCaption, context != null && !string.IsNullOrWhiteSpace(context.StateStore.SelectedRoutePlannerDistrictFilter) ? context.StateStore.SelectedRoutePlannerDistrictFilter : LocalizedText.Get(ModTextKey.TabletSelectorRoutePlannerDistrictAll)),
+                () => detail ?? LocalizedText.Get(ModTextKey.TabletSelectorRoutePlannerDistrictDetail),
                 () =>
                 {
                     if (context == null)
@@ -312,21 +312,21 @@ namespace LSOL.UI
             switch (mode)
             {
                 case RoutePlannerSortMode.ProjectedPayout:
-                    return "Projected payout";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortProjectedPayout);
                 case RoutePlannerSortMode.ProjectedValue:
-                    return "Projected value";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortProjectedValue);
                 case RoutePlannerSortMode.RealizedNetProfit:
-                    return "Live net";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortLiveNet);
                 case RoutePlannerSortMode.UnitPrice:
-                    return "Unit price";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortUnitPrice);
                 case RoutePlannerSortMode.Commodity:
-                    return "Commodity";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortCommodity);
                 case RoutePlannerSortMode.District:
-                    return "District";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortDistrict);
                 case RoutePlannerSortMode.Availability:
-                    return "Availability";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortAvailability);
                 default:
-                    return "Optimizer";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerSortOptimizer);
             }
         }
 
@@ -335,15 +335,15 @@ namespace LSOL.UI
             switch (mode)
             {
                 case RoutePlannerAvailabilityFilterMode.Available:
-                    return "Available";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerAvailabilityAvailable);
                 case RoutePlannerAvailabilityFilterMode.Blocked:
-                    return "Blocked";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerAvailabilityBlocked);
                 case RoutePlannerAvailabilityFilterMode.ActiveNpc:
-                    return "Active NPC";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerAvailabilityActiveNpc);
                 case RoutePlannerAvailabilityFilterMode.Underperforming:
-                    return "Underperforming";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerAvailabilityUnderperforming);
                 default:
-                    return "All";
+                    return LocalizedText.Get(ModTextKey.TabletRoutePlannerAvailabilityAll);
             }
         }
 
@@ -549,7 +549,7 @@ namespace LSOL.UI
         public static string BuildBalanceChrome(TabletStateSnapshot snapshot)
         {
             var balance = snapshot != null ? snapshot.Balance : 0f;
-            return string.Format("Balance {0}", ModFormatting.FormatMoney(balance));
+            return LocalizedText.Format(ModTextKey.TabletCommonBalance, ModFormatting.FormatMoney(balance));
         }
 
         public static TabletShellPage BuildLegacyIndustryStatisticsPage(
@@ -1085,29 +1085,31 @@ namespace LSOL.UI
             var permitSiteCount = permitSummaries.Count(summary => summary != null && summary.Industry != null && summary.Industry.RequiresContractorPermit);
             var unlockedPermitCount = permitSummaries.Count(summary => summary != null && summary.HasContractorPermitForGameplay);
             var operationsHeadline = snapshot.HasNearestIndustry
-                ? string.Format("Nearest: {0}", ShortenDashboardLabel(snapshot.NearestIndustryName, 20))
-                : "No nearby site";
+                ? LocalizedText.FormatOrDefault("tablet.home.operations.nearest", "Nearest: {0}", ShortenDashboardLabel(snapshot.NearestIndustryName, 20))
+                : LocalizedText.GetOrDefault("tablet.home.operations.noneNearby", "No nearby site");
             var operationsDetail = string.Format(
                 "{0}\n{1}",
                 operationsHeadline,
                 BuildHomeOperationsStatus(snapshot));
             var marketDetail = snapshot.MarketHighlights != null && snapshot.MarketHighlights.Count > 0
-                ? string.Format(
+                ? LocalizedText.FormatOrDefault(
+                    "tablet.home.market.cached",
                     "{0} ${1:0}/t\n{2} market highlights cached",
                     snapshot.MarketHighlights[0].Commodity,
                     snapshot.MarketHighlights[0].UnitPrice,
                     snapshot.MarketHighlights.Count)
-                : "No market highlights cached yet.\nOpen Network to refresh industry pricing.";
+                : LocalizedText.GetOrDefault("tablet.home.market.none", "No market highlights cached yet.\nOpen Network to refresh industry pricing.");
             var siteDetail = snapshot.HasNearestIndustry
-                ? string.Format(
+                ? LocalizedText.FormatOrDefault(
+                    "tablet.home.site.detail",
                     "{0}\nRate {1:0.0} t/h | Util {2:0}%",
                     ShortenDashboardLabel(snapshot.NearestIndustryName, 20),
                     snapshot.NearestIndustryProductionRateTonsPerHour,
                     snapshot.NearestIndustryUtilizationPercent)
-                : "Browse tracked industries, stores, and stations across the region.";
+                : LocalizedText.GetOrDefault("tablet.home.site.none", "Browse tracked industries, stores, and stations across the region.");
             var permitDetail = permitSiteCount > 0
-                ? string.Format("{0}/{1} transport permits unlocked", unlockedPermitCount, permitSiteCount)
-                : "No contractor permits configured.";
+                ? LocalizedText.FormatOrDefault("tablet.home.permits.detail", "{0}/{1} transport permits unlocked", unlockedPermitCount, permitSiteCount)
+                : LocalizedText.GetOrDefault("tablet.home.permits.none", "No contractor permits configured.");
             var missionListings = _specialMissionManager != null
                 ? _specialMissionManager.GetMissionListings()
                 : Array.Empty<SpecialMissionListing>();
@@ -1121,12 +1123,12 @@ namespace LSOL.UI
                 : missionListings.Count > 0
                     ? (availableMissionCount > 0
                         ? (generatedMissionCount > 0
-                            ? string.Format("{0} contracts ready\n{1} crisis | {2} tender | {3} board", availableMissionCount, crisisMissionCount, tenderMissionCount, generatedMissionCount)
-                            : string.Format("{0} contracts ready\n{1} community missions loaded", availableMissionCount, missionListings.Count))
+                            ? LocalizedText.FormatOrDefault("tablet.home.missions.readyBoard", "{0} contracts ready\n{1} crisis | {2} tender | {3} board", availableMissionCount, crisisMissionCount, tenderMissionCount, generatedMissionCount)
+                            : LocalizedText.FormatOrDefault("tablet.home.missions.readyCommunity", "{0} contracts ready\n{1} community missions loaded", availableMissionCount, missionListings.Count))
                         : (generatedMissionCount > 0
-                            ? string.Format("{0} board entries live\nGrow district presence, permits, or fleet capacity to unlock more.", missionListings.Count)
-                            : string.Format("{0} community missions loaded\nGrow district influence to unlock more contracts.", missionListings.Count)))
-                    : "No mission packs or board contracts ready yet.\nGrow district presence or add XML mission packs.";
+                            ? LocalizedText.FormatOrDefault("tablet.home.missions.boardLive", "{0} board entries live\nGrow district presence, permits, or fleet capacity to unlock more.", missionListings.Count)
+                            : LocalizedText.FormatOrDefault("tablet.home.missions.communityLoaded", "{0} community missions loaded\nGrow district influence to unlock more contracts.", missionListings.Count)))
+                    : LocalizedText.GetOrDefault("tablet.home.missions.none", "No mission packs or board contracts ready yet.\nGrow district presence or add XML mission packs.");
             var siteAction = snapshot.HasNearestIndustry
                 ? (snapshot.CanInteractWithNearestIndustry
                     ? (Action)(() => context.Push(TabletAppIds.Industry, "main", snapshot.NearestIndustry))
@@ -1134,15 +1136,15 @@ namespace LSOL.UI
                 : (Action)(() => context.Push(TabletAppIds.Network, "industries"));
 
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Company",
-                string.Format("{0}\n{1} sites | {2} hired | {3} ambient", TabletUiHelpers.BuildBalanceChrome(snapshot), totalTrackedSites, snapshot.ActiveNpcRouteCount, dispatchOverview.ActiveJobCount),
+                LocalizedText.GetOrDefault("tablet.home.company", "Company"),
+                LocalizedText.FormatOrDefault("tablet.home.companyDetail", "{0}\n{1} sites | {2} hired | {3} ambient", TabletUiHelpers.BuildBalanceChrome(snapshot), totalTrackedSites, snapshot.ActiveNpcRouteCount, dispatchOverview.ActiveJobCount),
                 () => context.Push(TabletAppIds.Network, "root"),
                 Color.FromArgb(176, 28, 32, 38),
                 Color.FromArgb(220, 88, 106, 118),
                 null,
                 "HQ"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Operations",
+                LocalizedText.GetOrDefault("tablet.home.operations", "Operations"),
                 operationsDetail,
                 siteAction,
                 Color.FromArgb(176, 34, 38, 42),
@@ -1150,8 +1152,9 @@ namespace LSOL.UI
                 null,
                 "LIVE"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Budget",
-                string.Format(
+                LocalizedText.GetOrDefault("tablet.home.budget", "Budget"),
+                LocalizedText.FormatOrDefault(
+                    "tablet.home.budgetDetail",
                     "7d net {0}\nKnown bills {1}",
                     budgetOverview.WeeklyNet >= 0f
                         ? "+" + ModFormatting.FormatMoney(budgetOverview.WeeklyNet)
@@ -1167,8 +1170,9 @@ namespace LSOL.UI
                 + propertySummary.Apartments.Count(entry => entry.IsOwned || entry.IsRented);
             var propertyArrears = propertySummary.TotalArrears;
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Properties",
-                string.Format(
+                LocalizedText.GetOrDefault("tablet.home.properties", "Properties"),
+                LocalizedText.FormatOrDefault(
+                    "tablet.home.propertiesDetail",
                     "{0} controlled properties\nArrears {1}",
                     propertyControlledCount,
                     ModFormatting.FormatMoney(propertyArrears)),
@@ -1178,25 +1182,25 @@ namespace LSOL.UI
                 null,
                 "PRP"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Industries",
-                string.Format("{0} tracked production sites", industryCount),
+                LocalizedText.GetOrDefault("tablet.home.industries", "Industries"),
+                LocalizedText.FormatOrDefault("tablet.home.industriesDetail", "{0} tracked production sites", industryCount),
                 () => context.Push(TabletAppIds.Network, "industries"),
                 Color.FromArgb(184, 40, 52, 46),
                 Color.FromArgb(226, 98, 124, 108),
                 null,
                 "IND"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Construction",
+                LocalizedText.GetOrDefault("tablet.home.construction", "Construction"),
                 constructionSiteCount > 0
-                    ? string.Format("{0} tracked construction delivery sites", constructionSiteCount)
-                    : "No construction delivery sites are currently configured.",
+                    ? LocalizedText.FormatOrDefault("tablet.home.constructionDetail", "{0} tracked construction delivery sites", constructionSiteCount)
+                    : LocalizedText.GetOrDefault("tablet.home.constructionNone", "No construction delivery sites are currently configured."),
                 () => context.Push(TabletAppIds.Network, "construction"),
                 Color.FromArgb(184, 58, 50, 40),
                 Color.FromArgb(226, 124, 104, 84),
                 null,
                 "CON"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Permits",
+                LocalizedText.GetOrDefault("tablet.home.permits", "Permits"),
                 permitDetail,
                 () => context.Push(TabletAppIds.Network, "permits"),
                 Color.FromArgb(188, 70, 56, 38),
@@ -1204,39 +1208,42 @@ namespace LSOL.UI
                 null,
                 "PER"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Stores",
-                string.Format("{0} retail delivery locations", snapshot.StoreSummaries.Count),
+                LocalizedText.GetOrDefault("tablet.home.stores", "Stores"),
+                LocalizedText.FormatOrDefault("tablet.home.storesDetail", "{0} retail delivery locations", snapshot.StoreSummaries.Count),
                 () => context.Push(TabletAppIds.Network, "stores"),
                 Color.FromArgb(188, 46, 52, 60),
                 Color.FromArgb(228, 104, 118, 132),
                 null,
                 "STR"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Stations",
-                string.Format("{0} fuel service stops", snapshot.GasStationSummaries.Count),
+                LocalizedText.GetOrDefault("tablet.home.stations", "Stations"),
+                LocalizedText.FormatOrDefault("tablet.home.stationsDetail", "{0} fuel service stops", snapshot.GasStationSummaries.Count),
                 () => context.Push(TabletAppIds.Network, "stations"),
                 Color.FromArgb(188, 36, 56, 58),
                 Color.FromArgb(228, 88, 128, 130),
                 null,
                 "GAS"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Services",
-                "Refuel or repair the active company vehicle from the hub.",
+                LocalizedText.GetOrDefault("tablet.home.services", "Services"),
+                LocalizedText.GetOrDefault("tablet.home.servicesDetail", "Refuel or repair the active company vehicle from the hub."),
                 () => context.Push(TabletAppIds.Network, "services"),
                 Color.FromArgb(188, 44, 48, 52),
                 Color.FromArgb(228, 102, 112, 120),
                 null,
                 "SRV"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Dispatch",
-                string.Format("{0}\n{1}", dispatchOverview.DispatchHeadline ?? "World dispatch idle", dispatchOverview.DispatchDetail ?? "No priority bias active."),
+                LocalizedText.GetOrDefault("tablet.home.dispatch", "Dispatch"),
+                string.Format(
+                    "{0}\n{1}",
+                    dispatchOverview.DispatchHeadline ?? LocalizedText.GetOrDefault("tablet.home.dispatchIdle", "World dispatch idle"),
+                    dispatchOverview.DispatchDetail ?? LocalizedText.GetOrDefault("tablet.home.dispatchNoBias", "No priority bias active.")),
                 () => context.Push(TabletAppIds.Network, "dispatch"),
                 Color.FromArgb(188, 52, 46, 58),
                 Color.FromArgb(228, 118, 108, 134),
                 null,
                 "DSP"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Market",
+                LocalizedText.GetOrDefault("tablet.home.market", "Market"),
                 marketDetail,
                 () => context.Push(TabletAppIds.Network, "market"),
                 Color.FromArgb(188, 54, 44, 58),
@@ -1244,15 +1251,15 @@ namespace LSOL.UI
                 null,
                 "MKT"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Analytics",
-                "Profit, market, site, district, and NPC trend surfaces.",
+                LocalizedText.GetOrDefault("tablet.home.analytics", "Analytics"),
+                LocalizedText.GetOrDefault("tablet.home.analyticsDetail", "Profit, market, site, district, and NPC trend surfaces."),
                 () => context.Push(TabletAppIds.Analytics, "root"),
                 Color.FromArgb(186, 48, 52, 66),
                 Color.FromArgb(228, 112, 124, 148),
                 null,
                 "ANA"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Successes",
+                LocalizedText.GetOrDefault("tablet.home.successes", "Successes"),
                 TabletEndgameStatusFormatter.BuildHomeTileDetail(unlockedSuccessCount, totalSuccessCount, endgame),
                 () => context.Push(TabletAppIds.Successes, "root"),
                 Color.FromArgb(186, 60, 52, 46),
@@ -1262,7 +1269,7 @@ namespace LSOL.UI
                     : null,
                 "SUC"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Missions",
+                LocalizedText.GetOrDefault("tablet.home.missions", "Missions"),
                 missionDetail,
                 () => context.Push(TabletAppIds.Missions, "root"),
                 Color.FromArgb(186, 88, 58, 54),
@@ -1270,7 +1277,9 @@ namespace LSOL.UI
                 null,
                 "MIS"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                snapshot.HasNearestIndustry ? "Site" : "Sites",
+                snapshot.HasNearestIndustry
+                    ? LocalizedText.GetOrDefault("tablet.home.site", "Site")
+                    : LocalizedText.GetOrDefault("tablet.home.sites", "Sites"),
                 siteDetail,
                 siteAction,
                 Color.FromArgb(188, 44, 60, 50),
@@ -1278,18 +1287,19 @@ namespace LSOL.UI
                 null,
                 "SITE"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Warehouse",
+                LocalizedText.GetOrDefault("tablet.home.warehouse", "Warehouse"),
                 warehouseCount > 0
-                    ? string.Format("{0} storage sites | {1} support-enabled", warehouseCount, snapshot.SecuredSupportSiteCount)
-                    : "No warehouse sites are configured.",
+                    ? LocalizedText.FormatOrDefault("tablet.home.warehouseDetail", "{0} storage sites | {1} support-enabled", warehouseCount, snapshot.SecuredSupportSiteCount)
+                    : LocalizedText.GetOrDefault("tablet.home.warehouseNone", "No warehouse sites are configured."),
                 () => context.Push(TabletAppIds.Network, "warehouses"),
                 Color.FromArgb(188, 46, 56, 64),
                 Color.FromArgb(228, 110, 126, 142),
                 null,
                 "WH"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Footprint",
-                string.Format(
+                LocalizedText.GetOrDefault("tablet.home.footprint", "Footprint"),
+                LocalizedText.FormatOrDefault(
+                    "tablet.home.footprintDetail",
                     "{0} districts | {1} corridors\n{2} support sites secured",
                     snapshot.ControlledDistrictCount,
                     snapshot.ActiveCorridorCount,
@@ -1300,33 +1310,33 @@ namespace LSOL.UI
                 null,
                 "FPT"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "District View",
-                "Inspect district influence, reputation, and coverage.",
+                LocalizedText.GetOrDefault("tablet.home.districtView", "District View"),
+                LocalizedText.GetOrDefault("tablet.home.districtViewDetail", "Inspect district influence, reputation, and coverage."),
                 _openDistrictView,
                 Color.FromArgb(184, 52, 60, 56),
                 Color.FromArgb(224, 110, 132, 122),
                 null,
                 "DST"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Depot / Yard",
-                "Lease or buy support sites and grow local crews.",
+                LocalizedText.GetOrDefault("tablet.home.depotYard", "Depot / Yard"),
+                LocalizedText.GetOrDefault("tablet.home.depotYardDetail", "Lease or buy support sites and grow local crews."),
                 _openDepotView,
                 Color.FromArgb(184, 58, 48, 60),
                 Color.FromArgb(224, 134, 108, 130),
                 null,
                 "DPT"));
             items.Add(TabletUiHelpers.CreateNavigationItem(
-                "Close",
-                "Return to gameplay.",
+                LocalizedText.GetOrDefault("tablet.home.close", "Close"),
+                LocalizedText.GetOrDefault("tablet.home.closeDetail", "Return to gameplay."),
                 context.Close,
                 "EXIT"));
 
             return new TabletShellPage
             {
                 Title = "LSOL OS",
-                Subtitle = "Company hub",
+                Subtitle = LocalizedText.GetOrDefault("tablet.home.subtitle", "Company hub"),
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                FooterText = "F8 Company Hub | Arrow Keys Navigate | Enter Select | Backspace/Esc Close",
+                FooterText = LocalizedText.GetOrDefault("tablet.home.footer", "F8 Company Hub | Arrow Keys Navigate | Enter Select | Backspace/Esc Close"),
                 WidthScale = 0.96f,
                 CaptionScale = 0.44f,
                 DetailScale = 0.275f,
@@ -1337,8 +1347,8 @@ namespace LSOL.UI
                 BottomPanelHeight = 146f,
                 BottomPanelRenderer = panel => TabletChartRenderer.DrawHistoryPanel(
                     panel,
-                    "Company Profit Over Time",
-                    string.Format("{0} window captured during gameplay.", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
+                    LocalizedText.GetOrDefault("tablet.home.profitPanelTitle", "Company Profit Over Time"),
+                    LocalizedText.FormatOrDefault("tablet.home.profitPanelSubtitle", "{0} window captured during gameplay.", context.StateStore.SelectedGraphTimeframe.ToDisplayLabel()),
                     context.StateStore.GetProfitHistory(context.StateStore.SelectedGraphTimeframe),
                     Color.FromArgb(214, 118, 200, 176),
                     value => ModFormatting.FormatMoney(value)),
@@ -1350,12 +1360,12 @@ namespace LSOL.UI
         {
             if (snapshot == null)
             {
-                return "No cargo vehicle linked.";
+                return LocalizedText.GetOrDefault("tablet.home.operationsStatus.noCargo", "No cargo vehicle linked.");
             }
 
             if (snapshot.TransferInProgress)
             {
-                return "Transfer active";
+                return LocalizedText.GetOrDefault("tablet.home.operationsStatus.transferActive", "Transfer active");
             }
 
             if (!string.IsNullOrWhiteSpace(snapshot.StatusBanner))
@@ -1370,18 +1380,18 @@ namespace LSOL.UI
 
             if (!snapshot.HasCargoVehicle)
             {
-                return "No cargo vehicle linked.";
+                return LocalizedText.GetOrDefault("tablet.home.operationsStatus.noCargo", "No cargo vehicle linked.");
             }
 
             var cargoLabel = snapshot.CargoIsEmpty
-                ? "Empty"
+                ? LocalizedText.GetOrDefault("tablet.home.operationsStatus.empty", "Empty")
                 : string.Format("{0} {1:0.0}/{2:0.0}t", snapshot.CargoCommodity, snapshot.CargoWeightTons, snapshot.CargoCapacityTons);
             if (!snapshot.HasPoweredVehicle || snapshot.FuelCapacityLiters <= 0.001f)
             {
                 return cargoLabel;
             }
 
-            return string.Format("{0} | Fuel {1:0}/{2:0}L", cargoLabel, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
+            return LocalizedText.FormatOrDefault("tablet.home.operationsStatus.fuel", "{0} | Fuel {1:0}/{2:0}L", cargoLabel, snapshot.FuelCurrentLiters, snapshot.FuelCapacityLiters);
         }
 
         private static string ShortenDashboardLabel(string value, int maxLength)

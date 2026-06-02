@@ -20,19 +20,19 @@ namespace LSOL.UI
             switch (timeframe)
             {
                 case TabletGraphTimeframe.FiveMinutes:
-                    return "5 min";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.fiveMinutes", "5 min");
                 case TabletGraphTimeframe.TenMinutes:
-                    return "10 min";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.tenMinutes", "10 min");
                 case TabletGraphTimeframe.ThirtyMinutes:
-                    return "30 min";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.thirtyMinutes", "30 min");
                 case TabletGraphTimeframe.OneHour:
-                    return "1 h";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.oneHour", "1 h");
                 case TabletGraphTimeframe.FourHours:
-                    return "4 h";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.fourHours", "4 h");
                 case TabletGraphTimeframe.OneDay:
-                    return "1 day";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.oneDay", "1 day");
                 default:
-                    return "30 min";
+                    return LocalizedText.GetOrDefault("tablet.timeframe.thirtyMinutes", "30 min");
             }
         }
     }

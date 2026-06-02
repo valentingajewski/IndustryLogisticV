@@ -52,7 +52,7 @@ namespace LSOL.UI
             DashboardSidebarCount = 0;
             DashboardTileColumns = 5;
             BottomPanelHeight = 0f;
-            FooterText = "Arrow Up/Down to navigate | Enter to select | Backspace/Esc to close";
+            FooterText = LocalizedText.Get(ModTextKey.TabletCommonFooterDefault);
             Items = Enumerable.Empty<MenuItem>();
         }
 

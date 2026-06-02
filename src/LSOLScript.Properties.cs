@@ -433,6 +433,7 @@ namespace LSOL
             {
                 _profit = updatedBalance;
                 _tabletStateStore.MarkBalanceDirty();
+                RequestCareerAutosave();
             }
 
             if (messages.Count > 0)

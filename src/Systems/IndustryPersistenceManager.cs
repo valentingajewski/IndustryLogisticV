@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 using GTA;
 using GTA.Math;
@@ -19,6 +20,7 @@ namespace LSOL.Systems
         private const string PersistenceRootElementName = "LSOLState";
         private const string PersistenceSectionElementName = "Section";
         private const string PersistenceValueElementName = "Value";
+        private static readonly object SaveSyncRoot = new object();
 
         public static int Load(string filePath, IEnumerable<Industry> industries)
         {
@@ -179,7 +181,80 @@ namespace LSOL.Systems
             }
 
             var document = BuildPersistenceXmlDocument(industries, metadata, territorySnapshot);
-            document.Save(filePath);
+            lock (SaveSyncRoot)
+            {
+                SaveDocumentAtomically(filePath, document);
+            }
+        }
+
+        private static void SaveDocumentAtomically(string filePath, XDocument document)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || document == null)
+            {
+                return;
+            }
+
+            var directory = Path.GetDirectoryName(filePath);
+            var fileName = Path.GetFileName(filePath);
+            var tempFilePath = !string.IsNullOrWhiteSpace(directory)
+                ? Path.Combine(directory, fileName + ".tmp")
+                : filePath + ".tmp";
+            var backupFilePath = !string.IsNullOrWhiteSpace(directory)
+                ? Path.Combine(directory, fileName + ".bak")
+                : filePath + ".bak";
+
+            try
+            {
+                using (var stream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var writer = XmlWriter.Create(
+                    stream,
+                    new XmlWriterSettings
+                    {
+                        Encoding = new UTF8Encoding(false),
+                        Indent = true,
+                        CloseOutput = false,
+                    }))
+                {
+                    document.Save(writer);
+                    writer.Flush();
+                    stream.Flush(true);
+                }
+
+                if (File.Exists(filePath))
+                {
+                    File.Replace(tempFilePath, filePath, backupFilePath, true);
+                    TryDeleteIfExists(backupFilePath);
+                }
+                else
+                {
+                    File.Move(tempFilePath, filePath);
+                }
+            }
+            catch
+            {
+                TryDeleteIfExists(tempFilePath);
+                TryDeleteIfExists(backupFilePath);
+                throw;
+            }
+        }
+
+        private static void TryDeleteIfExists(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath) || !File.Exists(filePath))
+            {
+                return;
+            }
+
+            try
+            {
+                File.Delete(filePath);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
 
         private static void WriteLegacyIniPersistence(StreamWriter writer, IEnumerable<Industry> industries, IndustryPersistenceMetadata metadata, TerritoryPersistenceSnapshot territorySnapshot)

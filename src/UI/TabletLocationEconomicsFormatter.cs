@@ -21,8 +21,8 @@ namespace LSOL.UI
 
             var ownerCutPercent = ModFormatting.FormatPercent(ownerCut * 100f);
             return summary.IsOwnedByPlayer
-                ? string.Format("Previous owner cut {0} removed | Owned sites keep the full payout", ownerCutPercent)
-                : string.Format("Current owner cut {0} | Purchase removes it from site payouts", ownerCutPercent);
+                ? LocalizedText.FormatOrDefault("tablet.location.ownerCut.owned", "Previous owner cut {0} removed | Owned sites keep the full payout", ownerCutPercent)
+                : LocalizedText.FormatOrDefault("tablet.location.ownerCut.unowned", "Current owner cut {0} | Purchase removes it from site payouts", ownerCutPercent);
         }
 
         public static string BuildPassiveIncomeDetail(TabletLocationSummary summary)
@@ -41,11 +41,11 @@ namespace LSOL.UI
 
             var segments = new List<string>
             {
-                string.Format(
-                    "{0} {1}/wk",
-                    summary.IsOwnedByPlayer ? "Expected" : "Potential",
+                LocalizedText.FormatOrDefault(
+                    summary.IsOwnedByPlayer ? "tablet.location.passiveIncome.expected" : "tablet.location.passiveIncome.potential",
+                    summary.IsOwnedByPlayer ? "Expected {0}/wk" : "Potential {0}/wk",
                     ModFormatting.FormatMoney(weeklyIncome)),
-                string.Format("Staff {0}/wk", ModFormatting.FormatMoney(staffingCost)),
+                LocalizedText.FormatOrDefault("tablet.location.passiveIncome.staff", "Staff {0}/wk", ModFormatting.FormatMoney(staffingCost)),
             };
 
             if (!string.IsNullOrWhiteSpace(summary.ServicePassiveIncomeStatus))
@@ -57,7 +57,7 @@ namespace LSOL.UI
             {
                 if (summary.ServiceLastPassiveIncome > 0.01f)
                 {
-                    segments.Add(string.Format("Last payout {0}", ModFormatting.FormatMoney(summary.ServiceLastPassiveIncome)));
+                    segments.Add(LocalizedText.FormatOrDefault("tablet.location.passiveIncome.lastPayout", "Last payout {0}", ModFormatting.FormatMoney(summary.ServiceLastPassiveIncome)));
                 }
                 else if (!string.IsNullOrWhiteSpace(summary.ServiceRecentPayoutStatus))
                 {
@@ -66,7 +66,7 @@ namespace LSOL.UI
             }
             else
             {
-                segments.Add("Needs operator and stock");
+                segments.Add(LocalizedText.GetOrDefault("tablet.location.passiveIncome.needsOperatorStock", "Needs operator and stock"));
             }
 
             return string.Join(" | ", segments.Where(segment => !string.IsNullOrWhiteSpace(segment)).ToArray());

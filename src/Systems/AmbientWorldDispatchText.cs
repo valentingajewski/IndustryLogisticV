@@ -1,4 +1,5 @@
 using System;
+using LSOL.UI;
 
 namespace LSOL.Systems
 {
@@ -13,25 +14,25 @@ namespace LSOL.Systems
 
         public static string BuildQueuedStatusText()
         {
-            return "Queued for dispatch";
+            return LocalizedText.GetOrDefault("tablet.dispatch.status.queued", "Queued for dispatch");
         }
 
         public static string BuildTravelingStatusText()
         {
-            return "NPC convoy en route";
+            return LocalizedText.GetOrDefault("tablet.dispatch.status.traveling", "NPC convoy en route");
         }
 
         public static string BuildRepeatedPathFailureStatusText()
         {
-            return "Ambient convoy hidden after repeated path failure.";
+            return LocalizedText.GetOrDefault("tablet.dispatch.status.pathFailure", "Ambient convoy hidden after repeated path failure.");
         }
 
         public static string BuildHiddenStatusText(string failureReason)
         {
             var reason = string.IsNullOrWhiteSpace(failureReason)
-                ? "visual spawn unavailable"
+                ? LocalizedText.GetOrDefault("tablet.dispatch.status.hiddenReasonDefault", "visual spawn unavailable")
                 : failureReason.Trim().TrimEnd('.');
-            return string.Format("Ambient convoy hidden: {0}.", reason);
+            return LocalizedText.FormatOrDefault("tablet.dispatch.status.hidden", "Ambient convoy hidden: {0}.", reason);
         }
 
         public static string BuildBlipName(string commodity)
@@ -40,8 +41,8 @@ namespace LSOL.Systems
                 ? string.Empty
                 : commodity.Trim();
             return string.IsNullOrWhiteSpace(normalizedCommodity)
-                ? "Ambient Freight"
-                : string.Format("Ambient Freight: {0}", normalizedCommodity);
+                ? LocalizedText.GetOrDefault("tablet.dispatch.blip.generic", "Ambient Freight")
+                : LocalizedText.FormatOrDefault("tablet.dispatch.blip.commodity", "Ambient Freight: {0}", normalizedCommodity);
         }
 
         public static string FormatJobType(NpcWorldJobType type)
@@ -49,21 +50,21 @@ namespace LSOL.Systems
             switch (type)
             {
                 case NpcWorldJobType.OverflowRescue:
-                    return "Overflow";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.overflow", "Overflow");
                 case NpcWorldJobType.ShortageRelief:
-                    return "Shortage";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.shortage", "Shortage");
                 case NpcWorldJobType.ExternalImport:
-                    return "Import";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.import", "Import");
                 case NpcWorldJobType.ExternalExport:
-                    return "Export";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.export", "Export");
                 case NpcWorldJobType.WarehouseBalancing:
-                    return "Warehouse";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.warehouse", "Warehouse");
                 case NpcWorldJobType.ServiceRun:
-                    return "Service";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.service", "Service");
                 case NpcWorldJobType.RivalFreight:
-                    return "Freight";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.freight", "Freight");
                 default:
-                    return "Dispatch";
+                    return LocalizedText.GetOrDefault("tablet.dispatch.jobType.dispatch", "Dispatch");
             }
         }
 
@@ -94,7 +95,7 @@ namespace LSOL.Systems
 
             if (normalized.StartsWith(LegacyRivalHiddenPrefix, StringComparison.OrdinalIgnoreCase))
             {
-                return "Ambient convoy hidden" + normalized.Substring(LegacyRivalHiddenPrefix.Length);
+                return LocalizedText.GetOrDefault("tablet.dispatch.status.hiddenPrefix", "Ambient convoy hidden") + normalized.Substring(LegacyRivalHiddenPrefix.Length);
             }
 
             return normalized;

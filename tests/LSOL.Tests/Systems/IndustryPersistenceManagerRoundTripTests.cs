@@ -1092,6 +1092,46 @@ namespace LSOL.Tests.Systems
             }
         }
 
+        [TestMethod]
+        public void Save_WhenOverwritingExistingFile_ReplacesContentsWithoutLeavingRuntimeArtifacts()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("overwrite.state.xml");
+
+            try
+            {
+                var first = new IndustryPersistenceMetadata
+                {
+                    Profit = 1250f,
+                    StartingBalance = 500f,
+                };
+                var second = new IndustryPersistenceMetadata
+                {
+                    Profit = 6400f,
+                    StartingBalance = 2500f,
+                    PlayerStatistics = new PlayerStatisticsPersistenceSnapshot
+                    {
+                        TotalSuccessfulDeliveries = 7,
+                    },
+                };
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), first, null);
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), second, null);
+
+                var loaded = IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), null);
+
+                Assert.AreEqual(6400f, loaded.Metadata.Profit, 0.01f);
+                Assert.AreEqual(2500f, loaded.Metadata.StartingBalance, 0.01f);
+                Assert.IsNotNull(loaded.Metadata.PlayerStatistics);
+                Assert.AreEqual(7, loaded.Metadata.PlayerStatistics.TotalSuccessfulDeliveries);
+                Assert.IsFalse(File.Exists(filePath + ".tmp"));
+                Assert.IsFalse(File.Exists(filePath + ".bak"));
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
         private static TerritoryManager CreateTerritoryManager()
         {
             var config = new ModConfig();
