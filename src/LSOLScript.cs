@@ -169,6 +169,7 @@ namespace LSOL
         private bool _industryPersistenceEnabled;
         private bool _hasPlayerSuccessBalanceSync;
         private bool _difficultySettingsLocked;
+        private bool _careerAutosaveFailureShown;
         private bool _cargoDamageDifficultyEnabled;
         private bool _pendingCargoDamageDifficultyEnabled;
         private bool _industryPricingDifficultyEnabled;
@@ -201,6 +202,7 @@ namespace LSOL
         private float _cruiseControlTargetSpeedMps;
         private bool _isConstructing;
         private int _lastIndustryObjectDeletionSweepMs;
+        private int _lastOfficeObjectDeletionSweepMs;
         private AlertRulesPersistenceSnapshot _alertRules;
 
         private OwnedFleetPersistenceSnapshot _pendingOwnedFleetRestore;
@@ -249,6 +251,8 @@ namespace LSOL
                     {
                         _tabletStateStore.MarkAllDirty();
                     }
+
+                    RequestCareerAutosave();
                 },
                 GetCurrentInGameWeekMinute,
                 HandlePlayerSuccessMissionCompleted,
@@ -294,6 +298,8 @@ namespace LSOL
                         _tabletStateStore.MarkNetworkDirty();
                         _tabletStateStore.MarkCargoDirty();
                     }
+
+                    RequestCareerAutosave();
                 },
                 null,
                 _financeTracker);
@@ -662,6 +668,7 @@ namespace LSOL
             var gameTime = Game.GameTime;
             UpdateApartmentSleepTransition(player, gameTime);
             SweepIndustryObjectDeletions(player, gameTime);
+            SweepOfficeObjectDeletions(player, gameTime);
 
             if (_lastIndustryTickMs == 0)
             {
@@ -757,6 +764,9 @@ namespace LSOL
 
             DrawOpenMenus();
             DrawTabletShell();
+
+            QueuePeriodicCareerAutosave(gameTime);
+            ProcessPendingCareerAutosave(gameTime);
         }
 
         private void OnKeyDown(object sender, WinForms.KeyEventArgs e)
@@ -2709,7 +2719,7 @@ namespace LSOL
 
         private string CurrentStartingBalanceCaption()
         {
-            return Text(ModTextKey.RowStartingBalance, ModFormatting.FormatMoney(GetSelectedStartingBalance()));
+            return Text(ModTextKey.RowStartingBalance,"< " + ModFormatting.FormatMoney(GetSelectedStartingBalance()) + " >");
         }
 
         private string CurrentVehicleFuelSettingCaption()
@@ -3812,6 +3822,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private void DeductProfit(float amount)
@@ -3833,6 +3845,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private void RecordTrackedBalanceDelta(float previousBalance, CompanyFinanceCategory expenseCategory, string expenseDescription, CompanyFinanceCategory incomeCategory = CompanyFinanceCategory.OtherIncome, string incomeDescription = null)
@@ -3858,6 +3872,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkBalanceDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private void SyncPlayerSuccessBalance(bool notifyUnlocks = true, bool markBalanceDirty = false)
@@ -3931,6 +3947,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkNetworkDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private void RecordNpcSuccessDeliveryProgress(string commodity, float deliveredTons, bool completedDelivery, bool isCleanDelivery)
@@ -3946,6 +3964,8 @@ namespace LSOL
                 completedDelivery,
                 isCleanDelivery,
                 DeliveryProgressSource.Npc);
+
+            RequestCareerAutosave();
         }
 
         private void HandlePlayerSuccessNpcContractsChanged()
@@ -3960,6 +3980,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkNetworkDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private void HandlePlayerSuccessMissionCompleted()
@@ -3974,6 +3996,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkNetworkDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private void RecordPlayerSuccessEmergencyServiceUsage()
@@ -3988,6 +4012,8 @@ namespace LSOL
             {
                 _tabletStateStore.MarkNetworkDirty();
             }
+
+            RequestCareerAutosave();
         }
 
         private string AcquireDistrictLicenseFromOffice(string districtName)
@@ -6274,6 +6300,90 @@ namespace LSOL
             }
 
             var hashesToDelete = new HashSet<int>(industry.ObjectToDeleteModelHashes);
+            for (int i = 0; i < nearbyProps.Length; i++)
+            {
+                var prop = nearbyProps[i];
+                if (prop == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    if (!prop.Exists() || prop.IsPersistent || !hashesToDelete.Contains(prop.Model.Hash))
+                    {
+                        continue;
+                    }
+
+                    Function.Call(Hash.SET_ENTITY_AS_MISSION_ENTITY, prop.Handle, true, true);
+                    prop.Delete();
+
+                    if (prop.Exists())
+                    {
+                        prop.IsVisible = false;
+                        var position = prop.Position;
+                        prop.Position = new Vector3(position.X, position.Y, position.Z - 250f);
+                        prop.Delete();
+                    }
+                }
+                catch
+                {
+                    // Keep deletion resilient: one bad streamed prop should not block the remaining cleanup pass.
+                }
+            }
+        }
+
+        private void SweepOfficeObjectDeletions(Ped player, int gameTime)
+        {
+            if (player == null || !player.Exists() || _propertyManager == null || gameTime - _lastOfficeObjectDeletionSweepMs < IndustryObjectDeletionSweepIntervalMs)
+            {
+                return;
+            }
+
+            _lastOfficeObjectDeletionSweepMs = gameTime;
+            var playerPosition = player.Position;
+            var activationRangeSquared = IndustryObjectDeletionActivationRange * IndustryObjectDeletionActivationRange;
+            var offices = _propertyManager != null ? _propertyManager.Offices : new OfficeDefinition[0];
+            for (int i = 0; i < offices.Count; i++)
+            {
+                var office = offices[i];
+                if (office == null || office.ObjectToDeleteModelHashes == null || office.ObjectToDeleteModelHashes.Count == 0)
+                {
+                    continue;
+                }
+
+                if (office.MarkerPosition.DistanceToSquared(playerPosition) > activationRangeSquared)
+                {
+                    continue;
+                }
+
+                DeleteConfiguredOfficeObjects(office);
+            }
+        }
+
+        private static void DeleteConfiguredOfficeObjects(OfficeDefinition office)
+        {
+            if (office == null || office.ObjectToDeleteModelHashes == null || office.ObjectToDeleteModelHashes.Count == 0)
+            {
+                return;
+            }
+
+            Prop[] nearbyProps;
+            try
+            {
+                nearbyProps = World.GetNearbyProps(office.MarkerPosition, IndustryObjectDeletionRadius);
+            }
+            catch
+            {
+                return;
+            }
+
+            if (nearbyProps == null || nearbyProps.Length == 0)
+            {
+                return;
+            }
+
+            var hashesToDelete = new HashSet<int>(office.ObjectToDeleteModelHashes);
             for (int i = 0; i < nearbyProps.Length; i++)
             {
                 var prop = nearbyProps[i];

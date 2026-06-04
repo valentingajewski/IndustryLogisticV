@@ -3572,7 +3572,7 @@ namespace LSOL.Systems
                 return IniFile.Load(resolvedPath);
             }
 
-            var document = XDocument.Load(resolvedPath);
+            var document = LoadPersistenceXmlDocument(resolvedPath);
             if (document.Root == null || !document.Root.Elements(PersistenceSectionElementName).Any())
             {
                 var legacyPath = ResolveLegacyPersistencePath(resolvedPath);
@@ -3585,6 +3585,14 @@ namespace LSOL.Systems
             }
 
             return IniFile.LoadFromString(BuildLegacyIniContentFromXml(document));
+        }
+
+        private static XDocument LoadPersistenceXmlDocument(string filePath)
+        {
+            using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                return XDocument.Load(stream, LoadOptions.None);
+            }
         }
 
         private static string ResolveReadablePersistencePath(string filePath)

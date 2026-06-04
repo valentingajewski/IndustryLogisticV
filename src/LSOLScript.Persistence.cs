@@ -133,6 +133,7 @@ namespace LSOL
             SetLiveDifficultyProfile(CapturePendingDifficultyProfile());
             _difficultySettingsLocked = true;
             _industryStatePath = filePath;
+            ActivateIndustryPersistenceSession();
             ApplyDifficultySettingsToSystems();
             ResetSaveSessionState();
             _industryManager.ResetIndustriesToDefaults();
@@ -189,6 +190,7 @@ namespace LSOL
             }
 
             _industryStatePath = entry.FilePath;
+            ActivateIndustryPersistenceSession();
             ApplyLoadedPersistenceMetadata(loadResult.Metadata, true);
             ResetCareerAutosaveState();
             ReturnToSavingOptionsMenu();
@@ -370,6 +372,7 @@ namespace LSOL
                 return;
             }
 
+            ClearCareerAutosaveFailureState();
             _careerAutosaveScheduler.RequestSave(Game.GameTime);
         }
 
@@ -395,12 +398,36 @@ namespace LSOL
                 return;
             }
 
+            NotifyCareerAutosaveFailure();
             _careerAutosaveScheduler.MarkSaveFailed(gameTime);
         }
 
         private void ResetCareerAutosaveState()
         {
+            ClearCareerAutosaveFailureState();
             _careerAutosaveScheduler.Reset(Game.GameTime);
+        }
+
+        private void ActivateIndustryPersistenceSession()
+        {
+            _industryPersistenceEnabled = true;
+            ClearCareerAutosaveFailureState();
+        }
+
+        private void ClearCareerAutosaveFailureState()
+        {
+            _careerAutosaveFailureShown = false;
+        }
+
+        private void NotifyCareerAutosaveFailure()
+        {
+            if (_careerAutosaveFailureShown)
+            {
+                return;
+            }
+
+            _careerAutosaveFailureShown = true;
+            ShowPersistenceFailure("Auto-save career data");
         }
 
         private bool ShouldAutosaveCareerState()
@@ -483,6 +510,7 @@ namespace LSOL
 
                 IndustryPersistenceManager.Save(filePath, _industryManager.Industries, BuildCurrentPersistenceMetadata(), _territoryManager.CreateSnapshot());
                 _careerAutosaveScheduler.MarkSaved(Game.GameTime);
+                ClearCareerAutosaveFailureState();
                 return true;
             }
             catch (IOException)
@@ -504,6 +532,24 @@ namespace LSOL
                 return false;
             }
             catch (ArgumentException)
+            {
+                if (notifyOnFailure)
+                {
+                    ShowPersistenceFailure("Save industry persistence data");
+                }
+
+                return false;
+            }
+            catch (InvalidOperationException)
+            {
+                if (notifyOnFailure)
+                {
+                    ShowPersistenceFailure("Save industry persistence data");
+                }
+
+                return false;
+            }
+            catch (XmlException)
             {
                 if (notifyOnFailure)
                 {

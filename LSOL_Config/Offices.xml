@@ -45,7 +45,7 @@
     <Marker x="905.63" y="3586.89" z="33.4" />
     <Spawn x="916.12" y="3590.29" z="33.3" heading="275" />
   </Office>
-  <Office id="8" legacyKey="SandyShoresOffice" name="Sandy Shores Logistic Office" district="GrandSenora" price="70000" weeklyRent="2800" maxCommercialVehicles="6">
+  <Office id="8" legacyKey="SandyShoresOffice" name="Sandy Shores Logistic Office" district="GrandSenora" price="70000" weeklyRent="2800" maxCommercialVehicles="6" objectToDelete="2265074802">
     <Marker x="1362.21" y="3616.75" z="34.89" />
     <Spawn x="1381" y="3593" z="34.85" heading="197" />
   </Office>

@@ -203,42 +203,42 @@ namespace LSOL.UI
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateActionItem(
-                    "Cash Summary",
+                    LocalizedText.Get(ModTextKey.TabletBudgetCashSummary),
                     string.Format("Balance {0}\n7d net {1}\n{2}", ModFormatting.FormatMoney(overview.CurrentBalance), FormatSignedMoney(overview.WeeklyNet), BudgetFleetResaleFormatter.BuildRootTileDetail(fleetResale)),
                     () => context.Push(TabletAppIds.Budget, "overview"),
                     iconLabel: "CSH"),
                 TabletUiHelpers.CreateActionItem(
-                    "Expense Breakdown",
+                    LocalizedText.Get(ModTextKey.TabletBudgetExpenseBreakdown),
                     string.Format("7d expenses {0}\n24h net {1}", ModFormatting.FormatMoney(overview.WeeklyExpenses), FormatSignedMoney(overview.DailyNet)),
                     () => context.Push(TabletAppIds.Budget, "expenses"),
                     iconLabel: "EXP"),
                 TabletUiHelpers.CreateActionItem(
-                    "Income Breakdown",
+                    LocalizedText.Get(ModTextKey.TabletBudgetIncomeBreakdown),
                     string.Format("7d income {0}\nRecent inflows by source", ModFormatting.FormatMoney(overview.WeeklyIncome)),
                     () => context.Push(TabletAppIds.Budget, "income"),
                     iconLabel: "INC"),
                 TabletUiHelpers.CreateActionItem(
-                    "Upcoming Bills",
+                    LocalizedText.Get(ModTextKey.TabletBudgetUpcomingBills),
                     string.Format("Known dues {0}\nRent, payroll, fleet, debt, and territorial upkeep", ModFormatting.FormatMoney(overview.UpcomingBills)),
                     () => context.Push(TabletAppIds.Budget, "bills"),
                     iconLabel: "BIL"),
                 TabletUiHelpers.CreateActionItem(
-                    "Weekly Forecast",
+                    LocalizedText.Get(ModTextKey.TabletBudgetWeeklyForecast),
                     BuildForecastTileDetail(overview.Forecast),
                     () => context.Push(TabletAppIds.Budget, "forecast"),
                     iconLabel: "FRC"),
                 TabletUiHelpers.CreateActionItem(
-                    "Route Profitability",
+                    LocalizedText.Get(ModTextKey.TabletBudgetRouteProfitability),
                     "Review NPC route revenue against contract and payroll costs.",
                     () => context.Push(TabletAppIds.Budget, "routes"),
                     iconLabel: "RTE"),
                 TabletUiHelpers.CreateActionItem(
-                    "Inventory Value",
+                    LocalizedText.Get(ModTextKey.TabletBudgetInventoryValue),
                     "Estimate on-hand cargo, stockpiles, and office fuel value. Fleet equity is tracked separately.",
                     () => context.Push(TabletAppIds.Budget, "inventory"),
                     iconLabel: "INV"),
                 TabletUiHelpers.CreateNavigationItem(
-                    "Back",
+                    LocalizedText.Get(ModTextKey.TabletBudgetBack),
                     "Return to the company hub.",
                     () => context.GoBack(),
                     "BACK"),

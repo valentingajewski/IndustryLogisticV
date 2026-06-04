@@ -599,6 +599,7 @@ namespace LSOL.Config
                             WeeklyOfficeRent = x.WeeklyOfficeRent,
                             MaxCommercialVehicles = x.MaxCommercialVehicles,
                             Description = x.Description,
+                            ObjectToDeleteModelHashes = x.ObjectToDeleteModelHashes != null ? new List<int>(x.ObjectToDeleteModelHashes) : new List<int>(),
                         })
                         .ToList();
             }

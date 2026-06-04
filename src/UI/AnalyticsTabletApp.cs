@@ -82,45 +82,45 @@ namespace LSOL.UI
             var items = new List<MenuItem>
             {
                 TabletUiHelpers.CreateActionItem(
-                    "Profit Trend",
-                    "Review company balance history with selectable windows.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsProfitTrend),
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsProfitTrendDescription),
                     () => context.Push(TabletAppIds.Analytics, "profit"),
                     iconLabel: "PRF"),
                 TabletUiHelpers.CreateActionItem(
-                    "Commodity Trend",
-                    "Browse commodity price history over time.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsCommodityTrend) ,
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsCommodityTrendDescription),
                     () => context.Push(TabletAppIds.Analytics, "commodity"),
                     iconLabel: "MKT"),
                 TabletUiHelpers.CreateActionItem(
-                    "Site Utilization",
-                    "Inspect per-site utilization history for industries.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsSiteUtilization),
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsSiteUtilizationDescription),
                     () => context.Push(TabletAppIds.Analytics, "utilization"),
                     iconLabel: "UTL"),
                 TabletUiHelpers.CreateActionItem(
-                    "Storage Fill",
-                    "Review warehouse and industry storage fill history.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsStorageFill),
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsStorageFillDescription),
                     () => context.Push(TabletAppIds.Analytics, "storage"),
                     iconLabel: "STO"),
                 TabletUiHelpers.CreateActionItem(
-                    "District Influence",
-                    "Compare district influence, charter status, competition pressure, and recurring territory burden.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsDistrictInfluence),
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsDistrictInfluenceDescription),
                     () => context.Push(TabletAppIds.Analytics, "districts"),
                     iconLabel: "DST"),
                 TabletUiHelpers.CreateActionItem(
-                    "NPC Routes",
-                    "Delivered tons, loss ratio, average payout, and contract drill-down.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsNpcRoutes),
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsNpcRoutesDescription),
                     () => context.Push(TabletAppIds.Analytics, "routes"),
                     iconLabel: "NPC"),
                 TabletUiHelpers.CreateActionItem(
-                    "Route Planner",
-                    "Projected versus actual lane value, blockers, and optimizer ranking.",
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsRoutePlanner),
+                    LocalizedText.Get(ModTextKey.TabletAnalyticsRoutePlannerDescription),
                     () => context.Push(TabletAppIds.Analytics, "route-planner"),
                     iconLabel: "OPT"),
                 TabletUiHelpers.CreateNavigationItem(
-                    "Back",
-                    "Return to the company hub.",
+                    LocalizedText.Get(ModTextKey.TabletNavigationBack),
+                    LocalizedText.Get(ModTextKey.TabletNavigationReturnToHub),
                     () => context.GoBack(),
-                    "BACK"),
+                    LocalizedText.Get(ModTextKey.TabletNavigationBack)),
             };
 
             return new TabletShellPage

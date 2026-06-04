@@ -132,7 +132,7 @@ namespace LSOL.UI
             }
 
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Offices",
+                LocalizedText.Get(ModTextKey.TabletPropertyOffices),
                 string.Format(
                     "{0} controlled / {1} total\n{2}",
                     controlledOffices,
@@ -144,7 +144,7 @@ namespace LSOL.UI
                 null,
                 "OFF"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Apartments",
+                LocalizedText.Get(ModTextKey.TabletPropertyApartments),
                 string.Format(
                     "{0} controlled / {1} total\n{2}",
                     controlledApartments,
@@ -156,7 +156,7 @@ namespace LSOL.UI
                 null,
                 "APT"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Motels",
+                LocalizedText.Get(ModTextKey.TabletPropertyMotels),
                 cheapestMotel != null
                     ? string.Format(
                         "{0} nightly locations\nCheapest {1} at {2}",
@@ -170,7 +170,7 @@ namespace LSOL.UI
                 null,
                 "MTL"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Active Office",
+                LocalizedText.Get(ModTextKey.TabletPropertyActiveOffice),
                 activeOffice != null
                     ? string.Format("{0}\n{1}", activeOffice.DisplayName, activeOffice.AssignmentSummary)
                     : "No office is active.\nActivate an owned or rented office to anchor company logistics.",
@@ -183,7 +183,7 @@ namespace LSOL.UI
                 null,
                 "HQ"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Active Residence",
+                LocalizedText.Get(ModTextKey.TabletPropertyActiveApartment),
                 activeApartment != null
                     ? string.Format("{0}\n{1}", activeApartment.DisplayName, activeApartment.IsOwned ? "Owned residence ready." : activeApartment.BillDetail)
                     : "No residence is active.\nActivate an apartment to anchor personal storage and sleep.",
@@ -196,7 +196,7 @@ namespace LSOL.UI
                 null,
                 "HOME"));
             items.Add(TabletUiHelpers.CreateActionItem(
-                "Weekly Rent Outlook",
+                LocalizedText.Get(ModTextKey.TabletPropertyWeeklyRentOutlook),
                 string.Format(
                     "Upcoming rent {0}\nOffice dues and rental residences only",
                     ModFormatting.FormatMoney(summary.UpcomingWeeklyRent)),

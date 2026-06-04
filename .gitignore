@@ -45,3 +45,11 @@ missions/
 *.old
 
 *.xlsx
+
+# Caveman folders/files
+*.agents
+*.clinerules
+*.cursor
+.opencode
+.windsurf
+skills-lock.json

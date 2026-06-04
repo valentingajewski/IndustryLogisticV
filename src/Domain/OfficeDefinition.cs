@@ -33,6 +33,8 @@ namespace LSOL.Domain
 
         public string Description { get; set; }
 
+        public List<int> ObjectToDeleteModelHashes { get; set; } = new List<int>();
+
         public string DisplayName
         {
             get { return string.IsNullOrWhiteSpace(SiteName) ? (OfficeId ?? string.Empty) : SiteName; }

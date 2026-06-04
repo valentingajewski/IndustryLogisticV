@@ -1061,6 +1061,7 @@ namespace LSOL.Config
                     WeeklyOfficeRent = Math.Max(0f, ReadFloatAttribute(element, "weeklyRent", 0f)),
                     MaxCommercialVehicles = Math.Max(0, ReadIntAttribute(element, "maxCommercialVehicles", 0)),
                     Description = ReadElementValue(element.Element("Description")),
+                    ObjectToDeleteModelHashes = ParseObjectModelHashes(ReadAttribute(element, "objectToDelete")),
                 });
             }
 
@@ -1747,6 +1748,72 @@ namespace LSOL.Config
                 || uint.TryParse(normalized, NumberStyles.Integer, CultureInfo.CurrentCulture, out unsignedValue))
             {
                 value = unchecked((int)unsignedValue);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static List<int> ParseObjectModelHashes(string raw)
+        {
+            var hashes = new List<int>();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return hashes;
+            }
+
+            var seen = new HashSet<int>();
+            var tokens = (raw ?? string.Empty).Split(new[] { ',', ';', '|', '\t', '\r', '\n', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < tokens.Length; i++)
+            {
+                var token = tokens[i].Trim();
+                if (string.IsNullOrWhiteSpace(token))
+                {
+                    continue;
+                }
+
+                int hash;
+                if (!TryParseObjectModelHash(token, out hash) || !seen.Add(hash))
+                {
+                    continue;
+                }
+
+                hashes.Add(hash);
+            }
+
+            return hashes;
+        }
+
+        private static bool TryParseObjectModelHash(string token, out int hash)
+        {
+            hash = 0;
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return false;
+            }
+
+            var normalized = token.Trim();
+            if (normalized.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                uint hexValue;
+                if (uint.TryParse(normalized.Substring(2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out hexValue))
+                {
+                    hash = unchecked((int)hexValue);
+                    return true;
+                }
+            }
+
+            int signedValue;
+            if (int.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out signedValue))
+            {
+                hash = signedValue;
+                return true;
+            }
+
+            uint unsignedValue;
+            if (uint.TryParse(normalized, NumberStyles.Integer, CultureInfo.InvariantCulture, out unsignedValue))
+            {
+                hash = unchecked((int)unsignedValue);
                 return true;
             }
 

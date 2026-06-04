@@ -31,6 +31,10 @@ From there you can:
 
 Named saves now auto-update in the background during key career events such as completed deliveries, contract or mission state changes, weekly finance ticks, and periodic runtime checkpoints.
 
+Creating or loading a named save also reactivates that slot as the current writable profile, even if persistence had been toggled off earlier.
+
+If a background autosave cannot update the XML file, LSOL now surfaces a status warning instead of failing silently.
+
 The Save game action still exists if you want to force an immediate write before swapping slots or testing something risky.
 
 The default `LSOL.state.xml` path keeps its existing fallback role. Runtime autosave targets the active named save only.
