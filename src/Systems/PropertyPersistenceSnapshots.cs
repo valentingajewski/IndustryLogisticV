@@ -13,6 +13,7 @@ namespace LSOL.Systems
             Offices = new List<OfficeOwnershipPersistenceEntry>();
             OfficeObjects = new List<OfficeObjectPersistenceEntry>();
             Apartments = new List<ApartmentOwnershipPersistenceEntry>();
+            CommercialVehicleAssets = new List<OwnedCommercialVehicleAssetPersistenceEntry>();
             CommercialVehicles = new List<OwnedCommercialVehiclePersistenceEntry>();
             PersonalVehicles = new List<OwnedPersonalVehiclePersistenceEntry>();
         }
@@ -31,6 +32,8 @@ namespace LSOL.Systems
 
         public List<ApartmentOwnershipPersistenceEntry> Apartments { get; }
 
+        public List<OwnedCommercialVehicleAssetPersistenceEntry> CommercialVehicleAssets { get; }
+
         public List<OwnedCommercialVehiclePersistenceEntry> CommercialVehicles { get; }
 
         public List<OwnedPersonalVehiclePersistenceEntry> PersonalVehicles { get; }
@@ -45,6 +48,7 @@ namespace LSOL.Systems
                     || Offices.Count > 0
                     || OfficeObjects.Count > 0
                     || Apartments.Count > 0
+                    || CommercialVehicleAssets.Count > 0
                     || CommercialVehicles.Count > 0
                     || PersonalVehicles.Count > 0;
             }
@@ -108,6 +112,10 @@ namespace LSOL.Systems
     {
         public string AssetId { get; set; }
 
+        public string TractorVehicleId { get; set; }
+
+        public string TrailerVehicleId { get; set; }
+
         public string DisplayName { get; set; }
 
         public string PoweredModelName { get; set; }
@@ -169,6 +177,63 @@ namespace LSOL.Systems
         public VehicleAppearancePersistenceSnapshot PoweredAppearance { get; set; }
 
         public VehicleAppearancePersistenceSnapshot CargoAppearance { get; set; }
+    }
+
+    public sealed class OwnedCommercialVehicleAssetPersistenceEntry
+    {
+        public string AssetId { get; set; }
+
+        public string DisplayName { get; set; }
+
+        public string ModelName { get; set; }
+
+        public CommercialVehicleFleetRole FleetRole { get; set; }
+
+        public float PurchasePrice { get; set; }
+
+        public string AssignedOfficeId { get; set; }
+
+        public bool IsRental { get; set; }
+
+        public float DailyRent { get; set; }
+
+        public int LastChargedDayIndex { get; set; } = -1;
+
+        public bool IsDeployed { get; set; }
+
+        public VehicleCargoType CargoType { get; set; }
+
+        public float CapacityTons { get; set; }
+
+        public string Commodity { get; set; }
+
+        public float WeightTons { get; set; }
+
+        public float CargoCondition { get; set; }
+
+        public float TotalLostTons { get; set; }
+
+        public string SourceIndustryId { get; set; }
+
+        public string SourceDistrictName { get; set; }
+
+        public string PlayerContractId { get; set; }
+
+        public string PlayerContractDestinationIndustryId { get; set; }
+
+        public float CurrentFuelLiters { get; set; }
+
+        public float MaintenanceCondition { get; set; } = 1f;
+
+        public int LastMaintenanceWeekIndex { get; set; } = -1;
+
+        public int LastInspectionWeekIndex { get; set; } = -1;
+
+        public int InspectionOverdueWeeks { get; set; }
+
+        public float LifetimeMaintenanceCost { get; set; }
+
+        public VehicleAppearancePersistenceSnapshot Appearance { get; set; }
     }
 
     public sealed class OwnedPersonalVehiclePersistenceEntry

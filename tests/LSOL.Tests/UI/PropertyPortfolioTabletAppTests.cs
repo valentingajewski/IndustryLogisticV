@@ -44,6 +44,7 @@ namespace LSOL.Tests.UI
             CollectionAssert.Contains(rootCaptions, "Offices");
             CollectionAssert.Contains(rootCaptions, "Apartments");
             CollectionAssert.Contains(rootCaptions, "Motels");
+            CollectionAssert.DoesNotContain(rootCaptions, "Fleet Slots");
 
             var availableOfficePage = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "office-detail", "charlie-office"));
             var availableOfficeCaptions = availableOfficePage.Items.Select(GetCaption).ToList();
@@ -158,19 +159,98 @@ namespace LSOL.Tests.UI
                         LastChargedWeekIndex = 0,
                     },
                 },
+                CommercialVehicleAssets =
+                {
+                    new OwnedCommercialVehicleAssetPersistenceEntry
+                    {
+                        AssetId = "rigid-1",
+                        DisplayName = "Truck 1",
+                        ModelName = "mule",
+                        FleetRole = CommercialVehicleFleetRole.Rigid,
+                        AssignedOfficeId = "alpha-office",
+                        PurchasePrice = 45000f,
+                        CapacityTons = 12f,
+                    },
+                    new OwnedCommercialVehicleAssetPersistenceEntry
+                    {
+                        AssetId = "tractor-1",
+                        DisplayName = "Lead Tractor",
+                        ModelName = "phantom",
+                        FleetRole = CommercialVehicleFleetRole.Tractor,
+                        AssignedOfficeId = "alpha-office",
+                        PurchasePrice = 90000f,
+                    },
+                    new OwnedCommercialVehicleAssetPersistenceEntry
+                    {
+                        AssetId = "trailer-1",
+                        DisplayName = "Container Trailer",
+                        ModelName = "trailers4",
+                        FleetRole = CommercialVehicleFleetRole.Trailer,
+                        AssignedOfficeId = "alpha-office",
+                        PurchasePrice = 30000f,
+                        CapacityTons = 24f,
+                    },
+                    new OwnedCommercialVehicleAssetPersistenceEntry
+                    {
+                        AssetId = "tractor-pool-1",
+                        DisplayName = "Reserve Tractor",
+                        ModelName = "packer",
+                        FleetRole = CommercialVehicleFleetRole.Tractor,
+                        AssignedOfficeId = "alpha-office",
+                        PurchasePrice = 80000f,
+                    },
+                    new OwnedCommercialVehicleAssetPersistenceEntry
+                    {
+                        AssetId = "trailer-pool-1",
+                        DisplayName = "Reefer Trailer",
+                        ModelName = "trailers2",
+                        FleetRole = CommercialVehicleFleetRole.Trailer,
+                        AssignedOfficeId = "alpha-office",
+                        PurchasePrice = 26000f,
+                        CapacityTons = 22f,
+                    },
+                },
                 CommercialVehicles =
                 {
                     new OwnedCommercialVehiclePersistenceEntry
                     {
-                        AssetId = "truck-1",
+                        AssetId = "slot-rigid",
                         DisplayName = "Truck 1",
+                        TractorVehicleId = "rigid-1",
+                        PoweredModelName = "mule",
+                        CargoModelName = "mule",
                         AssignedOfficeId = "alpha-office",
                         InActiveGarage = true,
                     },
                     new OwnedCommercialVehiclePersistenceEntry
                     {
-                        AssetId = "truck-2",
-                        DisplayName = "Truck 2",
+                        AssetId = "slot-coupled",
+                        DisplayName = "Lead Tractor + Container Trailer",
+                        TractorVehicleId = "tractor-1",
+                        TrailerVehicleId = "trailer-1",
+                        PoweredModelName = "phantom",
+                        CargoModelName = "trailers4",
+                        HasSeparateCargoVehicle = true,
+                        AssignedOfficeId = "alpha-office",
+                        InActiveGarage = true,
+                    },
+                    new OwnedCommercialVehiclePersistenceEntry
+                    {
+                        AssetId = "slot-tractor-pool",
+                        DisplayName = "Reserve Tractor",
+                        TractorVehicleId = "tractor-pool-1",
+                        PoweredModelName = "packer",
+                        CargoModelName = "packer",
+                        AssignedOfficeId = "alpha-office",
+                        InActiveGarage = false,
+                    },
+                    new OwnedCommercialVehiclePersistenceEntry
+                    {
+                        AssetId = "slot-trailer-pool",
+                        DisplayName = "Reefer Trailer",
+                        TrailerVehicleId = "trailer-pool-1",
+                        PoweredModelName = "trailers2",
+                        CargoModelName = "trailers2",
                         AssignedOfficeId = "alpha-office",
                         InActiveGarage = false,
                     },
@@ -202,6 +282,38 @@ namespace LSOL.Tests.UI
                 null,
                 null,
                 null);
+        }
+
+        [TestMethod]
+        public void BuildFleetPages_ShowSlotDetailAndAssignmentPools()
+        {
+            var store = CreateStore();
+            var shell = new TabletShellController(new ControlBindings(), store);
+            var context = new TabletShellContext(shell, new TabletStateSnapshot { Balance = 50000f });
+            var app = new PropertyPortfolioTabletApp(new PropertyPortfolioTabletActions());
+
+            var fleetPage = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "fleet"));
+            var fleetCaptions = fleetPage.Items.Select(GetCaption).ToList();
+            CollectionAssert.Contains(fleetCaptions, "Offices");
+            CollectionAssert.Contains(fleetCaptions, "Apartments");
+            CollectionAssert.DoesNotContain(fleetCaptions, "Fleet Slots");
+            Assert.AreEqual("Property Portfolio", fleetPage.Title);
+
+            var fleetDetailPage = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "fleet-slot-detail", "slot-coupled"));
+            var fleetDetailCaptions = fleetDetailPage.Items.Select(GetCaption).ToList();
+            CollectionAssert.Contains(fleetDetailCaptions, "Offices");
+            CollectionAssert.DoesNotContain(fleetDetailCaptions, "Detach Powered Unit");
+
+            var poweredPoolPage = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "fleet-powered", "slot-trailer-pool"));
+            var poweredPoolCaptions = poweredPoolPage.Items.Select(GetCaption).ToList();
+            CollectionAssert.Contains(poweredPoolCaptions, "Motels");
+            CollectionAssert.DoesNotContain(poweredPoolCaptions, "Reserve Tractor");
+        }
+
+        [TestMethod]
+        public void BuildFleetRoutes_FallBackToPortfolioRoot()
+        {
+            BuildFleetPages_ShowSlotDetailAndAssignmentPools();
         }
 
         private static string GetCaption(MenuItem item)

@@ -122,6 +122,7 @@ namespace LSOL
         private readonly CompanyMapController _companyMapController;
         private readonly StartingGuidesController _startingGuidesController;
         private readonly VehicleSpawnController _vehicleSpawnController;
+        private readonly VehicleSpawnController _commercialDealershipVehicleSpawnController;
         private readonly WorkerSpawnController _workerSpawnController;
         private readonly Dictionary<string, Blip> _commercialVehicleBlips;
         private readonly Dictionary<string, Blip> _personalVehicleBlips;
@@ -335,6 +336,14 @@ namespace LSOL
                 cargoFilterOrder,
                 defaultCargoFilter,
                 definition => IsCommercialDealershipVehicleAvailableToPlayer(definition));
+            _commercialDealershipVehicleSpawnController = new VehicleSpawnController(
+                _fleetManager,
+                _vehicleSpawnMarkerSeed,
+                _config.VehicleSpawnHeading,
+                cargoFilterOrder,
+                defaultCargoFilter,
+                definition => IsCommercialDealershipVehicleAvailableToPlayer(definition));
+            _commercialDealershipVehicleSpawnController.SetCommercialDealershipSectionMode(true);
             _workerSpawnController = new WorkerSpawnController(_config.WorkerModels);
             _commercialVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
             _personalVehicleBlips = new Dictionary<string, Blip>(StringComparer.OrdinalIgnoreCase);
@@ -748,6 +757,7 @@ namespace LSOL
                 _officeObjectsMenu != null && _officeObjectsMenu.IsOpen,
                 gameTime);
             UpdatePersonalDealershipPreview();
+            UpdateCommercialDealershipPreview();
             SyncPlayerSuccessBalance(true, true);
             _startingGuidesController.Update(player, gameTime);
 
@@ -4124,48 +4134,66 @@ namespace LSOL
             return result;
         }
 
+        private VehicleSpawnController CurrentVehicleSpawnController
+        {
+            get
+            {
+                return _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
+                    ? _commercialDealershipVehicleSpawnController
+                    : _vehicleSpawnController;
+            }
+        }
+
+        private string BuildCommercialDealershipSectionMenuCaption()
+        {
+            return string.Format("Section: < {0} >", CurrentVehicleSpawnController.CurrentCommercialDealershipSectionCaption);
+        }
+
+        private string BuildCommercialDealershipVehicleMenuCaption()
+        {
+            switch (CurrentVehicleSpawnController.SelectedCommercialDealershipSection)
+            {
+                case CommercialDealershipSection.TruckTractor:
+                    return string.Format("Truck tractor: < {0} >", CurrentVehicleSpawnController.CurrentVehicleCaption);
+                case CommercialDealershipSection.Trailers:
+                    return string.Format("Trailer: < {0} >", CurrentVehicleSpawnController.CurrentVehicleCaption);
+                case CommercialDealershipSection.TrucksVans:
+                    return string.Format("Truck/Van: < {0} >", CurrentVehicleSpawnController.CurrentVehicleCaption);
+                default:
+                    return string.Format("Vehicle: < {0} >", CurrentVehicleSpawnController.CurrentVehicleCaption);
+            }
+        }
+
         private void RebuildVehicleCargoMenuItems()
         {
-            var items = new List<OfficeMenuItem>
-            {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => string.Format("Cargo Filter: < {0} >", _vehicleSpawnController.SelectedFilter.ToDisplayName()),
-                    OnLeft = () => ChangeFilter(-1),
-                    OnRight = () => ChangeFilter(1),
-                    OnActivate = RefreshFilteredVehicles,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => string.Format("Cargo / Trailer: < {0} >", _vehicleSpawnController.CurrentVehicleCaption),
-                    DetailFactory = _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
-                        ? (Func<string>)BuildCommercialDealershipVehicleSelectionDetail
-                        : null,
-                    OnLeft = () => ChangeVehicleSelection(-1),
-                    OnRight = () => ChangeVehicleSelection(1),
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => string.Format("Truck: < {0} >", _vehicleSpawnController.CurrentTractorCaption),
-                    DetailFactory = _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
-                        ? (Func<string>)BuildCommercialDealershipTruckSelectionDetail
-                        : null,
-                    OnLeft = () => ChangeTractorSelection(-1),
-                    OnRight = () => ChangeTractorSelection(1),
-                },
-            };
-
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
             {
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = CurrentCommercialDealershipAcquisitionCaption,
-                    DetailFactory = BuildCommercialDealershipAcquisitionModeDetail,
-                    OnLeft = () => ChangeCommercialDealershipAcquisitionMode(-1),
-                    OnRight = () => ChangeCommercialDealershipAcquisitionMode(1),
-                    OnActivate = () => ChangeCommercialDealershipAcquisitionMode(1),
-                });
+                RebuildCommercialDealershipMenuItems();
+                return;
             }
+
+            var controller = CurrentVehicleSpawnController;
+            var items = new List<OfficeMenuItem>();
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Cargo Filter: < {0} >", controller.SelectedFilter.ToDisplayName()),
+                OnLeft = () => ChangeFilter(-1),
+                OnRight = () => ChangeFilter(1),
+                OnActivate = RefreshFilteredVehicles,
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Cargo / Trailer: < {0} >", controller.CurrentVehicleCaption),
+                OnLeft = () => ChangeVehicleSelection(-1),
+                OnRight = () => ChangeVehicleSelection(1),
+            });
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => string.Format("Truck: < {0} >", controller.CurrentTractorCaption),
+                OnLeft = () => ChangeTractorSelection(-1),
+                OnRight = () => ChangeTractorSelection(1),
+            });
 
             items.Add(new OfficeMenuItem
             {
@@ -4201,7 +4229,7 @@ namespace LSOL
             else if (context == VehicleCargoMenuContext.CommercialDealership)
             {
                 _vehicleCargoMenu.Title = "Trucks Dealership";
-                _vehicleCargoMenu.Subtitle = "Purchase trucks and/or trailers";
+                _vehicleCargoMenu.Subtitle = "Browse Truck tractor, Trailers, and Trucks/Vans";
             }
             else
             {
@@ -4210,7 +4238,7 @@ namespace LSOL
                 _officeMenu.Close();
             }
 
-            _vehicleSpawnController.RefreshFilteredVehicles();
+            CurrentVehicleSpawnController.RefreshFilteredVehicles();
             RebuildVehicleCargoMenuItems();
             _vehicleCargoMenu.Open();
         }
@@ -4232,7 +4260,7 @@ namespace LSOL
 
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
             {
-                _vehicleCargoMenu.Close();
+                ReturnFromCommercialDealershipMenu();
                 return;
             }
 
@@ -4261,19 +4289,29 @@ namespace LSOL
 
         private string CurrentVehicleSpawnerSelectionDetail()
         {
-            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
+            var controller = CurrentVehicleSpawnController;
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
+            {
+                return string.Format(
+                    "{0} | Vehicle {1}",
+                    controller.CurrentCommercialDealershipSectionCaption,
+                    controller.CurrentVehicleCaption);
+            }
+
+            var selectedVehicle = controller.SelectedVehicleDefinition;
             var selectedTruck = selectedVehicle != null && !selectedVehicle.IsTrailer
                 ? null
-                : _vehicleSpawnController.SelectedTractorDefinition;
+                : controller.SelectedTractorDefinition;
             return string.Format(
                 "{0} | Cargo / Trailer {1} | Truck {2}",
-                _vehicleSpawnController.SelectedFilter.ToDisplayName(),
-                _vehicleSpawnController.CurrentVehicleCaption,
-                selectedTruck != null ? _vehicleSpawnController.CurrentTractorCaption : "None");
+                controller.SelectedFilter.ToDisplayName(),
+                controller.CurrentVehicleCaption,
+                selectedTruck != null ? controller.CurrentTractorCaption : "None");
         }
 
         private string CurrentVehicleSpawnerActionDetail()
         {
+            var controller = CurrentVehicleSpawnController;
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
             {
                 return BuildCommercialDealershipPurchaseDetail();
@@ -4281,12 +4319,12 @@ namespace LSOL
 
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.Industry)
             {
-                return _vehicleSpawnController.HasAnySelection
+                return controller.HasAnySelection
                     ? "Spawn the selected truck, trailer, or combined rig at this industry pad."
                     : "Select a truck and/or trailer first.";
             }
 
-            return _vehicleSpawnController.HasAnySelection
+            return controller.HasAnySelection
                 ? "Spawn the selected truck, trailer, or combined rig at the office lot."
                 : "Select a truck and/or trailer first.";
         }
@@ -4337,25 +4375,37 @@ namespace LSOL
 
         private void ChangeFilter(int delta)
         {
+            if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
+            {
+                ChangeCommercialDealershipSection(delta);
+                return;
+            }
+
             _vehicleSpawnController.ChangeFilter(delta);
+            RefreshVehicleSelectionMenus();
+        }
+
+        private void ChangeCommercialDealershipSection(int delta)
+        {
+            _commercialDealershipVehicleSpawnController.ChangeCommercialDealershipSection(delta);
             RefreshVehicleSelectionMenus();
         }
 
         private void RefreshFilteredVehicles()
         {
-            _vehicleSpawnController.RefreshFilteredVehicles();
+            CurrentVehicleSpawnController.RefreshFilteredVehicles();
             RefreshVehicleSelectionMenus();
         }
 
         private void ChangeVehicleSelection(int delta)
         {
-            _vehicleSpawnController.ChangeVehicleSelection(delta);
+            CurrentVehicleSpawnController.ChangeVehicleSelection(delta);
             RefreshVehicleSelectionMenus();
         }
 
         private void ChangeTractorSelection(int delta)
         {
-            _vehicleSpawnController.ChangeTractorSelection(delta);
+            CurrentVehicleSpawnController.ChangeTractorSelection(delta);
             RefreshVehicleSelectionMenus();
         }
 
@@ -4807,40 +4857,7 @@ namespace LSOL
         {
             if (_vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership)
             {
-                var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-                var selectedTractor = selectedVehicle != null && !selectedVehicle.IsTrailer
-                    ? null
-                    : _vehicleSpawnController.SelectedTractorDefinition;
-                if (IsCommercialDealershipPhantomLocked(selectedVehicle) || IsCommercialDealershipPhantomLocked(selectedTractor))
-                {
-                    _vehicleSpawnController.RefreshFilteredVehicles();
-                    RefreshVehicleSelectionMenus();
-                    ShowStatus(PhantomRoadVeteranUnlockMessage);
-                    return;
-                }
-
-                string purchaseMessage;
-                var acquired = IsCommercialDealershipRentMode
-                    ? _propertyManager.TryRentCommercialVehicle(
-                        selectedVehicle,
-                        selectedTractor,
-                        ref _profit,
-                        GetCurrentInGameWeekMinute(),
-                        out _,
-                        out purchaseMessage)
-                    : _propertyManager.TryPurchaseCommercialVehicle(
-                        selectedVehicle,
-                        selectedTractor,
-                        ref _profit,
-                        out _,
-                        out purchaseMessage);
-                if (acquired)
-                {
-                    _tabletStateStore.MarkBalanceDirty();
-                    ReevaluatePlayerSuccesses(true);
-                }
-
-                ShowStatus(purchaseMessage);
+                PurchaseSelectedCommercialDealershipVehicle();
                 return;
             }
 
@@ -4856,16 +4873,17 @@ namespace LSOL
             Vehicle truck;
             Vehicle cargoVehicle;
             string message;
-            if (!_vehicleSpawnController.SpawnSelectedVehicle(GetGroundPosition, spawnPosition, spawnHeading, out truck, out cargoVehicle, out message))
+            var controller = CurrentVehicleSpawnController;
+            if (!controller.SpawnSelectedVehicle(GetGroundPosition, spawnPosition, spawnHeading, out truck, out cargoVehicle, out message))
             {
                 ShowStatus(message);
                 return;
             }
 
             _fleetManager.RegisterOwnedRig(truck, cargoVehicle);
-            var poweredDefinition = _vehicleSpawnController.SelectedVehicleDefinition != null && _vehicleSpawnController.SelectedVehicleDefinition.IsTrailer
-                ? _vehicleSpawnController.SelectedTractorDefinition
-                : (_vehicleSpawnController.SelectedVehicleDefinition ?? _vehicleSpawnController.SelectedTractorDefinition);
+            var poweredDefinition = controller.SelectedVehicleDefinition != null && controller.SelectedVehicleDefinition.IsTrailer
+                ? controller.SelectedTractorDefinition
+                : (controller.SelectedVehicleDefinition ?? controller.SelectedTractorDefinition);
             if (poweredDefinition != null && !poweredDefinition.IsTrailer)
             {
                 _vehicleFuelSystem.InitializeSpawnedVehicle(truck);

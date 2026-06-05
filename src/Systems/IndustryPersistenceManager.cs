@@ -1607,6 +1607,43 @@ namespace LSOL.Systems
                 writer.WriteLine();
             }
 
+            foreach (var asset in snapshot.CommercialVehicleAssets.OrderBy(entry => entry != null ? entry.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                if (asset == null || string.IsNullOrWhiteSpace(asset.AssetId) || string.IsNullOrWhiteSpace(asset.ModelName))
+                {
+                    continue;
+                }
+
+                writer.WriteLine("[{0}]", BuildPropertyCommercialAssetSectionName(asset.AssetId));
+                writer.WriteLine("DisplayName={0}", asset.DisplayName ?? string.Empty);
+                writer.WriteLine("ModelName={0}", asset.ModelName ?? string.Empty);
+                writer.WriteLine("FleetRole={0}", asset.FleetRole);
+                writer.WriteLine("PurchasePrice={0}", FormatFloat(asset.PurchasePrice));
+                writer.WriteLine("AssignedOfficeId={0}", asset.AssignedOfficeId ?? string.Empty);
+                writer.WriteLine("IsRental={0}", asset.IsRental ? "true" : "false");
+                writer.WriteLine("DailyRent={0}", FormatFloat(asset.DailyRent));
+                writer.WriteLine("LastChargedDayIndex={0}", asset.LastChargedDayIndex);
+                writer.WriteLine("IsDeployed={0}", asset.IsDeployed ? "true" : "false");
+                writer.WriteLine("CargoType={0}", asset.CargoType);
+                writer.WriteLine("CapacityTons={0}", FormatFloat(asset.CapacityTons));
+                writer.WriteLine("Commodity={0}", asset.Commodity ?? string.Empty);
+                writer.WriteLine("WeightTons={0}", FormatFloat(asset.WeightTons));
+                writer.WriteLine("CargoCondition={0}", FormatFloat(asset.CargoCondition));
+                writer.WriteLine("TotalLostTons={0}", FormatFloat(asset.TotalLostTons));
+                writer.WriteLine("SourceIndustryId={0}", asset.SourceIndustryId ?? string.Empty);
+                writer.WriteLine("SourceDistrictName={0}", asset.SourceDistrictName ?? string.Empty);
+                writer.WriteLine("PlayerContractId={0}", asset.PlayerContractId ?? string.Empty);
+                writer.WriteLine("PlayerContractDestinationIndustryId={0}", asset.PlayerContractDestinationIndustryId ?? string.Empty);
+                writer.WriteLine("CurrentFuelLiters={0}", FormatFloat(asset.CurrentFuelLiters));
+                writer.WriteLine("MaintenanceCondition={0}", FormatFloat(asset.MaintenanceCondition));
+                writer.WriteLine("LastMaintenanceWeekIndex={0}", asset.LastMaintenanceWeekIndex);
+                writer.WriteLine("LastInspectionWeekIndex={0}", asset.LastInspectionWeekIndex);
+                writer.WriteLine("InspectionOverdueWeeks={0}", asset.InspectionOverdueWeeks);
+                writer.WriteLine("LifetimeMaintenanceCost={0}", FormatFloat(asset.LifetimeMaintenanceCost));
+                WriteVehicleAppearanceSnapshot(writer, "Appearance", asset.Appearance);
+                writer.WriteLine();
+            }
+
             foreach (var vehicle in snapshot.CommercialVehicles.OrderBy(entry => entry != null ? entry.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase))
             {
                 if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.AssetId) || string.IsNullOrWhiteSpace(vehicle.PoweredModelName))
@@ -1615,6 +1652,8 @@ namespace LSOL.Systems
                 }
 
                 writer.WriteLine("[{0}]", BuildPropertyCommercialVehicleSectionName(vehicle.AssetId));
+                writer.WriteLine("TractorVehicleId={0}", vehicle.TractorVehicleId ?? string.Empty);
+                writer.WriteLine("TrailerVehicleId={0}", vehicle.TrailerVehicleId ?? string.Empty);
                 writer.WriteLine("DisplayName={0}", vehicle.DisplayName ?? string.Empty);
                 writer.WriteLine("PoweredModelName={0}", vehicle.PoweredModelName ?? string.Empty);
                 writer.WriteLine("CargoModelName={0}", vehicle.CargoModelName ?? string.Empty);
@@ -1762,6 +1801,8 @@ namespace LSOL.Systems
                         snapshot.CommercialVehicles.Add(new OwnedCommercialVehiclePersistenceEntry
                         {
                             AssetId = assetId,
+                            TractorVehicleId = ini.GetString(section, "TractorVehicleId", string.Empty),
+                            TrailerVehicleId = ini.GetString(section, "TrailerVehicleId", string.Empty),
                             DisplayName = ini.GetString(section, "DisplayName", string.Empty),
                             PoweredModelName = ini.GetString(section, "PoweredModelName", string.Empty),
                             CargoModelName = ini.GetString(section, "CargoModelName", string.Empty),
@@ -1793,6 +1834,46 @@ namespace LSOL.Systems
                             LifetimeMaintenanceCost = ini.GetFloat(section, "LifetimeMaintenanceCost", 0f),
                             PoweredAppearance = ReadVehicleAppearanceSnapshot(ini, section, "PoweredAppearance"),
                             CargoAppearance = ReadVehicleAppearanceSnapshot(ini, section, "CargoAppearance"),
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (section.StartsWith("PropertyCommercialAsset:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var assetId = section.Substring("PropertyCommercialAsset:".Length).Trim();
+                    if (!string.IsNullOrWhiteSpace(assetId))
+                    {
+                        snapshot.CommercialVehicleAssets.Add(new OwnedCommercialVehicleAssetPersistenceEntry
+                        {
+                            AssetId = assetId,
+                            DisplayName = ini.GetString(section, "DisplayName", string.Empty),
+                            ModelName = ini.GetString(section, "ModelName", string.Empty),
+                            FleetRole = ParseCommercialVehicleFleetRole(ini.GetString(section, "FleetRole", CommercialVehicleFleetRole.Rigid.ToString()), CommercialVehicleFleetRole.Rigid),
+                            PurchasePrice = ini.GetFloat(section, "PurchasePrice", 0f),
+                            AssignedOfficeId = ini.GetString(section, "AssignedOfficeId", string.Empty),
+                            IsRental = ini.GetBool(section, "IsRental", false),
+                            DailyRent = ini.GetFloat(section, "DailyRent", 0f),
+                            LastChargedDayIndex = ParseInt(ini.GetString(section, "LastChargedDayIndex", "-1"), -1),
+                            IsDeployed = ini.GetBool(section, "IsDeployed", false),
+                            CargoType = ParseVehicleCargoType(ini.GetString(section, "CargoType", VehicleCargoType.Unknown.ToString()), VehicleCargoType.Unknown),
+                            CapacityTons = ini.GetFloat(section, "CapacityTons", 0f),
+                            Commodity = CommodityCatalog.Normalize(ini.GetString(section, "Commodity", string.Empty)),
+                            WeightTons = ini.GetFloat(section, "WeightTons", 0f),
+                            CargoCondition = ini.GetFloat(section, "CargoCondition", 1f),
+                            TotalLostTons = ini.GetFloat(section, "TotalLostTons", 0f),
+                            SourceIndustryId = ini.GetString(section, "SourceIndustryId", string.Empty),
+                            SourceDistrictName = ini.GetString(section, "SourceDistrictName", string.Empty),
+                            PlayerContractId = ini.GetString(section, "PlayerContractId", string.Empty),
+                            PlayerContractDestinationIndustryId = ini.GetString(section, "PlayerContractDestinationIndustryId", string.Empty),
+                            CurrentFuelLiters = ini.GetFloat(section, "CurrentFuelLiters", 0f),
+                            MaintenanceCondition = ini.GetFloat(section, "MaintenanceCondition", 1f),
+                            LastMaintenanceWeekIndex = ParseInt(ini.GetString(section, "LastMaintenanceWeekIndex", "-1"), -1),
+                            LastInspectionWeekIndex = ParseInt(ini.GetString(section, "LastInspectionWeekIndex", "-1"), -1),
+                            InspectionOverdueWeeks = ParseInt(ini.GetString(section, "InspectionOverdueWeeks", "0"), 0),
+                            LifetimeMaintenanceCost = ini.GetFloat(section, "LifetimeMaintenanceCost", 0f),
+                            Appearance = ReadVehicleAppearanceSnapshot(ini, section, "Appearance"),
                         });
                     }
 
@@ -3088,6 +3169,11 @@ namespace LSOL.Systems
             return "PropertyApartment:" + (apartmentId ?? string.Empty).Trim();
         }
 
+        private static string BuildPropertyCommercialAssetSectionName(string assetId)
+        {
+            return "PropertyCommercialAsset:" + (assetId ?? string.Empty).Trim();
+        }
+
         private static string BuildPropertyCommercialVehicleSectionName(string assetId)
         {
             return "PropertyCommercialVehicle:" + (assetId ?? string.Empty).Trim();
@@ -3335,6 +3421,17 @@ namespace LSOL.Systems
             }
 
             VehicleCargoType parsed;
+            return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
+        }
+
+        private static CommercialVehicleFleetRole ParseCommercialVehicleFleetRole(string raw, CommercialVehicleFleetRole fallback)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return fallback;
+            }
+
+            CommercialVehicleFleetRole parsed;
             return Enum.TryParse(raw.Trim(), true, out parsed) ? parsed : fallback;
         }
 

@@ -15,10 +15,12 @@ tests/
 LSOL.Tests/
 packages/
 scripthookdotnet/
+shdn_enhanced/
 configs/
 doc_images/
 LSOL_files/
 missions/
+graphify-out/
 
 # Compiled folders
 

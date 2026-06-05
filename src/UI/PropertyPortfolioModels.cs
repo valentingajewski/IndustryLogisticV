@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using LSOL.Domain;
 using LSOL.Systems;
 
 namespace LSOL.UI

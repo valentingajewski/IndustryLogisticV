@@ -14,11 +14,95 @@ namespace LSOL
 
         private static readonly object AssemblyResolverSync = new object();
         private static bool _assemblyResolverInstalled;
+        
+        private static readonly object NotificationResolveSync = new object();
+        private static bool _notificationResolved;
+        private static MethodInfo _notificationPostTickerMethod;
+        private static MethodInfo _notificationShowMethod;
+        private static MethodInfo _screenShowSubtitleMethod;
 
         public static void EnsureInitialized(string baseDirectory, string assemblyLocation)
         {
             InstallAssemblyResolver(baseDirectory, assemblyLocation);
             ValidateScriptEventSurface();
+        }
+
+        public static void PostTicker(string text, bool blink, bool important)
+        {
+            EnsureNotificationResolved();
+
+            if (_notificationPostTickerMethod != null)
+            {
+                try
+                {
+                    _notificationPostTickerMethod.Invoke(null, new object[] { text, blink, important });
+                    return;
+                }
+                catch
+                {
+                }
+            }
+
+            if (_notificationShowMethod != null)
+            {
+                try
+                {
+                    _notificationShowMethod.Invoke(null, new object[] { text });
+                    return;
+                }
+                catch
+                {
+                }
+            }
+
+            if (_screenShowSubtitleMethod != null)
+            {
+                try
+                {
+                    _screenShowSubtitleMethod.Invoke(null, new object[] { text, 5000 });
+                    return;
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private static void EnsureNotificationResolved()
+        {
+            if (_notificationResolved)
+            {
+                return;
+            }
+
+            lock (NotificationResolveSync)
+            {
+                if (_notificationResolved)
+                {
+                    return;
+                }
+
+                try
+                {
+                    var notificationType = typeof(GTA.UI.Notification);
+                    if (notificationType != null)
+                    {
+                        _notificationPostTickerMethod = notificationType.GetMethod("PostTicker", BindingFlags.Public | BindingFlags.Static);
+                        _notificationShowMethod = notificationType.GetMethod("Show", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string) }, null);
+                    }
+
+                    var screenType = typeof(GTA.UI.Screen);
+                    if (screenType != null)
+                    {
+                        _screenShowSubtitleMethod = screenType.GetMethod("ShowSubtitle", BindingFlags.Public | BindingFlags.Static, null, new Type[] { typeof(string), typeof(int) }, null);
+                    }
+                }
+                catch
+                {
+                }
+
+                _notificationResolved = true;
+            }
         }
 
         internal static IReadOnlyList<string> GetManagedDependencyProbeDirectories(string baseDirectory, string assemblyLocation)

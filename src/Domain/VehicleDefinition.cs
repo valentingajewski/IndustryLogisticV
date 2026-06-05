@@ -3,6 +3,13 @@ using GTA;
 
 namespace LSOL.Domain
 {
+    public enum CommercialVehicleFleetRole
+    {
+        Rigid = 0,
+        Tractor = 1,
+        Trailer = 2,
+    }
+
     public sealed class VehicleDefinition
     {
         public string Id { get; set; }
@@ -18,6 +25,34 @@ namespace LSOL.Domain
         public bool IsEnabled { get; set; }
         public bool IsTrailer { get; set; }
         public bool IsTractor { get; set; }
+
+        public CommercialVehicleFleetRole FleetRole
+        {
+            get
+            {
+                if (IsTrailer)
+                {
+                    return CommercialVehicleFleetRole.Trailer;
+                }
+
+                if (IsTractor)
+                {
+                    return CommercialVehicleFleetRole.Tractor;
+                }
+
+                return CommercialVehicleFleetRole.Rigid;
+            }
+            set
+            {
+                IsTrailer = value == CommercialVehicleFleetRole.Trailer;
+                IsTractor = value == CommercialVehicleFleetRole.Tractor;
+            }
+        }
+
+        public bool IsRigid
+        {
+            get { return !IsTrailer && !IsTractor; }
+        }
 
         public Model Model => new Model(ModelName);
 

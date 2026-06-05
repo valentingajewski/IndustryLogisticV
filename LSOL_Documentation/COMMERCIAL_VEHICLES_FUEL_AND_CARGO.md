@@ -10,10 +10,10 @@ Commercial vehicles are bought from the commercial dealership.
 
 The dealership supports:
 
-- cargo-type filtering
-- truck and trailer combinations
-- price comparison while cycling options
-- purchase into the active office garage
+- top-level Truck tractors, Trailers, and Trucks/Vans sections
+- cargo-type submenus for trailers and for rigid trucks/vans
+- independent tractor, rigid truck, van, and trailer purchases or rentals from a Buy/Rent/Back action screen
+- live vehicle preview while browsing entries, with all acquisitions landing in the active office garage
 
 ![image](../doc_images/com_dealership_menu.JPG)
 
@@ -33,10 +33,23 @@ The best first purchase is rarely the flashiest one. It is the one that can stay
 
 Office fleet management lets you:
 
-- store trucks and trailers
-- deploy them into the world
-- move them into reserve when needed
+- store fleet slots in active garage or reserve
+- deploy coupled rigs, rigid trucks, tractor-only units, or trailer-only pool entries into the world
+- move slots into reserve when needed
 - retrieve them through office workflows
+- attach and detach tractors and trailers directly from the office garage menu without rebuying hardware
+
+## Fleet Slots And Independent Assets
+
+Commercial fleet ownership now separates physical assets from the slot you deploy.
+
+- tractors, rigid trucks, and trailers are owned as independent assets
+- every dealership purchase creates a garage slot seeded with that tractor, rigid truck, or trailer
+- a slot can hold a rigid truck, a tractor-only pool entry, a trailer-only pool entry, or a coupled tractor+trailer rig
+- the office garage menu is the pairing surface for attaching, detaching, storing, reserving, and deploying owned commercial hardware
+- fuel stays with powered unit state, while cargo mass and commodity stay with trailer or rigid body state
+
+This keeps old office garage workflows intact while letting you mix and match owned tractors and trailers later.
 
 ![image](../doc_images/office_garage.JPG)
 ![image](../doc_images/office_vehicle_menu.JPG)
@@ -50,6 +63,7 @@ Fuel usage can be part of the active difficulty profile.
 When fuel management is enabled, you need to watch:
 
 - current tank level
+- which powered unit currently owns the slot
 - range over real travel distance
 - route length relative to cargo value
 - refuel timing before long or multi-stop hauls
@@ -63,6 +77,7 @@ Cargo condition can also be active depending on your save settings.
 That adds pressure around:
 
 - reckless driving
+- detaching cargo bodies from low-range tractors before longer hauls
 - long routes without enough margin
 - low-quality NPC routes in weak corridors
 - loss value on damaged or missing cargo

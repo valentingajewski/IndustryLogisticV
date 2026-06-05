@@ -23,16 +23,19 @@ namespace LSOL
         private const int ApartmentSleepBlackoutDurationMs = 2000;
         private const int PersonalDealershipCategoryListStartIndex = 1;
         private const int PersonalDealershipVehicleListStartIndex = 1;
+        private const int CommercialDealershipContentListStartIndex = 1;
         private const float ApartmentExteriorMarkerScale = 1.3f;
         private const float ApartmentInteriorMarkerScale = 1.2f;
         private const float ApartmentGarageMarkerScale = 1.3f;
         private const float MotelExteriorMarkerScale = 1.3f;
         private const float DealershipInteractionDistance = 4.6f;
+        private const float CommercialDealershipVehiclePadHeading = 315f;
         private const float PersonalDealershipVehiclePadHeading = 70f;
         private const string PersonalDealershipAllCategory = "All";
         private const string PersonalDealershipUncategorizedCategory = "Uncategorized";
 
         private static readonly Vector3 CommercialDealershipMarker = new Vector3(-979.56f, -2232.48f, 8.86f);
+        private static readonly Vector3 CommercialDealershipVehiclePadPosition = new Vector3(-968.77f, -2242.95f, 8.85f);
         private static readonly Vector3 PersonalDealershipMarker = new Vector3(-38.68f, -1109.47f, 26.44f);
         private static readonly Vector3 PersonalDealershipVehiclePadPosition = new Vector3(-42.77f, -1112.92f, 26.44f);
 
@@ -46,16 +49,23 @@ namespace LSOL
         private LemonMenu _motelMenu;
         private LemonMenu _personalGarageMenu;
         private LemonMenu _personalDealershipMenu;
+        private Vehicle _commercialDealershipPreviewVehicle;
         private Vehicle _personalDealershipPreviewVehicle;
         private OfficeDefinition _menuOffice;
         private InteriorDefinition _menuApartment;
         private MotelDefinition _menuMotel;
         private CommercialGarageMenuContext _commercialGarageMenuContext;
         private OwnedCommercialVehiclePersistenceEntry _selectedCommercialGarageVehicle;
-        private CommercialDealershipAcquisitionMode _commercialDealershipAcquisitionMode;
         private List<OfficeObjectDefinition> _officeObjectPreviewSlots;
+        private List<VehicleCargoType> _commercialDealershipVisibleCargoTypes;
+        private List<VehicleDefinition> _commercialDealershipVisibleVehicles;
         private List<string> _personalDealershipCategories;
         private List<DealershipVehicleDefinition> _personalDealershipVisibleVehicles;
+        private CommercialDealershipCatalogSection _activeCommercialDealershipSection;
+        private CommercialDealershipMenuView _commercialDealershipMenuView;
+        private VehicleCargoType _activeCommercialDealershipCargoType;
+        private string _commercialDealershipPreviewModelName;
+        private string _commercialDealershipSelectedVehicleModelName;
         private string _activePersonalDealershipCategory;
         private string _personalDealershipPreviewModelName;
         private string _personalDealershipSelectedVehicleModelName;
@@ -63,6 +73,8 @@ namespace LSOL
         private ApartmentSleepTransitionPhase _apartmentSleepTransitionPhase;
         private int _apartmentSleepTransitionPhaseStartedAt;
         private bool _apartmentSleepClockApplied;
+        private int _selectedCommercialDealershipActionIndex;
+        private int _selectedCommercialDealershipCargoTypeIndex;
         private int _selectedPersonalDealershipCategoryIndex;
 
         private enum ApartmentSleepTransitionPhase
@@ -71,6 +83,21 @@ namespace LSOL
             FadingOut = 1,
             HoldingBlack = 2,
             FadingIn = 3,
+        }
+
+        private enum CommercialDealershipMenuView
+        {
+            Root = 0,
+            CargoTypes = 1,
+            Vehicles = 2,
+            Actions = 3,
+        }
+
+        private enum CommercialDealershipCatalogSection
+        {
+            TruckTractors = 0,
+            Trailers = 1,
+            TrucksVans = 2,
         }
 
         [Flags]
@@ -182,8 +209,15 @@ namespace LSOL
                 MaxVisibleItems = 10,
             };
             _commercialGarageMenuContext = CommercialGarageMenuContext.Office;
-            _commercialDealershipAcquisitionMode = CommercialDealershipAcquisitionMode.Purchase;
             _officeObjectPreviewSlots = new List<OfficeObjectDefinition>();
+            _commercialDealershipVisibleCargoTypes = new List<VehicleCargoType>();
+            _commercialDealershipVisibleVehicles = new List<VehicleDefinition>();
+            _activeCommercialDealershipSection = CommercialDealershipCatalogSection.TruckTractors;
+            _commercialDealershipMenuView = CommercialDealershipMenuView.Root;
+            _activeCommercialDealershipCargoType = VehicleCargoType.Unknown;
+            _commercialDealershipSelectedVehicleModelName = null;
+            _selectedCommercialDealershipActionIndex = 0;
+            _selectedCommercialDealershipCargoTypeIndex = 0;
             _personalDealershipCategories = new List<string>();
             _personalDealershipVisibleVehicles = new List<DealershipVehicleDefinition>();
         }
@@ -308,6 +342,7 @@ namespace LSOL
             }
 
             ClearPersonalDealershipPreviewVehicle();
+            ClearCommercialDealershipPreviewVehicle();
         }
 
         private bool HandlePropertyMenuKey(WinForms.Keys key)
@@ -1187,6 +1222,169 @@ namespace LSOL
             var activeOffice = _propertyManager.ActiveOffice;
             var capacity = activeOffice != null ? BuildOfficeGarageCapacityLabel(activeOffice) : "0";
             return string.Format("Active {0}/{1} | Reserve {2}", activeCount, capacity, reserveCount);
+        }
+
+        private void AddCommercialGarageAttachmentActions(
+            List<OfficeMenuItem> items,
+            OwnedCommercialVehiclePersistenceEntry vehicle,
+            OwnedCommercialVehicleAssetPersistenceEntry poweredAsset,
+            OwnedCommercialVehicleAssetPersistenceEntry trailerAsset)
+        {
+            if (items == null || vehicle == null || _propertyManager == null)
+            {
+                return;
+            }
+
+            if (poweredAsset != null && trailerAsset != null)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Detach Powered Unit",
+                    DetailFactory = () => string.Format("Return {0} to powered-unit pool.", poweredAsset.DisplayName),
+                    OnActivate = () => DetachCommercialPoweredUnitFromGarageVehicle(vehicle),
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Detach Trailer",
+                    DetailFactory = () => string.Format("Return {0} to trailer pool.", trailerAsset.DisplayName),
+                    OnActivate = () => DetachCommercialTrailerFromGarageVehicle(vehicle),
+                });
+                return;
+            }
+
+            if (poweredAsset != null && poweredAsset.FleetRole == CommercialVehicleFleetRole.Tractor && trailerAsset == null)
+            {
+                var availableTrailers = _propertyManager.GetAvailableCommercialTrailerAssets().ToList();
+                if (availableTrailers.Count == 0)
+                {
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => "No trailers free",
+                        DetailFactory = () => "Buy or detach a trailer before pairing this tractor.",
+                    });
+                    return;
+                }
+
+                for (int i = 0; i < availableTrailers.Count; i++)
+                {
+                    var trailerOption = availableTrailers[i];
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("Attach Trailer: {0}", trailerOption.DisplayName),
+                        DetailFactory = () => string.Format("Pair {0} with {1}.", trailerOption.DisplayName, vehicle.DisplayName),
+                        OnActivate = () => AttachCommercialTrailerToGarageVehicle(vehicle, trailerOption),
+                    });
+                }
+
+                return;
+            }
+
+            if (poweredAsset == null && trailerAsset != null)
+            {
+                var availablePoweredUnits = _propertyManager.GetAvailableCommercialPoweredAssets()
+                    .Where(asset => asset != null && asset.FleetRole == CommercialVehicleFleetRole.Tractor)
+                    .ToList();
+                if (availablePoweredUnits.Count == 0)
+                {
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => "No tractors free",
+                        DetailFactory = () => "Buy or detach a tractor before pairing this trailer.",
+                    });
+                    return;
+                }
+
+                for (int i = 0; i < availablePoweredUnits.Count; i++)
+                {
+                    var tractorOption = availablePoweredUnits[i];
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("Attach Powered Unit: {0}", tractorOption.DisplayName),
+                        DetailFactory = () => string.Format("Pair {0} with {1}.", tractorOption.DisplayName, vehicle.DisplayName),
+                        OnActivate = () => AttachCommercialPoweredUnitToGarageVehicle(vehicle, tractorOption),
+                    });
+                }
+            }
+        }
+
+        private void AttachCommercialTrailerToGarageVehicle(OwnedCommercialVehiclePersistenceEntry vehicle, OwnedCommercialVehicleAssetPersistenceEntry trailerAsset)
+        {
+            if (vehicle == null || trailerAsset == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryAssignCommercialVehicleTrailerAsset(vehicle.AssetId, trailerAsset.AssetId, out message))
+            {
+                RefreshCommercialGarageMenusAfterPairChange();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void AttachCommercialPoweredUnitToGarageVehicle(OwnedCommercialVehiclePersistenceEntry vehicle, OwnedCommercialVehicleAssetPersistenceEntry poweredAsset)
+        {
+            if (vehicle == null || poweredAsset == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryAssignCommercialVehiclePoweredAsset(vehicle.AssetId, poweredAsset.AssetId, out message))
+            {
+                RefreshCommercialGarageMenusAfterPairChange();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void DetachCommercialPoweredUnitFromGarageVehicle(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryClearCommercialVehiclePoweredAsset(vehicle.AssetId, out message))
+            {
+                RefreshCommercialGarageMenusAfterPairChange();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void DetachCommercialTrailerFromGarageVehicle(OwnedCommercialVehiclePersistenceEntry vehicle)
+        {
+            if (vehicle == null)
+            {
+                return;
+            }
+
+            string message;
+            if (_propertyManager.TryClearCommercialVehicleTrailerAsset(vehicle.AssetId, out message))
+            {
+                RefreshCommercialGarageMenusAfterPairChange();
+            }
+
+            ShowStatus(message);
+        }
+
+        private void RefreshCommercialGarageMenusAfterPairChange()
+        {
+            if (_tabletStateStore != null)
+            {
+                _tabletStateStore.MarkCargoDirty();
+            }
+
+            if (_commercialGarageActionMenu != null && _commercialGarageActionMenu.IsOpen)
+            {
+                RebuildCommercialGarageActionMenuItems();
+            }
+
+            RebuildCommercialGarageMenuItems();
+            ReevaluatePlayerSuccesses(true);
         }
 
         private string BuildOfficeGarageCapacityLabel(OfficeDefinition office)
@@ -2202,7 +2400,7 @@ namespace LSOL
                     CaptionFactory = () => BuildCommercialGarageSummary(),
                     DetailFactory = () => _commercialGarageMenuContext == CommercialGarageMenuContext.Industry
                         ? "Select an active garage vehicle to deploy at this industry."
-                        : "Enter opens vehicle actions for retrieve, storage, reserve, sale, or rental return.",
+                        : "Enter opens vehicle actions for retrieve, storage, attach, detach, reserve, sale, or rental return.",
                 }
             };
 
@@ -2212,7 +2410,7 @@ namespace LSOL
                 items.Add(new OfficeMenuItem
                 {
                     CaptionFactory = () => "No active commercial vehicles",
-                    DetailFactory = () => "Purchase trucks and trailers at the trucks dealership.",
+                    DetailFactory = () => "Purchase tractors, trailers, and rigid trucks at the trucks dealership.",
                 });
             }
             else
@@ -2512,6 +2710,8 @@ namespace LSOL
             var isDeployed = _propertyManager.IsCommercialVehicleDeployed(vehicle.AssetId);
             var npcAssignmentDetail = BuildCommercialVehicleNpcAssignmentDetail(vehicle);
             var isNpcAssigned = !string.IsNullOrWhiteSpace(npcAssignmentDetail);
+            var poweredAsset = _propertyManager.GetCommercialVehicleAssetRecord(vehicle.TractorVehicleId);
+            var trailerAsset = _propertyManager.GetCommercialVehicleAssetRecord(vehicle.TrailerVehicleId);
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => vehicle.DisplayName,
@@ -2550,6 +2750,11 @@ namespace LSOL
                     DetailFactory = () => "Store the deployed vehicle back in the company garage.",
                     OnActivate = () => StoreCommercialVehicleFromGarage(vehicle),
                 });
+            }
+
+            if (!isNpcAssigned && !isDeployed)
+            {
+                AddCommercialGarageAttachmentActions(items, vehicle, poweredAsset, trailerAsset);
             }
 
             if (vehicle.InActiveGarage && !isNpcAssigned)
@@ -3670,117 +3875,700 @@ namespace LSOL
         private void OpenCommercialDealershipMenu()
         {
             CloseAllMenus();
-            OpenVehicleCargoMenu(VehicleCargoMenuContext.CommercialDealership);
+            _vehicleCargoMenuContext = VehicleCargoMenuContext.CommercialDealership;
+            _activeCommercialDealershipSection = CommercialDealershipCatalogSection.TruckTractors;
+            _commercialDealershipMenuView = CommercialDealershipMenuView.Root;
+            _activeCommercialDealershipCargoType = VehicleCargoType.Unknown;
+            _commercialDealershipSelectedVehicleModelName = null;
+            _selectedCommercialDealershipActionIndex = 0;
+            _selectedCommercialDealershipCargoTypeIndex = 0;
+            _vehicleCargoMenu.Title = "Trucks Dealership";
+            _vehicleCargoMenu.Subtitle = "Truck tractors, trailers, and trucks/vans";
+            RebuildCommercialDealershipMenuItems();
+            SelectCommercialDealershipRootSectionRow();
+            _vehicleCargoMenu.Open();
         }
 
-        private bool IsCommercialDealershipRentMode
+        private void RebuildCommercialDealershipMenuItems()
         {
-            get { return _commercialDealershipAcquisitionMode == CommercialDealershipAcquisitionMode.Rent; }
-        }
+            RefreshCommercialDealershipMenuState();
 
-        private string CurrentCommercialDealershipAcquisitionCaption()
-        {
-            return string.Format("Acquisition: < {0} >", IsCommercialDealershipRentMode ? "Rent" : "Purchase");
-        }
+            _vehicleCargoMenu.Title = "Trucks Dealership";
+            _vehicleCargoMenu.Subtitle = BuildCommercialDealershipSubtitle();
 
-        private void ChangeCommercialDealershipAcquisitionMode(int delta)
-        {
-            if (delta == 0)
+            var items = new List<OfficeMenuItem>
             {
-                delta = 1;
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => string.Format("Balance: {0}", ModFormatting.FormatMoney(_profit)),
+                    DetailFactory = BuildCommercialDealershipBalanceDetail,
+                },
+            };
+
+            if (_commercialDealershipMenuView == CommercialDealershipMenuView.Root)
+            {
+                foreach (var section in GetCommercialDealershipSections())
+                {
+                    var sectionCopy = section;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => BuildCommercialDealershipSectionCaption(sectionCopy),
+                        DetailFactory = () => BuildCommercialDealershipSectionDetail(sectionCopy),
+                        OnActivate = () => EnterCommercialDealershipSection(sectionCopy),
+                    });
+                }
+            }
+            else if (_commercialDealershipMenuView == CommercialDealershipMenuView.CargoTypes)
+            {
+                if (_commercialDealershipVisibleCargoTypes.Count == 0)
+                {
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = BuildCommercialDealershipEmptyCargoTypeCaption,
+                        DetailFactory = BuildCommercialDealershipEmptyCargoTypeDetail,
+                    });
+                }
+                else
+                {
+                    for (int i = 0; i < _commercialDealershipVisibleCargoTypes.Count; i++)
+                    {
+                        var cargoType = _commercialDealershipVisibleCargoTypes[i];
+                        items.Add(new OfficeMenuItem
+                        {
+                            CaptionFactory = () => BuildCommercialDealershipCargoTypeCaption(cargoType),
+                            DetailFactory = () => BuildCommercialDealershipCargoTypeDetail(cargoType),
+                            OnActivate = () => EnterCommercialDealershipCargoType(cargoType),
+                        });
+                    }
+                }
+            }
+            else if (_commercialDealershipMenuView == CommercialDealershipMenuView.Vehicles)
+            {
+                if (_commercialDealershipVisibleVehicles.Count == 0)
+                {
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = BuildCommercialDealershipEmptyVehicleCaption,
+                        DetailFactory = () => "Press Backspace to return to previous dealership section.",
+                    });
+                }
+                else
+                {
+                    for (int i = 0; i < _commercialDealershipVisibleVehicles.Count; i++)
+                    {
+                        var definition = _commercialDealershipVisibleVehicles[i];
+                        items.Add(new OfficeMenuItem
+                        {
+                            CaptionFactory = () => BuildCommercialDealershipVehicleButtonCaption(definition),
+                            DetailFactory = () => BuildCommercialDealershipVehicleSelectionDetail(definition),
+                            OnActivate = EnterCommercialDealershipVehicleActions,
+                        });
+                    }
+                }
+            }
+            else
+            {
+                var definition = GetSelectedCommercialDealershipVehicleDefinition();
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Buy",
+                    DetailFactory = () => BuildCommercialDealershipPurchaseActionDetail(definition),
+                    OnActivate = PurchaseSelectedCommercialDealershipVehicle,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Rent",
+                    DetailFactory = () => BuildCommercialDealershipRentActionDetail(definition),
+                    OnActivate = RentSelectedCommercialDealershipVehicle,
+                });
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Back",
+                    DetailFactory = () => "Return to selected vehicle list.",
+                    OnActivate = ReturnFromCommercialDealershipMenu,
+                });
+                if (definition != null && IsCommercialDealershipPhantomLocked(definition))
+                {
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => "Unlock required",
+                        DetailFactory = () => PhantomRoadVeteranUnlockMessage,
+                    });
+                }
             }
 
-            _commercialDealershipAcquisitionMode = _commercialDealershipAcquisitionMode == CommercialDealershipAcquisitionMode.Purchase
-                ? CommercialDealershipAcquisitionMode.Rent
-                : CommercialDealershipAcquisitionMode.Purchase;
-            RebuildVehicleCargoMenuItems();
+            _vehicleCargoMenu.SetItems(items);
         }
 
-        private string BuildCommercialDealershipAcquisitionModeDetail()
+        private void RefreshCommercialDealershipMenuState()
         {
-            var dailyRent = GetSelectedCommercialVehicleDailyRent();
-            if (!IsCommercialDealershipRentMode)
+            var catalog = GetCommercialDealershipCatalog().ToList();
+            _commercialDealershipVisibleCargoTypes = GetCommercialDealershipCargoTypes(catalog, _activeCommercialDealershipSection);
+
+            if (_commercialDealershipVisibleCargoTypes.Count == 0)
             {
-                return "Left/right switches to rental pricing. Purchase adds the vehicle permanently to the company garage.";
+                _activeCommercialDealershipCargoType = VehicleCargoType.Unknown;
+                _selectedCommercialDealershipCargoTypeIndex = 0;
+            }
+            else
+            {
+                if (!_commercialDealershipVisibleCargoTypes.Contains(_activeCommercialDealershipCargoType))
+                {
+                    _activeCommercialDealershipCargoType = _commercialDealershipVisibleCargoTypes[0];
+                }
+
+                _selectedCommercialDealershipCargoTypeIndex = _commercialDealershipVisibleCargoTypes.FindIndex(cargoType => cargoType == _activeCommercialDealershipCargoType);
+                if (_selectedCommercialDealershipCargoTypeIndex < 0)
+                {
+                    _selectedCommercialDealershipCargoTypeIndex = 0;
+                }
             }
 
-            if (dailyRent <= 0.001f)
+            if (_commercialDealershipMenuView != CommercialDealershipMenuView.Vehicles
+                && _commercialDealershipMenuView != CommercialDealershipMenuView.Actions)
             {
-                return BuildCommercialDealershipRentUnavailableDetail();
+                _commercialDealershipVisibleVehicles = new List<VehicleDefinition>();
+                return;
             }
 
-            return string.Format(
-                "Rent charges {0}/day with no upfront cost. The first daily charge is billed after time advances into a later in-game day.",
-                ModFormatting.FormatMoney(dailyRent));
+            _commercialDealershipVisibleVehicles = GetCommercialDealershipSectionVehicles(catalog, _activeCommercialDealershipSection, _activeCommercialDealershipCargoType)
+                .OrderBy(definition => string.IsNullOrWhiteSpace(definition.DisplayName) ? definition.ModelName : definition.DisplayName, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (_commercialDealershipVisibleVehicles.Count == 0)
+            {
+                _commercialDealershipSelectedVehicleModelName = null;
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_commercialDealershipSelectedVehicleModelName)
+                || !_commercialDealershipVisibleVehicles.Any(definition => string.Equals(definition.ModelName, _commercialDealershipSelectedVehicleModelName, StringComparison.OrdinalIgnoreCase)))
+            {
+                _commercialDealershipSelectedVehicleModelName = _commercialDealershipVisibleVehicles[0].ModelName;
+            }
+        }
+
+        private IEnumerable<VehicleDefinition> GetCommercialDealershipCatalog()
+        {
+            return _fleetManager != null && _fleetManager.Definitions != null
+                ? _fleetManager.Definitions.Where(definition => definition != null && definition.IsEnabled && IsCommercialDealershipVehicleAvailableToPlayer(definition))
+                : Enumerable.Empty<VehicleDefinition>();
+        }
+
+        private static List<VehicleCargoType> GetCommercialDealershipCargoTypes(IEnumerable<VehicleDefinition> catalog, CommercialDealershipCatalogSection section)
+        {
+            if (catalog == null || section == CommercialDealershipCatalogSection.TruckTractors)
+            {
+                return new List<VehicleCargoType>();
+            }
+
+            return catalog
+                .Where(definition => IsCommercialDealershipSectionMatch(definition, section))
+                .Select(definition => definition.CargoType)
+                .Distinct()
+                .OrderBy(cargoType => cargoType.ToDisplayName(), StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+
+        private static IEnumerable<VehicleDefinition> GetCommercialDealershipSectionVehicles(
+            IEnumerable<VehicleDefinition> catalog,
+            CommercialDealershipCatalogSection section,
+            VehicleCargoType cargoType)
+        {
+            if (catalog == null)
+            {
+                return Enumerable.Empty<VehicleDefinition>();
+            }
+
+            switch (section)
+            {
+                case CommercialDealershipCatalogSection.TruckTractors:
+                    return catalog.Where(definition => definition.IsTractor);
+                case CommercialDealershipCatalogSection.Trailers:
+                    return catalog.Where(definition => definition.IsTrailer && definition.CargoType == cargoType);
+                default:
+                    return catalog.Where(definition => definition.IsRigid && definition.CargoType == cargoType);
+            }
+        }
+
+        private static bool IsCommercialDealershipSectionMatch(VehicleDefinition definition, CommercialDealershipCatalogSection section)
+        {
+            if (definition == null)
+            {
+                return false;
+            }
+
+            switch (section)
+            {
+                case CommercialDealershipCatalogSection.TruckTractors:
+                    return definition.IsTractor;
+                case CommercialDealershipCatalogSection.Trailers:
+                    return definition.IsTrailer;
+                default:
+                    return definition.IsRigid;
+            }
+        }
+
+        private static IEnumerable<CommercialDealershipCatalogSection> GetCommercialDealershipSections()
+        {
+            yield return CommercialDealershipCatalogSection.TruckTractors;
+            yield return CommercialDealershipCatalogSection.Trailers;
+            yield return CommercialDealershipCatalogSection.TrucksVans;
+        }
+
+        private string BuildCommercialDealershipBalanceDetail()
+        {
+            if (_propertyManager == null || string.IsNullOrWhiteSpace(_propertyManager.ActiveOfficeId) || _propertyManager.ActiveOffice == null)
+            {
+                return "Purchases and rentals land in active office garage. Activate office before buying fleet.";
+            }
+
+            return string.Format("Active office: {0}. Purchases and rentals land in this garage.", _propertyManager.ActiveOffice.DisplayName);
+        }
+
+        private string BuildCommercialDealershipSubtitle()
+        {
+            switch (_commercialDealershipMenuView)
+            {
+                case CommercialDealershipMenuView.CargoTypes:
+                    return _activeCommercialDealershipSection == CommercialDealershipCatalogSection.Trailers
+                        ? "Select trailer cargo type"
+                        : "Select trucks/vans cargo type";
+                case CommercialDealershipMenuView.Vehicles:
+                    switch (_activeCommercialDealershipSection)
+                    {
+                        case CommercialDealershipCatalogSection.TruckTractors:
+                            return "Browse truck tractors";
+                        case CommercialDealershipCatalogSection.Trailers:
+                            return string.Format("Browse {0} trailers", _activeCommercialDealershipCargoType.ToDisplayName());
+                        default:
+                            return string.Format("Browse {0} trucks and vans", _activeCommercialDealershipCargoType.ToDisplayName());
+                    }
+                case CommercialDealershipMenuView.Actions:
+                    var selectedDefinition = GetSelectedCommercialDealershipVehicleDefinition();
+                    return selectedDefinition == null
+                        ? "Choose Buy, Rent, or Back"
+                        : string.Format("{0} options", GetCommercialDealershipVehicleLabel(selectedDefinition));
+                default:
+                    return "Choose Truck tractors, Trailers, or Trucks/Vans";
+            }
+        }
+
+        private static string BuildCommercialDealershipSectionCaption(CommercialDealershipCatalogSection section)
+        {
+            switch (section)
+            {
+                case CommercialDealershipCatalogSection.TruckTractors:
+                    return "Truck tractors";
+                case CommercialDealershipCatalogSection.Trailers:
+                    return "Trailers";
+                default:
+                    return "Trucks/Vans";
+            }
+        }
+
+        private string BuildCommercialDealershipSectionDetail(CommercialDealershipCatalogSection section)
+        {
+            var vehicleCount = GetCommercialDealershipSectionVehicleCount(section);
+            if (section == CommercialDealershipCatalogSection.TruckTractors)
+            {
+                return vehicleCount <= 0
+                    ? "No truck tractors are currently listed in dealership catalog."
+                    : string.Format("Browse {0} truck tractor{1}.", vehicleCount, vehicleCount == 1 ? string.Empty : "s");
+            }
+
+            var cargoTypeCount = GetCommercialDealershipCargoTypeCount(section);
+            if (section == CommercialDealershipCatalogSection.Trailers)
+            {
+                return vehicleCount <= 0
+                    ? "No trailers are currently listed in dealership catalog."
+                    : string.Format("Browse {0} trailer cargo type{1} across {2} trailer{3}.", cargoTypeCount, cargoTypeCount == 1 ? string.Empty : "s", vehicleCount, vehicleCount == 1 ? string.Empty : "s");
+            }
+
+            return vehicleCount <= 0
+                ? "No rigid trucks or vans are currently listed in dealership catalog."
+                : string.Format("Browse {0} truck/van cargo type{1} across {2} rigid truck or van listing{3}.", cargoTypeCount, cargoTypeCount == 1 ? string.Empty : "s", vehicleCount, vehicleCount == 1 ? string.Empty : "s");
+        }
+
+        private int GetCommercialDealershipSectionVehicleCount(CommercialDealershipCatalogSection section)
+        {
+            return GetCommercialDealershipCatalog().Count(definition => IsCommercialDealershipSectionMatch(definition, section));
+        }
+
+        private int GetCommercialDealershipCargoTypeCount(CommercialDealershipCatalogSection section)
+        {
+            return GetCommercialDealershipCargoTypes(GetCommercialDealershipCatalog(), section).Count;
+        }
+
+        private string BuildCommercialDealershipCargoTypeCaption(VehicleCargoType cargoType)
+        {
+            return cargoType.ToDisplayName();
+        }
+
+        private string BuildCommercialDealershipCargoTypeDetail(VehicleCargoType cargoType)
+        {
+            var vehicleCount = GetCommercialDealershipCargoTypeVehicleCount(_activeCommercialDealershipSection, cargoType);
+            if (_activeCommercialDealershipSection == CommercialDealershipCatalogSection.Trailers)
+            {
+                return vehicleCount <= 0
+                    ? string.Format("No trailers are listed for cargo type {0}.", cargoType.ToDisplayName())
+                    : string.Format("Browse {0} trailer{1} for {2}.", vehicleCount, vehicleCount == 1 ? string.Empty : "s", cargoType.ToDisplayName());
+            }
+
+            return vehicleCount <= 0
+                ? string.Format("No trucks or vans are listed for cargo type {0}.", cargoType.ToDisplayName())
+                : string.Format("Browse {0} truck or van listing{1} for {2}.", vehicleCount, vehicleCount == 1 ? string.Empty : "s", cargoType.ToDisplayName());
+        }
+
+        private int GetCommercialDealershipCargoTypeVehicleCount(CommercialDealershipCatalogSection section, VehicleCargoType cargoType)
+        {
+            return GetCommercialDealershipSectionVehicles(GetCommercialDealershipCatalog(), section, cargoType).Count();
+        }
+
+        private string BuildCommercialDealershipEmptyCargoTypeCaption()
+        {
+            return _activeCommercialDealershipSection == CommercialDealershipCatalogSection.Trailers
+                ? "No trailer cargo types"
+                : "No truck/van cargo types";
+        }
+
+        private string BuildCommercialDealershipEmptyCargoTypeDetail()
+        {
+            return _activeCommercialDealershipSection == CommercialDealershipCatalogSection.Trailers
+                ? "No enabled trailers are currently listed in dealership catalog."
+                : "No enabled rigid trucks or vans are currently listed in dealership catalog.";
+        }
+
+        private void EnterCommercialDealershipSection(CommercialDealershipCatalogSection section)
+        {
+            _activeCommercialDealershipSection = section;
+            _selectedCommercialDealershipActionIndex = 0;
+            _commercialDealershipMenuView = section == CommercialDealershipCatalogSection.TruckTractors
+                ? CommercialDealershipMenuView.Vehicles
+                : CommercialDealershipMenuView.CargoTypes;
+            RebuildCommercialDealershipMenuItems();
+            if (_commercialDealershipMenuView == CommercialDealershipMenuView.CargoTypes)
+            {
+                SelectCommercialDealershipCargoTypeRow();
+            }
+            else
+            {
+                SelectCommercialDealershipVehicleRow(_commercialDealershipSelectedVehicleModelName);
+            }
+        }
+
+        private void EnterCommercialDealershipCargoType(VehicleCargoType cargoType)
+        {
+            _activeCommercialDealershipCargoType = cargoType;
+            _selectedCommercialDealershipCargoTypeIndex = _commercialDealershipVisibleCargoTypes.FindIndex(entry => entry == cargoType);
+            if (_selectedCommercialDealershipCargoTypeIndex < 0)
+            {
+                _selectedCommercialDealershipCargoTypeIndex = 0;
+            }
+
+            _selectedCommercialDealershipActionIndex = 0;
+            _commercialDealershipMenuView = CommercialDealershipMenuView.Vehicles;
+            RebuildCommercialDealershipMenuItems();
+            SelectCommercialDealershipVehicleRow(_commercialDealershipSelectedVehicleModelName);
+        }
+
+        private void EnterCommercialDealershipVehicleActions()
+        {
+            var definition = GetSelectedCommercialDealershipVehicleDefinition();
+            if (definition == null)
+            {
+                ShowStatus("Select a commercial vehicle first.");
+                return;
+            }
+
+            _commercialDealershipSelectedVehicleModelName = definition.ModelName;
+            _selectedCommercialDealershipActionIndex = 0;
+            _commercialDealershipMenuView = CommercialDealershipMenuView.Actions;
+            RebuildCommercialDealershipMenuItems();
+            SelectCommercialDealershipActionRow();
+        }
+
+        private void ReturnFromCommercialDealershipMenu()
+        {
+            if (_vehicleCargoMenu != null && _vehicleCargoMenu.IsOpen && _commercialDealershipMenuView == CommercialDealershipMenuView.Actions)
+            {
+                _selectedCommercialDealershipActionIndex = Math.Max(0, _vehicleCargoMenu.SelectedIndex - CommercialDealershipContentListStartIndex);
+            }
+
+            if (_commercialDealershipMenuView == CommercialDealershipMenuView.Actions)
+            {
+                _commercialDealershipMenuView = CommercialDealershipMenuView.Vehicles;
+                RebuildCommercialDealershipMenuItems();
+                SelectCommercialDealershipVehicleRow(_commercialDealershipSelectedVehicleModelName);
+                return;
+            }
+
+            if (_commercialDealershipMenuView == CommercialDealershipMenuView.Vehicles)
+            {
+                var selectedDefinition = GetSelectedCommercialDealershipVehicleDefinition();
+                _commercialDealershipSelectedVehicleModelName = selectedDefinition != null ? selectedDefinition.ModelName : _commercialDealershipSelectedVehicleModelName;
+
+                if (_activeCommercialDealershipSection == CommercialDealershipCatalogSection.TruckTractors)
+                {
+                    _commercialDealershipMenuView = CommercialDealershipMenuView.Root;
+                    RebuildCommercialDealershipMenuItems();
+                    SelectCommercialDealershipRootSectionRow();
+                    return;
+                }
+
+                _commercialDealershipMenuView = CommercialDealershipMenuView.CargoTypes;
+                RebuildCommercialDealershipMenuItems();
+                SelectCommercialDealershipCargoTypeRow();
+                return;
+            }
+
+            if (_commercialDealershipMenuView == CommercialDealershipMenuView.CargoTypes)
+            {
+                _commercialDealershipMenuView = CommercialDealershipMenuView.Root;
+                RebuildCommercialDealershipMenuItems();
+                SelectCommercialDealershipRootSectionRow();
+                return;
+            }
+
+            ClearCommercialDealershipPreviewVehicle();
+            _vehicleCargoMenu.Close();
+        }
+
+        private void SelectCommercialDealershipRootSectionRow()
+        {
+            if (_vehicleCargoMenu == null)
+            {
+                return;
+            }
+
+            _vehicleCargoMenu.SelectedIndex = CommercialDealershipContentListStartIndex + (int)_activeCommercialDealershipSection;
+        }
+
+        private void SelectCommercialDealershipCargoTypeRow()
+        {
+            if (_vehicleCargoMenu == null)
+            {
+                return;
+            }
+
+            _vehicleCargoMenu.SelectedIndex = CommercialDealershipContentListStartIndex + _selectedCommercialDealershipCargoTypeIndex;
+        }
+
+        private void SelectCommercialDealershipVehicleRow(string preferredModelName)
+        {
+            if (_vehicleCargoMenu == null)
+            {
+                return;
+            }
+
+            var targetIndex = CommercialDealershipContentListStartIndex;
+            if (_commercialDealershipVisibleVehicles != null && _commercialDealershipVisibleVehicles.Count > 0)
+            {
+                var preferredIndex = !string.IsNullOrWhiteSpace(preferredModelName)
+                    ? _commercialDealershipVisibleVehicles.FindIndex(definition => string.Equals(definition.ModelName, preferredModelName, StringComparison.OrdinalIgnoreCase))
+                    : -1;
+                if (preferredIndex >= 0)
+                {
+                    targetIndex = CommercialDealershipContentListStartIndex + preferredIndex;
+                }
+            }
+
+            _vehicleCargoMenu.SelectedIndex = targetIndex;
+        }
+
+        private void SelectCommercialDealershipActionRow()
+        {
+            if (_vehicleCargoMenu == null)
+            {
+                return;
+            }
+
+            if (_selectedCommercialDealershipActionIndex < 0 || _selectedCommercialDealershipActionIndex > 2)
+            {
+                _selectedCommercialDealershipActionIndex = 0;
+            }
+
+            _vehicleCargoMenu.SelectedIndex = CommercialDealershipContentListStartIndex + _selectedCommercialDealershipActionIndex;
+        }
+
+        private void RestoreCommercialDealershipSelection()
+        {
+            switch (_commercialDealershipMenuView)
+            {
+                case CommercialDealershipMenuView.CargoTypes:
+                    SelectCommercialDealershipCargoTypeRow();
+                    break;
+                case CommercialDealershipMenuView.Vehicles:
+                    SelectCommercialDealershipVehicleRow(_commercialDealershipSelectedVehicleModelName);
+                    break;
+                case CommercialDealershipMenuView.Actions:
+                    SelectCommercialDealershipActionRow();
+                    break;
+                default:
+                    SelectCommercialDealershipRootSectionRow();
+                    break;
+            }
+        }
+
+        private VehicleDefinition GetSelectedCommercialDealershipVehicleDefinition()
+        {
+            if (_vehicleCargoMenu == null
+                || !_vehicleCargoMenu.IsOpen
+                || _commercialDealershipVisibleVehicles == null
+                || _commercialDealershipVisibleVehicles.Count == 0)
+            {
+                return null;
+            }
+
+            if (_commercialDealershipMenuView == CommercialDealershipMenuView.Actions)
+            {
+                var actionDefinition = FindCommercialDealershipVehicleDefinition(_commercialDealershipSelectedVehicleModelName)
+                    ?? _commercialDealershipVisibleVehicles[0];
+                _commercialDealershipSelectedVehicleModelName = actionDefinition != null ? actionDefinition.ModelName : _commercialDealershipSelectedVehicleModelName;
+                return actionDefinition;
+            }
+
+            if (_commercialDealershipMenuView != CommercialDealershipMenuView.Vehicles)
+            {
+                return null;
+            }
+
+            var selectedIndex = _vehicleCargoMenu.SelectedIndex - CommercialDealershipContentListStartIndex;
+            if (selectedIndex >= 0 && selectedIndex < _commercialDealershipVisibleVehicles.Count)
+            {
+                var definition = _commercialDealershipVisibleVehicles[selectedIndex];
+                _commercialDealershipSelectedVehicleModelName = definition != null ? definition.ModelName : _commercialDealershipSelectedVehicleModelName;
+                return definition;
+            }
+
+            return FindCommercialDealershipVehicleDefinition(_commercialDealershipSelectedVehicleModelName);
+        }
+
+        private VehicleDefinition FindCommercialDealershipVehicleDefinition(string modelName)
+        {
+            if (_commercialDealershipVisibleVehicles == null || _commercialDealershipVisibleVehicles.Count == 0 || string.IsNullOrWhiteSpace(modelName))
+            {
+                return null;
+            }
+
+            return _commercialDealershipVisibleVehicles.FirstOrDefault(
+                definition => string.Equals(definition.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private void PurchaseSelectedCommercialDealershipVehicle()
+        {
+            AcquireSelectedCommercialDealershipVehicle(false);
+        }
+
+        private void RentSelectedCommercialDealershipVehicle()
+        {
+            AcquireSelectedCommercialDealershipVehicle(true);
+        }
+
+        private void AcquireSelectedCommercialDealershipVehicle(bool asRental)
+        {
+            if (_vehicleCargoMenu != null && _vehicleCargoMenu.IsOpen && _commercialDealershipMenuView == CommercialDealershipMenuView.Actions)
+            {
+                _selectedCommercialDealershipActionIndex = Math.Max(0, _vehicleCargoMenu.SelectedIndex - CommercialDealershipContentListStartIndex);
+            }
+
+            var definition = GetSelectedCommercialDealershipVehicleDefinition();
+            if (definition == null)
+            {
+                ShowStatus("Select a commercial vehicle to purchase or rent.");
+                return;
+            }
+
+            if (IsCommercialDealershipPhantomLocked(definition))
+            {
+                RebuildCommercialDealershipMenuItems();
+                RestoreCommercialDealershipSelection();
+                ShowStatus(PhantomRoadVeteranUnlockMessage);
+                return;
+            }
+
+            var selectedVehicle = GetCommercialDealershipSelectedVehicle(definition);
+            var selectedTractor = GetCommercialDealershipSelectedTractor(definition);
+            string purchaseMessage;
+            var acquired = asRental
+                ? _propertyManager.TryRentCommercialVehicle(
+                    selectedVehicle,
+                    selectedTractor,
+                    ref _profit,
+                    GetCurrentInGameWeekMinute(),
+                    out _,
+                    out purchaseMessage)
+                : _propertyManager.TryPurchaseCommercialVehicle(
+                    selectedVehicle,
+                    selectedTractor,
+                    ref _profit,
+                    out _,
+                    out purchaseMessage);
+
+            _commercialDealershipSelectedVehicleModelName = definition.ModelName;
+            if (acquired)
+            {
+                _tabletStateStore.MarkBalanceDirty();
+                ReevaluatePlayerSuccesses(true);
+                RebuildCommercialDealershipMenuItems();
+                RestoreCommercialDealershipSelection();
+            }
+
+            ShowStatus(purchaseMessage);
         }
 
         private float GetSelectedCommercialVehicleDailyRent()
         {
-            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            var selectedTractor = GetSelectedCommercialDealershipTruckDefinition(selectedVehicle);
-            return Math.Max(0f, selectedVehicle != null ? selectedVehicle.DailyRent : 0f)
-                + Math.Max(0f, selectedTractor != null ? selectedTractor.DailyRent : 0f);
+            return GetSelectedCommercialVehicleDailyRent(GetSelectedCommercialDealershipVehicleDefinition());
+        }
+
+        private static float GetSelectedCommercialVehicleDailyRent(VehicleDefinition selectedDefinition)
+        {
+            return Math.Max(0f, selectedDefinition != null ? selectedDefinition.DailyRent : 0f);
         }
 
         private string CurrentVehicleSpawnerActionCaption()
         {
-            return _vehicleCargoMenuContext == VehicleCargoMenuContext.CommercialDealership
-                ? (IsCommercialDealershipRentMode ? "~b~Rent Vehicle~s~" : "~b~Purchase Vehicle~s~")
-                : "~b~Spawn Vehicle~s~";
+            return "~b~Spawn Vehicle~s~";
         }
 
         private string BuildCommercialDealershipVehicleSelectionDetail()
         {
-            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            var purchaseQuote = GetSelectedCommercialVehiclePurchaseQuote(selectedVehicle);
-            if (selectedVehicle == null)
+            return BuildCommercialDealershipVehicleSelectionDetail(GetSelectedCommercialDealershipVehicleDefinition());
+        }
+
+        private string BuildCommercialDealershipVehicleSelectionDetail(VehicleDefinition selectedDefinition)
+        {
+            if (selectedDefinition == null)
             {
-                var selectedTruck = _vehicleSpawnController.SelectedTractorDefinition;
-                if (selectedTruck == null)
+                if (_commercialDealershipMenuView == CommercialDealershipMenuView.Root)
                 {
-                    return "No cargo vehicle or trailer selected. Set Cargo / Trailer to None for truck-only purchases, or change the cargo filter.";
+                    return "Open Truck tractors, Trailers, or Trucks/Vans to browse dealership catalog.";
                 }
 
-                var truckPrice = ModFormatting.FormatMoney(Math.Max(0f, selectedTruck.Price));
-                var truckOnlyDailyRent = GetSelectedCommercialVehicleDailyRent();
-                return truckOnlyDailyRent > 0.001f
-                    ? string.Format("Truck only. Price {0} | Rent {1}/day.", truckPrice, ModFormatting.FormatMoney(truckOnlyDailyRent))
-                    : string.Format("Truck only. Price {0}.", truckPrice);
+                if (_commercialDealershipMenuView == CommercialDealershipMenuView.CargoTypes)
+                {
+                    return _activeCommercialDealershipSection == CommercialDealershipCatalogSection.Trailers
+                        ? "Select a trailer cargo type to list matching trailers."
+                        : "Select a trucks/vans cargo type to list matching vehicles.";
+                }
+
+                return BuildCommercialDealershipEmptyVehicleCaption();
             }
 
-            var vehiclePrice = selectedVehicle.IsTrailer || purchaseQuote == null || !purchaseQuote.UsesFirstFreeEntitlement
-                ? Math.Max(0f, selectedVehicle.Price)
-                : purchaseQuote.EffectivePrice;
-            var vehicleSpecs = BuildCommercialDealershipVehicleSpecs(selectedVehicle, vehiclePrice);
-            var dailyRent = GetSelectedCommercialVehicleDailyRent();
-            if (!selectedVehicle.IsTrailer)
+            _commercialDealershipSelectedVehicleModelName = selectedDefinition.ModelName;
+
+            var purchaseQuote = GetSelectedCommercialVehiclePurchaseQuote(selectedDefinition);
+            var vehiclePrice = purchaseQuote != null
+                ? purchaseQuote.EffectivePrice
+                : Math.Max(0f, selectedDefinition.Price);
+            var detail = string.Format("{0}. Select to open Buy, Rent, or Back.", BuildCommercialDealershipVehicleSpecs(selectedDefinition, vehiclePrice));
+            if (selectedDefinition.IsTrailer)
             {
-                var detail = dailyRent > 0.001f
-                    ? string.Format("{0} | Rent {1}/day.", vehicleSpecs, ModFormatting.FormatMoney(dailyRent))
-                    : string.Format("{0}.", vehicleSpecs);
-
-                return AppendCommercialVehiclePurchaseEntitlementNote(detail, purchaseQuote);
+                return string.Format("Trailer only. {0}", detail);
             }
 
-            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
-            if (selectedTractor == null)
-            {
-                return dailyRent > 0.001f
-                    ? string.Format("Trailer only. {0} | Rent {1}/day. Set Truck to None to keep it standalone.", vehicleSpecs, ModFormatting.FormatMoney(dailyRent))
-                    : string.Format("Trailer only. {0}. Set Truck to None to keep it standalone.", vehicleSpecs);
-            }
-
-            var totalPrice = Math.Max(0f, selectedVehicle.Price) + Math.Max(0f, selectedTractor.Price);
-            return dailyRent > 0.001f
-                ? string.Format(
-                    "{0} | Total with truck {1} | Rent {2}/day.",
-                    vehicleSpecs,
-                    ModFormatting.FormatMoney(totalPrice),
-                    ModFormatting.FormatMoney(dailyRent))
-                : string.Format(
-                    "{0} | Total with truck {1}.",
-                    vehicleSpecs,
-                    ModFormatting.FormatMoney(totalPrice));
+            return AppendCommercialVehiclePurchaseEntitlementNote(detail, purchaseQuote);
         }
 
         private static string BuildCommercialDealershipVehicleSpecs(VehicleDefinition definition, float purchasePrice)
@@ -3798,104 +4586,43 @@ namespace LSOL
                 ModFormatting.FormatMoney(Math.Max(0f, definition.DailyRent)));
         }
 
-        private string BuildCommercialDealershipRentUnavailableDetail()
+        private string BuildCommercialDealershipPurchaseActionDetail(VehicleDefinition selectedDefinition)
         {
-            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            var selectedTractor = GetSelectedCommercialDealershipTruckDefinition(selectedVehicle);
-            if (selectedVehicle == null && selectedTractor == null)
+            if (selectedDefinition == null)
             {
-                return "Select a truck and/or trailer first.";
+                return BuildCommercialDealershipSelectionPrompt();
             }
 
-            var parts = new List<string>();
-            if (selectedVehicle != null)
+            if (IsCommercialDealershipPhantomLocked(selectedDefinition))
             {
-                parts.Add(string.Format(
-                    "{0} {1}/day",
-                    string.IsNullOrWhiteSpace(selectedVehicle.DisplayName) ? selectedVehicle.ModelName : selectedVehicle.DisplayName,
-                    ModFormatting.FormatMoney(Math.Max(0f, selectedVehicle.DailyRent))));
+                return PhantomRoadVeteranUnlockMessage;
             }
 
-            if (selectedTractor != null && (selectedVehicle == null || !string.Equals(selectedTractor.ModelName, selectedVehicle.ModelName, StringComparison.OrdinalIgnoreCase)))
-            {
-                parts.Add(string.Format(
-                    "{0} {1}/day",
-                    string.IsNullOrWhiteSpace(selectedTractor.DisplayName) ? selectedTractor.ModelName : selectedTractor.DisplayName,
-                    ModFormatting.FormatMoney(Math.Max(0f, selectedTractor.DailyRent))));
-            }
-
-            return string.Format(
-                "Rental requires a positive daily rent. Current selection: {0}. Vehicles with dailyRent set to 0 are treated as not rentable.",
-                string.Join(" | ", parts));
-        }
-
-        private string BuildCommercialDealershipTruckSelectionDetail()
-        {
-            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
-            if (selectedVehicle == null)
-            {
-                if (selectedTractor == null)
-                {
-                    return "Select a truck for a truck-only purchase, or pair one with a trailer.";
-                }
-
-                var tractorPrice = Math.Max(0f, selectedTractor.Price);
-                var truckOnlyDailyRent = GetSelectedCommercialVehicleDailyRent();
-                return truckOnlyDailyRent > 0.001f
-                    ? string.Format("Truck only. Price {0} | Rent {1}/day.", ModFormatting.FormatMoney(tractorPrice), ModFormatting.FormatMoney(truckOnlyDailyRent))
-                    : string.Format("Truck only. Price {0}.", ModFormatting.FormatMoney(tractorPrice));
-            }
-
-            if (!selectedVehicle.IsTrailer)
-            {
-                return "No separate truck tractor is needed for the selected vehicle. Set Cargo / Trailer to None to buy a truck alone.";
-            }
-
-            if (selectedTractor == null)
-            {
-                return "Truck is set to None. The selected trailer will be purchased or rented on its own.";
-            }
-
-            var selectedTractorPrice = Math.Max(0f, selectedTractor.Price);
-            var totalPrice = Math.Max(0f, selectedVehicle.Price) + selectedTractorPrice;
-            var totalDailyRent = GetSelectedCommercialVehicleDailyRent();
-            return totalDailyRent > 0.001f
-                ? string.Format(
-                    "Truck price {0} | Total purchase {1} | Total rent {2}/day.",
-                    ModFormatting.FormatMoney(selectedTractorPrice),
-                    ModFormatting.FormatMoney(totalPrice),
-                    ModFormatting.FormatMoney(totalDailyRent))
-                : string.Format(
-                    "Truck price {0} | Total purchase {1}.",
-                    ModFormatting.FormatMoney(selectedTractorPrice),
-                    ModFormatting.FormatMoney(totalPrice));
-        }
-
-        private string BuildCommercialDealershipPurchaseDetail()
-        {
-            var selectedVehicle = _vehicleSpawnController.SelectedVehicleDefinition;
-            var selectedTractor = GetSelectedCommercialDealershipTruckDefinition(selectedVehicle);
-            if (selectedVehicle == null && selectedTractor == null)
-            {
-                return "Select a truck and/or trailer first.";
-            }
-
-            var purchaseQuote = _propertyManager.GetCommercialVehiclePurchaseQuote(selectedVehicle, selectedTractor);
+            var purchaseQuote = GetSelectedCommercialVehiclePurchaseQuote(selectedDefinition);
             var price = purchaseQuote != null
                 ? purchaseQuote.EffectivePrice
-                : Math.Max(0f, selectedVehicle != null ? selectedVehicle.Price : 0f) + Math.Max(0f, selectedTractor != null ? selectedTractor.Price : 0f);
-            if (!IsCommercialDealershipRentMode)
+                : Math.Max(0f, selectedDefinition.Price);
+            return AppendCommercialVehiclePurchaseEntitlementNote(
+                string.Format("Buy for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price)),
+                purchaseQuote);
+        }
+
+        private string BuildCommercialDealershipRentActionDetail(VehicleDefinition selectedDefinition)
+        {
+            if (selectedDefinition == null)
             {
-                return AppendCommercialVehiclePurchaseEntitlementNote(
-                    string.Format("Purchase for {0} and assign it to the active office garage.", ModFormatting.FormatMoney(price)),
-                    purchaseQuote);
+                return BuildCommercialDealershipSelectionPrompt();
             }
 
-            var dailyRent = GetSelectedCommercialVehicleDailyRent();
+            if (IsCommercialDealershipPhantomLocked(selectedDefinition))
+            {
+                return PhantomRoadVeteranUnlockMessage;
+            }
+
+            var dailyRent = GetSelectedCommercialVehicleDailyRent(selectedDefinition);
             if (dailyRent <= 0.001f)
             {
-                return BuildCommercialDealershipRentUnavailableDetail();
+                return BuildCommercialDealershipRentUnavailableDetail(selectedDefinition);
             }
 
             return string.Format(
@@ -3903,11 +4630,34 @@ namespace LSOL
                 ModFormatting.FormatMoney(dailyRent));
         }
 
-        private CommercialVehiclePurchaseQuote GetSelectedCommercialVehiclePurchaseQuote(VehicleDefinition selectedVehicle)
+        private string BuildCommercialDealershipRentUnavailableDetail()
+        {
+            return BuildCommercialDealershipRentUnavailableDetail(GetSelectedCommercialDealershipVehicleDefinition());
+        }
+
+        private string BuildCommercialDealershipRentUnavailableDetail(VehicleDefinition selectedDefinition)
+        {
+            if (selectedDefinition == null)
+            {
+                return BuildCommercialDealershipSelectionPrompt();
+            }
+
+            return string.Format(
+                "Rental requires a positive daily rent. Current selection: {0} {1}/day. Vehicles with dailyRent set to 0 are treated as not rentable.",
+                GetCommercialDealershipVehicleLabel(selectedDefinition),
+                ModFormatting.FormatMoney(Math.Max(0f, selectedDefinition.DailyRent)));
+        }
+
+        private string BuildCommercialDealershipPurchaseDetail()
+        {
+            return BuildCommercialDealershipPurchaseActionDetail(GetSelectedCommercialDealershipVehicleDefinition());
+        }
+
+        private CommercialVehiclePurchaseQuote GetSelectedCommercialVehiclePurchaseQuote(VehicleDefinition selectedDefinition)
         {
             return _propertyManager.GetCommercialVehiclePurchaseQuote(
-                selectedVehicle,
-                GetSelectedCommercialDealershipTruckDefinition(selectedVehicle));
+                GetCommercialDealershipSelectedVehicle(selectedDefinition),
+                GetCommercialDealershipSelectedTractor(selectedDefinition));
         }
 
         private static string AppendCommercialVehiclePurchaseEntitlementNote(string detail, CommercialVehiclePurchaseQuote purchaseQuote)
@@ -3923,21 +4673,144 @@ namespace LSOL
                 PropertyManager.GetCommercialVehiclePurchaseEntitlementLabel(purchaseQuote.EntitlementFamily));
         }
 
-        private VehicleDefinition GetSelectedCommercialDealershipTruckDefinition(VehicleDefinition selectedVehicle)
+        private static VehicleDefinition GetCommercialDealershipSelectedVehicle(VehicleDefinition selectedDefinition)
         {
-            var selectedTractor = _vehicleSpawnController.SelectedTractorDefinition;
-            if (selectedVehicle == null)
-            {
-                return selectedTractor;
-            }
-
-            return selectedVehicle.IsTrailer ? selectedTractor : null;
+            return selectedDefinition != null && !selectedDefinition.IsTractor
+                ? selectedDefinition
+                : null;
         }
 
-        private enum CommercialDealershipAcquisitionMode
+        private static VehicleDefinition GetCommercialDealershipSelectedTractor(VehicleDefinition selectedDefinition)
         {
-            Purchase = 0,
-            Rent = 1,
+            return selectedDefinition != null && selectedDefinition.IsTractor
+                ? selectedDefinition
+                : null;
+        }
+
+        private string BuildCommercialDealershipVehicleButtonCaption(VehicleDefinition definition)
+        {
+            if (definition == null)
+            {
+                return "Unknown vehicle";
+            }
+
+            var purchaseQuote = GetSelectedCommercialVehiclePurchaseQuote(definition);
+            var purchasePrice = purchaseQuote != null
+                ? purchaseQuote.EffectivePrice
+                : Math.Max(0f, definition.Price);
+            return string.Format("{0} - {1}", GetCommercialDealershipVehicleLabel(definition), ModFormatting.FormatMoney(purchasePrice));
+        }
+
+        private string BuildCommercialDealershipEmptyVehicleCaption()
+        {
+            switch (_activeCommercialDealershipSection)
+            {
+                case CommercialDealershipCatalogSection.TruckTractors:
+                    return "No truck tractors listed";
+                case CommercialDealershipCatalogSection.Trailers:
+                    return string.Format("No {0} trailers listed", _activeCommercialDealershipCargoType.ToDisplayName());
+                default:
+                    return string.Format("No {0} trucks or vans listed", _activeCommercialDealershipCargoType.ToDisplayName());
+            }
+        }
+
+        private string BuildCommercialDealershipSelectionPrompt()
+        {
+            switch (_commercialDealershipMenuView)
+            {
+                case CommercialDealershipMenuView.Root:
+                    return "Select Truck tractors, Trailers, or Trucks/Vans first.";
+                case CommercialDealershipMenuView.CargoTypes:
+                    return _activeCommercialDealershipSection == CommercialDealershipCatalogSection.Trailers
+                        ? "Select a trailer cargo type first."
+                        : "Select a trucks/vans cargo type first.";
+                case CommercialDealershipMenuView.Actions:
+                    return "Choose Buy, Rent, or Back.";
+                default:
+                    return "Select a commercial vehicle first.";
+            }
+        }
+
+        private void UpdateCommercialDealershipPreview()
+        {
+            var definition = GetSelectedCommercialDealershipVehicleDefinition();
+            if (definition == null)
+            {
+                ClearCommercialDealershipPreviewVehicle();
+                return;
+            }
+
+            _commercialDealershipSelectedVehicleModelName = definition.ModelName;
+            EnsureCommercialDealershipPreviewVehicle(definition);
+        }
+
+        private void EnsureCommercialDealershipPreviewVehicle(VehicleDefinition definition)
+        {
+            if (definition == null || string.IsNullOrWhiteSpace(definition.ModelName))
+            {
+                ClearCommercialDealershipPreviewVehicle();
+                return;
+            }
+
+            if (_commercialDealershipPreviewVehicle != null
+                && _commercialDealershipPreviewVehicle.Exists()
+                && string.Equals(_commercialDealershipPreviewModelName, definition.ModelName, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            ClearCommercialDealershipPreviewVehicle();
+
+            var model = new Model(definition.ModelName);
+            if (!model.Request(500))
+            {
+                model.MarkAsNoLongerNeeded();
+                return;
+            }
+
+            var vehicle = World.CreateVehicle(model, CommercialDealershipVehiclePadPosition, CommercialDealershipVehiclePadHeading);
+            model.MarkAsNoLongerNeeded();
+            if (vehicle == null || !vehicle.Exists())
+            {
+                return;
+            }
+
+            vehicle.IsPersistent = false;
+            Function.Call(Hash.SET_ENTITY_COLLISION, vehicle.Handle, false, false);
+            Function.Call(Hash.SET_ENTITY_INVINCIBLE, vehicle.Handle, true);
+            Function.Call(Hash.FREEZE_ENTITY_POSITION, vehicle.Handle, true);
+            Function.Call(Hash.SET_VEHICLE_ENGINE_ON, vehicle.Handle, false, true, true);
+
+            _commercialDealershipPreviewVehicle = vehicle;
+            _commercialDealershipPreviewModelName = definition.ModelName;
+        }
+
+        private void ClearCommercialDealershipPreviewVehicle()
+        {
+            if (_commercialDealershipPreviewVehicle != null)
+            {
+                try
+                {
+                    if (_commercialDealershipPreviewVehicle.Exists())
+                    {
+                        _commercialDealershipPreviewVehicle.Delete();
+                    }
+                }
+                catch
+                {
+                    // Preview cleanup should be best-effort only.
+                }
+            }
+
+            _commercialDealershipPreviewVehicle = null;
+            _commercialDealershipPreviewModelName = null;
+        }
+
+        private static string GetCommercialDealershipVehicleLabel(VehicleDefinition definition)
+        {
+            return definition == null || string.IsNullOrWhiteSpace(definition.DisplayName)
+                ? definition != null ? definition.ModelName : "Unknown vehicle"
+                : definition.DisplayName;
         }
 
         private enum CommercialGarageMenuContext

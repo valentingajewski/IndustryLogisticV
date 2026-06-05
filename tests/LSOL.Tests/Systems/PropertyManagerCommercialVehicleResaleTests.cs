@@ -87,6 +87,68 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void TrySellCommercialVehicle_RemovesLinkedCommercialAssets()
+        {
+            var manager = CreatePropertyManager();
+            var snapshot = new PropertyOwnershipPersistenceSnapshot
+            {
+                ActiveOfficeId = "alpha-office",
+                Offices =
+                {
+                    new OfficeOwnershipPersistenceEntry
+                    {
+                        OfficeId = "alpha-office",
+                        IsOwned = true,
+                        LastChargedWeekIndex = -1,
+                    },
+                },
+            };
+
+            snapshot.CommercialVehicleAssets.Add(new OwnedCommercialVehicleAssetPersistenceEntry
+            {
+                AssetId = "tractor-1",
+                DisplayName = "Tractor",
+                ModelName = "phantom",
+                FleetRole = CommercialVehicleFleetRole.Tractor,
+                AssignedOfficeId = "alpha-office",
+                PurchasePrice = 70000f,
+                MaintenanceCondition = 1f,
+            });
+            snapshot.CommercialVehicleAssets.Add(new OwnedCommercialVehicleAssetPersistenceEntry
+            {
+                AssetId = "trailer-1",
+                DisplayName = "Trailer",
+                ModelName = "trailers4",
+                FleetRole = CommercialVehicleFleetRole.Trailer,
+                AssignedOfficeId = "alpha-office",
+                PurchasePrice = 30000f,
+                MaintenanceCondition = 1f,
+                CapacityTons = 20f,
+            });
+            snapshot.CommercialVehicles.Add(new OwnedCommercialVehiclePersistenceEntry
+            {
+                AssetId = "slot-1",
+                TractorVehicleId = "tractor-1",
+                TrailerVehicleId = "trailer-1",
+                DisplayName = "Tractor + Trailer",
+                PoweredModelName = "phantom",
+                CargoModelName = "trailers4",
+                HasSeparateCargoVehicle = true,
+                PurchasePrice = 100000f,
+                AssignedOfficeId = "alpha-office",
+                InActiveGarage = true,
+                MaintenanceCondition = 1f,
+            });
+
+            manager.ApplySnapshot(snapshot, 0);
+            var balance = 0f;
+
+            Assert.IsTrue(manager.TrySellCommercialVehicle("slot-1", null, null, ref balance, out _));
+            Assert.AreEqual(0, manager.CommercialVehicleAssets.Count);
+            Assert.AreEqual(0, manager.CommercialVehicles.Count);
+        }
+
+        [TestMethod]
         public void GetFleetSaleSummary_ExcludesRentalVehicles()
         {
             var manager = CreatePropertyManager();

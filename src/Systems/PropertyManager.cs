@@ -167,6 +167,8 @@ namespace LSOL.Systems
         private readonly List<InteriorDefinition> _interiorDefinitions;
         private readonly Dictionary<string, InteriorDefinition> _interiorDefinitionsById;
         private readonly List<MotelDefinition> _motelDefinitions;
+        private readonly List<VehicleDefinition> _commercialVehicleDefinitions;
+        private readonly Dictionary<string, VehicleDefinition> _commercialVehicleDefinitionsByModelName;
         private readonly List<DealershipVehicleDefinition> _personalVehicleDefinitions;
         private readonly Dictionary<string, DealershipVehicleDefinition> _personalVehicleDefinitionsById;
         private readonly Dictionary<string, CommercialVehicleRuntimeState> _commercialRuntime;
@@ -206,6 +208,13 @@ namespace LSOL.Systems
             _motelDefinitions = config != null && config.MotelDefinitions != null
                 ? config.MotelDefinitions.OrderBy(x => x != null ? x.RestPrice : 0f).ThenBy(x => x != null ? x.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase).ToList()
                 : new List<MotelDefinition>();
+            _commercialVehicleDefinitions = config != null && config.VehicleDefinitions != null
+                ? config.VehicleDefinitions.Where(x => x != null).ToList()
+                : new List<VehicleDefinition>();
+            _commercialVehicleDefinitionsByModelName = _commercialVehicleDefinitions
+                .Where(x => !string.IsNullOrWhiteSpace(x.ModelName))
+                .GroupBy(x => x.ModelName.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
             _personalVehicleDefinitions = config != null && config.PersonalVehicleDefinitions != null
                 ? config.PersonalVehicleDefinitions.OrderBy(x => x != null ? x.Price : 0f).ThenBy(x => x != null ? x.DisplayName : string.Empty, StringComparer.OrdinalIgnoreCase).ToList()
                 : new List<DealershipVehicleDefinition>();
@@ -266,6 +275,11 @@ namespace LSOL.Systems
         public IReadOnlyList<OwnedCommercialVehiclePersistenceEntry> CommercialVehicles
         {
             get { return _state.CommercialVehicles; }
+        }
+
+        public IReadOnlyList<OwnedCommercialVehicleAssetPersistenceEntry> CommercialVehicleAssets
+        {
+            get { return _state.CommercialVehicleAssets; }
         }
 
         public IReadOnlyList<OwnedPersonalVehiclePersistenceEntry> PersonalVehicles
@@ -333,6 +347,7 @@ namespace LSOL.Systems
         {
             ClearRuntimeState();
             _state = snapshot != null ? CloneSnapshot(snapshot) : new PropertyOwnershipPersistenceSnapshot();
+            EnsureCommercialVehicleAssetsAndSlots();
             EnsureValidSelections();
             NormalizeOfficeAccessContracts();
             NormalizeApartmentAccessContracts();
@@ -499,6 +514,16 @@ namespace LSOL.Systems
             vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
             vehicle.LastInspectionWeekIndex = currentWeekIndex;
             vehicle.InspectionOverdueWeeks = 0;
+
+            foreach (var asset in GetLinkedCommercialVehicleAssets(vehicle))
+            {
+                asset.MaintenanceCondition = 1f;
+                asset.LastMaintenanceWeekIndex = currentWeekIndex;
+                asset.LastInspectionWeekIndex = currentWeekIndex;
+                asset.InspectionOverdueWeeks = 0;
+            }
+
+            RefreshCommercialVehicleSlot(vehicle);
         }
 
         public CommercialVehicleSalePreview GetCommercialVehicleSalePreview(string assetId)
@@ -536,6 +561,253 @@ namespace LSOL.Systems
             }
 
             return summary;
+        }
+
+        public OwnedCommercialVehicleAssetPersistenceEntry GetCommercialVehicleAssetRecord(string assetId)
+        {
+            EnsureCommercialVehicleAssetsAndSlots();
+            return GetCommercialVehicleAsset(assetId);
+        }
+
+        public IEnumerable<OwnedCommercialVehicleAssetPersistenceEntry> GetAvailableCommercialPoweredAssets(string includeAssetId = null)
+        {
+            EnsureCommercialVehicleAssetsAndSlots();
+            return _state.CommercialVehicleAssets
+                .Where(asset => asset != null
+                    && asset.FleetRole != CommercialVehicleFleetRole.Trailer
+                    && IsCommercialPoweredAssetAvailable(asset, includeAssetId))
+                .OrderBy(asset => asset.DisplayName, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public IEnumerable<OwnedCommercialVehicleAssetPersistenceEntry> GetAvailableCommercialTrailerAssets(string includeAssetId = null)
+        {
+            EnsureCommercialVehicleAssetsAndSlots();
+            return _state.CommercialVehicleAssets
+                .Where(asset => asset != null
+                    && asset.FleetRole == CommercialVehicleFleetRole.Trailer
+                    && IsCommercialTrailerAssetAvailable(asset, includeAssetId))
+                .OrderBy(asset => asset.DisplayName, StringComparer.OrdinalIgnoreCase);
+        }
+
+        public bool TryAssignCommercialVehiclePoweredAsset(string fleetSlotId, string assetId, out string message)
+        {
+            message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
+
+            var slot = GetCommercialVehicle(fleetSlotId);
+            if (slot == null)
+            {
+                message = "Fleet slot not found.";
+                return false;
+            }
+
+            if (slot.IsDeployed)
+            {
+                message = string.Format("Store {0} before changing powered units.", slot.DisplayName);
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(slot.TractorVehicleId))
+            {
+                message = "Clear current powered unit first.";
+                return false;
+            }
+
+            var asset = GetCommercialVehicleAsset(assetId);
+            if (asset == null || asset.FleetRole == CommercialVehicleFleetRole.Trailer)
+            {
+                message = "Selected asset is not a powered unit.";
+                return false;
+            }
+
+            if (asset.FleetRole == CommercialVehicleFleetRole.Rigid && !string.IsNullOrWhiteSpace(slot.TrailerVehicleId))
+            {
+                message = "Clear trailer assignment before using a rigid truck here.";
+                return false;
+            }
+
+            if (!IsCommercialPoweredAssetAvailable(asset, asset.AssetId))
+            {
+                message = string.Format("{0} is already paired with a trailer.", asset.DisplayName);
+                return false;
+            }
+
+            var sourceSlot = GetCommercialVehicleSlotContainingAsset(asset.AssetId);
+            if (sourceSlot != null && sourceSlot.IsDeployed)
+            {
+                message = string.Format("Store {0} before reassigning it.", sourceSlot.DisplayName);
+                return false;
+            }
+
+            if (sourceSlot != null)
+            {
+                sourceSlot.TractorVehicleId = string.Empty;
+                if (!RemoveCommercialVehicleSlotIfEmpty(sourceSlot))
+                {
+                    RefreshCommercialVehicleSlot(sourceSlot);
+                }
+            }
+
+            slot.TractorVehicleId = asset.AssetId;
+            asset.AssignedOfficeId = _state.ActiveOfficeId;
+            NormalizeCommercialGarageAssignments();
+            message = string.Format("Assigned {0} to {1}.", asset.DisplayName, slot.DisplayName);
+            return true;
+        }
+
+        public bool TryAssignCommercialVehicleTrailerAsset(string fleetSlotId, string assetId, out string message)
+        {
+            message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
+
+            var slot = GetCommercialVehicle(fleetSlotId);
+            if (slot == null)
+            {
+                message = "Fleet slot not found.";
+                return false;
+            }
+
+            if (slot.IsDeployed)
+            {
+                message = string.Format("Store {0} before changing trailers.", slot.DisplayName);
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(slot.TrailerVehicleId))
+            {
+                message = "Clear current trailer first.";
+                return false;
+            }
+
+            var asset = GetCommercialVehicleAsset(assetId);
+            if (asset == null || asset.FleetRole != CommercialVehicleFleetRole.Trailer)
+            {
+                message = "Selected asset is not a trailer.";
+                return false;
+            }
+
+            var poweredAsset = GetPoweredCommercialVehicleAsset(slot);
+            if (poweredAsset != null && poweredAsset.FleetRole == CommercialVehicleFleetRole.Rigid)
+            {
+                message = "Rigid trucks cannot tow a separate trailer in this slot.";
+                return false;
+            }
+
+            if (!IsCommercialTrailerAssetAvailable(asset, asset.AssetId))
+            {
+                message = string.Format("{0} is already coupled to a powered unit.", asset.DisplayName);
+                return false;
+            }
+
+            var sourceSlot = GetCommercialVehicleSlotContainingAsset(asset.AssetId);
+            if (sourceSlot != null && sourceSlot.IsDeployed)
+            {
+                message = string.Format("Store {0} before reassigning it.", sourceSlot.DisplayName);
+                return false;
+            }
+
+            if (sourceSlot != null)
+            {
+                sourceSlot.TrailerVehicleId = string.Empty;
+                if (!RemoveCommercialVehicleSlotIfEmpty(sourceSlot))
+                {
+                    RefreshCommercialVehicleSlot(sourceSlot);
+                }
+            }
+
+            slot.TrailerVehicleId = asset.AssetId;
+            asset.AssignedOfficeId = _state.ActiveOfficeId;
+            NormalizeCommercialGarageAssignments();
+            message = string.Format("Assigned {0} to {1}.", asset.DisplayName, slot.DisplayName);
+            return true;
+        }
+
+        public bool TryClearCommercialVehiclePoweredAsset(string fleetSlotId, out string message)
+        {
+            message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
+
+            var slot = GetCommercialVehicle(fleetSlotId);
+            if (slot == null)
+            {
+                message = "Fleet slot not found.";
+                return false;
+            }
+
+            if (slot.IsDeployed)
+            {
+                message = string.Format("Store {0} before changing powered units.", slot.DisplayName);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(slot.TractorVehicleId))
+            {
+                message = "No powered unit is assigned.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(slot.TrailerVehicleId))
+            {
+                message = "This powered unit is already in powered-unit pool.";
+                return false;
+            }
+
+            var asset = GetCommercialVehicleAsset(slot.TractorVehicleId);
+            if (asset == null)
+            {
+                message = "Powered unit record not found.";
+                return false;
+            }
+
+            slot.TractorVehicleId = string.Empty;
+            CreateCommercialVehicleSlot(asset, null, false);
+            NormalizeCommercialGarageAssignments();
+            message = string.Format("Moved {0} back to powered-unit pool.", asset.DisplayName);
+            return true;
+        }
+
+        public bool TryClearCommercialVehicleTrailerAsset(string fleetSlotId, out string message)
+        {
+            message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
+
+            var slot = GetCommercialVehicle(fleetSlotId);
+            if (slot == null)
+            {
+                message = "Fleet slot not found.";
+                return false;
+            }
+
+            if (slot.IsDeployed)
+            {
+                message = string.Format("Store {0} before changing trailers.", slot.DisplayName);
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(slot.TrailerVehicleId))
+            {
+                message = "No trailer is assigned.";
+                return false;
+            }
+
+            if (string.IsNullOrWhiteSpace(slot.TractorVehicleId))
+            {
+                message = "This trailer is already in trailer pool.";
+                return false;
+            }
+
+            var asset = GetCommercialVehicleAsset(slot.TrailerVehicleId);
+            if (asset == null)
+            {
+                message = "Trailer record not found.";
+                return false;
+            }
+
+            slot.TrailerVehicleId = string.Empty;
+            CreateCommercialVehicleSlot(null, asset, false);
+            NormalizeCommercialGarageAssignments();
+            message = string.Format("Moved {0} back to trailer pool.", asset.DisplayName);
+            return true;
         }
 
         public bool CanUseCommercialSystems(out string reason)
@@ -1026,6 +1298,7 @@ namespace LSOL.Systems
         {
             vehicle = null;
             message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
 
             string officeReason;
             if (!CanUseCommercialSystems(out officeReason))
@@ -1070,42 +1343,31 @@ namespace LSOL.Systems
                 ConsumeCommercialVehiclePurchaseEntitlement(officeState, purchaseQuote.EntitlementFamily);
             }
 
-            vehicle = new OwnedCommercialVehiclePersistenceEntry
+            var currentWeekIndex = GetWeekIndex(GetTrackedCurrentInGameMinute());
+            var inActiveGarage = GetActiveCommercialGarageVehicles().Count() < GetActiveOfficeCapacity();
+            if (hasSeparateCargoVehicle)
             {
-                AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
-                DisplayName = BuildCommercialDisplayName(
-                    poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
-                    cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
-                    hasSeparateCargoVehicle),
-                PoweredModelName = poweredDefinition != null ? poweredDefinition.ModelName : string.Empty,
-                CargoModelName = cargoRecordDefinition != null ? cargoRecordDefinition.ModelName : string.Empty,
-                HasSeparateCargoVehicle = hasSeparateCargoVehicle,
-                PurchasePrice = purchasePrice,
-                AssignedOfficeId = _state.ActiveOfficeId,
-                IsRental = false,
-                DailyRent = 0f,
-                LastChargedDayIndex = -1,
-                InActiveGarage = GetActiveCommercialGarageVehicles().Count() < GetActiveOfficeCapacity(),
-                IsDeployed = false,
-                PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
-                PoweredHeading = ActiveOffice != null ? ActiveOffice.SpawnHeading : 0f,
-                CargoType = cargoDefinition != null ? cargoDefinition.CargoType : VehicleCargoType.Unknown,
-                CapacityTons = cargoDefinition != null ? Math.Max(0f, cargoDefinition.CapacityTons) : 0f,
-                Commodity = string.Empty,
-                WeightTons = 0f,
-                CargoCondition = 0f,
-                TotalLostTons = 0f,
-                SourceIndustryId = string.Empty,
-                SourceDistrictName = string.Empty,
-                CurrentFuelLiters = 0f,
-                MaintenanceCondition = 1f,
-                LastMaintenanceWeekIndex = GetWeekIndex(GetTrackedCurrentInGameMinute()),
-                LastInspectionWeekIndex = GetWeekIndex(GetTrackedCurrentInGameMinute()),
-                InspectionOverdueWeeks = 0,
-                LifetimeMaintenanceCost = 0f,
-            };
+                float poweredAssetPrice;
+                float cargoAssetPrice;
+                SplitCommercialVehicleValue(
+                    purchasePrice,
+                    tractorDefinition != null ? tractorDefinition.Price : 0f,
+                    cargoDefinition != null ? cargoDefinition.Price : 0f,
+                    out poweredAssetPrice,
+                    out cargoAssetPrice);
 
-            _state.CommercialVehicles.Add(vehicle);
+                var poweredAsset = CreateCommercialVehicleAsset(tractorDefinition, false, poweredAssetPrice, 0f, -1, currentWeekIndex, false);
+                var cargoAsset = CreateCommercialVehicleAsset(cargoDefinition, false, cargoAssetPrice, 0f, -1, currentWeekIndex, true);
+                vehicle = CreateCommercialVehicleSlot(poweredAsset, cargoAsset, inActiveGarage);
+            }
+            else
+            {
+                var singleDefinition = poweredDefinition;
+                var cargoCarrier = singleDefinition != null && !singleDefinition.IsTractor;
+                var singleAsset = CreateCommercialVehicleAsset(singleDefinition, false, purchasePrice, 0f, -1, currentWeekIndex, cargoCarrier);
+                vehicle = CreateCommercialVehicleSlot(singleAsset, null, inActiveGarage);
+            }
+
             NormalizeCommercialGarageAssignments();
             message = vehicle.InActiveGarage
                 ? string.Format("Purchased {0} for {1}. Assigned to active office garage.", vehicle.DisplayName, ModFormatting.FormatMoney(purchasePrice))
@@ -1130,6 +1392,7 @@ namespace LSOL.Systems
         {
             vehicle = null;
             message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
 
             string officeReason;
             if (!CanUseCommercialSystems(out officeReason))
@@ -1152,37 +1415,32 @@ namespace LSOL.Systems
                 message = "Rental requires a positive dailyRent on the selected vehicle or truck.";
                 return false;
             }
-            vehicle = new OwnedCommercialVehiclePersistenceEntry
+            var currentWeekIndex = GetWeekIndex(currentInGameMinute);
+            var lastChargedDayIndex = GetDayIndex(currentInGameMinute);
+            var inActiveGarage = GetActiveCommercialGarageVehicles().Count() < GetActiveOfficeCapacity();
+            if (hasSeparateCargoVehicle)
             {
-                AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
-                DisplayName = BuildCommercialDisplayName(
-                    poweredDefinition != null ? poweredDefinition.DisplayName : string.Empty,
-                    cargoDefinition != null ? cargoDefinition.DisplayName : string.Empty,
-                    hasSeparateCargoVehicle),
-                PoweredModelName = poweredDefinition != null ? poweredDefinition.ModelName : string.Empty,
-                CargoModelName = cargoRecordDefinition != null ? cargoRecordDefinition.ModelName : string.Empty,
-                HasSeparateCargoVehicle = hasSeparateCargoVehicle,
-                PurchasePrice = 0f,
-                AssignedOfficeId = _state.ActiveOfficeId,
-                IsRental = true,
-                DailyRent = dailyRent,
-                LastChargedDayIndex = GetDayIndex(currentInGameMinute),
-                InActiveGarage = GetActiveCommercialGarageVehicles().Count() < GetActiveOfficeCapacity(),
-                IsDeployed = false,
-                PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
-                PoweredHeading = ActiveOffice != null ? ActiveOffice.SpawnHeading : 0f,
-                CargoType = cargoDefinition != null ? cargoDefinition.CargoType : VehicleCargoType.Unknown,
-                CapacityTons = cargoDefinition != null ? Math.Max(0f, cargoDefinition.CapacityTons) : 0f,
-                Commodity = string.Empty,
-                WeightTons = 0f,
-                CargoCondition = 0f,
-                TotalLostTons = 0f,
-                SourceIndustryId = string.Empty,
-                SourceDistrictName = string.Empty,
-                CurrentFuelLiters = 0f,
-            };
+                float poweredAssetRent;
+                float cargoAssetRent;
+                SplitCommercialVehicleValue(
+                    dailyRent,
+                    tractorDefinition != null ? tractorDefinition.DailyRent : 0f,
+                    cargoDefinition != null ? cargoDefinition.DailyRent : 0f,
+                    out poweredAssetRent,
+                    out cargoAssetRent);
 
-            _state.CommercialVehicles.Add(vehicle);
+                var poweredAsset = CreateCommercialVehicleAsset(tractorDefinition, true, 0f, poweredAssetRent, lastChargedDayIndex, currentWeekIndex, false);
+                var cargoAsset = CreateCommercialVehicleAsset(cargoDefinition, true, 0f, cargoAssetRent, lastChargedDayIndex, currentWeekIndex, true);
+                vehicle = CreateCommercialVehicleSlot(poweredAsset, cargoAsset, inActiveGarage);
+            }
+            else
+            {
+                var singleDefinition = poweredDefinition;
+                var cargoCarrier = singleDefinition != null && !singleDefinition.IsTractor;
+                var singleAsset = CreateCommercialVehicleAsset(singleDefinition, true, 0f, dailyRent, lastChargedDayIndex, currentWeekIndex, cargoCarrier);
+                vehicle = CreateCommercialVehicleSlot(singleAsset, null, inActiveGarage);
+            }
+
             NormalizeCommercialGarageAssignments();
             message = vehicle.InActiveGarage
                 ? string.Format(
@@ -1199,6 +1457,7 @@ namespace LSOL.Systems
         public bool TrySellCommercialVehicle(string assetId, FleetManager fleetManager, VehicleFuelSystem fuelSystem, ref float balance, out string message)
         {
             message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
             var vehicle = GetCommercialVehicle(assetId);
             if (vehicle == null)
             {
@@ -1220,6 +1479,7 @@ namespace LSOL.Systems
             var refund = CalculateCommercialVehicleSaleRefund(vehicle);
             balance += refund;
             RecordFinanceIncome(CompanyFinanceCategory.OtherIncome, refund, string.Format("Sold commercial vehicle {0}", vehicle.DisplayName));
+            DeleteCommercialVehicleAssets(vehicle);
             _state.CommercialVehicles.Remove(vehicle);
             NormalizeCommercialGarageAssignments();
             message = refund > 0.001f
@@ -1231,6 +1491,7 @@ namespace LSOL.Systems
         public bool TryEndCommercialVehicleRental(string assetId, FleetManager fleetManager, VehicleFuelSystem fuelSystem, ref float balance, out string message)
         {
             message = string.Empty;
+            EnsureCommercialVehicleAssetsAndSlots();
             var vehicle = GetCommercialVehicle(assetId);
             if (vehicle == null)
             {
@@ -1249,6 +1510,7 @@ namespace LSOL.Systems
                 TryStoreCommercialVehicle(assetId, fleetManager, fuelSystem, out _);
             }
 
+            DeleteCommercialVehicleAssets(vehicle);
             _state.CommercialVehicles.Remove(vehicle);
             NormalizeCommercialGarageAssignments();
             message = string.Format("Ended rental for {0}.", vehicle.DisplayName);
@@ -2013,11 +2275,14 @@ namespace LSOL.Systems
                 return false;
             }
 
+            EnsureCommercialVehicleAssetsAndSlots();
             CaptureAndStoreCommercialVehicle(entry, fleetManager, fuelSystem, true, out _);
 
-            var cargoDefinition = fleetManager.FindDefinitionByModelName(entry.CargoModelName);
-            var tractorDefinition = entry.HasSeparateCargoVehicle
-                ? fleetManager.FindDefinitionByModelName(entry.PoweredModelName)
+            var poweredAsset = GetPoweredCommercialVehicleAsset(entry);
+            var cargoAsset = GetCargoCommercialVehicleAsset(entry) ?? poweredAsset;
+            var cargoDefinition = fleetManager.FindDefinitionByModelName(cargoAsset != null ? cargoAsset.ModelName : entry.CargoModelName);
+            var tractorDefinition = poweredAsset != null && poweredAsset.FleetRole == CommercialVehicleFleetRole.Tractor
+                ? fleetManager.FindDefinitionByModelName(poweredAsset.ModelName)
                 : null;
             if (cargoDefinition == null || (entry.HasSeparateCargoVehicle && tractorDefinition == null))
             {
@@ -2037,24 +2302,26 @@ namespace LSOL.Systems
             var poweredDefinition = tractorDefinition ?? cargoDefinition;
             if (fuelSystem != null && poweredDefinition != null && !poweredDefinition.IsTrailer)
             {
-                fuelSystem.InitializeSpawnedVehicle(truck, entry.CurrentFuelLiters > 0.001f ? (float?)entry.CurrentFuelLiters : null);
+                var currentFuelLiters = poweredAsset != null ? poweredAsset.CurrentFuelLiters : entry.CurrentFuelLiters;
+                fuelSystem.InitializeSpawnedVehicle(truck, currentFuelLiters > 0.001f ? (float?)currentFuelLiters : null);
             }
 
             var cargoState = fleetManager.GetOrCreateCargoState(cargoVehicle);
             if (cargoState != null)
             {
-                cargoState.CargoType = entry.CargoType != VehicleCargoType.Unknown ? entry.CargoType : cargoDefinition.CargoType;
-                cargoState.CapacityTons = entry.CapacityTons > 0.001f ? entry.CapacityTons : Math.Max(0f, cargoDefinition.CapacityTons);
-                cargoState.Commodity = entry.Commodity;
-                cargoState.WeightTons = Math.Max(0f, Math.Min(cargoState.CapacityTons, entry.WeightTons));
+                var cargoSnapshot = cargoAsset ?? poweredAsset;
+                cargoState.CargoType = cargoSnapshot != null && cargoSnapshot.CargoType != VehicleCargoType.Unknown ? cargoSnapshot.CargoType : cargoDefinition.CargoType;
+                cargoState.CapacityTons = cargoSnapshot != null && cargoSnapshot.CapacityTons > 0.001f ? cargoSnapshot.CapacityTons : Math.Max(0f, cargoDefinition.CapacityTons);
+                cargoState.Commodity = cargoSnapshot != null ? cargoSnapshot.Commodity : entry.Commodity;
+                cargoState.WeightTons = Math.Max(0f, Math.Min(cargoState.CapacityTons, cargoSnapshot != null ? cargoSnapshot.WeightTons : entry.WeightTons));
                 cargoState.CargoCondition = cargoState.WeightTons <= 0.001f
                     ? 0f
-                    : Math.Max(0f, Math.Min(1f, entry.CargoCondition));
-                cargoState.TotalLostTons = Math.Max(0f, entry.TotalLostTons);
-                cargoState.SourceIndustryId = entry.SourceIndustryId;
-                cargoState.SourceDistrictName = entry.SourceDistrictName;
-                cargoState.PlayerContractId = entry.PlayerContractId ?? string.Empty;
-                cargoState.PlayerContractDestinationIndustryId = entry.PlayerContractDestinationIndustryId ?? string.Empty;
+                    : Math.Max(0f, Math.Min(1f, cargoSnapshot != null ? cargoSnapshot.CargoCondition : entry.CargoCondition));
+                cargoState.TotalLostTons = Math.Max(0f, cargoSnapshot != null ? cargoSnapshot.TotalLostTons : entry.TotalLostTons);
+                cargoState.SourceIndustryId = cargoSnapshot != null ? cargoSnapshot.SourceIndustryId : entry.SourceIndustryId;
+                cargoState.SourceDistrictName = cargoSnapshot != null ? cargoSnapshot.SourceDistrictName : entry.SourceDistrictName;
+                cargoState.PlayerContractId = cargoSnapshot != null ? cargoSnapshot.PlayerContractId ?? string.Empty : entry.PlayerContractId ?? string.Empty;
+                cargoState.PlayerContractDestinationIndustryId = cargoSnapshot != null ? cargoSnapshot.PlayerContractDestinationIndustryId ?? string.Empty : entry.PlayerContractDestinationIndustryId ?? string.Empty;
             }
 
             ApplyCommercialVehicleMaintenanceState(truck, entry.MaintenanceCondition);
@@ -2065,25 +2332,37 @@ namespace LSOL.Systems
 
             if (truck != null && truck.Exists())
             {
-                if (entry.PoweredAppearance != null && entry.PoweredAppearance.HasData)
+                var poweredAppearance = poweredAsset != null ? poweredAsset.Appearance : entry.PoweredAppearance;
+                if (poweredAppearance != null && poweredAppearance.HasData)
                 {
-                    ApplyVehicleAppearance(truck, entry.PoweredAppearance);
+                    ApplyVehicleAppearance(truck, poweredAppearance);
                 }
                 else
                 {
-                    entry.PoweredAppearance = CaptureVehicleAppearance(truck);
+                    var capturedAppearance = CaptureVehicleAppearance(truck);
+                    if (poweredAsset != null)
+                    {
+                        poweredAsset.Appearance = capturedAppearance;
+                    }
+                    entry.PoweredAppearance = capturedAppearance;
                 }
             }
 
             if (cargoVehicle != null && cargoVehicle.Exists() && cargoVehicle.Handle != truck.Handle)
             {
-                if (entry.CargoAppearance != null && entry.CargoAppearance.HasData)
+                var cargoAppearance = cargoAsset != null ? cargoAsset.Appearance : entry.CargoAppearance;
+                if (cargoAppearance != null && cargoAppearance.HasData)
                 {
-                    ApplyVehicleAppearance(cargoVehicle, entry.CargoAppearance);
+                    ApplyVehicleAppearance(cargoVehicle, cargoAppearance);
                 }
                 else
                 {
-                    entry.CargoAppearance = CaptureVehicleAppearance(cargoVehicle);
+                    var capturedAppearance = CaptureVehicleAppearance(cargoVehicle);
+                    if (cargoAsset != null)
+                    {
+                        cargoAsset.Appearance = capturedAppearance;
+                    }
+                    entry.CargoAppearance = capturedAppearance;
                 }
             }
             else
@@ -2099,6 +2378,11 @@ namespace LSOL.Systems
             entry.PoweredPosition = truck != null && truck.Exists() ? truck.Position : finalSpawnPosition;
             entry.PoweredHeading = truck != null && truck.Exists() ? truck.Heading : spawnHeading;
             entry.IsDeployed = true;
+            foreach (var asset in GetLinkedCommercialVehicleAssets(entry))
+            {
+                asset.IsDeployed = true;
+            }
+            RefreshCommercialVehicleSlot(entry);
 
             message = string.Format("Retrieved {0}.", entry.DisplayName);
             return true;
@@ -2117,6 +2401,10 @@ namespace LSOL.Systems
             if (!_commercialRuntime.TryGetValue(entry.AssetId, out runtime))
             {
                 entry.IsDeployed = false;
+                foreach (var asset in GetLinkedCommercialVehicleAssets(entry))
+                {
+                    asset.IsDeployed = false;
+                }
                 message = string.Format("{0} is already stored.", entry.DisplayName);
                 return false;
             }
@@ -2127,12 +2415,19 @@ namespace LSOL.Systems
             {
                 entry.IsDeployed = false;
                 _commercialRuntime.Remove(entry.AssetId);
+                foreach (var asset in GetLinkedCommercialVehicleAssets(entry))
+                {
+                    asset.IsDeployed = false;
+                }
                 message = string.Format("Stored {0}.", entry.DisplayName);
                 return true;
             }
 
             entry.PoweredPosition = truck.Position;
             entry.PoweredHeading = truck.Heading;
+
+            var poweredAsset = GetPoweredCommercialVehicleAsset(entry);
+            var cargoAsset = GetCargoCommercialVehicleAsset(entry) ?? poweredAsset;
 
             if (fleetManager != null)
             {
@@ -2149,6 +2444,20 @@ namespace LSOL.Systems
                     entry.SourceDistrictName = cargoState.SourceDistrictName;
                     entry.PlayerContractId = cargoState.PlayerContractId;
                     entry.PlayerContractDestinationIndustryId = cargoState.PlayerContractDestinationIndustryId;
+
+                    if (cargoAsset != null)
+                    {
+                        cargoAsset.CargoType = cargoState.CargoType;
+                        cargoAsset.CapacityTons = cargoState.CapacityTons;
+                        cargoAsset.Commodity = cargoState.Commodity;
+                        cargoAsset.WeightTons = cargoState.WeightTons;
+                        cargoAsset.CargoCondition = cargoState.CargoCondition;
+                        cargoAsset.TotalLostTons = cargoState.TotalLostTons;
+                        cargoAsset.SourceIndustryId = cargoState.SourceIndustryId;
+                        cargoAsset.SourceDistrictName = cargoState.SourceDistrictName;
+                        cargoAsset.PlayerContractId = cargoState.PlayerContractId;
+                        cargoAsset.PlayerContractDestinationIndustryId = cargoState.PlayerContractDestinationIndustryId;
+                    }
                 }
             }
 
@@ -2156,16 +2465,44 @@ namespace LSOL.Systems
             {
                 var telemetry = fuelSystem.GetTelemetry(truck, cargoVehicle);
                 entry.CurrentFuelLiters = telemetry != null ? telemetry.CurrentLiters : entry.CurrentFuelLiters;
+                if (poweredAsset != null && telemetry != null)
+                {
+                    poweredAsset.CurrentFuelLiters = telemetry.CurrentLiters;
+                }
+            }
+
+            entry.MaintenanceCondition = NormalizeMaintenanceCondition(entry.MaintenanceCondition);
+            if (poweredAsset != null)
+            {
+                poweredAsset.MaintenanceCondition = entry.MaintenanceCondition;
+            }
+
+            if (cargoAsset != null && !ReferenceEquals(cargoAsset, poweredAsset))
+            {
+                cargoAsset.MaintenanceCondition = entry.MaintenanceCondition;
             }
 
             entry.PoweredAppearance = CaptureVehicleAppearance(truck);
+            if (poweredAsset != null)
+            {
+                poweredAsset.Appearance = entry.PoweredAppearance;
+            }
             entry.CargoAppearance = cargoVehicle != null && cargoVehicle.Exists() && cargoVehicle.Handle != truck.Handle
                 ? CaptureVehicleAppearance(cargoVehicle)
                 : null;
+            if (cargoAsset != null && entry.CargoAppearance != null)
+            {
+                cargoAsset.Appearance = entry.CargoAppearance;
+            }
 
             if (!deleteVehicles)
             {
                 entry.IsDeployed = true;
+                foreach (var asset in GetLinkedCommercialVehicleAssets(entry))
+                {
+                    asset.IsDeployed = true;
+                }
+                RefreshCommercialVehicleSlot(entry);
                 message = string.Format("Captured {0}.", entry.DisplayName);
                 return true;
             }
@@ -2180,7 +2517,12 @@ namespace LSOL.Systems
             }
 
             entry.IsDeployed = false;
+            foreach (var asset in GetLinkedCommercialVehicleAssets(entry))
+            {
+                asset.IsDeployed = false;
+            }
             _commercialRuntime.Remove(entry.AssetId);
+            RefreshCommercialVehicleSlot(entry);
             message = string.Format("Stored {0}.", entry.DisplayName);
             return true;
         }
@@ -2378,6 +2720,10 @@ namespace LSOL.Systems
                 if (entry != null)
                 {
                     entry.AssignedOfficeId = _state.ActiveOfficeId;
+                    foreach (var asset in GetLinkedCommercialVehicleAssets(entry))
+                    {
+                        asset.AssignedOfficeId = _state.ActiveOfficeId;
+                    }
                 }
             }
 
@@ -2386,7 +2732,9 @@ namespace LSOL.Systems
 
         private void NormalizeCommercialGarageAssignments()
         {
+            EnsureCommercialVehicleAssetsAndSlots();
             var capacity = GetActiveOfficeCapacity();
+            RefreshCommercialVehicleSlots();
             var ordered = _state.CommercialVehicles
                 .Where(entry => entry != null)
                 .OrderByDescending(entry => entry.InActiveGarage)
@@ -2398,6 +2746,10 @@ namespace LSOL.Systems
             {
                 ordered[i].AssignedOfficeId = _state.ActiveOfficeId;
                 ordered[i].InActiveGarage = i < capacity;
+                foreach (var asset in GetLinkedCommercialVehicleAssets(ordered[i]))
+                {
+                    asset.AssignedOfficeId = _state.ActiveOfficeId;
+                }
             }
         }
 
@@ -3527,6 +3879,8 @@ namespace LSOL.Systems
                 clone.CommercialVehicles.Add(new OwnedCommercialVehiclePersistenceEntry
                 {
                     AssetId = entry.AssetId,
+                    TractorVehicleId = entry.TractorVehicleId,
+                    TrailerVehicleId = entry.TrailerVehicleId,
                     DisplayName = entry.DisplayName,
                     PoweredModelName = entry.PoweredModelName,
                     CargoModelName = entry.CargoModelName,
@@ -3556,6 +3910,46 @@ namespace LSOL.Systems
                     LifetimeMaintenanceCost = entry.LifetimeMaintenanceCost,
                     PoweredAppearance = CloneVehicleAppearance(entry.PoweredAppearance),
                     CargoAppearance = CloneVehicleAppearance(entry.CargoAppearance),
+                });
+            }
+
+            for (int i = 0; i < source.CommercialVehicleAssets.Count; i++)
+            {
+                var asset = source.CommercialVehicleAssets[i];
+                if (asset == null)
+                {
+                    continue;
+                }
+
+                clone.CommercialVehicleAssets.Add(new OwnedCommercialVehicleAssetPersistenceEntry
+                {
+                    AssetId = asset.AssetId,
+                    DisplayName = asset.DisplayName,
+                    ModelName = asset.ModelName,
+                    FleetRole = asset.FleetRole,
+                    PurchasePrice = asset.PurchasePrice,
+                    AssignedOfficeId = asset.AssignedOfficeId,
+                    IsRental = asset.IsRental,
+                    DailyRent = asset.DailyRent,
+                    LastChargedDayIndex = asset.LastChargedDayIndex,
+                    IsDeployed = asset.IsDeployed,
+                    CargoType = asset.CargoType,
+                    CapacityTons = asset.CapacityTons,
+                    Commodity = asset.Commodity,
+                    WeightTons = asset.WeightTons,
+                    CargoCondition = asset.CargoCondition,
+                    TotalLostTons = asset.TotalLostTons,
+                    SourceIndustryId = asset.SourceIndustryId,
+                    SourceDistrictName = asset.SourceDistrictName,
+                    PlayerContractId = asset.PlayerContractId,
+                    PlayerContractDestinationIndustryId = asset.PlayerContractDestinationIndustryId,
+                    CurrentFuelLiters = asset.CurrentFuelLiters,
+                    MaintenanceCondition = asset.MaintenanceCondition,
+                    LastMaintenanceWeekIndex = asset.LastMaintenanceWeekIndex,
+                    LastInspectionWeekIndex = asset.LastInspectionWeekIndex,
+                    InspectionOverdueWeeks = asset.InspectionOverdueWeeks,
+                    LifetimeMaintenanceCost = asset.LifetimeMaintenanceCost,
+                    Appearance = CloneVehicleAppearance(asset.Appearance),
                 });
             }
 
@@ -4071,6 +4465,471 @@ namespace LSOL.Systems
             }
 
             return true;
+        }
+
+        private VehicleDefinition GetCommercialVehicleDefinition(string modelName)
+        {
+            if (string.IsNullOrWhiteSpace(modelName))
+            {
+                return null;
+            }
+
+            VehicleDefinition definition;
+            return _commercialVehicleDefinitionsByModelName.TryGetValue(modelName.Trim(), out definition)
+                ? definition
+                : null;
+        }
+
+        private void EnsureCommercialVehicleAssetsAndSlots()
+        {
+            if (_state == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < _state.CommercialVehicles.Count; i++)
+            {
+                var slot = _state.CommercialVehicles[i];
+                if (slot != null && string.IsNullOrWhiteSpace(slot.AssetId))
+                {
+                    slot.AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture);
+                }
+            }
+
+            if (_state.CommercialVehicleAssets.Count == 0)
+            {
+                foreach (var slot in _state.CommercialVehicles.Where(entry => entry != null))
+                {
+                    MaterializeCommercialVehicleAssetsFromLegacySlot(slot);
+                }
+            }
+
+            RefreshCommercialVehicleSlots();
+        }
+
+        private void MaterializeCommercialVehicleAssetsFromLegacySlot(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            if (slot == null)
+            {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(slot.TractorVehicleId) || !string.IsNullOrWhiteSpace(slot.TrailerVehicleId))
+            {
+                return;
+            }
+
+            if (slot.HasSeparateCargoVehicle)
+            {
+                var tractorDefinition = GetCommercialVehicleDefinition(slot.PoweredModelName);
+                var trailerDefinition = GetCommercialVehicleDefinition(slot.CargoModelName);
+
+                float tractorPrice;
+                float trailerPrice;
+                SplitCommercialVehicleValue(
+                    slot.PurchasePrice,
+                    tractorDefinition != null ? tractorDefinition.Price : 0f,
+                    trailerDefinition != null ? trailerDefinition.Price : 0f,
+                    out tractorPrice,
+                    out trailerPrice);
+
+                float tractorRent;
+                float trailerRent;
+                SplitCommercialVehicleValue(
+                    slot.DailyRent,
+                    tractorDefinition != null ? tractorDefinition.DailyRent : 0f,
+                    trailerDefinition != null ? trailerDefinition.DailyRent : 0f,
+                    out tractorRent,
+                    out trailerRent);
+
+                float tractorMaintenanceCost;
+                float trailerMaintenanceCost;
+                SplitCommercialVehicleValue(
+                    slot.LifetimeMaintenanceCost,
+                    tractorPrice,
+                    trailerPrice,
+                    out tractorMaintenanceCost,
+                    out trailerMaintenanceCost);
+
+                var tractorAsset = CreateCommercialVehicleAssetFromLegacySnapshot(
+                    slot,
+                    tractorDefinition,
+                    CommercialVehicleFleetRole.Tractor,
+                    slot.PoweredModelName,
+                    tractorPrice,
+                    tractorRent,
+                    tractorMaintenanceCost,
+                    false);
+                var trailerAsset = CreateCommercialVehicleAssetFromLegacySnapshot(
+                    slot,
+                    trailerDefinition,
+                    CommercialVehicleFleetRole.Trailer,
+                    slot.CargoModelName,
+                    trailerPrice,
+                    trailerRent,
+                    trailerMaintenanceCost,
+                    true);
+                slot.TractorVehicleId = tractorAsset.AssetId;
+                slot.TrailerVehicleId = trailerAsset.AssetId;
+                return;
+            }
+
+            var definition = GetCommercialVehicleDefinition(!string.IsNullOrWhiteSpace(slot.CargoModelName) ? slot.CargoModelName : slot.PoweredModelName);
+            var fleetRole = definition != null ? definition.FleetRole : CommercialVehicleFleetRole.Rigid;
+            var fallbackModelName = !string.IsNullOrWhiteSpace(slot.CargoModelName) ? slot.CargoModelName : slot.PoweredModelName;
+            var asset = CreateCommercialVehicleAssetFromLegacySnapshot(
+                slot,
+                definition,
+                fleetRole,
+                fallbackModelName,
+                slot.PurchasePrice,
+                slot.DailyRent,
+                slot.LifetimeMaintenanceCost,
+                fleetRole != CommercialVehicleFleetRole.Tractor);
+
+            if (fleetRole == CommercialVehicleFleetRole.Trailer)
+            {
+                slot.TrailerVehicleId = asset.AssetId;
+            }
+            else
+            {
+                slot.TractorVehicleId = asset.AssetId;
+            }
+        }
+
+        private OwnedCommercialVehicleAssetPersistenceEntry CreateCommercialVehicleAssetFromLegacySnapshot(
+            OwnedCommercialVehiclePersistenceEntry slot,
+            VehicleDefinition definition,
+            CommercialVehicleFleetRole fleetRole,
+            string fallbackModelName,
+            float purchasePrice,
+            float dailyRent,
+            float lifetimeMaintenanceCost,
+            bool cargoCarrier)
+        {
+            var asset = new OwnedCommercialVehicleAssetPersistenceEntry
+            {
+                AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+                DisplayName = definition != null && !string.IsNullOrWhiteSpace(definition.DisplayName)
+                    ? definition.DisplayName
+                    : (!string.IsNullOrWhiteSpace(slot.DisplayName) ? slot.DisplayName : fallbackModelName ?? string.Empty),
+                ModelName = definition != null && !string.IsNullOrWhiteSpace(definition.ModelName)
+                    ? definition.ModelName
+                    : (fallbackModelName ?? string.Empty),
+                FleetRole = fleetRole,
+                PurchasePrice = Math.Max(0f, purchasePrice),
+                AssignedOfficeId = slot.AssignedOfficeId,
+                IsRental = slot.IsRental,
+                DailyRent = Math.Max(0f, dailyRent),
+                LastChargedDayIndex = slot.LastChargedDayIndex,
+                IsDeployed = slot.IsDeployed,
+                CargoType = cargoCarrier ? slot.CargoType : VehicleCargoType.Unknown,
+                CapacityTons = cargoCarrier ? Math.Max(0f, slot.CapacityTons) : 0f,
+                Commodity = cargoCarrier ? slot.Commodity : string.Empty,
+                WeightTons = cargoCarrier ? slot.WeightTons : 0f,
+                CargoCondition = cargoCarrier ? slot.CargoCondition : 0f,
+                TotalLostTons = cargoCarrier ? slot.TotalLostTons : 0f,
+                SourceIndustryId = cargoCarrier ? slot.SourceIndustryId : string.Empty,
+                SourceDistrictName = cargoCarrier ? slot.SourceDistrictName : string.Empty,
+                PlayerContractId = cargoCarrier ? slot.PlayerContractId : string.Empty,
+                PlayerContractDestinationIndustryId = cargoCarrier ? slot.PlayerContractDestinationIndustryId : string.Empty,
+                CurrentFuelLiters = cargoCarrier ? 0f : Math.Max(0f, slot.CurrentFuelLiters),
+                MaintenanceCondition = slot.MaintenanceCondition,
+                LastMaintenanceWeekIndex = slot.LastMaintenanceWeekIndex,
+                LastInspectionWeekIndex = slot.LastInspectionWeekIndex,
+                InspectionOverdueWeeks = slot.InspectionOverdueWeeks,
+                LifetimeMaintenanceCost = Math.Max(0f, lifetimeMaintenanceCost),
+                Appearance = CloneVehicleAppearance(cargoCarrier ? (slot.CargoAppearance ?? slot.PoweredAppearance) : slot.PoweredAppearance),
+            };
+
+            _state.CommercialVehicleAssets.Add(asset);
+            return asset;
+        }
+
+        private OwnedCommercialVehicleAssetPersistenceEntry CreateCommercialVehicleAsset(
+            VehicleDefinition definition,
+            bool isRental,
+            float purchasePrice,
+            float dailyRent,
+            int lastChargedDayIndex,
+            int currentWeekIndex,
+            bool cargoCarrier)
+        {
+            var asset = new OwnedCommercialVehicleAssetPersistenceEntry
+            {
+                AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+                DisplayName = definition != null ? definition.DisplayName : string.Empty,
+                ModelName = definition != null ? definition.ModelName : string.Empty,
+                FleetRole = definition != null ? definition.FleetRole : CommercialVehicleFleetRole.Rigid,
+                PurchasePrice = Math.Max(0f, purchasePrice),
+                AssignedOfficeId = _state.ActiveOfficeId,
+                IsRental = isRental,
+                DailyRent = Math.Max(0f, dailyRent),
+                LastChargedDayIndex = lastChargedDayIndex,
+                IsDeployed = false,
+                CargoType = cargoCarrier && definition != null ? definition.CargoType : VehicleCargoType.Unknown,
+                CapacityTons = cargoCarrier && definition != null ? Math.Max(0f, definition.CapacityTons) : 0f,
+                Commodity = string.Empty,
+                WeightTons = 0f,
+                CargoCondition = 0f,
+                TotalLostTons = 0f,
+                SourceIndustryId = string.Empty,
+                SourceDistrictName = string.Empty,
+                PlayerContractId = string.Empty,
+                PlayerContractDestinationIndustryId = string.Empty,
+                CurrentFuelLiters = 0f,
+                MaintenanceCondition = 1f,
+                LastMaintenanceWeekIndex = currentWeekIndex,
+                LastInspectionWeekIndex = currentWeekIndex,
+                InspectionOverdueWeeks = 0,
+                LifetimeMaintenanceCost = 0f,
+            };
+
+            _state.CommercialVehicleAssets.Add(asset);
+            return asset;
+        }
+
+        private OwnedCommercialVehiclePersistenceEntry CreateCommercialVehicleSlot(OwnedCommercialVehicleAssetPersistenceEntry poweredAsset, OwnedCommercialVehicleAssetPersistenceEntry trailerAsset, bool inActiveGarage)
+        {
+            var slot = new OwnedCommercialVehiclePersistenceEntry
+            {
+                AssetId = Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture),
+                TractorVehicleId = poweredAsset != null && poweredAsset.FleetRole != CommercialVehicleFleetRole.Trailer ? poweredAsset.AssetId : string.Empty,
+                TrailerVehicleId = trailerAsset != null
+                    ? trailerAsset.AssetId
+                    : (poweredAsset != null && poweredAsset.FleetRole == CommercialVehicleFleetRole.Trailer ? poweredAsset.AssetId : string.Empty),
+                AssignedOfficeId = _state.ActiveOfficeId,
+                InActiveGarage = inActiveGarage,
+                IsDeployed = false,
+                PoweredPosition = ActiveOffice != null ? ActiveOffice.SpawnPosition : Vector3.Zero,
+                PoweredHeading = ActiveOffice != null ? ActiveOffice.SpawnHeading : 0f,
+            };
+
+            _state.CommercialVehicles.Add(slot);
+            RefreshCommercialVehicleSlot(slot);
+            return slot;
+        }
+
+        private void RefreshCommercialVehicleSlots()
+        {
+            for (int i = _state.CommercialVehicles.Count - 1; i >= 0; i--)
+            {
+                var slot = _state.CommercialVehicles[i];
+                if (slot == null)
+                {
+                    _state.CommercialVehicles.RemoveAt(i);
+                    continue;
+                }
+
+                if (RemoveCommercialVehicleSlotIfEmpty(slot))
+                {
+                    continue;
+                }
+
+                RefreshCommercialVehicleSlot(slot);
+            }
+        }
+
+        private void RefreshCommercialVehicleSlot(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            if (slot == null)
+            {
+                return;
+            }
+
+            var linkedAssets = GetLinkedCommercialVehicleAssets(slot);
+            if (linkedAssets.Count == 0)
+            {
+                return;
+            }
+
+            var poweredAsset = GetPoweredCommercialVehicleAsset(slot);
+            var cargoAsset = GetCargoCommercialVehicleAsset(slot) ?? poweredAsset;
+            var hasSeparateCargoVehicle = poweredAsset != null && cargoAsset != null && !string.Equals(poweredAsset.AssetId, cargoAsset.AssetId, StringComparison.OrdinalIgnoreCase);
+
+            slot.DisplayName = BuildCommercialDisplayName(
+                poweredAsset != null ? poweredAsset.DisplayName : string.Empty,
+                cargoAsset != null ? cargoAsset.DisplayName : string.Empty,
+                hasSeparateCargoVehicle);
+            slot.PoweredModelName = poweredAsset != null ? poweredAsset.ModelName : string.Empty;
+            slot.CargoModelName = cargoAsset != null ? cargoAsset.ModelName : string.Empty;
+            slot.HasSeparateCargoVehicle = hasSeparateCargoVehicle;
+            slot.PurchasePrice = linkedAssets.Sum(asset => Math.Max(0f, asset.PurchasePrice));
+            slot.AssignedOfficeId = _state.ActiveOfficeId;
+            slot.IsRental = linkedAssets.All(asset => asset.IsRental);
+            slot.DailyRent = linkedAssets.Sum(asset => Math.Max(0f, asset.DailyRent));
+            slot.LastChargedDayIndex = linkedAssets.Count > 0 ? linkedAssets.Max(asset => asset.LastChargedDayIndex) : -1;
+            slot.CargoType = cargoAsset != null ? cargoAsset.CargoType : VehicleCargoType.Unknown;
+            slot.CapacityTons = cargoAsset != null ? Math.Max(0f, cargoAsset.CapacityTons) : 0f;
+            slot.Commodity = cargoAsset != null ? cargoAsset.Commodity : string.Empty;
+            slot.WeightTons = cargoAsset != null ? Math.Max(0f, cargoAsset.WeightTons) : 0f;
+            slot.CargoCondition = cargoAsset != null ? cargoAsset.CargoCondition : 0f;
+            slot.TotalLostTons = cargoAsset != null ? cargoAsset.TotalLostTons : 0f;
+            slot.SourceIndustryId = cargoAsset != null ? cargoAsset.SourceIndustryId : string.Empty;
+            slot.SourceDistrictName = cargoAsset != null ? cargoAsset.SourceDistrictName : string.Empty;
+            slot.PlayerContractId = cargoAsset != null ? cargoAsset.PlayerContractId : string.Empty;
+            slot.PlayerContractDestinationIndustryId = cargoAsset != null ? cargoAsset.PlayerContractDestinationIndustryId : string.Empty;
+            slot.CurrentFuelLiters = poweredAsset != null ? Math.Max(0f, poweredAsset.CurrentFuelLiters) : 0f;
+            slot.MaintenanceCondition = linkedAssets.Min(asset => asset.MaintenanceCondition);
+            slot.LastMaintenanceWeekIndex = linkedAssets.Max(asset => asset.LastMaintenanceWeekIndex);
+            slot.LastInspectionWeekIndex = linkedAssets.Max(asset => asset.LastInspectionWeekIndex);
+            slot.InspectionOverdueWeeks = linkedAssets.Max(asset => asset.InspectionOverdueWeeks);
+            slot.LifetimeMaintenanceCost = linkedAssets.Sum(asset => Math.Max(0f, asset.LifetimeMaintenanceCost));
+            slot.PoweredAppearance = CloneVehicleAppearance(poweredAsset != null ? poweredAsset.Appearance : null);
+            slot.CargoAppearance = hasSeparateCargoVehicle && cargoAsset != null
+                ? CloneVehicleAppearance(cargoAsset.Appearance)
+                : null;
+            slot.IsDeployed = linkedAssets.Any(asset => asset.IsDeployed) || slot.IsDeployed;
+        }
+
+        private OwnedCommercialVehicleAssetPersistenceEntry GetCommercialVehicleAsset(string assetId)
+        {
+            if (string.IsNullOrWhiteSpace(assetId) || _state == null || _state.CommercialVehicleAssets == null)
+            {
+                return null;
+            }
+
+            return _state.CommercialVehicleAssets.FirstOrDefault(asset => asset != null && string.Equals(asset.AssetId, assetId, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private List<OwnedCommercialVehicleAssetPersistenceEntry> GetLinkedCommercialVehicleAssets(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            var linkedAssets = new List<OwnedCommercialVehicleAssetPersistenceEntry>();
+            if (slot == null)
+            {
+                return linkedAssets;
+            }
+
+            var poweredAsset = GetCommercialVehicleAsset(slot.TractorVehicleId);
+            if (poweredAsset != null)
+            {
+                linkedAssets.Add(poweredAsset);
+            }
+
+            var trailerAsset = GetCommercialVehicleAsset(slot.TrailerVehicleId);
+            if (trailerAsset != null && !linkedAssets.Any(asset => string.Equals(asset.AssetId, trailerAsset.AssetId, StringComparison.OrdinalIgnoreCase)))
+            {
+                linkedAssets.Add(trailerAsset);
+            }
+
+            return linkedAssets;
+        }
+
+        private OwnedCommercialVehicleAssetPersistenceEntry GetPoweredCommercialVehicleAsset(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            var poweredAsset = GetCommercialVehicleAsset(slot != null ? slot.TractorVehicleId : null);
+            if (poweredAsset != null)
+            {
+                return poweredAsset;
+            }
+
+            return GetCommercialVehicleAsset(slot != null ? slot.TrailerVehicleId : null);
+        }
+
+        private OwnedCommercialVehicleAssetPersistenceEntry GetCargoCommercialVehicleAsset(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            var cargoAsset = GetCommercialVehicleAsset(slot != null ? slot.TrailerVehicleId : null);
+            if (cargoAsset != null)
+            {
+                return cargoAsset;
+            }
+
+            return GetCommercialVehicleAsset(slot != null ? slot.TractorVehicleId : null);
+        }
+
+        private OwnedCommercialVehiclePersistenceEntry GetCommercialVehicleSlotContainingAsset(string assetId)
+        {
+            if (string.IsNullOrWhiteSpace(assetId))
+            {
+                return null;
+            }
+
+            return _state.CommercialVehicles.FirstOrDefault(slot => slot != null
+                && (string.Equals(slot.TractorVehicleId, assetId, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(slot.TrailerVehicleId, assetId, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private bool RemoveCommercialVehicleSlotIfEmpty(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            if (slot == null)
+            {
+                return false;
+            }
+
+            var isEmpty = string.IsNullOrWhiteSpace(slot.TractorVehicleId)
+                && string.IsNullOrWhiteSpace(slot.TrailerVehicleId);
+            if (!isEmpty)
+            {
+                return false;
+            }
+
+            _state.CommercialVehicles.Remove(slot);
+            return true;
+        }
+
+        private void DeleteCommercialVehicleAssets(OwnedCommercialVehiclePersistenceEntry slot)
+        {
+            foreach (var asset in GetLinkedCommercialVehicleAssets(slot))
+            {
+                _state.CommercialVehicleAssets.Remove(asset);
+            }
+        }
+
+        private bool IsCommercialPoweredAssetAvailable(OwnedCommercialVehicleAssetPersistenceEntry asset, string includeAssetId)
+        {
+            if (asset == null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(includeAssetId) && string.Equals(asset.AssetId, includeAssetId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var slot = GetCommercialVehicleSlotContainingAsset(asset.AssetId);
+            return slot == null || string.IsNullOrWhiteSpace(slot.TrailerVehicleId);
+        }
+
+        private bool IsCommercialTrailerAssetAvailable(OwnedCommercialVehicleAssetPersistenceEntry asset, string includeAssetId)
+        {
+            if (asset == null)
+            {
+                return false;
+            }
+
+            if (!string.IsNullOrWhiteSpace(includeAssetId) && string.Equals(asset.AssetId, includeAssetId, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var slot = GetCommercialVehicleSlotContainingAsset(asset.AssetId);
+            return slot == null || string.IsNullOrWhiteSpace(slot.TractorVehicleId);
+        }
+
+        private static void SplitCommercialVehicleValue(float totalValue, float firstWeight, float secondWeight, out float firstValue, out float secondValue)
+        {
+            totalValue = Math.Max(0f, totalValue);
+            firstWeight = Math.Max(0f, firstWeight);
+            secondWeight = Math.Max(0f, secondWeight);
+
+            if (totalValue <= 0.001f)
+            {
+                firstValue = 0f;
+                secondValue = 0f;
+                return;
+            }
+
+            var weightTotal = firstWeight + secondWeight;
+            if (weightTotal <= 0.001f)
+            {
+                firstValue = totalValue * 0.5f;
+                secondValue = totalValue - firstValue;
+                return;
+            }
+
+            firstValue = totalValue * (firstWeight / weightTotal);
+            secondValue = totalValue - firstValue;
         }
 
         private sealed class CommercialVehicleRuntimeState
