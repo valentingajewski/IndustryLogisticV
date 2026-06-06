@@ -9,6 +9,6 @@
     <ExteriorPosition x="570.49" y="-1745.73" z="29.33" />
   </Motel>
   <Motel id="motel_004" name="The Motor" igName="Motel" type="Budget" restPrice="45">
-    <ExteriorPosition x="570.49" y="-1745.73" z="29.33" />
+    <ExteriorPosition x="1141.69" y="2664.36" z="38.16" />
   </Motel>
 </Motels>

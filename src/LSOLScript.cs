@@ -56,9 +56,6 @@ namespace LSOL
             ModLanguage.Italian,
             ModLanguage.Spanish,
             ModLanguage.Russian,
-            ModLanguage.Japanese,
-            ModLanguage.Chinese,
-            ModLanguage.Hindi,
             ModLanguage.Portuguese,
             ModLanguage.Turkish,
         };
@@ -3234,12 +3231,6 @@ namespace LSOL
                     return Text(ModTextKey.ValueLanguageSpanish);
                 case ModLanguage.Russian:
                     return Text(ModTextKey.ValueLanguageRussian);
-                case ModLanguage.Japanese:
-                    return Text(ModTextKey.ValueLanguageJapanese);
-                case ModLanguage.Chinese:
-                    return Text(ModTextKey.ValueLanguageChinese);
-                case ModLanguage.Hindi:
-                    return Text(ModTextKey.ValueLanguageHindi);
                 case ModLanguage.Portuguese:
                     return Text(ModTextKey.ValueLanguagePortuguese);
                 case ModLanguage.Turkish:

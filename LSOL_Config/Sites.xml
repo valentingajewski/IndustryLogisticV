@@ -636,6 +636,46 @@
       <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
+  <Site catalogId="515" legacyKey="Store16" name="Premium Deluxe Motorsport" role="StoreSink" district="Downtown" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="600" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="-27.37" y="-1081.95" z="26.64" />
+    <Inputs primary="Vehicles" />
+    <Economy>
+      <Casual purchasePrice="33750" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="45000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="63000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="516" legacyKey="Store17" name="Gallivanter" role="StoreSink" district="Vinewood" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="800" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="-84" y="97.80" z="72.91" />
+    <Inputs primary="Vehicles" />
+    <Economy>
+      <Casual purchasePrice="33750" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="45000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="63000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="517" legacyKey="Store18" name="Grand Senora Clothes Store" role="StoreSink" district="Grand Senora" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="1198.18" y="2697" z="37.44" />
+    <Inputs primary="Clothes" />
+    <Economy>
+      <Casual purchasePrice="33750" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="45000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="63000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
+  <Site catalogId="518" legacyKey="Store19" name="Larry's RV Sales" role="StoreSink" district="Grand Senora" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="400" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+    <Marker x="1210" y="2717.46" z="38" />
+    <Inputs primary="Vehicles" />
+    <Economy>
+      <Casual purchasePrice="33750" inputCapacityTons="7.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Standard purchasePrice="45000" inputCapacityTons="6" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Hardcore purchasePrice="63000" inputCapacityTons="4.8" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+      <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
+    </Economy>
+  </Site>
   <Site catalogId="700" legacyKey="Petrol Station 01" name="Davis Avenue" role="FuelSink" district="SouthLosSantos" company="LTD" startingTankRatio="0.3" density="Medium" emptyingRate="0.07" weeklyPassiveIncome="2100" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2">
     <Marker x="-66" y="-1759" z="29" />
     <VehicleSpawn x="-66" y="-1759" z="29" heading="340" />
