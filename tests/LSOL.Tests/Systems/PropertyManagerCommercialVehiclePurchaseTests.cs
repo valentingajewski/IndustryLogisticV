@@ -11,6 +11,8 @@ namespace LSOL.Tests.Systems
     [TestClass]
     public sealed class PropertyManagerCommercialVehiclePurchaseTests
     {
+        private const int MinutesPerDay = 24 * 60;
+
         [TestMethod]
         public void ApplySnapshotAndCreateSnapshot_PreservesOfficeCommercialFreeFlags()
         {
@@ -193,6 +195,37 @@ namespace LSOL.Tests.Systems
             Assert.IsTrue(purchaseQuote.UsesFirstFreeEntitlement);
             Assert.AreEqual(CommercialVehiclePurchaseEntitlementFamily.Tiptruck, purchaseQuote.EntitlementFamily);
             Assert.AreEqual(0f, purchaseQuote.EffectivePrice, 0.01f);
+        }
+
+        [TestMethod]
+        public void ProcessWeeklyCharges_RentedCommercialVehicleBillsOncePerDayAcrossSnapshotRefresh()
+        {
+            var manager = CreatePropertyManager(CreateOffice("alpha", 1));
+            var snapshot = CreateOwnedOfficeSnapshot();
+            var rentedAsset = CreateCommercialAsset("rubble-asset", "Rubble", "rubble", CommercialVehicleFleetRole.Rigid, 30f);
+            rentedAsset.IsRental = true;
+            rentedAsset.DailyRent = 850f;
+            rentedAsset.LastChargedDayIndex = 0;
+            snapshot.CommercialVehicleAssets.Add(rentedAsset);
+            snapshot.CommercialVehicles.Add(CreateCommercialSlot("rubble-slot", "Rubble", "rubble-asset", null, "rubble", "rubble", false, true));
+            manager.ApplySnapshot(snapshot, 0);
+
+            var balance = 5000f;
+            var firstChargeMessages = manager.ProcessWeeklyCharges(MinutesPerDay, ref balance);
+
+            Assert.AreEqual(4150f, balance, 0.01f);
+            Assert.IsTrue(firstChargeMessages.Any(message => message.Contains("Rubble")));
+            Assert.AreEqual(1, manager.CommercialVehicles.Single().LastChargedDayIndex);
+            Assert.AreEqual(1, manager.GetCommercialVehicleAssetRecord("rubble-asset").LastChargedDayIndex);
+
+            manager.ApplySnapshot(manager.CreateSnapshot(null, null), MinutesPerDay);
+
+            var repeatChargeMessages = manager.ProcessWeeklyCharges(MinutesPerDay + 1, ref balance);
+
+            Assert.AreEqual(4150f, balance, 0.01f);
+            Assert.IsFalse(repeatChargeMessages.Any(message => message.Contains("Rubble")));
+            Assert.AreEqual(1, manager.CommercialVehicles.Single().LastChargedDayIndex);
+            Assert.AreEqual(1, manager.GetCommercialVehicleAssetRecord("rubble-asset").LastChargedDayIndex);
         }
 
         [TestMethod]

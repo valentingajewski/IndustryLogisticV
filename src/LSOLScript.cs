@@ -3737,13 +3737,13 @@ namespace LSOL
         private void OpenNetworkRoutePlannerMapFromTablet()
         {
             CloseAllMenus();
-            _companyMapController.OpenNetworkView(() => ReturnToTabletRouteFromCompanyMap(TabletAppIds.Network, "planner"));
+            _companyMapController.OpenNetworkView(() => ReturnToTabletRouteFromCompanyMap(TabletAppIds.Network, "planner"), true);
         }
 
         private void OpenAnalyticsRoutePlannerMapFromTablet()
         {
             CloseAllMenus();
-            _companyMapController.OpenNetworkView(() => ReturnToTabletRouteFromCompanyMap(TabletAppIds.Analytics, "route-planner"));
+            _companyMapController.OpenNetworkView(() => ReturnToTabletRouteFromCompanyMap(TabletAppIds.Analytics, "route-planner"), true);
         }
 
         private void OpenCompanyDistrictViewFromTablet()

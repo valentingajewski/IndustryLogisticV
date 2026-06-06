@@ -656,7 +656,7 @@
       <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
-  <Site catalogId="517" legacyKey="Store18" name="Grand Senora Clothes Store" role="StoreSink" district="Grand Senora" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+  <Site catalogId="517" legacyKey="Store18" name="Grand Senora Clothes Store" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="60" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
     <Marker x="1198.18" y="2697" z="37.44" />
     <Inputs primary="Clothes" />
     <Economy>
@@ -666,7 +666,7 @@
       <Impossible purchasePrice="81000" inputCapacityTons="3.9" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
-  <Site catalogId="518" legacyKey="Store19" name="Larry's RV Sales" role="StoreSink" district="Grand Senora" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="400" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
+  <Site catalogId="518" legacyKey="Store19" name="Larry's RV Sales" role="StoreSink" district="GrandSenora" startingTankRatio="0.3" density="Low" emptyingRate="0.02" weeklyPassiveIncome="400" ownershipTier="Local" enabled="true" industryOwnerCut="0.15">
     <Marker x="1210" y="2717.46" z="38" />
     <Inputs primary="Vehicles" />
     <Economy>

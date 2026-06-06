@@ -109,6 +109,8 @@ namespace LSOL.Tests.UI
                 out var districtB,
                 () => overlay);
 
+            controller.OpenNetworkView(showPlannerOverlay: true);
+
             overlay = new RoutePlannerOverlaySnapshot
             {
                 SelectedCandidateId = "lane-a",
@@ -155,6 +157,48 @@ namespace LSOL.Tests.UI
         }
 
         [TestMethod]
+        public void GetNetworkViewSnapshot_HidesPlannerOverlayUnlessRoutePlannerMapRequested()
+        {
+            var overlay = new RoutePlannerOverlaySnapshot
+            {
+                SelectedCandidateId = "lane-a",
+                SelectedDistrictA = "Port",
+                SelectedDistrictB = "GrandSenora",
+                Lanes = new[]
+                {
+                    new RoutePlannerOverlayLane
+                    {
+                        CandidateId = "lane-a",
+                        DistrictA = "Port",
+                        DistrictB = "GrandSenora",
+                        Label = "Fuel planner lane",
+                        Kind = RoutePlannerOverlayLaneKind.Selected,
+                        IsSelected = true,
+                    },
+                },
+            };
+            var controller = CreateControllerWithScenario(
+                out var territoryManager,
+                out _,
+                out _,
+                () => overlay);
+
+            var snapshot = InvokeGetNetworkViewSnapshot(controller);
+            var plannerOverlay = GetPropertyValue<RoutePlannerOverlaySnapshot>(snapshot, "PlannerOverlay");
+
+            Assert.IsNotNull(plannerOverlay);
+            Assert.AreEqual(0, plannerOverlay.Lanes.Count, "Company Map should not show planner overlay unless it was opened from the route planner.");
+
+            controller.OpenNetworkView(showPlannerOverlay: true);
+
+            snapshot = InvokeGetNetworkViewSnapshot(controller);
+            plannerOverlay = GetPropertyValue<RoutePlannerOverlaySnapshot>(snapshot, "PlannerOverlay");
+
+            Assert.AreEqual(1, plannerOverlay.Lanes.Count);
+            Assert.AreEqual("lane-a", plannerOverlay.SelectedCandidateId);
+        }
+
+        [TestMethod]
         public void GetNetworkViewSnapshot_ExposesContestedCorridorMetadata()
         {
             var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
@@ -172,6 +216,38 @@ namespace LSOL.Tests.UI
             Assert.IsNotNull(district);
             Assert.AreEqual(1, district.ContestedCorridorCount);
             Assert.AreEqual(districtB, district.HottestCorridorName);
+        }
+
+        [TestMethod]
+        public void GetNetworkViewSnapshot_HidesCompetitionOnlyCorridorsWithoutRights()
+        {
+            var controller = CreateControllerWithScenario(out var territoryManager, out var districtA, out var districtB);
+            territoryManager.ApplySnapshot(new TerritoryPersistenceSnapshot
+            {
+                Corridors =
+                {
+                    new TerritoryCorridorSnapshot
+                    {
+                        DistrictA = districtA,
+                        DistrictB = districtB,
+                        RightLevel = CorridorRightLevel.None,
+                        CurrentWeekDeliveryCount = 3,
+                        CurrentWeekDeliveredTons = 18f,
+                        CompetitivePressure = 0.36f,
+                        ActiveCompetitionJobs = 2,
+                        ActiveCarrierCount = 1,
+                        DominantCarrierName = "Senora Line",
+                        CompetitiveWinCount = 1,
+                        ContestedWeekStreak = 2,
+                    },
+                },
+            });
+
+            var snapshot = InvokeGetNetworkViewSnapshot(controller);
+            var visibleCorridors = GetPropertyValue<IList<TerritoryCorridorState>>(snapshot, "VisibleCorridors");
+
+            Assert.AreEqual(0, GetPropertyValue<int>(snapshot, "ActiveCorridorCount"));
+            Assert.AreEqual(0, visibleCorridors.Count, "Competition-only corridors without route rights should stay hidden in the network graph.");
         }
 
         [TestMethod]

@@ -52,6 +52,56 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void RegisterDelivery_NpcDeliveriesDoNotActivateCorridorRights()
+        {
+            var territoryManager = CreateTerritoryManager();
+            var destination = GetIndustry(territoryManager, "alpha-depot");
+
+            Assert.IsNotNull(destination);
+
+            territoryManager.RegisterDelivery(destination, "Fuel", 8f, true, "bravo-depot", "GrandSenora");
+            territoryManager.RegisterDelivery(destination, "Fuel", 8f, true, "bravo-depot", "GrandSenora");
+
+            var corridor = territoryManager.GetCorridorState("Port", "GrandSenora");
+
+            Assert.IsNotNull(corridor);
+            Assert.AreEqual(0, territoryManager.GetActiveCorridorCount());
+            Assert.AreEqual(CorridorRightLevel.None, corridor.RightLevel);
+            Assert.AreEqual(0, corridor.DeliveryCount);
+            Assert.AreEqual(0f, corridor.TotalDeliveredTons, 0.001f);
+            Assert.AreEqual(2, corridor.CurrentWeekDeliveryCount);
+            Assert.AreEqual(16f, corridor.CurrentWeekDeliveredTons, 0.001f);
+        }
+
+        [TestMethod]
+        public void RegisterDelivery_PlayerPromotionIgnoresNpcTelemetry()
+        {
+            var territoryManager = CreateTerritoryManager();
+            var destination = GetIndustry(territoryManager, "alpha-depot");
+
+            Assert.IsNotNull(destination);
+
+            territoryManager.RegisterDelivery(destination, "Fuel", 8f, true, "bravo-depot", "GrandSenora");
+            territoryManager.RegisterDelivery(destination, "Fuel", 8f, true, "bravo-depot", "GrandSenora");
+            territoryManager.RegisterDelivery(destination, "Fuel", 20f, false, "bravo-depot", "GrandSenora");
+
+            var corridor = territoryManager.GetCorridorState("Port", "GrandSenora");
+
+            Assert.IsNotNull(corridor);
+            Assert.AreEqual(CorridorRightLevel.None, corridor.RightLevel);
+            Assert.AreEqual(1, corridor.DeliveryCount);
+            Assert.AreEqual(20f, corridor.TotalDeliveredTons, 0.001f);
+            Assert.AreEqual(0, territoryManager.GetActiveCorridorCount());
+
+            territoryManager.RegisterDelivery(destination, "Fuel", 10f, false, "bravo-depot", "GrandSenora");
+
+            Assert.AreEqual(CorridorRightLevel.ServicePermit, corridor.RightLevel);
+            Assert.AreEqual(2, corridor.DeliveryCount);
+            Assert.AreEqual(30f, corridor.TotalDeliveredTons, 0.001f);
+            Assert.AreEqual(1, territoryManager.GetActiveCorridorCount());
+        }
+
+        [TestMethod]
         public void ProcessWeeklyMaintenance_RiskDistrictCreatesLiveDistrictEvent()
         {
             var territoryManager = CreateTerritoryManager();

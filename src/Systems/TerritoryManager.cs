@@ -1287,11 +1287,14 @@ namespace LSOL.Systems
                     corridorState.CompetitiveOpportunity = Math.Max(0f, corridorState.CompetitiveOpportunity - (responseRelief * 0.3f));
                 }
 
-                corridorState.DeliveryCount += 1;
-                corridorState.TotalDeliveredTons += deliveredTons;
                 corridorState.CurrentWeekDeliveryCount += 1;
                 corridorState.CurrentWeekDeliveredTons += deliveredTons;
-                corridorState.RightLevel = ResolveCorridorLevel(corridorState.DeliveryCount, corridorState.TotalDeliveredTons);
+                if (!viaNpc)
+                {
+                    corridorState.DeliveryCount += 1;
+                    corridorState.TotalDeliveredTons += deliveredTons;
+                    corridorState.RightLevel = ResolveCorridorLevel(corridorState.DeliveryCount, corridorState.TotalDeliveredTons);
+                }
             }
 
             RefreshComputedState();

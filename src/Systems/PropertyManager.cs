@@ -3054,6 +3054,10 @@ namespace LSOL.Systems
             var charge = vehicle.DailyRent * elapsedDays;
             balance -= charge;
             vehicle.LastChargedDayIndex = currentDayIndex;
+            foreach (var asset in GetLinkedCommercialVehicleAssets(vehicle))
+            {
+                asset.LastChargedDayIndex = currentDayIndex;
+            }
             RecordFinanceExpense(CompanyFinanceCategory.VehicleRent, charge, Math.Max(0, currentDayIndex * MinutesPerDay), string.Format("Commercial rental charge for {0}", vehicle.DisplayName));
             if (messages != null)
             {

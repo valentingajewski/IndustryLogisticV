@@ -66,6 +66,7 @@ namespace LSOL.UI
         private readonly SimpleMenu _depotDetailMenu;
         private Action _returnAction;
         private Action _districtDetailBackAction;
+        private bool _showPlannerOverlay;
         private bool _networkViewOpen;
         private NetworkViewSnapshot _networkViewSnapshot;
         private NetworkLayoutCache _networkLayoutCache;
@@ -123,6 +124,7 @@ namespace LSOL.UI
         public void Open(Action returnAction = null)
         {
             _closeAllMenus();
+            _showPlannerOverlay = false;
             _returnAction = returnAction;
             OpenRootMenu();
         }
@@ -130,6 +132,7 @@ namespace LSOL.UI
         public void OpenDistrictView(Action returnAction = null)
         {
             _closeAllMenus();
+            _showPlannerOverlay = false;
             _returnAction = returnAction;
             OpenDistrictMenu();
         }
@@ -137,13 +140,15 @@ namespace LSOL.UI
         public void OpenDepotView(Action returnAction = null)
         {
             _closeAllMenus();
+            _showPlannerOverlay = false;
             _returnAction = returnAction;
             OpenDepotMenu();
         }
 
-        public void OpenNetworkView(Action returnAction = null)
+        public void OpenNetworkView(Action returnAction = null, bool showPlannerOverlay = false)
         {
             _closeAllMenus();
+            _showPlannerOverlay = showPlannerOverlay;
             _returnAction = returnAction;
             OpenNetworkViewInternal();
         }
@@ -151,6 +156,7 @@ namespace LSOL.UI
         public void Close()
         {
             CloseMenus();
+            _showPlannerOverlay = false;
             _returnAction = null;
         }
 
@@ -608,7 +614,7 @@ namespace LSOL.UI
                 return;
             }
 
-            var plannerOverlay = _getRoutePlannerOverlaySnapshot != null
+            var plannerOverlay = _showPlannerOverlay && _getRoutePlannerOverlaySnapshot != null
                 ? _getRoutePlannerOverlaySnapshot()
                 : null;
             if (plannerOverlay != null
@@ -1415,10 +1421,7 @@ namespace LSOL.UI
             var visibleCorridors = _territoryManager != null
                 ? _territoryManager.CorridorStates
                     .Where(corridor => corridor != null
-                        && (corridor.RightLevel != CorridorRightLevel.None
-                            || corridor.ActiveCompetitionJobs > 0
-                            || corridor.CompetitivePressure >= 0.18f
-                            || corridor.ContestedWeekStreak > 0))
+                        && corridor.RightLevel != CorridorRightLevel.None)
                     .OrderByDescending(corridor => corridor.CompetitivePressure)
                     .ThenByDescending(corridor => (int)corridor.RightLevel)
                     .ThenBy(corridor => corridor.CorridorId, StringComparer.OrdinalIgnoreCase)
@@ -1430,7 +1433,7 @@ namespace LSOL.UI
             var activeCorridorCount = _territoryManager != null
                 ? _territoryManager.CorridorStates.Count(corridor => corridor != null && corridor.RightLevel != CorridorRightLevel.None)
                 : 0;
-            var plannerOverlay = _getRoutePlannerOverlaySnapshot != null
+            var plannerOverlay = _showPlannerOverlay && _getRoutePlannerOverlaySnapshot != null
                 ? (_getRoutePlannerOverlaySnapshot() ?? new RoutePlannerOverlaySnapshot())
                 : new RoutePlannerOverlaySnapshot();
 
@@ -2487,7 +2490,11 @@ namespace LSOL.UI
             fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.DistrictStates, BuildDistrictStateHash));
             fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.SiteStates, BuildSiteStateHash));
             fingerprint = CombineSignature(fingerprint, BuildUnorderedSignature(_territoryManager.CorridorStates, BuildCorridorStateHash));
-            fingerprint = CombineSignature(fingerprint, BuildPlannerOverlayHash(_getRoutePlannerOverlaySnapshot != null ? _getRoutePlannerOverlaySnapshot() : null));
+            fingerprint = CombineSignature(fingerprint, _showPlannerOverlay ? 1L : 0L);
+            if (_showPlannerOverlay)
+            {
+                fingerprint = CombineSignature(fingerprint, BuildPlannerOverlayHash(_getRoutePlannerOverlaySnapshot != null ? _getRoutePlannerOverlaySnapshot() : null));
+            }
             return fingerprint;
         }
 
