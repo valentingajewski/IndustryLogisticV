@@ -21,8 +21,8 @@ namespace LSOL.UI
 
             var ownerCutPercent = ModFormatting.FormatPercent(ownerCut * 100f);
             return summary.IsOwnedByPlayer
-                ? LocalizedText.FormatOrDefault("tablet.location.ownerCut.owned", "Previous owner cut {0} removed | Owned sites keep the full payout", ownerCutPercent)
-                : LocalizedText.FormatOrDefault("tablet.location.ownerCut.unowned", "Current owner cut {0} | Purchase removes it from site payouts", ownerCutPercent);
+                ? LocalizedText.FormatOrDefault("tablet.location.ownerCut.owned", "No owner cut", ownerCutPercent)
+                : LocalizedText.FormatOrDefault("tablet.location.ownerCut.unowned", "Current owner cut {0} | Owning site removes the cut", ownerCutPercent);
         }
 
         public static string BuildPassiveIncomeDetail(TabletLocationSummary summary)

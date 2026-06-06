@@ -278,10 +278,7 @@ namespace LSOL.UI
                         ModFormatting.FormatMoney(office.PurchasePrice))),
                 TabletUiHelpers.CreateInfoItem(
                     "Assignment",
-                    office.AssignmentSummary),
-                TabletUiHelpers.CreateInfoItem(
-                    "Marker Operations",
-                    "Garage, office objects, fuel management, and repairs remain on the office marker menu. Use a placed Construction Site Cabin for Hire NPC.")
+                    office.AssignmentSummary)
             };
 
             var hasTransferRental = summary.Offices.Any(entry => !string.Equals(entry.OfficeId, office.OfficeId, StringComparison.OrdinalIgnoreCase) && entry.IsRented && !entry.IsOwned);
@@ -418,9 +415,6 @@ namespace LSOL.UI
                     string.IsNullOrWhiteSpace(apartment.InteriorIgName)
                         ? apartment.InteriorType
                         : string.Format("{0} | {1}", apartment.InteriorType, apartment.InteriorIgName)),
-                TabletUiHelpers.CreateInfoItem(
-                    "Marker Operations",
-                    "Enter, exit, garage access, and sleeping remain on the apartment marker menu.")
             };
 
             if (!apartment.IsOwned && !apartment.HasArrears)
@@ -511,7 +505,7 @@ namespace LSOL.UI
             {
                 TabletUiHelpers.CreateInfoItem(
                     "Motel Stops",
-                    "Motels stay as nightly rest locations only. They do not become owned, rented, activated, or billed properties.")
+                    "Motels stay as nightly rest locations only.")
             };
 
             if (summary.Motels.Count == 0)
@@ -555,9 +549,6 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateInfoItem(
                     "Nightly Price",
                     string.Format("Buy a room for the night for {0}.", ModFormatting.FormatMoney(motel.NightlyRestPrice))),
-                TabletUiHelpers.CreateInfoItem(
-                    "Motel Rules",
-                    "No ownership, no weekly rent, no arrears, and no activation state. This is only a quick-rest shortcut."),
                 BuildActionItem(
                     "Quick Rest",
                     string.Format("Pay {0} and use the existing motel rest flow.", ModFormatting.FormatMoney(motel.NightlyRestPrice)),

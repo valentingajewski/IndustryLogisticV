@@ -2142,7 +2142,7 @@ namespace LSOL.UI
 
             if (!industry.IsOwned)
             {
-                return "Potential passive income locked until purchase";
+                return "Passive income locked";
             }
 
             if (siteState != null && !string.IsNullOrWhiteSpace(siteState.PassiveIncomeStatus))
@@ -2313,13 +2313,9 @@ namespace LSOL.UI
 
             if (locationKind == ExternalLocationKind.Industry)
             {
-                var detail = string.Format("Storage {0:0.0}t | Omega {1:0.0}t", storage, industry.OmegaStorage);
-                if (!string.IsNullOrWhiteSpace(productionWarning))
-                {
-                    detail += string.Format(" | ~r~{0}~s~", productionWarning);
-                }
-
-                return detail;
+                    return string.IsNullOrWhiteSpace(productionWarning)
+                        ? string.Empty
+                        : string.Format("~r~{0}~s~", productionWarning);
             }
 
             if (locationKind == ExternalLocationKind.GasStation)
@@ -3392,12 +3388,12 @@ namespace LSOL.UI
         {
             if (state == null || (!state.IsOwned && !state.IsRented))
             {
-                return "Acquire access to assign company vehicles here.";
+                return "Acquire site to manage vehicle";
             }
 
             if (state.OutstandingRent > 0.01f || state.IsAccessSuspended)
             {
-                return "Garage assignment is paused until office arrears are cleared.";
+                return "Garage paused until office arrears are cleared.";
             }
 
             if (!isActive)

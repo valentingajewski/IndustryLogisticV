@@ -23,6 +23,23 @@ namespace LSOL.Systems
         public string DistrictName { get; set; }
     }
 
+    public sealed class TransferProgressDisplay
+    {
+        public string Label { get; set; }
+
+        public bool UseCargoTransferSkin { get; set; }
+
+        public string Commodity { get; set; }
+
+        public string ActionLabel { get; set; }
+
+        public float CurrentTons { get; set; }
+
+        public float TargetTons { get; set; }
+
+        public float Progress { get; set; }
+    }
+
     public sealed class CargoTransferController
     {
         private readonly FleetManager _fleetManager;
@@ -63,7 +80,7 @@ namespace LSOL.Systems
             _pendingTransfer = null;
         }
 
-        public void Update(int now, Action<string, float> drawProgressBar)
+        public void Update(int now, Action<TransferProgressDisplay> drawProgressBar)
         {
             if (_pendingTransfer == null)
             {
@@ -83,7 +100,10 @@ namespace LSOL.Systems
                 _showStatus(ModDiagnostics.FormatFailure("Transfer visual callback", ex));
             }
 
-            drawProgressBar(_pendingTransfer.Label, progress);
+            var display = _pendingTransfer.Display ?? CreateBasicTransferDisplay(string.Empty);
+            display.Progress = progress;
+            _pendingTransfer.Display = display;
+            drawProgressBar(display);
 
             if (elapsed < _pendingTransfer.DurationMs)
             {
@@ -174,7 +194,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                BuildLoadingTransferLabel(0f, targetLoadTons, selectedProduct),
+                BuildLoadingTransferDisplay(0f, targetLoadTons, selectedProduct),
                 2600,
                 () =>
                 {
@@ -237,7 +257,7 @@ namespace LSOL.Systems
                     }
 
                     var currentTons = targetLoadTons * ModMath.Clamp01(progress);
-                    _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
+                    _pendingTransfer.Display = BuildLoadingTransferDisplay(currentTons, targetLoadTons, selectedProduct);
                 });
         }
 
@@ -310,7 +330,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                BuildUnloadingTransferLabel(0f, targetUnloadTons, commodity),
+                BuildUnloadingTransferDisplay(0f, targetUnloadTons, commodity),
                 2800,
                 () =>
                 {
@@ -432,7 +452,7 @@ namespace LSOL.Systems
                     }
 
                     var currentTons = targetUnloadTons * ModMath.Clamp01(progress);
-                    _pendingTransfer.Label = BuildUnloadingTransferLabel(currentTons, targetUnloadTons, commodity);
+                    _pendingTransfer.Display = BuildUnloadingTransferDisplay(currentTons, targetUnloadTons, commodity);
                 });
         }
 
@@ -500,7 +520,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                BuildLoadingTransferLabel(0f, targetLoadTons, selectedProduct),
+                BuildLoadingTransferDisplay(0f, targetLoadTons, selectedProduct),
                 2600,
                 () =>
                 {
@@ -563,7 +583,7 @@ namespace LSOL.Systems
                     }
 
                     var currentTons = targetLoadTons * ModMath.Clamp01(progress);
-                    _pendingTransfer.Label = BuildLoadingTransferLabel(currentTons, targetLoadTons, selectedProduct);
+                    _pendingTransfer.Display = BuildLoadingTransferDisplay(currentTons, targetLoadTons, selectedProduct);
                 });
         }
 
@@ -618,7 +638,7 @@ namespace LSOL.Systems
 
             beforeStart();
             StartTransfer(
-                BuildUnloadingTransferLabel(0f, targetUnloadTons, commodity),
+                BuildUnloadingTransferDisplay(0f, targetUnloadTons, commodity),
                 2800,
                 () =>
                 {
@@ -728,7 +748,7 @@ namespace LSOL.Systems
                     }
 
                     var currentTons = targetUnloadTons * ModMath.Clamp01(progress);
-                    _pendingTransfer.Label = BuildUnloadingTransferLabel(currentTons, targetUnloadTons, commodity);
+                    _pendingTransfer.Display = BuildUnloadingTransferDisplay(currentTons, targetUnloadTons, commodity);
                 });
         }
 
@@ -802,11 +822,11 @@ namespace LSOL.Systems
             }
         }
 
-        private void StartTransfer(string label, int durationMs, Action complete, Action<float> onProgress = null)
+        private void StartTransfer(TransferProgressDisplay display, int durationMs, Action complete, Action<float> onProgress = null)
         {
             _pendingTransfer = new PendingTransfer
             {
-                Label = label,
+            Display = display ?? CreateBasicTransferDisplay(string.Empty),
                 DurationMs = durationMs,
                 StartMs = Game.GameTime,
                 OnComplete = complete,
@@ -818,7 +838,7 @@ namespace LSOL.Systems
         {
             beforeStart?.Invoke();
             StartTransfer(
-                label,
+                CreateBasicTransferDisplay(label),
                 durationMs,
                 complete,
                 progress =>
@@ -828,8 +848,54 @@ namespace LSOL.Systems
                         return;
                     }
 
-                    _pendingTransfer.Label = progressLabelFactory(ModMath.Clamp01(progress));
+                    _pendingTransfer.Display = CreateBasicTransferDisplay(progressLabelFactory(ModMath.Clamp01(progress)));
                 });
+        }
+
+        private static TransferProgressDisplay CreateBasicTransferDisplay(string label)
+        {
+            return new TransferProgressDisplay
+            {
+                Label = label ?? string.Empty,
+                UseCargoTransferSkin = false,
+                Commodity = string.Empty,
+                ActionLabel = string.Empty,
+                CurrentTons = 0f,
+                TargetTons = 0f,
+                Progress = 0f,
+            };
+        }
+
+        internal static TransferProgressDisplay BuildLoadingTransferDisplay(float currentTons, float targetTons, string commodity)
+        {
+            currentTons = Math.Max(0f, currentTons);
+            targetTons = Math.Max(0f, targetTons);
+            return new TransferProgressDisplay
+            {
+                Label = BuildLoadingTransferLabel(currentTons, targetTons, commodity),
+                UseCargoTransferSkin = true,
+                Commodity = commodity ?? string.Empty,
+                ActionLabel = "Loading",
+                CurrentTons = currentTons,
+                TargetTons = targetTons,
+                Progress = targetTons <= 0.001f ? 0f : ModMath.Clamp01(currentTons / targetTons),
+            };
+        }
+
+        internal static TransferProgressDisplay BuildUnloadingTransferDisplay(float currentTons, float targetTons, string commodity)
+        {
+            currentTons = Math.Max(0f, currentTons);
+            targetTons = Math.Max(0f, targetTons);
+            return new TransferProgressDisplay
+            {
+                Label = BuildUnloadingTransferLabel(currentTons, targetTons, commodity),
+                UseCargoTransferSkin = true,
+                Commodity = commodity ?? string.Empty,
+                ActionLabel = "Unloading",
+                CurrentTons = currentTons,
+                TargetTons = targetTons,
+                Progress = targetTons <= 0.001f ? 0f : ModMath.Clamp01(currentTons / targetTons),
+            };
         }
 
         internal static float ResolveLoadTargetTons(Industry industry, string commodity, float requestedTons)
@@ -937,7 +1003,7 @@ namespace LSOL.Systems
 
         private sealed class PendingTransfer
         {
-            public string Label { get; set; }
+            public TransferProgressDisplay Display { get; set; }
             public int StartMs { get; set; }
             public int DurationMs { get; set; }
             public Action OnComplete { get; set; }

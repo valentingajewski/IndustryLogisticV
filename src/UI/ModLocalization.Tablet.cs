@@ -142,7 +142,7 @@ namespace LSOL.UI
             Add(translations,  ModTextKey.TabletRoutePlannerAvailabilityActiveNpc,  "Active NPC",  "PNJ actif",  "NPC attivo",  "NPC activo",  "Активный NPC",  "NPC ativo",  "Aktif NPC");
             Add(translations,  ModTextKey.TabletRoutePlannerAvailabilityUnderperforming,  "Underperforming",  "Sous-performant",  "Sotto rendimento",  "Bajo rendimiento",  "Низкая эффективность",  "Abaixo do esperado",  "Düşük performanslı");
 
-            Add(translations,  ModTextKey.TabletBudgetCashSummary,  "Cashsummary",  "Résumé de trésorerie",  "Riepilogo cassa",  "Resumen de efectivo",  "Сводка наличности",  "Resumo de caixa",  "Nakit özeti");
+            Add(translations,  ModTextKey.TabletBudgetCashSummary,  "Cash summary",  "Résumé de trésorerie",  "Riepilogo cassa",  "Resumen de efectivo",  "Сводка наличности",  "Resumo de caixa",  "Nakit özeti");
             Add(translations,  ModTextKey.TabletBudgetExpenseBreakdown,  "Expense breakdown",  "Répartition dépenses",  "Ripartizione delle spese",  "Desglose de gastos",  "Разбивка расходов",  "Detalhamento de despesas",  "Gider dökümü");
             Add(translations,  ModTextKey.TabletBudgetIncomeBreakdown,  "Income breakdown",  "Répartition des revenus",  "Ripartizione dei ricavi",  "Desglose de ingresos",  "Разбивка доходов",  "Detalhamento de receitas",  "Gelir dökümü");
             Add(translations,  ModTextKey.TabletBudgetUpcomingBills,  "Upcoming bills",  "Factures à venir",  "Fatture in arrivo",  "Facturas próximas",  "Предстоящие счета",  "Contas a pagar",  "Yaklaşan faturalar");

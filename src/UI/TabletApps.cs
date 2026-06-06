@@ -1257,7 +1257,7 @@ namespace LSOL.UI
                 Color.FromArgb(186, 48, 52, 66),
                 Color.FromArgb(228, 112, 124, 148),
                 null,
-                "ANA"));
+                "ANL"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.GetOrDefault("tablet.home.successes", "Successes"),
                 TabletEndgameStatusFormatter.BuildHomeTileDetail(unlockedSuccessCount, totalSuccessCount, endgame),
@@ -1267,7 +1267,7 @@ namespace LSOL.UI
                 totalSuccessCount > 0
                     ? (float?)unlockedSuccessCount / totalSuccessCount
                     : null,
-                "SUC"));
+                "SUS"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.GetOrDefault("tablet.home.missions", "Missions"),
                 missionDetail,
@@ -2499,12 +2499,12 @@ namespace LSOL.UI
 
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Refuel Current Vehicle",
-                "Immediate support refuel for the currently active company truck while ambient dispatch stabilizes regional service demand.",
+                "Dispatch a truck from nearest gas station to refuel office vehicle",
                 () => _requestRefuelService?.Invoke(),
                 iconLabel: "FUEL"));
             items.Add(TabletUiHelpers.CreateActionItem(
                 "Repair Current Vehicle",
-                "Restore the currently active vehicle and trailer to working order from the hub.",
+                "Repair current vehicle",
                 () => _requestRepairService?.Invoke(),
                 iconLabel: "FIX"));
             items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the network hub.", () => context.GoBack(), "BACK"));

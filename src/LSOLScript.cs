@@ -1591,13 +1591,13 @@ namespace LSOL
             DrawRect(resolution.Width, resolution.Height, x + 1f, y + 1f, innerWidth, innerHeight, fillColor);
         }
 
-        private static void DrawHudText(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font)
+        private static void DrawHudText(Size resolution, string text, float x, float y, float scale, Color color, GTA.UI.Font font, bool centered = false)
         {
             var coords = ToScriptTextCoords(resolution, x, y);
             Function.Call(Hash.SET_TEXT_FONT, (int)font);
             Function.Call(Hash.SET_TEXT_SCALE, 0f, scale);
             Function.Call(Hash.SET_TEXT_COLOUR, color.R, color.G, color.B, color.A);
-            Function.Call(Hash.SET_TEXT_CENTRE, false);
+            Function.Call(Hash.SET_TEXT_CENTRE, centered);
             Function.Call(Hash.SET_TEXT_DROPSHADOW, 0, 0, 0, 0, 0);
             Function.Call(Hash.SET_TEXT_OUTLINE);
             Function.Call(Hash.BEGIN_TEXT_COMMAND_DISPLAY_TEXT, "STRING");
@@ -5686,29 +5686,284 @@ namespace LSOL
             _cargoTransferController.ClearCargoStateAndVisuals(cargoVehicle, cargoState);
         }
 
-        private void DrawProgressBar(string label, float progress)
+        private void DrawProgressBar(TransferProgressDisplay display)
         {
-            var res = Screen.MainWindowResolution;
-            var width = res.Width * 0.36f;
-            var height = res.Height * 0.045f;
-            var x = (res.Width - width) * 0.5f;
-            var y = res.Height * 0.88f;
+            if (display != null && display.UseCargoTransferSkin && display.TargetTons > 0.001f)
+            {
+                DrawCargoTransferProgressOverlay(display);
+                return;
+            }
 
-            DrawRect(res.Width, res.Height, x + 6f, y + 6f, width, height, Color.FromArgb(95, 0, 0, 0));
-            DrawRect(res.Width, res.Height, x, y, width, height, Color.FromArgb(192, 14, 20, 30));
-            DrawRect(res.Width, res.Height, x, y, width, 4f, Color.FromArgb(236, 219, 165, 57));
-            DrawRect(res.Width, res.Height, x + 2f, y + 2f, (width - 4f) * progress, height - 4f, Color.FromArgb(236, 219, 165, 57));
+            DrawLegacyProgressBar(display != null ? display.Label : string.Empty, display != null ? display.Progress : 0f);
+        }
 
-            new TextElement(
-                    label,
-                    ToScriptTextCoords(res, x + 10f, y - 21f),
-                    0.33f,
-                    Color.White,
+        private void DrawCargoTransferProgressOverlay(TransferProgressDisplay display)
+        {
+            var resolution = Screen.MainWindowResolution;
+            var progress = ModMath.Clamp01(display.Progress);
+            var targetTons = Math.Max(0f, display.TargetTons);
+            var currentTons = Math.Min(targetTons, Math.Max(0f, display.CurrentTons));
+            var totalWidth = ScaleFromScriptSpaceX(resolution, 579f);
+            var overlayHeight = ScaleFromScriptSpaceY(resolution, 82f);
+            var infoWidth = ScaleFromScriptSpaceX(resolution, 111f);
+            var gap = ScaleFromScriptSpaceX(resolution, 10f);
+            var x = ((resolution.Width - totalWidth) * 0.5f) + ScaleFromScriptSpaceX(resolution, 20f);
+            var y = resolution.Height - overlayHeight - ScaleFromScriptSpaceY(resolution, 34f);
+            var infoX = x;
+            var infoY = y + ScaleFromScriptSpaceY(resolution, 16f);
+            var infoHeight = ScaleFromScriptSpaceY(resolution, 42f);
+            var barX = x + infoWidth + gap;
+            var barY = y + ScaleFromScriptSpaceY(resolution, 22f);
+            var barWidth = totalWidth - infoWidth - gap;
+            var barHeight = ScaleFromScriptSpaceY(resolution, 28f);
+            var trackInsetX = ScaleFromScriptSpaceX(resolution, 6f);
+            var trackInsetY = ScaleFromScriptSpaceY(resolution, 4f);
+            var trackX = barX + trackInsetX;
+            var trackY = barY + trackInsetY;
+            var trackWidth = Math.Max(0f, barWidth - (trackInsetX * 2f));
+            var trackHeight = Math.Max(0f, barHeight - (trackInsetY * 2f));
+            var textX = infoX + ScaleFromScriptSpaceX(resolution, 12f);
+            var headlineY = infoY + ScaleFromScriptSpaceY(resolution, 9f);
+            var tonsY = infoY + ScaleFromScriptSpaceY(resolution, 22f);
+            var tickLabelY = y + ScaleFromScriptSpaceY(resolution, 58f);
+            var calloutWidth = ScaleFromScriptSpaceX(resolution, 46f);
+            var calloutHeight = ScaleFromScriptSpaceY(resolution, 18f);
+            var fillCenterX = trackX + (trackWidth * progress);
+            var calloutX = Math.Max(barX, Math.Min(barX + barWidth - calloutWidth, fillCenterX - (calloutWidth * 0.5f)));
+            var calloutY = barY - calloutHeight - ScaleFromScriptSpaceY(resolution, 7f);
+            var calloutTextX = calloutX + (calloutWidth * 0.5f);
+            var calloutTextY = calloutY + ScaleFromScriptSpaceY(resolution, 3f);
+            var stemWidth = Math.Max(1f, ScaleFromScriptSpaceX(resolution, 1f));
+            var stemX = Math.Max(calloutX + ScaleFromScriptSpaceX(resolution, 6f), Math.Min(trackX + trackWidth, fillCenterX)) - (stemWidth * 0.5f);
+            var stemHeight = Math.Max(0f, barY - (calloutY + calloutHeight) + ScaleFromScriptSpaceY(resolution, 2f));
+            var headline = BuildCargoTransferHeadline(display);
+            var quantityLine = string.Format(
+                "{0} / {1} t",
+                ModFormatting.FormatNumber(currentTons),
+                ModFormatting.FormatNumber(targetTons));
+
+            DrawTransferShadow(resolution, infoX, infoY, infoWidth, infoHeight);
+            DrawTransferShadow(resolution, barX, barY, barWidth, barHeight);
+            DrawTransferInfoPanel(resolution, infoX, infoY, infoWidth, infoHeight);
+            DrawTransferBarShell(resolution, barX, barY, barWidth, barHeight);
+            DrawTransferBarFill(resolution, trackX, trackY, trackWidth, trackHeight, progress);
+            DrawTransferMilestones(resolution, trackX, barY, trackWidth, barHeight, tickLabelY);
+
+            DrawTransferShadow(resolution, calloutX, calloutY, calloutWidth, calloutHeight, 3f, 4f, 24, 54);
+            DrawTransferCallout(resolution, calloutX, calloutY, calloutWidth, calloutHeight);
+            DrawRect(resolution.Width, resolution.Height, stemX, calloutY + calloutHeight - 1f, stemWidth, stemHeight, Color.FromArgb(182, 231, 183, 72));
+
+            DrawHudText(
+                resolution,
+                headline,
+                textX,
+                headlineY,
+                0.18f,
+                Color.FromArgb(246, 240, 244, 248),
+                GTA.UI.Font.ChaletComprimeCologne);
+
+            DrawHudText(
+                resolution,
+                quantityLine,
+                textX,
+                tonsY,
+                0.15f,
+                Color.FromArgb(226, 214, 220, 228),
+                GTA.UI.Font.ChaletLondon);
+
+            DrawHudText(
+                resolution,
+                string.Format("{0:0}%", progress * 100f),
+                calloutTextX,
+                calloutTextY,
+                0.18f,
+                Color.FromArgb(248, 246, 238, 216),
+                GTA.UI.Font.ChaletComprimeCologne,
+                true);
+        }
+
+        private static void DrawLegacyProgressBar(string label, float progress)
+        {
+            progress = ModMath.Clamp01(progress);
+            var resolution = Screen.MainWindowResolution;
+            var width = resolution.Width * 0.36f;
+            var height = resolution.Height * 0.045f;
+            var x = (resolution.Width - width) * 0.5f;
+            var y = resolution.Height * 0.88f;
+
+            DrawRect(resolution.Width, resolution.Height, x + 6f, y + 6f, width, height, Color.FromArgb(95, 0, 0, 0));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, height, Color.FromArgb(192, 14, 20, 30));
+            DrawRect(resolution.Width, resolution.Height, x, y, width, 4f, Color.FromArgb(236, 219, 165, 57));
+            DrawRect(resolution.Width, resolution.Height, x + 2f, y + 2f, (width - 4f) * progress, height - 4f, Color.FromArgb(236, 219, 165, 57));
+            DrawHudText(resolution, label, x + 10f, y - 21f, 0.22f, Color.White, GTA.UI.Font.ChaletLondon);
+        }
+
+        private static string BuildCargoTransferHeadline(TransferProgressDisplay display)
+        {
+            var commodity = string.IsNullOrWhiteSpace(display.Commodity) ? "Cargo" : display.Commodity.Trim();
+            var action = string.IsNullOrWhiteSpace(display.ActionLabel) ? "Transfer" : display.ActionLabel.Trim();
+            return string.Format("{0} {1}:", commodity.ToUpperInvariant(), action.ToUpperInvariant());
+        }
+
+        private static void DrawTransferInfoPanel(Size resolution, float x, float y, float width, float height)
+        {
+            DrawSoftCapsule(resolution, x, y, width, height, Color.FromArgb(224, 6, 8, 12));
+            DrawSoftCapsule(resolution, x + 1f, y + 1f, width - 2f, height - 2f, Color.FromArgb(98, 120, 129, 138));
+            DrawSoftCapsule(resolution, x + 3f, y + 3f, width - 6f, height - 6f, Color.FromArgb(232, 18, 24, 31));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                x + ScaleFromScriptSpaceX(resolution, 12f),
+                y + ScaleFromScriptSpaceY(resolution, 6f),
+                width - ScaleFromScriptSpaceX(resolution, 24f),
+                Math.Max(2f, ScaleFromScriptSpaceY(resolution, 2f)),
+                Color.FromArgb(56, 255, 255, 255));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                x + ScaleFromScriptSpaceX(resolution, 14f),
+                y + height - ScaleFromScriptSpaceY(resolution, 8f),
+                width - ScaleFromScriptSpaceX(resolution, 28f),
+                Math.Max(2f, ScaleFromScriptSpaceY(resolution, 2f)),
+                Color.FromArgb(138, 201, 155, 62));
+        }
+
+        private static void DrawTransferBarShell(Size resolution, float x, float y, float width, float height)
+        {
+            DrawSoftCapsule(resolution, x, y, width, height, Color.FromArgb(230, 6, 8, 12));
+            DrawSoftCapsule(resolution, x + 1f, y + 1f, width - 2f, height - 2f, Color.FromArgb(112, 122, 131, 140));
+            DrawSoftCapsule(resolution, x + 3f, y + 3f, width - 6f, height - 6f, Color.FromArgb(230, 19, 24, 30));
+
+            var innerX = x + ScaleFromScriptSpaceX(resolution, 6f);
+            var innerY = y + ScaleFromScriptSpaceY(resolution, 4f);
+            var innerWidth = width - ScaleFromScriptSpaceX(resolution, 12f);
+            var innerHeight = height - ScaleFromScriptSpaceY(resolution, 8f);
+            DrawSoftCapsule(resolution, innerX, innerY, innerWidth, innerHeight, Color.FromArgb(226, 27, 32, 38));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                innerX + ScaleFromScriptSpaceX(resolution, 9f),
+                innerY + ScaleFromScriptSpaceY(resolution, 2f),
+                innerWidth - ScaleFromScriptSpaceX(resolution, 18f),
+                Math.Max(2f, ScaleFromScriptSpaceY(resolution, 2f)),
+                Color.FromArgb(48, 255, 255, 255));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                innerX + ScaleFromScriptSpaceX(resolution, 9f),
+                innerY + (innerHeight * 0.52f),
+                innerWidth - ScaleFromScriptSpaceX(resolution, 18f),
+                innerHeight * 0.36f,
+                Color.FromArgb(38, 0, 0, 0));
+        }
+
+        private static void DrawTransferBarFill(Size resolution, float x, float y, float width, float height, float progress)
+        {
+            progress = ModMath.Clamp01(progress);
+            var fillWidth = width * progress;
+            if (fillWidth <= 0.5f)
+            {
+                return;
+            }
+
+            fillWidth = Math.Min(width, Math.Max(fillWidth, Math.Min(width, height * 0.55f)));
+            DrawSoftCapsule(resolution, x, y, fillWidth, height, Color.FromArgb(236, 138, 97, 34));
+            DrawSoftCapsule(resolution, x + 1f, y + 1f, Math.Max(0f, fillWidth - 2f), Math.Max(0f, height - 2f), Color.FromArgb(240, 196, 144, 56));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                x + ScaleFromScriptSpaceX(resolution, 8f),
+                y + ScaleFromScriptSpaceY(resolution, 2f),
+                Math.Max(0f, fillWidth - ScaleFromScriptSpaceX(resolution, 16f)),
+                Math.Max(2f, ScaleFromScriptSpaceY(resolution, 2f)),
+                Color.FromArgb(76, 255, 236, 182));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                x + ScaleFromScriptSpaceX(resolution, 9f),
+                y + (height * 0.54f),
+                Math.Max(0f, fillWidth - ScaleFromScriptSpaceX(resolution, 18f)),
+                height * 0.32f,
+                Color.FromArgb(56, 98, 56, 10));
+        }
+
+        private static void DrawTransferMilestones(Size resolution, float barX, float barY, float barWidth, float barHeight, float labelY)
+        {
+            var markerTop = barY + ScaleFromScriptSpaceY(resolution, 4f);
+            var markerHeight = barHeight - ScaleFromScriptSpaceY(resolution, 8f);
+            var labels = new[] { "0", "25", "50", "75", "100" };
+            var positions = new[] { 0f, 0.25f, 0.5f, 0.75f, 1f };
+
+            for (int i = 0; i < positions.Length; i++)
+            {
+                var tickX = barX + (barWidth * positions[i]);
+                var tickWidth = i == 0 || i == positions.Length - 1
+                    ? Math.Max(2f, ScaleFromScriptSpaceX(resolution, 2f))
+                    : Math.Max(1f, ScaleFromScriptSpaceX(resolution, 1f));
+                var alpha = i == 0 || i == positions.Length - 1 ? 156 : 112;
+
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    tickX - (tickWidth * 0.5f),
+                    markerTop,
+                    tickWidth,
+                    markerHeight,
+                    Color.FromArgb(alpha, 196, 200, 204));
+
+                DrawHudText(
+                    resolution,
+                    labels[i],
+                    tickX,
+                    labelY,
+                    0.14f,
+                    Color.FromArgb(194, 205, 210, 216),
                     GTA.UI.Font.ChaletLondon,
-                    Alignment.Left,
-                    true,
-                    false)
-                .Draw();
+                    true);
+            }
+        }
+
+        private static void DrawTransferCallout(Size resolution, float x, float y, float width, float height)
+        {
+            DrawSoftCapsule(resolution, x, y, width, height, Color.FromArgb(236, 7, 9, 13));
+            DrawSoftCapsule(resolution, x + 1f, y + 1f, width - 2f, height - 2f, Color.FromArgb(104, 153, 126, 60));
+            DrawSoftCapsule(resolution, x + 3f, y + 3f, width - 6f, height - 6f, Color.FromArgb(236, 34, 26, 12));
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                x + ScaleFromScriptSpaceX(resolution, 8f),
+                y + ScaleFromScriptSpaceY(resolution, 2f),
+                width - ScaleFromScriptSpaceX(resolution, 16f),
+                Math.Max(2f, ScaleFromScriptSpaceY(resolution, 2f)),
+                Color.FromArgb(58, 255, 244, 210));
+        }
+
+        private static void DrawTransferShadow(Size resolution, float x, float y, float width, float height, float nearOffsetX = 4f, float nearOffsetY = 6f, int farAlpha = 32, int nearAlpha = 74)
+        {
+            DrawSoftCapsule(resolution, x + (nearOffsetX * 1.7f), y + (nearOffsetY * 1.4f), width, height, Color.FromArgb(farAlpha, 0, 0, 0));
+            DrawSoftCapsule(resolution, x + nearOffsetX, y + nearOffsetY, width, height, Color.FromArgb(nearAlpha, 0, 0, 0));
+        }
+
+        private static void DrawSoftCapsule(Size resolution, float x, float y, float width, float height, Color color)
+        {
+            if (width <= 0f || height <= 0f)
+            {
+                return;
+            }
+
+            var capInset = Math.Max(2f, height * 0.24f);
+            var horizontalWidth = Math.Max(0f, width - (capInset * 2f));
+            var verticalHeight = Math.Max(0f, height - (capInset * 2f));
+
+            if (horizontalWidth > 0f)
+            {
+                DrawRect(resolution.Width, resolution.Height, x + capInset, y, horizontalWidth, height, color);
+            }
+
+            if (verticalHeight > 0f)
+            {
+                DrawRect(resolution.Width, resolution.Height, x, y + capInset, width, verticalHeight, color);
+            }
         }
 
         private void DrawPanel(List<string> lines, float xNormalized, float yNormalized, float widthNormalized, Color bgColor, Color accentColor)
