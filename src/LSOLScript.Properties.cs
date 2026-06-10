@@ -142,7 +142,7 @@ namespace LSOL
                 CancelApartmentRental = CancelApartmentRentalById,
                 SellApartment = SellApartmentById,
                 PayApartmentArrears = PayApartmentArrearsById,
-                RestAtMotel = RestAtMotelById,
+                SetMotelWaypoint = SetMotelWaypointById,
             };
         }
 
@@ -3388,6 +3388,25 @@ namespace LSOL
             }
 
             RestAtMotelInternal(motel);
+        }
+
+        private void SetMotelWaypointById(string motelId)
+        {
+            if (string.IsNullOrWhiteSpace(motelId) || _propertyManager == null)
+            {
+                return;
+            }
+
+            var motel = _propertyManager.Motels.FirstOrDefault(entry => entry != null && string.Equals(entry.MotelId, motelId, StringComparison.OrdinalIgnoreCase));
+            if (motel == null)
+            {
+                ShowStatus("Motel definition unavailable.");
+                return;
+            }
+
+            var position = motel.ExteriorPosition;
+            Function.Call(Hash.SET_NEW_WAYPOINT, position.X, position.Y);
+            ShowStatus(string.Format("GPS route set to {0}.", motel.DisplayName));
         }
 
         private void RestAtMotelInternal(MotelDefinition motel)

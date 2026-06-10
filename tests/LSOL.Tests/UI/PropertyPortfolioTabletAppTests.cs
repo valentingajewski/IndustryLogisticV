@@ -35,7 +35,7 @@ namespace LSOL.Tests.UI
                 CancelApartmentRental = apartmentId => invoked.Add("cancel-apartment:" + apartmentId),
                 SellApartment = apartmentId => invoked.Add("sell-apartment:" + apartmentId),
                 PayApartmentArrears = apartmentId => invoked.Add("pay-apartment-arrears:" + apartmentId),
-                RestAtMotel = motelId => invoked.Add("rest-motel:" + motelId),
+                SetMotelWaypoint = motelId => invoked.Add("waypoint-motel:" + motelId),
             });
 
             var rootPage = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "root"));
@@ -68,16 +68,16 @@ namespace LSOL.Tests.UI
             payApartmentArrears.OnActivate();
 
             var motelPage = app.BuildPage(context, new TabletRoute(TabletAppIds.PropertyPortfolio, "motel-detail", "motel-1"));
-            var quickRest = FindItem(motelPage, "Quick Rest");
-            Assert.IsNotNull(quickRest);
-            quickRest.OnActivate();
+            var setGpsRoute = FindItem(motelPage, "Set GPS Route");
+            Assert.IsNotNull(setGpsRoute);
+            setGpsRoute.OnActivate();
 
             CollectionAssert.AreEquivalent(
                 new[]
                 {
                     "pay-office-arrears:bravo-office",
                     "pay-apartment-arrears:bravo-home",
-                    "rest-motel:motel-1",
+                    "waypoint-motel:motel-1",
                 },
                 invoked);
         }

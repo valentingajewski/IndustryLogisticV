@@ -32,7 +32,7 @@ namespace LSOL.UI
 
         public Action<string> PayApartmentArrears { get; set; }
 
-        public Action<string> RestAtMotel { get; set; }
+        public Action<string> SetMotelWaypoint { get; set; }
     }
 
     internal sealed class PropertyPortfolioTabletApp : ITabletApp
@@ -159,11 +159,11 @@ namespace LSOL.UI
                 LocalizedText.Get(ModTextKey.TabletPropertyMotels),
                 cheapestMotel != null
                     ? string.Format(
-                        "{0} nightly locations\nCheapest {1} at {2}",
+                        "{0} motel location{1} available\nNearest stop: {2}",
                         summary.Motels.Count,
-                        ModFormatting.FormatMoney(cheapestMotel.NightlyRestPrice),
+                        summary.Motels.Count == 1 ? string.Empty : "s",
                         cheapestMotel.DisplayName)
-                    : "No motel rest locations are configured.\nMotels remain rest-only.",
+                    : "No motel locations are configured.",
                 () => context.Push(TabletAppIds.PropertyPortfolio, "motels"),
                 Color.FromArgb(180, 54, 44, 58),
                 Color.FromArgb(224, 130, 108, 144),
@@ -505,12 +505,12 @@ namespace LSOL.UI
             {
                 TabletUiHelpers.CreateInfoItem(
                     "Motel Stops",
-                    "Motels stay as nightly rest locations only.")
+                    "Set a GPS waypoint to any motel exterior location.")
             };
 
             if (summary.Motels.Count == 0)
             {
-                items.Add(TabletUiHelpers.CreateInfoItem("No motels configured", "No quick-rest motel locations are available in the current configuration."));
+                items.Add(TabletUiHelpers.CreateInfoItem("No motels configured", "No motel locations are available in the current configuration."));
             }
             else
             {
@@ -521,7 +521,7 @@ namespace LSOL.UI
             return new TabletShellPage
             {
                 Title = "Motels",
-                Subtitle = "Nightly rest-only locations surfaced inside the property portfolio",
+                Subtitle = "Motel exterior stops available for GPS routing",
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.92f,
                 MaxVisibleItems = 6,
@@ -544,15 +544,12 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateBannerItem(
                     motel.DisplayName,
                     string.IsNullOrWhiteSpace(motel.MotelIgName)
-                        ? string.Format("{0} | Rest-only stop", motel.MotelType)
-                        : string.Format("{0} | {1} | Rest-only stop", motel.MotelType, motel.MotelIgName)),
-                TabletUiHelpers.CreateInfoItem(
-                    "Nightly Price",
-                    string.Format("Buy a room for the night for {0}.", ModFormatting.FormatMoney(motel.NightlyRestPrice))),
+                        ? string.Format("{0} | Exterior stop", motel.MotelType)
+                        : string.Format("{0} | {1} | Exterior stop", motel.MotelType, motel.MotelIgName)),
                 BuildActionItem(
-                    "Quick Rest",
-                    string.Format("Pay {0} and use the existing motel rest flow.", ModFormatting.FormatMoney(motel.NightlyRestPrice)),
-                    _actions.RestAtMotel,
+                    "Set GPS Route",
+                    string.Format("Place a GPS waypoint at the exterior entrance of {0}.", motel.DisplayName),
+                    _actions.SetMotelWaypoint,
                     motel.MotelId,
                     context,
                     false),
@@ -607,12 +604,12 @@ namespace LSOL.UI
             var igLabel = string.IsNullOrWhiteSpace(motel.MotelIgName) ? string.Empty : string.Format(" | {0}", motel.MotelIgName);
             return TabletUiHelpers.CreateActionItem(
                 motel.DisplayName,
-                string.Format("{0}{1} | Nightly rest {2}", typeLabel, igLabel, ModFormatting.FormatMoney(motel.NightlyRestPrice)),
+                string.Format("{0}{1} | Exterior stop", typeLabel, igLabel),
                 () => context.Push(TabletAppIds.PropertyPortfolio, "motel-detail", motel.MotelId),
                 Color.FromArgb(176, 52, 44, 58),
                 Color.FromArgb(220, 126, 104, 142),
                 null,
-                "REST");
+                "GPS");
         }
 
         private MenuItem BuildStatusItem(string displayName, string statusLabel, bool isActive, bool hasArrears, string detail)
