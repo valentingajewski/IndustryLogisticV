@@ -16,6 +16,7 @@ namespace LSOL.Config
         public Vector3 MainOfficePosition { get; private set; }
         public Vector3 VehicleSpawnPosition { get; private set; }
         public float VehicleSpawnHeading { get; private set; }
+        public bool DeveloperModeEnabled { get; private set; }
         public ControlBindings Controls { get; private set; }
         public Dictionary<string, float> CommodityBasePrices { get; private set; }
         public Dictionary<string, IndustryConfig> IndustryConfigs { get; private set; }
@@ -52,6 +53,7 @@ namespace LSOL.Config
                 MainOfficePosition = coreConfig.MainOfficePosition,
                 VehicleSpawnPosition = coreConfig.VehicleSpawnPosition,
                 VehicleSpawnHeading = coreConfig.VehicleSpawnHeading,
+                DeveloperModeEnabled = coreConfig.DeveloperModeEnabled || !string.IsNullOrWhiteSpace(coreConfig.DeveloperPasskey),
                 Controls = controls,
                 CommodityBasePrices = new Dictionary<string, float>(externalCatalog.CommodityBasePrices, StringComparer.OrdinalIgnoreCase),
                 ExternalCatalog = externalCatalog,

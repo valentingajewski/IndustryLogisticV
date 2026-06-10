@@ -66,6 +66,13 @@ namespace LSOL.Config
                 coreConfig.Controls.MenuBack = ControlBindings.ParseOrDefault(ReadAttribute(controls, "menuBack", "Backspace"), coreConfig.Controls.MenuBack);
             }
 
+            var developer = root.Element("Developer");
+            if (developer != null)
+            {
+                coreConfig.DeveloperModeEnabled = ReadBoolAttribute(developer, "enableDeveloperMode", coreConfig.DeveloperModeEnabled);
+                coreConfig.DeveloperPasskey = ReadAttribute(developer, "passkey", coreConfig.DeveloperPasskey);
+            }
+
             var densityProfiles = root.Element("DensityProfiles");
             if (densityProfiles != null)
             {

@@ -77,6 +77,7 @@ namespace LSOL
         private readonly string _defaultIndustryStatePath;
         private readonly string _savegamesDirectoryPath;
         private readonly ControlBindings _controls;
+        private readonly bool _developerModeEnabled;
         private readonly IndustryManager _industryManager;
         private readonly FleetManager _fleetManager;
         private readonly PropertyManager _propertyManager;
@@ -210,6 +211,17 @@ namespace LSOL
         public LSOLScript()
         {
             _isConstructing = true;
+            try
+            {
+                ShvdnRuntimeCompatibility.EnsureInitialized(
+                    AppDomain.CurrentDomain.BaseDirectory,
+                    Assembly.GetExecutingAssembly().Location);
+            }
+            catch
+            {
+                // Dependency resolution is best-effort; SHVDN still resolves its own assemblies.
+            }
+
             var runtimeLayout = ResolveRuntimeLayout();
             var iniPath = runtimeLayout.SettingsFilePath;
             _configDirectory = runtimeLayout.ConfigDirectory;
@@ -220,6 +232,7 @@ namespace LSOL
             _addonCatalog = LsolAddonCatalog.Load(_configDirectory);
             _config = ModConfig.Load(_configDirectory, _addonCatalog, iniPath);
             _controls = _config.Controls ?? new ControlBindings();
+            _developerModeEnabled = _config.DeveloperModeEnabled;
             _industryManager = new IndustryManager(_config);
             _fleetManager = new FleetManager(_config);
             _propertyManager = new PropertyManager(_config);
@@ -308,7 +321,13 @@ namespace LSOL
                 message => ShowStatus(message),
                 _playerContractsManager,
                 _territoryManager,
-                industry => _industryOutputPropManager.RefreshIndustry(industry));
+                industry =>
+                {
+                    if (!ShvdnRuntimeCompatibility.IsEnhancedRuntime)
+                    {
+                        _industryOutputPropManager.RefreshIndustry(industry);
+                    }
+                });
             var cargoFilterOrder = _config.CargoTypes != null && _config.CargoTypes.Count > 0
                 ? _config.CargoTypes
                 : new List<VehicleCargoType>
@@ -630,7 +649,7 @@ namespace LSOL
 
             _isConstructing = false;
 
-            Notification.PostTicker(PrefixMessage(Text(ModTextKey.DetailLoadedSuccessfully)), false, false);
+            ShvdnRuntimeCompatibility.PostTicker(PrefixMessage(Text(ModTextKey.DetailLoadedSuccessfully)), false, false);
         }
 
         private bool AnyMenuOpen
@@ -702,7 +721,10 @@ namespace LSOL
                 }
 
                 _industryManager.Update(elapsed / 60000f, _config.OmegaMultiplier);
-                _industryOutputPropManager.Update(player.Position);
+                if (!ShvdnRuntimeCompatibility.IsEnhancedRuntime)
+                {
+                    _industryOutputPropManager.Update(player.Position);
+                }
                 _fleetManager.CleanupStates();
                 _vehicleFuelSystem.CleanupStates();
                 _territoryManager.EvaluateFinancialPressure(_profit, gameTime, message => ShowStatus(message, 4500));
@@ -809,7 +831,11 @@ namespace LSOL
 
             if (e.KeyCode == _controls.OpenDebugMenu)
             {
-                ToggleDebugMenu();
+                if (_developerModeEnabled)
+                {
+                    ToggleDebugMenu();
+                }
+
                 return;
             }
 
@@ -6510,7 +6536,7 @@ namespace LSOL
                 _tabletStateStore.MarkStatusDirty();
             }
 
-            Notification.PostTicker(prefixed, false, false);
+            ShvdnRuntimeCompatibility.PostTicker(prefixed, false, false);
         }
 
         private void SweepIndustryObjectDeletions(Ped player, int gameTime)

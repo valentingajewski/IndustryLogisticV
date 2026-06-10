@@ -11,15 +11,62 @@ namespace LSOL
     internal static class ShvdnRuntimeCompatibility
     {
         private const string SdkDirectoryName = "scripthookdotnet";
+        private const string EnhancedSdkDirectoryName = "shdn_enhanced";
+
+        // SHVDN "Enhanced" (GTA5_Enhanced.exe) ships ScriptHookVDotNet3 assembly version 3.9+,
+        // while the Legacy build ships 3.7.x. Both target net48 and share the same assembly name,
+        // so a single LSOL.dll binds by name and loads under either runtime.
+        private static readonly Version EnhancedRuntimeMinimumVersion = new Version(3, 9, 0, 0);
 
         private static readonly object AssemblyResolverSync = new object();
         private static bool _assemblyResolverInstalled;
-        
+
+        private static readonly object EnhancedRuntimeSync = new object();
+        private static bool _enhancedRuntimeResolved;
+        private static bool _isEnhancedRuntime;
+
         private static readonly object NotificationResolveSync = new object();
         private static bool _notificationResolved;
         private static MethodInfo _notificationPostTickerMethod;
         private static MethodInfo _notificationShowMethod;
         private static MethodInfo _screenShowSubtitleMethod;
+
+        /// <summary>
+        /// True when LSOL is running under the SHVDN Enhanced runtime (ScriptHookVDotNet3 &gt;= 3.9).
+        /// Used to gate subsystems that are unstable on the Enhanced game build.
+        /// </summary>
+        public static bool IsEnhancedRuntime
+        {
+            get
+            {
+                if (_enhancedRuntimeResolved)
+                {
+                    return _isEnhancedRuntime;
+                }
+
+                lock (EnhancedRuntimeSync)
+                {
+                    if (_enhancedRuntimeResolved)
+                    {
+                        return _isEnhancedRuntime;
+                    }
+
+                    try
+                    {
+                        var runtimeVersion = typeof(Script).Assembly.GetName().Version;
+                        _isEnhancedRuntime = runtimeVersion != null && runtimeVersion >= EnhancedRuntimeMinimumVersion;
+                    }
+                    catch
+                    {
+                        _isEnhancedRuntime = false;
+                    }
+
+                    _enhancedRuntimeResolved = true;
+                }
+
+                return _isEnhancedRuntime;
+            }
+        }
 
         public static void EnsureInitialized(string baseDirectory, string assemblyLocation)
         {
@@ -163,6 +210,16 @@ namespace LSOL
                 return null;
             }
 
+            // LemonUI.SHVDN3 is built against an older ScriptHookVDotNet3 version (3.6.x) than the
+            // runtime that loads it (Legacy 3.7.x or Enhanced 3.9.x). Returning the already-loaded
+            // assembly with the same simple name keeps a single SHVDN3 type identity, so LemonUI's
+            // GTA.Script/UI types stay compatible with the host instead of binding to a second copy.
+            var loadedAssembly = FindLoadedAssemblyBySimpleName(requestedAssemblyName);
+            if (loadedAssembly != null)
+            {
+                return loadedAssembly;
+            }
+
             for (int i = 0; i < probeDirectories.Count; i++)
             {
                 var candidatePath = Path.Combine(probeDirectories[i], requestedAssemblyName + ".dll");
@@ -178,6 +235,39 @@ namespace LSOL
                 catch
                 {
                 }
+            }
+
+            return null;
+        }
+
+        private static Assembly FindLoadedAssemblyBySimpleName(string simpleName)
+        {
+            if (string.IsNullOrWhiteSpace(simpleName))
+            {
+                return null;
+            }
+
+            try
+            {
+                var loadedAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+                for (int i = 0; i < loadedAssemblies.Length; i++)
+                {
+                    var candidate = loadedAssemblies[i];
+                    if (candidate == null)
+                    {
+                        continue;
+                    }
+
+                    var candidateName = candidate.GetName().Name;
+                    if (!string.IsNullOrEmpty(candidateName)
+                        && candidateName.Equals(simpleName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+            catch
+            {
             }
 
             return null;
@@ -208,6 +298,7 @@ namespace LSOL
             var depth = 0;
             while (!string.IsNullOrWhiteSpace(current) && depth < 6)
             {
+                AddDirectory(directories, Path.Combine(current, EnhancedSdkDirectoryName));
                 AddDirectory(directories, Path.Combine(current, SdkDirectoryName));
                 current = NormalizeDirectoryPath(Path.GetDirectoryName(current));
                 depth += 1;

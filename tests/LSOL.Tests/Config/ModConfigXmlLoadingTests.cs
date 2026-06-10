@@ -85,6 +85,49 @@ namespace LSOL.Tests.Config
             AssertLooseCargoRule(tiptruck2Layout, 10);
         }
 
+        [TestMethod]
+        public void Load_WithRepoLsolConfig_KeepsDeveloperModeDisabledByDefault()
+        {
+            var configDirectory = Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config");
+
+            var config = ModConfig.Load(configDirectory);
+
+            Assert.IsFalse(config.DeveloperModeEnabled);
+        }
+
+        [TestMethod]
+        public void Load_WithDeveloperFlagEnabled_EnablesDeveloperMode()
+        {
+            var config = LoadWithCoreDeveloperElement("<Developer enableDeveloperMode=\"true\" passkey=\"\" />");
+
+            Assert.IsTrue(config.DeveloperModeEnabled);
+        }
+
+        [TestMethod]
+        public void Load_WithDeveloperPasskeySet_EnablesDeveloperMode()
+        {
+            var config = LoadWithCoreDeveloperElement("<Developer enableDeveloperMode=\"false\" passkey=\"abc123\" />");
+
+            Assert.IsTrue(config.DeveloperModeEnabled);
+        }
+
+        private static ModConfig LoadWithCoreDeveloperElement(string developerElement)
+        {
+            var repoConfigDirectory = Path.Combine(TestWorkspace.GetRepoRoot(), "LSOL_Config");
+            var tempSitesPath = TestWorkspace.CreateTempFilePath("Sites.xml");
+            var tempConfigDirectory = Path.GetDirectoryName(tempSitesPath);
+
+            File.Copy(Path.Combine(repoConfigDirectory, "Resources.xml"), Path.Combine(tempConfigDirectory, "Resources.xml"));
+            File.Copy(Path.Combine(repoConfigDirectory, "Districts.xml"), Path.Combine(tempConfigDirectory, "Districts.xml"));
+            File.Copy(Path.Combine(repoConfigDirectory, "Sites.xml"), Path.Combine(tempConfigDirectory, "Sites.xml"));
+
+            var coreXml = File.ReadAllText(Path.Combine(repoConfigDirectory, "Core.xml"));
+            coreXml = coreXml.Replace("<Developer enableDeveloperMode=\"false\" passkey=\"\" />", developerElement);
+            File.WriteAllText(Path.Combine(tempConfigDirectory, "Core.xml"), coreXml);
+
+            return ModConfig.Load(tempConfigDirectory);
+        }
+
         private static void AssertLooseCargoRule(VehicleObjectLayoutDefinition layout, int expectedMaxPropCount)
         {
             Assert.IsNotNull(layout);

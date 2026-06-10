@@ -9,11 +9,22 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <UseWindowsForms>true</UseWindowsForms>
+    <!--
+      ShvdnVariant selects which ScriptHookVDotNet v3 reference assembly LSOL compiles against.
+      Both variants share the assembly name "ScriptHookVDotNet3", so a single LSOL.dll binds
+      by name and loads under either runtime at game start.
+        Legacy   -> scripthookdotnet\   (SHVDN3 3.7.x, GTA5.exe Legacy)
+        Enhanced -> shdn_enhanced\      (SHVDN3 3.9.x, GTA5_Enhanced.exe)
+      Build the strictest target (Enhanced) to verify the used API surface exists in both.
+    -->
+    <ShvdnVariant Condition="'$(ShvdnVariant)' == ''">Legacy</ShvdnVariant>
+    <ShvdnReferenceDir Condition="'$(ShvdnVariant)' == 'Enhanced'">shdn_enhanced</ShvdnReferenceDir>
+    <ShvdnReferenceDir Condition="'$(ShvdnReferenceDir)' == ''">scripthookdotnet</ShvdnReferenceDir>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="ScriptHookVDotNet3">
-      <HintPath>scripthookdotnet\ScriptHookVDotNet3.dll</HintPath>
+      <HintPath>$(ShvdnReferenceDir)\ScriptHookVDotNet3.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="LemonUI.SHVDN3">

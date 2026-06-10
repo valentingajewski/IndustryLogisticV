@@ -32,6 +32,10 @@ namespace LSOL.Config
 
         public float VehicleSpawnHeading { get; set; } = 230f;
 
+        public bool DeveloperModeEnabled { get; set; }
+
+        public string DeveloperPasskey { get; set; } = string.Empty;
+
         public ControlBindings Controls { get; }
 
         public XmlDensityProfileConfig StoreDensityProfile { get; }

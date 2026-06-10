@@ -394,9 +394,6 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateInfoItem(
                     "Lowest Expected Cash",
                     string.Format("Worst point {0} | {1}", ModFormatting.FormatMoney(forecast.LowestProjectedBalance), forecast.TurnsNegative ? "Forecast turns negative" : "Forecast stays above zero")),
-                TabletUiHelpers.CreateInfoItem(
-                    "Assumption",
-                    "Forecast replays the last 7 in-game days of income against currently known scheduled obligations only."),
                 TabletUiHelpers.CreateNavigationItem("Back", "Return to Budget.", () => context.GoBack(), "BACK"),
             };
 
