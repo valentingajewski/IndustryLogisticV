@@ -3925,6 +3925,17 @@ namespace LSOL.UI
                 }
             }
 
+            if (summary != null && summary.RequiresIndustryPurchase)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    "Purchase Site",
+                    string.Format(
+                        "Buy {0} for {1}",
+                        industry.Name,
+                        ModFormatting.FormatMoney(industry.IndustryPrice)),
+                    () => context.Push(TabletAppIds.Industry, "purchase-confirm", industry)));
+            }
+
             items.Add(TabletUiHelpers.CreateActionItem(
                 "View Statistics",
                 statisticsDetail,

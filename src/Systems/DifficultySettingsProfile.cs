@@ -20,6 +20,7 @@ namespace LSOL.Systems
                 OfficeGarageLimitDifficultyEnabled = true,
                 OfficeNpcLimitDifficultyEnabled = false,
                 NpcRouteLimit = 5,
+                MaxModuleLimitPerSite = 10,
             };
         }
 
@@ -44,6 +45,7 @@ namespace LSOL.Systems
                 OfficeGarageLimitDifficultyEnabled = metadata.OfficeGarageLimitDifficultyEnabled,
                 OfficeNpcLimitDifficultyEnabled = metadata.OfficeNpcLimitDifficultyEnabled,
                 NpcRouteLimit = metadata.NpcRouteLimit,
+                MaxModuleLimitPerSite = metadata.MaxModuleLimitPerSite,
             };
         }
 
@@ -71,6 +73,8 @@ namespace LSOL.Systems
 
         public int NpcRouteLimit { get; set; }
 
+        public int MaxModuleLimitPerSite { get; set; }
+
         public DifficultySettingsProfile Clone()
         {
             return new DifficultySettingsProfile
@@ -87,6 +91,7 @@ namespace LSOL.Systems
                 OfficeGarageLimitDifficultyEnabled = OfficeGarageLimitDifficultyEnabled,
                 OfficeNpcLimitDifficultyEnabled = OfficeNpcLimitDifficultyEnabled,
                 NpcRouteLimit = NpcRouteLimit,
+                MaxModuleLimitPerSite = MaxModuleLimitPerSite,
             };
         }
 
@@ -109,6 +114,7 @@ namespace LSOL.Systems
             metadata.OfficeGarageLimitDifficultyEnabled = OfficeGarageLimitDifficultyEnabled;
             metadata.OfficeNpcLimitDifficultyEnabled = OfficeNpcLimitDifficultyEnabled;
             metadata.NpcRouteLimit = NpcRouteLimit;
+            metadata.MaxModuleLimitPerSite = MaxModuleLimitPerSite;
         }
 
         public void ApplyBooleanBulkState(bool enabled)
@@ -153,7 +159,8 @@ namespace LSOL.Systems
                 && ReputationDifficultyEnabled == other.ReputationDifficultyEnabled
                 && OfficeGarageLimitDifficultyEnabled == other.OfficeGarageLimitDifficultyEnabled
                 && OfficeNpcLimitDifficultyEnabled == other.OfficeNpcLimitDifficultyEnabled
-                && NpcRouteLimit == other.NpcRouteLimit;
+                && NpcRouteLimit == other.NpcRouteLimit
+                && MaxModuleLimitPerSite == other.MaxModuleLimitPerSite;
         }
 
         public override bool Equals(object obj)
@@ -177,6 +184,7 @@ namespace LSOL.Systems
                 hashCode = (hashCode * 397) ^ OfficeGarageLimitDifficultyEnabled.GetHashCode();
                 hashCode = (hashCode * 397) ^ OfficeNpcLimitDifficultyEnabled.GetHashCode();
                 hashCode = (hashCode * 397) ^ NpcRouteLimit;
+                hashCode = (hashCode * 397) ^ MaxModuleLimitPerSite;
                 return hashCode;
             }
         }

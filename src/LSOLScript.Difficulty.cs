@@ -34,6 +34,7 @@ namespace LSOL
                 OfficeGarageLimitDifficultyEnabled = _officeGarageLimitDifficultyEnabled,
                 OfficeNpcLimitDifficultyEnabled = _officeNpcLimitDifficultyEnabled,
                 NpcRouteLimit = _npcRouteLimit,
+                MaxModuleLimitPerSite = _maxModuleLimitPerSite,
             };
         }
 
@@ -53,6 +54,7 @@ namespace LSOL
                 OfficeGarageLimitDifficultyEnabled = _pendingOfficeGarageLimitDifficultyEnabled,
                 OfficeNpcLimitDifficultyEnabled = _pendingOfficeNpcLimitDifficultyEnabled,
                 NpcRouteLimit = _pendingNpcRouteLimit,
+                MaxModuleLimitPerSite = _pendingMaxModuleLimitPerSite,
             };
         }
 
@@ -78,6 +80,7 @@ namespace LSOL
             _officeGarageLimitDifficultyEnabled = profile.OfficeGarageLimitDifficultyEnabled;
             _officeNpcLimitDifficultyEnabled = profile.OfficeNpcLimitDifficultyEnabled;
             _npcRouteLimit = ClampNpcRouteLimit(profile.NpcRouteLimit);
+            _maxModuleLimitPerSite = ClampMaxModuleLimitPerSite(profile.MaxModuleLimitPerSite);
         }
 
         private void SetPendingDifficultyProfile(DifficultySettingsProfile profile)
@@ -95,6 +98,7 @@ namespace LSOL
             _pendingOfficeGarageLimitDifficultyEnabled = profile.OfficeGarageLimitDifficultyEnabled;
             _pendingOfficeNpcLimitDifficultyEnabled = profile.OfficeNpcLimitDifficultyEnabled;
             _pendingNpcRouteLimit = ClampNpcRouteLimit(profile.NpcRouteLimit);
+            _pendingMaxModuleLimitPerSite = ClampMaxModuleLimitPerSite(profile.MaxModuleLimitPerSite);
         }
 
         private void SyncPendingDifficultyProfileFromLive()
@@ -322,6 +326,24 @@ namespace LSOL
                             OnLeft = () => ChangeNpcRouteLimit(-1),
                             OnRight = () => ChangeNpcRouteLimit(1),
                             OnActivate = () => ChangeNpcRouteLimit(1),
+                        };
+                case DifficultySettingKind.MaxModuleLimitPerSite:
+                    return target == DifficultyProfileTarget.Pending
+                        ? new OfficeMenuItem
+                        {
+                            CaptionFactory = CurrentPendingMaxModuleLimitPerSiteCaption,
+                            DetailFactory = CurrentMaxModuleLimitPerSiteDetail,
+                            OnLeft = () => ChangePendingMaxModuleLimitPerSite(-1),
+                            OnRight = () => ChangePendingMaxModuleLimitPerSite(1),
+                            OnActivate = () => ChangePendingMaxModuleLimitPerSite(1),
+                        }
+                        : new OfficeMenuItem
+                        {
+                            CaptionFactory = CurrentMaxModuleLimitPerSiteCaption,
+                            DetailFactory = CurrentMaxModuleLimitPerSiteDetail,
+                            OnLeft = () => ChangeMaxModuleLimitPerSite(-1),
+                            OnRight = () => ChangeMaxModuleLimitPerSite(1),
+                            OnActivate = () => ChangeMaxModuleLimitPerSite(1),
                         };
                 default:
                     throw new ArgumentOutOfRangeException(nameof(kind), kind, null);

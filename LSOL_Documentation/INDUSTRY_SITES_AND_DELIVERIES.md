@@ -43,6 +43,10 @@ Depending on your current settings and the site definition, you may need:
 
 Starter-tier sites are starter access, not universal free ownership. If a site still belongs to someone else, owner-cut rules can reduce your effective delivery profit until you buy it.
 
+You can buy a site two ways:
+- From the **company hub tablet**: open the Network app, pick the industry, warehouse, or store, and use **Purchase Site**. This reads the price straight from the site configuration and does not require you to drive out to the marker.
+- On location: stand near the marker, open the industry tablet, and use the buy action there.
+
 By opening the game map you can still check whether a site is owned, open or closed:
 - Green blip color means the site is owned by the player
 - Yellow blip color means the site is openned. Site is not owned but still resources can be unload or load.
@@ -59,7 +63,7 @@ The industry tablet is your main site interface. It is where you:
 - review stock and storage state
 - inspect inputs and outputs
 - buy upgrade modules
-- buy the site when ownership is required
+- buy the site when ownership is required (you can also buy it remotely from the company hub Network app via **Purchase Site**)
 
 ![image](../doc_images/industry_menu.JPG)
 ![image](../doc_images/industry_menu_stats.JPG)

@@ -90,6 +90,7 @@ namespace LSOL.Systems
         private EconomyDifficultyPreset _economyPreset;
         private bool _industryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
+        private int _maxModuleLimitPerSite;
 
         public IndustryManager(ModConfig config)
         {
@@ -153,6 +154,21 @@ namespace LSOL.Systems
         public void SetLicensingDifficultyEnabled(bool enabled)
         {
             _licensingDifficultyEnabled = enabled;
+        }
+
+        public void SetMaxModuleLimitPerSite(int limit)
+        {
+            _maxModuleLimitPerSite = Math.Max(1, Math.Min(10, limit));
+        }
+
+        public bool IsAtModuleLimit(Industry industry)
+        {
+            if (industry == null)
+            {
+                return false;
+            }
+
+            return _maxModuleLimitPerSite > 0 && industry.UpgradeLevel >= _maxModuleLimitPerSite;
         }
 
         public void ConfigureMarketPressure(GlobalMarketManager globalMarket)

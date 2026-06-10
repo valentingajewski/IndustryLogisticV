@@ -18,6 +18,7 @@ namespace LSOL.UI
                 string.Format("Difficulty {0} preset", FormatEconomyDifficultyPreset(profile.EconomyDifficultyPreset)),
                 string.Format("Wages {0}", FormatNpcWeeklyWageDifficulty(profile.NpcWeeklyWageDifficulty)),
                 string.Format("Routes {0}", Math.Max(0, profile.NpcRouteLimit)),
+                string.Format("Modules {0}", Math.Max(1, profile.MaxModuleLimitPerSite)),
                 string.Format("Challenges {0}/{1}", profile.CountEnabledBooleanSettings(), DifficultySettingsCatalog.BooleanSettingCount),
             };
 

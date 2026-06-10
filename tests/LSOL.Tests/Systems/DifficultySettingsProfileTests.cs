@@ -14,6 +14,7 @@ namespace LSOL.Tests.Systems
                 EconomyDifficultyPreset = EconomyDifficultyPreset.Impossible,
                 NpcWeeklyWageDifficulty = NpcWeeklyWageDifficulty.Hardcore,
                 NpcRouteLimit = 0,
+                MaxModuleLimitPerSite = 7,
                 VehicleFuelDifficultyEnabled = false,
                 CargoWeightPowerDifficultyEnabled = false,
                 CargoDamageDifficultyEnabled = true,
@@ -30,6 +31,7 @@ namespace LSOL.Tests.Systems
             Assert.AreEqual(EconomyDifficultyPreset.Impossible, profile.EconomyDifficultyPreset);
             Assert.AreEqual(NpcWeeklyWageDifficulty.Hardcore, profile.NpcWeeklyWageDifficulty);
             Assert.AreEqual(0, profile.NpcRouteLimit);
+            Assert.AreEqual(7, profile.MaxModuleLimitPerSite);
             Assert.IsTrue(profile.VehicleFuelDifficultyEnabled);
             Assert.IsTrue(profile.CargoWeightPowerDifficultyEnabled);
             Assert.IsTrue(profile.CargoDamageDifficultyEnabled);
@@ -45,6 +47,7 @@ namespace LSOL.Tests.Systems
             Assert.AreEqual(EconomyDifficultyPreset.Impossible, profile.EconomyDifficultyPreset);
             Assert.AreEqual(NpcWeeklyWageDifficulty.Hardcore, profile.NpcWeeklyWageDifficulty);
             Assert.AreEqual(0, profile.NpcRouteLimit);
+            Assert.AreEqual(7, profile.MaxModuleLimitPerSite);
             Assert.IsFalse(profile.VehicleFuelDifficultyEnabled);
             Assert.IsFalse(profile.CargoWeightPowerDifficultyEnabled);
             Assert.IsFalse(profile.CargoDamageDifficultyEnabled);

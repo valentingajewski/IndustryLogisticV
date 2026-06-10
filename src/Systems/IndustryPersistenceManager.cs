@@ -405,6 +405,7 @@ namespace LSOL.Systems
                 writer.WriteLine("EconomyDifficultyPreset={0}", metadata.EconomyDifficultyPreset);
                 writer.WriteLine("NpcWeeklyWageDifficulty={0}", metadata.NpcWeeklyWageDifficulty);
                 writer.WriteLine("NpcRouteLimit={0}", metadata.NpcRouteLimit);
+                writer.WriteLine("MaxModuleLimitPerSite={0}", metadata.MaxModuleLimitPerSite);
                 writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
             }
             writer.WriteLine();
@@ -577,6 +578,9 @@ namespace LSOL.Systems
             metadata.NpcRouteLimit = ParseInt(
                 ini.GetString("Meta", "NpcRouteLimit", "5"),
                 5);
+            metadata.MaxModuleLimitPerSite = ParseInt(
+                ini.GetString("Meta", "MaxModuleLimitPerSite", "10"),
+                10);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
             metadata.Analytics = ReadAnalyticsSnapshot(ini);
             metadata.Market = ReadGlobalMarketSnapshot(ini);
@@ -3952,6 +3956,7 @@ namespace LSOL.Systems
         public EconomyDifficultyPreset EconomyDifficultyPreset { get; set; } = EconomyDifficultyPreset.Standard;
         public NpcWeeklyWageDifficulty NpcWeeklyWageDifficulty { get; set; } = NpcWeeklyWageDifficulty.Standard;
         public int NpcRouteLimit { get; set; } = 5;
+        public int MaxModuleLimitPerSite { get; set; } = 10;
         public bool DifficultySettingsLocked { get; set; }
         public TabletAnalyticsPersistenceSnapshot Analytics { get; set; }
         public GlobalMarketPersistenceSnapshot Market { get; set; }

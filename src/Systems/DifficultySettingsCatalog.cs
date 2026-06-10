@@ -18,6 +18,7 @@ namespace LSOL.Systems
         OfficeGarageLimitDifficultyEnabled = 9,
         OfficeNpcLimitDifficultyEnabled = 10,
         NpcRouteLimit = 11,
+        MaxModuleLimitPerSite = 12,
     }
 
     internal sealed class DifficultySettingDescriptor
@@ -52,6 +53,7 @@ namespace LSOL.Systems
             new DifficultySettingDescriptor(DifficultySettingKind.OfficeGarageLimitDifficultyEnabled, true, true),
             new DifficultySettingDescriptor(DifficultySettingKind.OfficeNpcLimitDifficultyEnabled, true, true),
             new DifficultySettingDescriptor(DifficultySettingKind.NpcRouteLimit, false, false),
+            new DifficultySettingDescriptor(DifficultySettingKind.MaxModuleLimitPerSite, false, false),
         });
 
         private static readonly ReadOnlyCollection<DifficultySettingDescriptor> BooleanBulkSettingsInternal = Array.AsReadOnly(

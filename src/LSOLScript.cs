@@ -37,6 +37,9 @@ namespace LSOL
         private const int DefaultNpcRouteLimit = 5;
         private const int MinNpcRouteLimit = 0;
         private const int MaxNpcRouteLimit = 10;
+        private const int DefaultMaxModuleLimitPerSite = 10;
+        private const int MinMaxModuleLimitPerSite = 1;
+        private const int MaxMaxModuleLimitPerSite = 10;
         private const int AlertRuleEvaluationIntervalMs = 15000;
         private const int AlertRuleNotificationCooldownMs = 180000;
         private const int AlertRuleGlobalCooldownMs = 45000;
@@ -192,6 +195,8 @@ namespace LSOL
         private NpcWeeklyWageDifficulty _pendingNpcWeeklyWageDifficulty;
         private int _npcRouteLimit;
         private int _pendingNpcRouteLimit;
+        private int _maxModuleLimitPerSite;
+        private int _pendingMaxModuleLimitPerSite;
         private bool _vehicleFuelDifficultyEnabled;
         private bool _pendingVehicleFuelDifficultyEnabled;
         private bool _cargoWeightPowerDifficultyEnabled;
@@ -809,7 +814,7 @@ namespace LSOL
 
             if (IsDebugMenuHotkey(e))
             {
-                if (!CanHandleKeyPress(e.KeyCode))
+                if (!_developerModeEnabled || !CanHandleKeyPress(e.KeyCode))
                 {
                     return;
                 }
@@ -2847,6 +2852,21 @@ namespace LSOL
             return Text(ModTextKey.DetailNpcRouteLimit);
         }
 
+        private string CurrentMaxModuleLimitPerSiteCaption()
+        {
+            return Text(ModTextKey.RowMaxModuleLimitPerSite, FormatMaxModuleLimitPerSiteValue(_maxModuleLimitPerSite));
+        }
+
+        private string CurrentPendingMaxModuleLimitPerSiteCaption()
+        {
+            return Text(ModTextKey.RowMaxModuleLimitPerSite, FormatMaxModuleLimitPerSiteValue(_pendingMaxModuleLimitPerSite));
+        }
+
+        private string CurrentMaxModuleLimitPerSiteDetail()
+        {
+            return Text(ModTextKey.DetailMaxModuleLimitPerSite);
+        }
+
         private string CurrentOfficeNpcLimitDetail()
         {
             return BuildOfficeNpcLimitDetail(_officeNpcLimitDifficultyEnabled);
@@ -2988,6 +3008,11 @@ namespace LSOL
             _pendingNpcRouteLimit = ClampNpcRouteLimit(_pendingNpcRouteLimit + delta);
         }
 
+        private void ChangePendingMaxModuleLimitPerSite(int delta)
+        {
+            _pendingMaxModuleLimitPerSite = ClampMaxModuleLimitPerSite(_pendingMaxModuleLimitPerSite + delta);
+        }
+
         private void ChangePendingEconomyDifficultyPreset(int delta)
         {
             _pendingEconomyDifficultyPreset = OffsetEconomyDifficultyPreset(_pendingEconomyDifficultyPreset, delta);
@@ -3117,6 +3142,18 @@ namespace LSOL
             ApplyDifficultySettingsToSystems();
         }
 
+        private void ChangeMaxModuleLimitPerSite(int delta)
+        {
+            if (_difficultySettingsLocked)
+            {
+                ShowDifficultySettingsLockedStatus();
+                return;
+            }
+
+            _maxModuleLimitPerSite = ClampMaxModuleLimitPerSite(_maxModuleLimitPerSite + delta);
+            ApplyDifficultySettingsToSystems();
+        }
+
         private void ChangeNpcWeeklyWageDifficulty(int delta)
         {
             if (_difficultySettingsLocked)
@@ -3170,6 +3207,7 @@ namespace LSOL
             _industryManager.SetIndustryPricingDifficultyEnabled(_industryPricingDifficultyEnabled);
             _industryManager.SetLicensingDifficultyEnabled(_licensingDifficultyEnabled);
             _industryManager.SetEconomyDifficultyPreset(_economyDifficultyPreset);
+            _industryManager.SetMaxModuleLimitPerSite(_maxModuleLimitPerSite);
             _propertyManager.SetOfficeGarageLimitEnforced(_officeGarageLimitDifficultyEnabled);
             _vehicleFuelSystem.SetDifficultyEnabled(_vehicleFuelDifficultyEnabled);
             _vehicleLoadPowerService.SetDifficultyEnabled(_cargoWeightPowerDifficultyEnabled);
@@ -3294,6 +3332,16 @@ namespace LSOL
         private static string FormatNpcRouteLimitValue(int routeLimit)
         {
             return ClampNpcRouteLimit(routeLimit).ToString();
+        }
+
+        private static int ClampMaxModuleLimitPerSite(int value)
+        {
+            return Math.Max(MinMaxModuleLimitPerSite, Math.Min(MaxMaxModuleLimitPerSite, value));
+        }
+
+        private static string FormatMaxModuleLimitPerSiteValue(int value)
+        {
+            return ClampMaxModuleLimitPerSite(value).ToString();
         }
 
         private static NpcWeeklyWageDifficulty OffsetWeeklyWageDifficulty(NpcWeeklyWageDifficulty current, int delta)
@@ -5332,6 +5380,12 @@ namespace LSOL
                 return;
             }
 
+            if (_industryManager.IsAtModuleLimit(industry))
+            {
+                ShowStatus(string.Format("Module limit reached ({0}/{0}). Adjust difficulty settings to raise cap.", _maxModuleLimitPerSite));
+                return;
+            }
+
             float cost;
             string result;
             var balanceBefore = _profit;
@@ -5590,6 +5644,12 @@ namespace LSOL
             if (_industryManager.RequiresIndustryPurchase(_menuIndustry))
             {
                 OpenIndustryPurchaseMenu(_menuIndustry, IndustryPurchaseMenuReturnTarget.UpgradeMenu);
+                return;
+            }
+
+            if (_industryManager.IsAtModuleLimit(_menuIndustry))
+            {
+                ShowStatus(string.Format("Module limit reached ({0}/{0}). Adjust difficulty settings to raise cap.", _maxModuleLimitPerSite));
                 return;
             }
 
