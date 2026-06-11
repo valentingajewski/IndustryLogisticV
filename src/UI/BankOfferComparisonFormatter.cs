@@ -30,14 +30,14 @@ namespace LSOL.UI
         public static string BuildBranchLabel(string displayName, string bankId, bool disambiguate)
         {
             var resolvedName = string.IsNullOrWhiteSpace(displayName)
-                ? "Bank"
+                ? LocalizedText.Get(ModTextKey.BankingMenuTitle)
                 : displayName.Trim();
             if (!disambiguate || string.IsNullOrWhiteSpace(bankId))
             {
                 return resolvedName;
             }
 
-            return string.Format("{0} #{1}", resolvedName, bankId.Trim());
+            return LocalizedText.Format(ModTextKey.BankingValueBranchWithId, resolvedName, bankId.Trim());
         }
 
         public static string BuildCaption(BankOfferComparisonRow row)
@@ -49,7 +49,7 @@ namespace LSOL.UI
 
             var label = BuildBranchLabel(row.DisplayName, row.BankId, row.NameIsDuplicated);
             return row.IsCurrentBranch
-                ? string.Format("{0} [HERE]", label)
+                ? LocalizedText.Format(ModTextKey.BankingValueCurrentBranchHere, label)
                 : label;
         }
 
@@ -62,8 +62,8 @@ namespace LSOL.UI
 
             if (IsCapped(row))
             {
-                return string.Format(
-                    "Requested {0} exceeds max {1} | Rate {2} | Capped total {3} | Capped installment {4}/w",
+                return LocalizedText.Format(
+                    ModTextKey.BankingDetailComparisonCapped,
                     ModFormatting.FormatMoney(Math.Max(0f, row.RequestedPrincipal)),
                     ModFormatting.FormatMoney(Math.Max(0f, row.MaxAvailablePrincipal)),
                     ModFormatting.FormatPercent(Math.Max(0f, row.OfferedRatePercent)),
@@ -71,8 +71,8 @@ namespace LSOL.UI
                     ModFormatting.FormatMoney(Math.Max(0f, row.PreviewWeeklyInstallment)));
             }
 
-            return string.Format(
-                "Rate {0} | Installment {1}/w | Total {2} | Max {3}",
+            return LocalizedText.Format(
+                ModTextKey.BankingDetailComparisonNormal,
                 ModFormatting.FormatPercent(Math.Max(0f, row.OfferedRatePercent)),
                 ModFormatting.FormatMoney(Math.Max(0f, row.PreviewWeeklyInstallment)),
                 ModFormatting.FormatMoney(Math.Max(0f, row.PreviewTotalRepayment)),

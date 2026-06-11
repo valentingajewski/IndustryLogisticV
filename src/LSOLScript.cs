@@ -3703,7 +3703,7 @@ namespace LSOL
 
         private void RebuildOfficeMenuItems()
         {
-            _officeMenu.Title = "Office Menu";
+            _officeMenu.Title = Text(ModTextKey.PropertyMenuOfficeTitle);
             _officeMenu.Subtitle = BuildOfficeMenuSubtitle();
             _officeMenu.SetItems(BuildOfficeMenuItems());
         }

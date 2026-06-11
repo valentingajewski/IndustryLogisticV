@@ -76,7 +76,7 @@ namespace LSOL.UI
             {
                 DrawTextBlock(
                     panel.Resolution,
-                    "History builds as gameplay runs. Keep the save active for a few samples.",
+                    LocalizedText.Get("tablet.chart.history.pending"),
                     panel.X + 14f,
                     panel.Y + 58f,
                     0.21f,
@@ -196,7 +196,7 @@ namespace LSOL.UI
             {
                 DrawTextBlock(
                     panel.Resolution,
-                    "No comparison data is currently available.",
+                    LocalizedText.Get("tablet.chart.comparison.none"),
                     panel.X + 14f,
                     panel.Y + 58f,
                     0.21f,
@@ -291,7 +291,7 @@ namespace LSOL.UI
             {
                 DrawTextBlock(
                     panel.Resolution,
-                    "No route metrics are available for the current selection.",
+                    LocalizedText.Get("tablet.chart.metrics.none"),
                     panel.X + 14f,
                     panel.Y + 58f,
                     0.21f,

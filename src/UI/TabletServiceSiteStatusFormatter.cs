@@ -20,19 +20,18 @@ namespace LSOL.UI
             var remainingTons = Math.Max(0f, requiredTons - currentTons);
             var deliveries = Math.Max(0, summary.ServiceCurrentWeekDeliveries);
             var progressStatus = remainingTons <= ServiceTargetDisplayThresholdTons
-                ? LocalizedText.GetOrDefault("tablet.service.weeklyTarget.met", "Met this week")
-                : LocalizedText.FormatOrDefault("tablet.service.weeklyTarget.remaining", "{0:0.0}t remaining", remainingTons);
+                ? LocalizedText.Get("tablet.service.weeklyTarget.met")
+                : LocalizedText.Format("tablet.service.weeklyTarget.remaining", remainingTons);
 
-            return LocalizedText.FormatOrDefault(
+            return LocalizedText.Format(
                 "tablet.service.weeklyTarget.detail",
-                "{0:0.0}/{1:0.0}t | {2} | {3} {4}",
                 currentTons,
                 requiredTons,
                 progressStatus,
                 deliveries,
                 deliveries == 1
-                    ? LocalizedText.GetOrDefault("tablet.service.weeklyTarget.delivery", "delivery")
-                    : LocalizedText.GetOrDefault("tablet.service.weeklyTarget.deliveries", "deliveries"));
+                    ? LocalizedText.Get("tablet.service.weeklyTarget.delivery")
+                    : LocalizedText.Get("tablet.service.weeklyTarget.deliveries"));
         }
 
         public static string BuildContractStatusDetail(TabletLocationSummary summary)
@@ -45,16 +44,16 @@ namespace LSOL.UI
             if (!summary.IsOwnedByPlayer && HasServiceReadiness(summary))
             {
                 var openMarketStatus = !string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
-                    ? summary.ServiceContractStatus
-                    : LocalizedText.GetOrDefault("tablet.service.contractStatus.openMarket", "Open market");
-                return LocalizedText.FormatOrDefault("tablet.service.contractStatus.lockedUntilPurchase", "{0} | Locked until purchase", openMarketStatus);
+                    ? ServiceStatusCatalog.Display(summary.ServiceContractStatus)
+                    : LocalizedText.Get("tablet.service.contractStatus.openMarket");
+                return LocalizedText.Format("tablet.service.contractStatus.lockedUntilPurchase", openMarketStatus);
             }
 
             var segments = new List<string>();
             if (!string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
-                && !string.Equals(summary.ServiceContractStatus, "Open market", StringComparison.OrdinalIgnoreCase))
+                && !ServiceStatusCatalog.IsOpenMarket(summary.ServiceContractStatus))
             {
-                segments.Add(summary.ServiceContractStatus);
+                segments.Add(ServiceStatusCatalog.Display(summary.ServiceContractStatus));
             }
 
             var pressureDetail = BuildPressureDetail(summary);
@@ -84,14 +83,14 @@ namespace LSOL.UI
             var segments = new List<string>();
             if (summary.ServicePenaltySteps > 0)
             {
-                segments.Add(LocalizedText.FormatOrDefault("tablet.service.pressure.penalty", "Penalty {0}/{1}", Math.Max(0, summary.ServicePenaltySteps), MaxPenaltySteps));
+                segments.Add(LocalizedText.Format("tablet.service.pressure.penalty", Math.Max(0, summary.ServicePenaltySteps), MaxPenaltySteps));
             }
 
             if (summary.ServiceSuccessStreak > 0)
             {
                 segments.Add(summary.ServicePenaltySteps > 0
-                    ? LocalizedText.FormatOrDefault("tablet.service.pressure.recovery", "Recovery {0}", summary.ServiceSuccessStreak)
-                    : LocalizedText.FormatOrDefault("tablet.service.pressure.streak", "Streak {0}", summary.ServiceSuccessStreak));
+                    ? LocalizedText.Format("tablet.service.pressure.recovery", summary.ServiceSuccessStreak)
+                    : LocalizedText.Format("tablet.service.pressure.streak", summary.ServiceSuccessStreak));
             }
 
             return segments.Count > 0
@@ -108,19 +107,19 @@ namespace LSOL.UI
 
             if (summary.ServiceTargetMetLastWeek)
             {
-                return LocalizedText.GetOrDefault("tablet.service.lastWeek.met", "Last week met");
+                return LocalizedText.Get("tablet.service.lastWeek.met");
             }
 
             if (summary.ServicePenaltySteps > 0)
             {
-                return LocalizedText.GetOrDefault("tablet.service.lastWeek.missed", "Last week missed");
+                return LocalizedText.Get("tablet.service.lastWeek.missed");
             }
 
             return summary.ServiceRequiredWeeklyTons > ServiceTargetDisplayThresholdTons
                 || summary.ServiceCurrentWeekDeliveries > 0
                 || summary.ServiceCurrentWeekTons > ServiceTargetDisplayThresholdTons
                 || !string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
-                ? LocalizedText.GetOrDefault("tablet.service.lastWeek.pending", "Last week pending")
+                ? LocalizedText.Get("tablet.service.lastWeek.pending")
                 : string.Empty;
         }
 

@@ -50,7 +50,7 @@ namespace LSOL.UI
 
             if (!string.IsNullOrWhiteSpace(summary.ServicePassiveIncomeStatus))
             {
-                segments.Add(summary.ServicePassiveIncomeStatus);
+                segments.Add(ServiceStatusCatalog.Display(summary.ServicePassiveIncomeStatus));
             }
 
             if (summary.IsOwnedByPlayer)
@@ -61,7 +61,7 @@ namespace LSOL.UI
                 }
                 else if (!string.IsNullOrWhiteSpace(summary.ServiceRecentPayoutStatus))
                 {
-                    segments.Add(summary.ServiceRecentPayoutStatus);
+                    segments.Add(ServiceStatusCatalog.Display(summary.ServiceRecentPayoutStatus));
                 }
             }
             else

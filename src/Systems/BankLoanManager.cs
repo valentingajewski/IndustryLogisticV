@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LSOL.Domain;
+using LSOL.UI;
 
 namespace LSOL.Systems
 {
@@ -92,6 +93,16 @@ namespace LSOL.Systems
         private readonly Dictionary<string, List<BankOfferRateSnapshot>> _offerHistoryByBankId;
         private readonly CompanyFinanceTracker _financeTracker;
         private CompanyLoanState _activeLoan;
+
+        private static string Text(string key)
+        {
+            return ModLocalization.Service.Get(key);
+        }
+
+        private static string Text(string key, params object[] args)
+        {
+            return ModLocalization.Service.Format(key, args);
+        }
 
         public BankLoanManager(IEnumerable<BankDefinition> banks, CompanyFinanceTracker financeTracker)
         {
@@ -221,32 +232,32 @@ namespace LSOL.Systems
             message = string.Empty;
             if (bank == null)
             {
-                message = "No bank selected.";
+                message = Text(ModTextKey.BankingStatusNoBankSelected);
                 return false;
             }
 
             if (_activeLoan != null)
             {
-                message = string.Format("Finish the active loan from {0} before taking another one.", _activeLoan.BankName);
+                message = Text(ModTextKey.BankingStatusFinishActiveLoanFirst, _activeLoan.BankName);
                 return false;
             }
 
             if (!SupportedLoanTerms.Contains(termWeeks))
             {
-                message = "Selected repayment term is invalid.";
+                message = Text(ModTextKey.BankingStatusSelectedTermInvalid);
                 return false;
             }
 
             var preview = CreatePreview(bank, requestedPrincipal, termWeeks, currentInGameMinute);
             if (preview == null || preview.Principal <= 0.01f)
             {
-                message = "Loan amount must be greater than zero.";
+                message = Text(ModTextKey.BankingStatusLoanAmountPositive);
                 return false;
             }
 
             if (preview.Principal - bank.LoanAmountMaxLimit > 0.01f)
             {
-                message = string.Format("{0} can only offer up to {1}.", bank.DisplayName, ModFormatting.FormatMoney(bank.LoanAmountMaxLimit));
+                message = Text(ModTextKey.BankingStatusBankMaxOffer, bank.DisplayName, ModFormatting.FormatMoney(bank.LoanAmountMaxLimit));
                 return false;
             }
 
@@ -269,10 +280,10 @@ namespace LSOL.Systems
                 CompanyFinanceCategory.LoanDisbursement,
                 preview.Principal,
                 currentInGameMinute,
-                string.Format("Company loan from {0} at {1}", bank.DisplayName, ModFormatting.FormatPercent(preview.RatePercent)));
+                Text(ModTextKey.BankingFinanceIncomeLoanFromRate, bank.DisplayName, ModFormatting.FormatPercent(preview.RatePercent)));
 
-            message = string.Format(
-                "Secured {0} from {1}. Weekly installment {2} for {3} weeks.",
+            message = Text(
+                ModTextKey.BankingStatusSecuredLoan,
                 ModFormatting.FormatMoney(preview.Principal),
                 bank.DisplayName,
                 ModFormatting.FormatMoney(preview.WeeklyInstallment),
@@ -309,7 +320,7 @@ namespace LSOL.Systems
                     CompanyFinanceCategory.LoanRepayment,
                     dueAmount,
                     Math.Max(0, weekIndex * MinutesPerWeek),
-                    string.Format("Weekly loan repayment to {0}", _activeLoan.BankName));
+                    Text(ModTextKey.BankingFinanceExpenseWeeklyRepaymentTo, _activeLoan.BankName));
 
                 _activeLoan.RemainingBalance = Math.Max(0f, _activeLoan.RemainingBalance - dueAmount);
                 _activeLoan.WeeksPaid = Math.Min(_activeLoan.TermWeeks, _activeLoan.WeeksPaid + 1);
@@ -318,16 +329,16 @@ namespace LSOL.Systems
                 if (_activeLoan.RemainingBalance <= 0.01f || _activeLoan.WeeksPaid >= _activeLoan.TermWeeks)
                 {
                     var completedBankName = _activeLoan.BankName;
-                    messages.Add(string.Format(
-                        "Paid weekly loan installment to {0}: {1}. Loan fully repaid.",
+                    messages.Add(Text(
+                        ModTextKey.BankingStatusLoanRepaid,
                         completedBankName,
                         ModFormatting.FormatMoney(dueAmount)));
                     _activeLoan = null;
                     continue;
                 }
 
-                messages.Add(string.Format(
-                    "Paid weekly loan installment to {0}: {1}. {2} remaining over {3} week(s).",
+                messages.Add(Text(
+                    ModTextKey.BankingStatusLoanRepaymentRemaining,
                     _activeLoan.BankName,
                     ModFormatting.FormatMoney(dueAmount),
                     ModFormatting.FormatMoney(_activeLoan.RemainingBalance),

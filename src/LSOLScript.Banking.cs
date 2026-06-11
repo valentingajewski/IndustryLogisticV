@@ -29,9 +29,9 @@ namespace LSOL
 
         private void InitializeBankingMenus()
         {
-            _bankMenu = new LemonMenu("Bank")
+            _bankMenu = new LemonMenu(Text(ModTextKey.BankingMenuTitle))
             {
-                Subtitle = "Arrange company financing in person",
+                Subtitle = Text(ModTextKey.BankingMenuArrangeSubtitle),
                 AlignRight = true,
                 MaxVisibleItems = 12,
                 Theme = LemonMenuTheme.Default,
@@ -138,8 +138,8 @@ namespace LSOL
 
                 if (canShowPrompts && !promptShown && playerPosition.DistanceTo(bank.Position) <= BankInteractionDistance)
                 {
-                    Screen.ShowHelpTextThisFrame(PrefixMessage(string.Format(
-                        "Press {0} to review financing at {1}.",
+                    Screen.ShowHelpTextThisFrame(PrefixMessage(Text(
+                        ModTextKey.BankingPromptReviewFinancing,
                         KeyName(_controls.Interact),
                         bank.DisplayName)));
                     promptShown = true;
@@ -182,7 +182,7 @@ namespace LSOL
         {
             if (bank == null)
             {
-                ShowStatus("No bank is in range.");
+                ShowStatus(Text(ModTextKey.BankingStatusNoBankInRange));
                 return;
             }
 
@@ -207,24 +207,24 @@ namespace LSOL
                 _menuBank = _bankLoanManager != null ? _bankLoanManager.Banks.FirstOrDefault() : null;
             }
 
-            _bankMenu.Title = _menuBank != null ? BuildBankDisplayLabel(_menuBank) : "Bank";
+            _bankMenu.Title = _menuBank != null ? BuildBankDisplayLabel(_menuBank) : Text(ModTextKey.BankingMenuTitle);
             _bankMenu.Subtitle = _bankLoanManager != null && _bankLoanManager.HasActiveLoan
-                ? (_bankMenuShowingHistory ? "Recent weekly branch offers" : "Active company loan")
+                ? (_bankMenuShowingHistory ? Text(ModTextKey.BankingMenuSubtitleRecentOffers) : Text(ModTextKey.BankingMenuSubtitleActiveLoan))
                 : (_bankMenuShowingComparison
-                    ? "Weekly comparison across all branches"
-                    : (_bankMenuShowingHistory ? "Recent weekly branch offers" : "Weekly company financing offer"));
+                    ? Text(ModTextKey.BankingMenuSubtitleWeeklyComparison)
+                    : (_bankMenuShowingHistory ? Text(ModTextKey.BankingMenuSubtitleRecentOffers) : Text(ModTextKey.BankingMenuSubtitleWeeklyOffer)));
 
             var items = new List<OfficeMenuItem>();
             if (_menuBank == null || _bankLoanManager == null)
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "No bank data loaded",
-                    DetailFactory = () => string.Format("Check {0} for valid bank definitions.", RuntimeLayoutResolver.BuildPreferredConfigFileDisplayPath("Banks.xml")),
+                    CaptionFactory = () => Text(ModTextKey.BankingRowNoBankDataLoaded),
+                    DetailFactory = () => Text(ModTextKey.BankingDetailCheckDefinitions, RuntimeLayoutResolver.BuildPreferredConfigFileDisplayPath("Banks.xml")),
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Close",
+                    CaptionFactory = () => Text(ModTextKey.CommonClose),
                     OnActivate = CloseBankMenu,
                 });
                 _bankMenu.SetItems(items);
@@ -250,50 +250,50 @@ namespace LSOL
                 var activeLoan = _bankLoanManager.ActiveLoan;
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Origin bank",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowOriginBank),
                     DetailFactory = () => ResolveActiveLoanBankDisplayLabel(activeLoan),
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Original principal",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowOriginalPrincipal),
                     DetailFactory = () => activeLoan != null ? ModFormatting.FormatMoney(activeLoan.OriginalPrincipal) : string.Empty,
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Locked interest rate",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowLockedInterestRate),
                     DetailFactory = () => activeLoan != null ? ModFormatting.FormatPercent(activeLoan.LockedInterestRatePercent) : string.Empty,
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Total repayment",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowTotalRepayment),
                     DetailFactory = () => activeLoan != null ? ModFormatting.FormatMoney(activeLoan.TotalRepayment) : string.Empty,
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Remaining balance",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowRemainingBalance),
                     DetailFactory = () => activeLoan != null ? ModFormatting.FormatMoney(activeLoan.RemainingBalance) : string.Empty,
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Weekly installment",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowWeeklyInstallment),
                     DetailFactory = () => activeLoan != null ? ModFormatting.FormatMoney(activeLoan.WeeklyInstallment) : string.Empty,
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Weeks remaining",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowWeeksRemaining),
                     DetailFactory = () => activeLoan != null ? activeLoan.WeeksRemaining.ToString() : string.Empty,
                 });
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Next due week",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowNextDueWeek),
                     DetailFactory = () => activeLoan != null ? FormatWeekLabel(activeLoan.NextDueWeekIndex) : string.Empty,
                 });
                 AddBankCreditStandingRows(items);
                 AddBankOfferHistoryNavigationRow(items);
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Close",
-                    DetailFactory = () => "A company can only carry one active bank loan at a time.",
+                    CaptionFactory = () => Text(ModTextKey.CommonClose),
+                    DetailFactory = () => Text(ModTextKey.BankingDetailActiveLoanOnly),
                     OnActivate = CloseBankMenu,
                 });
                 _bankMenu.SetItems(items);
@@ -305,78 +305,78 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Current offer rate",
+                CaptionFactory = () => Text(ModTextKey.BankingRowCurrentOfferRate),
                 DetailFactory = CurrentBankOfferDetail,
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Maximum available",
+                CaptionFactory = () => Text(ModTextKey.BankingRowMaximumAvailable),
                 DetailFactory = () => ModFormatting.FormatMoney(_menuBank.LoanAmountMaxLimit),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Company balance",
+                CaptionFactory = () => Text(ModTextKey.BankingRowCompanyBalance),
                 DetailFactory = () => ModFormatting.FormatMoney(_profit),
             });
             AddBankCreditStandingRows(items);
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Loan amount",
+                CaptionFactory = () => Text(ModTextKey.BankingRowLoanAmount),
                 DetailFactory = CurrentBankLoanAmountDetail,
-                IconLabelFactory = () => string.Format("< {0} >", ModFormatting.FormatMoney(GetSelectedBankLoanAmount())),
+                IconLabelFactory = () => Text(ModTextKey.BankingValueAmountSelector, ModFormatting.FormatMoney(GetSelectedBankLoanAmount())),
                 OnLeft = () => ChangeBankLoanAmount(-1),
                 OnRight = () => ChangeBankLoanAmount(1),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Repayment term",
+                CaptionFactory = () => Text(ModTextKey.BankingRowRepaymentTerm),
                 DetailFactory = CurrentBankLoanTermDetail,
-                IconLabelFactory = () => string.Format("< {0}w >", GetSelectedBankLoanTermWeeks()),
+                IconLabelFactory = () => Text(ModTextKey.BankingValueTermSelectorWeeks, GetSelectedBankLoanTermWeeks()),
                 OnLeft = () => ChangeBankLoanTerm(-1),
                 OnRight = () => ChangeBankLoanTerm(1),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Compare weekly offers",
-                DetailFactory = () => "Open a branch-by-branch rate, installment, total, and cap view for a chosen amount and term.",
+                CaptionFactory = () => Text(ModTextKey.BankingRowCompareWeeklyOffers),
+                DetailFactory = () => Text(ModTextKey.BankingDetailCompareWeeklyOffers),
                 OnActivate = OpenBankComparisonPage,
             });
             AddBankOfferHistoryNavigationRow(items);
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Preview principal",
+                CaptionFactory = () => Text(ModTextKey.BankingRowPreviewPrincipal),
                 DetailFactory = () => FormatPreviewValue(preview => preview.Principal),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Preview locked rate",
+                CaptionFactory = () => Text(ModTextKey.BankingRowPreviewLockedRate),
                 DetailFactory = () => FormatPreviewRate(),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Preview total",
+                CaptionFactory = () => Text(ModTextKey.BankingRowPreviewTotal),
                 DetailFactory = () => FormatPreviewValue(preview => preview.TotalRepayment),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Preview installment",
+                CaptionFactory = () => Text(ModTextKey.BankingRowPreviewInstallment),
                 DetailFactory = () => FormatPreviewValue(preview => preview.WeeklyInstallment),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Preview term",
-                DetailFactory = () => string.Format("{0} weeks", GetSelectedBankLoanTermWeeks()),
+                CaptionFactory = () => Text(ModTextKey.BankingRowPreviewTerm),
+                DetailFactory = () => Text(ModTextKey.BankingValueWeeks, GetSelectedBankLoanTermWeeks()),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Confirm loan",
-                DetailFactory = () => "Send the payout to the LSOL company balance and lock this week’s rate.",
+                CaptionFactory = () => Text(ModTextKey.BankingRowConfirmLoan),
+                DetailFactory = () => Text(ModTextKey.BankingDetailConfirmLoan),
                 OnActivate = ConfirmBankLoan,
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Close",
-                DetailFactory = () => "Return to the world marker.",
+                CaptionFactory = () => Text(ModTextKey.CommonClose),
+                DetailFactory = () => Text(ModTextKey.BankingDetailReturnToWorldMarker),
                 OnActivate = CloseBankMenu,
             });
 
@@ -391,27 +391,27 @@ namespace LSOL
             var termWeeks = GetSelectedBankLoanTermWeeks();
             var currentMinute = GetCurrentInGameWeekMinute();
 
-            _bankMenu.Title = "Compare Offers";
-            _bankMenu.Subtitle = string.Format("{0} requested over {1} weeks", ModFormatting.FormatMoney(requestedAmount), termWeeks);
+            _bankMenu.Title = Text(ModTextKey.BankingTitleCompareOffers);
+            _bankMenu.Subtitle = Text(ModTextKey.BankingSubtitleRequestedOverWeeks, ModFormatting.FormatMoney(requestedAmount), termWeeks);
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Current branch",
-                DetailFactory = () => string.Format("Comparing against {0}.", BuildBankDisplayLabel(_menuBank)),
+                CaptionFactory = () => Text(ModTextKey.BankingRowCurrentBranch),
+                DetailFactory = () => Text(ModTextKey.BankingDetailComparingAgainst, BuildBankDisplayLabel(_menuBank)),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Compare amount",
-                DetailFactory = () => string.Format("{0} requested across all banks. Rows marked capped show each branch maximum.", ModFormatting.FormatMoney(requestedAmount)),
-                IconLabelFactory = () => string.Format("< {0} >", ModFormatting.FormatMoney(requestedAmount)),
+                CaptionFactory = () => Text(ModTextKey.BankingRowCompareAmount),
+                DetailFactory = () => Text(ModTextKey.BankingDetailCompareAmount, ModFormatting.FormatMoney(requestedAmount)),
+                IconLabelFactory = () => Text(ModTextKey.BankingValueAmountSelector, ModFormatting.FormatMoney(requestedAmount)),
                 OnLeft = () => ChangeBankComparisonLoanAmount(-1),
                 OnRight = () => ChangeBankComparisonLoanAmount(1),
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Repayment term",
-                DetailFactory = () => string.Format("{0} weeks. Weekly installment previews refresh for every branch below.", termWeeks),
-                IconLabelFactory = () => string.Format("< {0}w >", termWeeks),
+                CaptionFactory = () => Text(ModTextKey.BankingRowRepaymentTerm),
+                DetailFactory = () => Text(ModTextKey.BankingDetailRepaymentTermComparison, termWeeks),
+                IconLabelFactory = () => Text(ModTextKey.BankingValueTermSelectorWeeks, termWeeks),
                 OnLeft = () => ChangeBankLoanTerm(-1),
                 OnRight = () => ChangeBankLoanTerm(1),
             });
@@ -458,8 +458,8 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Back",
-                DetailFactory = () => "Return to the current branch loan preview and confirmation page.",
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                DetailFactory = () => Text(ModTextKey.BankingDetailBackToLoanPreview),
                 OnActivate = ReturnToBankOfferPage,
             });
         }
@@ -471,28 +471,28 @@ namespace LSOL
                 ? _bankLoanManager.GetOfferHistory(_menuBank.BankId).ToList()
                 : new List<BankOfferRateSnapshot>();
 
-            _bankMenu.Title = "Offer History";
+            _bankMenu.Title = Text(ModTextKey.BankingTitleOfferHistory);
             _bankMenu.Subtitle = BuildBankDisplayLabel(_menuBank);
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Current branch",
-                DetailFactory = () => string.Format("Recent weekly offers for {0}.", BuildBankDisplayLabel(_menuBank)),
+                CaptionFactory = () => Text(ModTextKey.BankingRowCurrentBranch),
+                DetailFactory = () => Text(ModTextKey.BankingDetailRecentOffersForBranch, BuildBankDisplayLabel(_menuBank)),
             });
 
             if (history.Count == 0)
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "No offer history yet",
-                    DetailFactory = () => "This branch starts tracking once a weekly rate is first resolved.",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowNoOfferHistoryYet),
+                    DetailFactory = () => Text(ModTextKey.BankingDetailNoOfferHistoryYet),
                 });
             }
             else
             {
                 items.Add(new OfficeMenuItem
                 {
-                    CaptionFactory = () => "Recent range",
+                    CaptionFactory = () => Text(ModTextKey.BankingRowRecentRange),
                     DetailFactory = () => BuildBankOfferHistoryRangeDetail(history),
                 });
 
@@ -502,9 +502,9 @@ namespace LSOL
                     var currentOffer = history[0];
                     items.Add(new OfficeMenuItem
                     {
-                        CaptionFactory = () => "Delta vs previous",
-                        DetailFactory = () => string.Format(
-                            "{0} against {1}.",
+                        CaptionFactory = () => Text(ModTextKey.BankingRowDeltaVsPrevious),
+                        DetailFactory = () => Text(
+                            ModTextKey.BankingDetailDeltaAgainstWeek,
                             FormatSignedRateDelta(currentOffer.RatePercent - previousOffer.RatePercent),
                             FormatWeekLabel(previousOffer.WeekIndex)),
                     });
@@ -523,8 +523,8 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Back",
-                DetailFactory = () => "Return to the current branch bank page.",
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                DetailFactory = () => Text(ModTextKey.BankingDetailBackToBankPage),
                 OnActivate = ReturnToBankOfferPage,
             });
         }
@@ -560,17 +560,17 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Credit standing",
+                CaptionFactory = () => Text(ModTextKey.BankingRowCreditStanding),
                 DetailFactory = CurrentCompanyCreditStandingDetail,
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Standing drivers",
+                CaptionFactory = () => Text(ModTextKey.BankingRowStandingDrivers),
                 DetailFactory = CurrentCompanyCreditStandingSummary,
             });
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Future offer posture",
+                CaptionFactory = () => Text(ModTextKey.BankingRowFutureOfferPosture),
                 DetailFactory = CurrentCompanyCreditStandingEffect,
             });
         }
@@ -584,7 +584,7 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => "Offer history",
+                CaptionFactory = () => Text(ModTextKey.BankingRowOfferHistory),
                 DetailFactory = CurrentBankOfferHistoryDetail,
                 OnActivate = OpenBankHistoryPage,
             });
@@ -594,7 +594,7 @@ namespace LSOL
         {
             if (_bankLoanManager == null || _menuBank == null)
             {
-                ShowStatus("No bank offer is available.");
+                ShowStatus(Text(ModTextKey.BankingStatusNoBankOfferAvailable));
                 return;
             }
 
@@ -652,8 +652,8 @@ namespace LSOL
             }
 
             var currentMinute = GetCurrentInGameWeekMinute();
-            return string.Format(
-                "{0} for {1}",
+            return Text(
+                ModTextKey.BankingDetailCurrentOfferForWeek,
                 ModFormatting.FormatPercent(_bankLoanManager.GetCurrentOfferRate(_menuBank, currentMinute)),
                 FormatWeekLabel(BankLoanManager.GetWeekIndex(currentMinute)));
         }
@@ -663,7 +663,7 @@ namespace LSOL
             var standing = GetCurrentCompanyCreditStanding();
             return standing == null
                 ? string.Empty
-                : string.Format("{0} | Score {1}", standing.Label, standing.Score);
+                : Text(ModTextKey.BankingDetailCreditStandingScore, standing.Label, standing.Score);
         }
 
         private string CurrentCompanyCreditStandingSummary()
@@ -687,8 +687,8 @@ namespace LSOL
 
             var history = _bankLoanManager.GetOfferHistory(_menuBank.BankId);
             return history.Count > 0
-                ? string.Format("Review the last {0} locked weekly offer(s) for this branch.", history.Count)
-                : "Review the recent weekly rates that have locked for this branch.";
+                ? Text(ModTextKey.BankingDetailOfferHistoryCount, history.Count)
+                : Text(ModTextKey.BankingDetailOfferHistoryRecent);
         }
 
         private string CurrentBankLoanAmountDetail()
@@ -696,18 +696,18 @@ namespace LSOL
             var selectedAmount = GetSelectedBankLoanAmount();
             if (selectedAmount <= 0.01f)
             {
-                return "No valid amount options.";
+                return Text(ModTextKey.BankingDetailNoValidAmountOptions);
             }
 
-            return string.Format(
-                "{0} selected | max {1}",
+            return Text(
+                ModTextKey.BankingDetailLoanAmountSelected,
                 ModFormatting.FormatMoney(selectedAmount),
                 ModFormatting.FormatMoney(_menuBank != null ? _menuBank.LoanAmountMaxLimit : 0f));
         }
 
         private string CurrentBankLoanTermDetail()
         {
-            return string.Format("{0} weeks", GetSelectedBankLoanTermWeeks());
+            return Text(ModTextKey.BankingValueWeeks, GetSelectedBankLoanTermWeeks());
         }
 
         private string FormatPreviewValue(Func<CompanyLoanPreview, float> selector)
@@ -897,8 +897,8 @@ namespace LSOL
 
             var bestRate = history.Min(entry => entry != null ? entry.RatePercent : float.MaxValue);
             var worstRate = history.Max(entry => entry != null ? entry.RatePercent : 0f);
-            return string.Format(
-                "Best {0} | Worst {1} across {2} week(s).",
+            return LocalizedText.Format(
+                ModTextKey.BankingDetailHistoryRange,
                 ModFormatting.FormatPercent(bestRate),
                 ModFormatting.FormatPercent(worstRate),
                 history.Count);
@@ -912,7 +912,7 @@ namespace LSOL
             }
 
             return offer.WeekIndex == currentWeekIndex
-                ? string.Format("{0} [CURRENT]", FormatWeekLabel(offer.WeekIndex))
+                ? LocalizedText.Format(ModTextKey.BankingValueWeekCurrent, FormatWeekLabel(offer.WeekIndex))
                 : FormatWeekLabel(offer.WeekIndex);
         }
 
@@ -924,15 +924,15 @@ namespace LSOL
             }
 
             var offer = history[index];
-            var detail = string.Format("Rate {0}", ModFormatting.FormatPercent(offer.RatePercent));
+            var detail = LocalizedText.Format(ModTextKey.BankingDetailRate, ModFormatting.FormatPercent(offer.RatePercent));
             if (index + 1 >= history.Count || history[index + 1] == null)
             {
                 return detail;
             }
 
             var previousOffer = history[index + 1];
-            return string.Format(
-                "{0} | vs previous {1}",
+            return LocalizedText.Format(
+                ModTextKey.BankingDetailVsPrevious,
                 detail,
                 FormatSignedRateDelta(offer.RatePercent - previousOffer.RatePercent));
         }
@@ -941,7 +941,7 @@ namespace LSOL
         {
             if (Math.Abs(value) <= 0.001f)
             {
-                return "0.00%";
+                return ModFormatting.FormatPercent(0f);
             }
 
             return ModFormatting.FormatSignedPercent(value);
@@ -984,7 +984,7 @@ namespace LSOL
 
         private static string FormatWeekLabel(int weekIndex)
         {
-            return string.Format("Week {0}", Math.Max(0, weekIndex) + 1);
+            return LocalizedText.Format(ModTextKey.BankingValueWeek, Math.Max(0, weekIndex) + 1);
         }
     }
 }

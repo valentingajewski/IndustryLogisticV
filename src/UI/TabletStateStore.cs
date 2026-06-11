@@ -1608,8 +1608,8 @@ namespace LSOL.UI
                     AddCommodityValue(commodityValues, "Fuel", value);
                     locationValues.Add(new TabletInventoryValueEntry
                     {
-                        Label = string.Format("{0} tank", office.DisplayName),
-                        Detail = string.Format("{0:0}L diesel stored", storedLiters),
+                        Label = LocalizedText.Format("tablet.inventoryValue.tankLabel", office.DisplayName),
+                        Detail = LocalizedText.Format("tablet.inventoryValue.dieselStored", storedLiters),
                         Value = value,
                     });
                 }
@@ -1629,7 +1629,11 @@ namespace LSOL.UI
                     locationValues.Add(new TabletInventoryValueEntry
                     {
                         Label = vehicle.DisplayName,
-                        Detail = string.Format("{0} {1:0.0}t | {2}", commodity, weightTons, vehicle.IsDeployed ? "deployed cargo" : "garage cargo"),
+                        Detail = LocalizedText.Format(
+                            "tablet.inventoryValue.cargoDetail",
+                            commodity,
+                            weightTons,
+                            LocalizedText.Get(vehicle.IsDeployed ? "tablet.inventoryValue.cargoDeployed" : "tablet.inventoryValue.cargoGarage")),
                         Value = value,
                     });
                 }
@@ -1650,7 +1654,7 @@ namespace LSOL.UI
                     .Select(pair => new TabletInventoryValueEntry
                     {
                         Label = pair.Key,
-                        Detail = "Combined value across all tracked locations",
+                        Detail = LocalizedText.Get("tablet.inventoryValue.combinedDetail"),
                         Value = pair.Value,
                     })
                     .ToArray(),
@@ -1780,7 +1784,7 @@ namespace LSOL.UI
 
         public bool TryAcceptPlayerContract(string contractId, out string message)
         {
-            message = "Player contracts are unavailable.";
+            message = LocalizedText.Get("tablet.contracts.unavailableMessage");
             if (_playerContractsManager == null)
             {
                 return false;
@@ -1799,7 +1803,7 @@ namespace LSOL.UI
 
         public bool TryCancelPlayerContract(string contractId, out string message)
         {
-            message = "Player contracts are unavailable.";
+            message = LocalizedText.Get("tablet.contracts.unavailableMessage");
             if (_playerContractsManager == null)
             {
                 return false;
@@ -1818,7 +1822,7 @@ namespace LSOL.UI
 
         public bool TryDeployQuickJobVehicle(string contractId, out string message)
         {
-            message = "Player contracts are unavailable.";
+            message = LocalizedText.Get("tablet.contracts.unavailableMessage");
             if (_playerContractsManager == null)
             {
                 return false;
@@ -1905,14 +1909,14 @@ namespace LSOL.UI
             var player = _getPlayer != null ? _getPlayer() : null;
             if (industry == null)
             {
-                snapshot.StatusText = "No industry selected.";
+                snapshot.StatusText = LocalizedText.Get("tablet.industry.unavailable.noIndustry");
                 ClearLoadOptionsCache();
                 return snapshot;
             }
 
             if (player == null || !player.Exists())
             {
-                snapshot.StatusText = "Player unavailable.";
+                snapshot.StatusText = LocalizedText.Get("tablet.industry.load.playerUnavailable");
                 ClearLoadOptionsCache();
                 return snapshot;
             }
@@ -1921,7 +1925,7 @@ namespace LSOL.UI
             var cargoVehicle = _fleetManager.ResolveCargoVehicle(player, out driverVehicle);
             if (cargoVehicle == null || !cargoVehicle.Exists())
             {
-                snapshot.StatusText = "Bring a cargo vehicle close to the industry.";
+                snapshot.StatusText = LocalizedText.Get("tablet.industry.unload.noCargoVehicle");
                 ClearLoadOptionsCache();
                 return snapshot;
             }
@@ -1929,7 +1933,7 @@ namespace LSOL.UI
             var cargoState = _fleetManager.GetOrCreateCargoState(cargoVehicle);
             if (cargoState == null)
             {
-                snapshot.StatusText = "Unable to read cargo state.";
+                snapshot.StatusText = LocalizedText.Get("tablet.industry.load.readCargoStateFailed");
                 ClearLoadOptionsCache();
                 return snapshot;
             }
@@ -1941,7 +1945,7 @@ namespace LSOL.UI
 
             if (!cargoState.IsEmpty)
             {
-                snapshot.StatusText = "Unload current cargo before loading a new product.";
+                snapshot.StatusText = LocalizedText.Get("tablet.industry.load.unloadFirst");
                 ClearLoadOptionsCache();
                 return snapshot;
             }
@@ -1973,7 +1977,7 @@ namespace LSOL.UI
             snapshot.LoadOptionSubtitles = new Dictionary<string, string>(_cachedLoadOptionSubtitles, StringComparer.OrdinalIgnoreCase);
             if (snapshot.LoadOptions.Count == 0)
             {
-                snapshot.StatusText = "No compatible product available to load.";
+                snapshot.StatusText = LocalizedText.Get("tablet.industry.load.noneAvailable");
             }
 
             return snapshot;
@@ -2014,11 +2018,11 @@ namespace LSOL.UI
                     LocationKind = locationKind,
                     Name = industry.Name,
                     OwnershipTag = isOwnedByPlayer
-                        ? "~g~[OWNED]~s~"
-                        : "~r~[NOT OWNED]~s~",
+                        ? LocalizedText.Get("tablet.location.tag.owned")
+                        : LocalizedText.Get("tablet.location.tag.notOwned"),
                     PermitTag = !requiresPermitForGameplay
-                        ? "~g~[OPEN]~s~"
-                        : (hasPermitForGameplay ? "~g~[PERMIT]~s~" : "~r~[LOCKED]~s~"),
+                        ? LocalizedText.Get("tablet.location.tag.open")
+                        : (hasPermitForGameplay ? LocalizedText.Get("tablet.location.tag.permit") : LocalizedText.Get("tablet.location.tag.locked")),
                     IsOwnedByPlayer = isOwnedByPlayer,
                     RequiresIndustryPurchase = _industryManager.RequiresIndustryPurchase(industry),
                     HasContractorPermitForGameplay = hasPermitForGameplay,
@@ -2035,16 +2039,8 @@ namespace LSOL.UI
                     OverviewDetail = BuildOverviewDetail(locationKind, industry, storage, fillRatio, productionWarning, warehouseRisk),
                     PrimaryConversion = industry.GetPrimaryConversionDescription(),
                     ModuleSummary = industry.SiteRole == SiteRole.Warehouse
-                        ? string.Format(
-                            "Storage In Lv.{0} | Storage Out Lv.{1}",
-                            industry.InputStorageModuleLevel,
-                            industry.OutputStorageModuleLevel)
-                        : string.Format(
-                            "Prod Lv.{0} | In Lv.{1} | Out Lv.{2} | Omega Lv.{3}",
-                            industry.ProductionModuleLevel,
-                            industry.InputStorageModuleLevel,
-                            industry.OutputStorageModuleLevel,
-                            industry.OmegaStorageModuleLevel),
+                        ? LocalizedText.Format("tablet.location.stats.moduleLevelsWarehouseBasic", industry.InputStorageModuleLevel, industry.OutputStorageModuleLevel)
+                        : LocalizedText.Format("tablet.location.stats.moduleLevelsIndustry", industry.ProductionModuleLevel, industry.InputStorageModuleLevel, industry.OutputStorageModuleLevel, industry.OmegaStorageModuleLevel),
                 };
 
                 PopulateServiceSiteBusinessSummary(summary, industry, fillRatio);
@@ -2101,14 +2097,14 @@ namespace LSOL.UI
             summary.ServiceOperational = industry.IsOwned && siteState != null && siteState.PassiveIncomeOperational;
             summary.ServiceLastPassiveIncome = industry.IsOwned && siteState != null ? Math.Max(0f, siteState.LastPassiveIncomeAmount) : 0f;
             summary.ServiceStaffStatus = industry.IsOwned
-                ? (summary.ServiceStaffAssigned ? "Assigned" : "Missing")
-                : "Requires operator";
+                ? (summary.ServiceStaffAssigned ? ServiceStatusCatalog.StatusAssigned : ServiceStatusCatalog.StatusMissing)
+                : ServiceStatusCatalog.StatusRequiresOperator;
             summary.ServiceStockStatus = industry.IsOwned
-                ? (summary.ServiceStockReady ? "Ready" : "Low stock")
-                : "Requires stock";
+                ? (summary.ServiceStockReady ? ServiceStatusCatalog.StatusReady : ServiceStatusCatalog.StatusLowStock)
+                : ServiceStatusCatalog.StatusRequiresStock;
             summary.ServiceOperationsStatus = industry.IsOwned
-                ? (summary.ServiceOperational ? "Operational" : "Inactive")
-                : "Potential only";
+                ? (summary.ServiceOperational ? ServiceStatusCatalog.StatusOperational : ServiceStatusCatalog.StatusInactive)
+                : ServiceStatusCatalog.StatusPotentialOnly;
             summary.ServicePassiveIncomeStatus = BuildServiceSitePassiveIncomeStatus(industry, siteState);
             summary.ServiceRecentPayoutStatus = BuildServiceSitePayoutStatus(industry, siteState);
         }
@@ -2130,7 +2126,7 @@ namespace LSOL.UI
             summary.ServicePenaltySteps = Math.Max(0, siteState.ServicePenaltySteps);
             summary.ServiceSuccessStreak = Math.Max(0, siteState.ServiceSuccessStreak);
             summary.ServiceTargetMetLastWeek = siteState.ServiceTargetMetLastWeek;
-            summary.ServiceContractStatus = siteState.ServiceContractStatus ?? string.Empty;
+            summary.ServiceContractStatus = ServiceStatusCatalog.NormalizeKey(siteState.ServiceContractStatus);
         }
 
         private static string BuildServiceSitePassiveIncomeStatus(Industry industry, TerritorySiteState siteState)
@@ -2142,15 +2138,15 @@ namespace LSOL.UI
 
             if (!industry.IsOwned)
             {
-                return "Passive income locked";
+                return ServiceStatusCatalog.PassiveIncomeLocked;
             }
 
             if (siteState != null && !string.IsNullOrWhiteSpace(siteState.PassiveIncomeStatus))
             {
-                return siteState.PassiveIncomeStatus;
+                return ServiceStatusCatalog.NormalizeKey(siteState.PassiveIncomeStatus);
             }
 
-            return "Passive income pending";
+            return ServiceStatusCatalog.PassiveIncomePending;
         }
 
         private static string BuildServiceSitePayoutStatus(Industry industry, TerritorySiteState siteState)
@@ -2162,12 +2158,12 @@ namespace LSOL.UI
 
             if (siteState == null || siteState.LastPassiveIncomeWeekIndex < 0)
             {
-                return "No completed weekly payout yet";
+                return ServiceStatusCatalog.PassiveIncomeNoCompletedPayout;
             }
 
             return !string.IsNullOrWhiteSpace(siteState.LastPassiveIncomeStatus)
-                ? siteState.LastPassiveIncomeStatus
-                : "No recent payout";
+                ? ServiceStatusCatalog.NormalizeKey(siteState.LastPassiveIncomeStatus)
+                : ServiceStatusCatalog.PassiveIncomeNoRecentPayout;
         }
 
         private static void PopulateOwnedServiceSiteBusinessSummary(TabletLocationSummary summary, Industry industry, float fillRatio)
@@ -2189,21 +2185,21 @@ namespace LSOL.UI
 
             var segments = new List<string>
             {
-                string.Format("Income {0}/wk", ModFormatting.FormatMoney(summary.ServiceWeeklyIncome)),
-                summary.ServiceOperational ? "Operational" : "Inactive",
-                summary.ServiceStaffAssigned ? "Staffed" : "No staff",
-                summary.ServiceStockReady ? "Stock ready" : "Low stock",
+                LocalizedText.FormatOrDefault("tablet.service.overview.income", "Income {0}/wk", ModFormatting.FormatMoney(summary.ServiceWeeklyIncome)),
+                ServiceStatusCatalog.Display(summary.ServiceOperational ? ServiceStatusCatalog.StatusOperational : ServiceStatusCatalog.StatusInactive),
+                LocalizedText.GetOrDefault(summary.ServiceStaffAssigned ? "tablet.service.overview.staffed" : "tablet.service.overview.noStaff", summary.ServiceStaffAssigned ? "Staffed" : "No staff"),
+                ServiceStatusCatalog.Display(summary.ServiceStockReady ? ServiceStatusCatalog.StatusReady : ServiceStatusCatalog.StatusLowStock),
             };
 
             if (!string.IsNullOrWhiteSpace(summary.ServiceContractStatus)
-                && !string.Equals(summary.ServiceContractStatus, "Open market", StringComparison.OrdinalIgnoreCase))
+                && !ServiceStatusCatalog.IsOpenMarket(summary.ServiceContractStatus))
             {
-                segments.Add(summary.ServiceContractStatus);
+                segments.Add(ServiceStatusCatalog.Display(summary.ServiceContractStatus));
             }
 
             if (industry.IsGasStation)
             {
-                segments.Add(string.Format("{0:0}% full", fillRatio * 100f));
+                segments.Add(LocalizedText.FormatOrDefault("tablet.service.overview.fill", "{0:0}% full", fillRatio * 100f));
             }
 
             return string.Join(" | ", segments.Where(segment => !string.IsNullOrWhiteSpace(segment)).ToArray());
@@ -2220,13 +2216,13 @@ namespace LSOL.UI
 
             if (!string.IsNullOrWhiteSpace(cargoCommodity))
             {
-                reasons[cargoCommodity] = ResolveMarketHighlightReason(cargoCommodity, districtName, "Active cargo");
+                reasons[cargoCommodity] = ResolveMarketHighlightReason(cargoCommodity, districtName, "tablet.market.reason.activeCargo");
             }
 
             if (nearestIndustry != null)
             {
-                AddMarketHighlights(reasons, nearestIndustry.Outputs, districtName, "Nearby output");
-                AddMarketHighlights(reasons, nearestIndustry.Inputs, districtName, "Nearby demand");
+                AddMarketHighlights(reasons, nearestIndustry.Outputs, districtName, "tablet.market.reason.nearbyOutput");
+                AddMarketHighlights(reasons, nearestIndustry.Inputs, districtName, "tablet.market.reason.nearbyDemand");
             }
 
             if (reasons.Count < 3)
@@ -2236,7 +2232,7 @@ namespace LSOL.UI
                     .SelectMany(industry => industry.Outputs)
                     .Take(24)
                     .ToList();
-                AddMarketHighlights(reasons, networkOutputs, string.Empty, "Network output");
+                AddMarketHighlights(reasons, networkOutputs, string.Empty, "tablet.market.reason.networkOutput");
             }
 
             return reasons
@@ -2264,7 +2260,7 @@ namespace LSOL.UI
                 .ToArray();
         }
 
-        private void AddMarketHighlights(IDictionary<string, string> reasons, IEnumerable<string> commodities, string districtName, string fallbackReason)
+        private void AddMarketHighlights(IDictionary<string, string> reasons, IEnumerable<string> commodities, string districtName, string fallbackReasonKey)
         {
             if (reasons == null || commodities == null)
             {
@@ -2279,7 +2275,7 @@ namespace LSOL.UI
                     continue;
                 }
 
-                reasons[normalized] = ResolveMarketHighlightReason(normalized, districtName, fallbackReason);
+                reasons[normalized] = ResolveMarketHighlightReason(normalized, districtName, fallbackReasonKey);
                 if (reasons.Count >= 6)
                 {
                     return;
@@ -2287,12 +2283,12 @@ namespace LSOL.UI
             }
         }
 
-        private string ResolveMarketHighlightReason(string commodity, string districtName, string fallbackReason)
+        private string ResolveMarketHighlightReason(string commodity, string districtName, string fallbackReasonKey)
         {
             string shockReason;
             return _globalMarket != null && _globalMarket.TryGetShockHighlightReason(commodity, districtName, out shockReason)
                 ? shockReason
-                : fallbackReason;
+                : LocalizedText.Get(fallbackReasonKey);
         }
 
         private static string BuildOverviewDetail(ExternalLocationKind locationKind, Industry industry, float storage, float fillRatio, string productionWarning, WarehouseStorageRiskSnapshot warehouseRisk)
@@ -2304,11 +2300,15 @@ namespace LSOL.UI
 
             if (industry.SiteRole == SiteRole.Warehouse)
             {
-                var detail = string.Format("Storage {0:0.0}t | {1:0}% full | Condition {2:0}%", storage, fillRatio * 100f, Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)));
+                var detail = LocalizedText.Format(
+                    "tablet.location.stats.overviewStorageCondition",
+                    storage,
+                    fillRatio * 100f,
+                    Math.Max(0f, Math.Min(100f, industry.StorageCondition * 100f)));
                 var warehouseTelemetry = TabletUiHelpers.BuildWarehouseOverviewTelemetry(warehouseRisk);
                 return string.IsNullOrWhiteSpace(warehouseTelemetry)
                     ? detail
-                    : string.Format("{0} | {1}", detail, warehouseTelemetry);
+                    : LocalizedText.Format("tablet.location.access.summary", detail, warehouseTelemetry);
             }
 
             if (locationKind == ExternalLocationKind.Industry)
@@ -2320,14 +2320,13 @@ namespace LSOL.UI
 
             if (locationKind == ExternalLocationKind.GasStation)
             {
-                return string.Format(
-                    "Fuel {0:0.0}t | {1:0}% full{2}",
-                    storage,
-                    fillRatio * 100f,
-                    industry.RefuelIsFree ? " | Free office refuel" : string.Empty);
+                var detail = LocalizedText.Format("tablet.location.stats.overviewFuel", storage, fillRatio * 100f);
+                return industry.RefuelIsFree
+                    ? LocalizedText.Format("tablet.location.access.summary", detail, LocalizedText.Get("tablet.location.stats.freeOfficeRefuel"))
+                    : detail;
             }
 
-            return string.Format("Storage {0:0.0}t | {1:0}% full", storage, fillRatio * 100f);
+            return LocalizedText.Format("tablet.location.stats.overviewStorage", storage, fillRatio * 100f);
         }
 
         private static string BuildRoutePerformanceLabel(NpcLogisticsContract contract)
@@ -2965,7 +2964,9 @@ namespace LSOL.UI
                         {
                             Category = CompanyFinanceCategory.VehicleRent,
                             Label = vehicle.DisplayName,
-                            Detail = string.Format("Rental charge overdue by {0} day{1}", overdueDays, overdueDays == 1 ? string.Empty : "s"),
+                            Detail = LocalizedText.Format(
+                                overdueDays == 1 ? "tablet.budget.bill.vehicleRentOverdue.one" : "tablet.budget.bill.vehicleRentOverdue.many",
+                                overdueDays),
                             Amount = vehicle.DailyRent * overdueDays,
                             DueInMinutes = 0,
                         });
@@ -2976,7 +2977,7 @@ namespace LSOL.UI
                     {
                         Category = CompanyFinanceCategory.VehicleRent,
                         Label = vehicle.DisplayName,
-                        Detail = "Daily commercial rental charge",
+                        Detail = LocalizedText.Get("tablet.budget.bill.vehicleRentDaily"),
                         Amount = vehicle.DailyRent,
                         DueInMinutes = nextDayDueInMinutes,
                     });
@@ -2988,9 +2989,9 @@ namespace LSOL.UI
                     bills.Add(new TabletUpcomingBillEntry
                     {
                         Category = CompanyFinanceCategory.CorporateOverhead,
-                        Label = "Corporate overhead",
-                        Detail = string.Format(
-                            "Scale {0} | Sites {1} | Fleet {2} | NPC {3} | Districts {4} | Support {5} | Corridors {6}",
+                        Label = LocalizedText.Get("tablet.budget.category.corporateOverhead"),
+                        Detail = LocalizedText.Format(
+                            "tablet.budget.bill.corporateOverheadDetail",
                             corporateOverhead.ScaleScore,
                             corporateOverhead.OwnedSiteCount,
                             corporateOverhead.OwnedFleetCount,
@@ -3009,9 +3010,9 @@ namespace LSOL.UI
                     bills.Add(new TabletUpcomingBillEntry
                     {
                         Category = CompanyFinanceCategory.FleetMaintenance,
-                        Label = "Fleet maintenance",
-                        Detail = string.Format(
-                            "Owned rigs {0} | Bay coverage {1} | Overdue inspections {2} | Avg condition {3:0}%",
+                        Label = LocalizedText.Get("tablet.budget.category.fleetMaintenance"),
+                        Detail = LocalizedText.Format(
+                            "tablet.budget.bill.fleetMaintenanceDetail",
                             fleetMaintenance.VehicleCount,
                             fleetMaintenance.CoveredVehicleCount,
                             fleetMaintenance.OverdueInspectionCount,
@@ -3038,7 +3039,7 @@ namespace LSOL.UI
                     {
                         Category = CompanyFinanceCategory.NpcWages,
                         Label = BuildRoutePerformanceLabel(contract),
-                        Detail = string.Format("Weekly payroll for {0}", contract.Tier.DisplayName),
+                        Detail = LocalizedText.Format("tablet.budget.bill.npcPayroll", contract.Tier.DisplayName),
                         Amount = weeklyWage,
                         DueInMinutes = _npcLogisticsManager.GetRemainingPayrollMinutes(contract),
                     });
@@ -3052,11 +3053,10 @@ namespace LSOL.UI
                 bills.Add(new TabletUpcomingBillEntry
                 {
                     Category = CompanyFinanceCategory.LoanRepayment,
-                    Label = string.IsNullOrWhiteSpace(activeLoan.BankName) ? "Company loan" : activeLoan.BankName,
-                    Detail = string.Format(
-                        "Weekly company loan installment | {0} week{1} remaining",
-                        activeLoan.WeeksRemaining,
-                        activeLoan.WeeksRemaining == 1 ? string.Empty : "s"),
+                    Label = string.IsNullOrWhiteSpace(activeLoan.BankName) ? LocalizedText.Get("tablet.budget.bill.companyLoanLabel") : activeLoan.BankName,
+                    Detail = LocalizedText.Format(
+                        activeLoan.WeeksRemaining == 1 ? "tablet.budget.bill.companyLoanInstallment.one" : "tablet.budget.bill.companyLoanInstallment.many",
+                        activeLoan.WeeksRemaining),
                     Amount = Math.Max(0f, Math.Min(activeLoan.WeeklyInstallment, activeLoan.RemainingBalance)),
                     DueInMinutes = dueInMinutes,
                 });
@@ -3076,7 +3076,7 @@ namespace LSOL.UI
                         bills.Add(new TabletUpcomingBillEntry
                         {
                             Category = CompanyFinanceCategory.TerritoryOperations,
-                            Label = string.Format("{0} charter", district.DistrictName),
+                            Label = LocalizedText.Format("tablet.budget.bill.districtCharterLabel", district.DistrictName),
                             Detail = BuildTerritoryCharterBillDetail(district),
                             Amount = district.AdministrationCost,
                             DueInMinutes = dueInMinutes,
@@ -3089,7 +3089,7 @@ namespace LSOL.UI
                     bills.Add(new TabletUpcomingBillEntry
                     {
                         Category = CompanyFinanceCategory.TerritoryOperations,
-                        Label = "Territory footprint",
+                        Label = LocalizedText.Get("tablet.budget.bill.territoryFootprintLabel"),
                         Detail = BuildTerritoryOperationsBillDetail(summary),
                         Amount = summary.InfrastructureCost,
                         DueInMinutes = dueInMinutes,
@@ -3131,7 +3131,7 @@ namespace LSOL.UI
                         PropertyId = office.OfficeId ?? string.Empty,
                         Category = CompanyFinanceCategory.OfficeRent,
                         Label = office.DisplayName,
-                        Detail = "Office arrears are blocking access until paid.",
+                        Detail = LocalizedText.Get("tablet.budget.bill.officeArrears"),
                         Amount = state.OutstandingRent,
                         DueInMinutes = 0,
                     });
@@ -3149,7 +3149,7 @@ namespace LSOL.UI
                     PropertyId = office.OfficeId ?? string.Empty,
                     Category = CompanyFinanceCategory.OfficeRent,
                     Label = office.DisplayName,
-                    Detail = "Weekly office rent",
+                    Detail = LocalizedText.Get("tablet.budget.bill.officeWeeklyRent"),
                     Amount = weeklyRent,
                     DueInMinutes = nextWeekDueInMinutes,
                 });
@@ -3170,7 +3170,7 @@ namespace LSOL.UI
                         PropertyId = apartment.InteriorId ?? string.Empty,
                         Category = CompanyFinanceCategory.ApartmentRent,
                         Label = apartment.DisplayName,
-                        Detail = "Apartment arrears are outstanding.",
+                        Detail = LocalizedText.Get("tablet.budget.bill.apartmentArrears"),
                         Amount = state.OutstandingRent,
                         DueInMinutes = 0,
                     });
@@ -3188,7 +3188,7 @@ namespace LSOL.UI
                     PropertyId = apartment.InteriorId ?? string.Empty,
                     Category = CompanyFinanceCategory.ApartmentRent,
                     Label = apartment.DisplayName,
-                    Detail = "Weekly apartment rent",
+                    Detail = LocalizedText.Get("tablet.budget.bill.apartmentWeeklyRent"),
                     Amount = weeklyRent,
                     DueInMinutes = nextWeekDueInMinutes,
                 });
@@ -3334,23 +3334,23 @@ namespace LSOL.UI
         {
             if (state == null || (!state.IsOwned && !state.IsRented))
             {
-                return string.Format(
-                    "Rent {0} | Buy {1}",
+                return LocalizedText.Format(
+                    "tablet.property.portfolio.rentBuy",
                     ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.WeeklyOfficeRent : 0f)),
                     ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.OfficePrice : 0f)));
             }
 
             if (bill != null)
             {
-                return string.Format(
-                    "{0} | {1}",
+                return LocalizedText.Format(
+                    "tablet.location.access.summary",
                     ModFormatting.FormatMoney(bill.Amount),
-                    bill.DueInMinutes <= 0 ? "Due now" : "Due next week");
+                    LocalizedText.Get(bill.DueInMinutes <= 0 ? "tablet.property.portfolio.dueNow" : "tablet.property.portfolio.dueNextWeek"));
             }
 
             return IsOwnedOffice(state)
-                ? "Owned access. No rent due."
-                : string.Format("Weekly rent {0}", ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.WeeklyOfficeRent : 0f)));
+                ? LocalizedText.Get("tablet.property.portfolio.ownedOffice")
+                : LocalizedText.Format("tablet.property.portfolio.weeklyRent", ModFormatting.FormatMoney(Math.Max(0f, office != null ? office.WeeklyOfficeRent : 0f)));
         }
 
         private static string BuildApartmentPortfolioBillDetail(
@@ -3360,23 +3360,23 @@ namespace LSOL.UI
         {
             if (state == null || (!state.IsOwned && !state.IsRented))
             {
-                return string.Format(
-                    "Rent {0} | Buy {1}",
+                return LocalizedText.Format(
+                    "tablet.property.portfolio.rentBuy",
                     ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorWeeklyRent : 0f)),
                     ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorPrice : 0f)));
             }
 
             if (bill != null)
             {
-                return string.Format(
-                    "{0} | {1}",
+                return LocalizedText.Format(
+                    "tablet.location.access.summary",
                     ModFormatting.FormatMoney(bill.Amount),
-                    bill.DueInMinutes <= 0 ? "Due now" : "Due next week");
+                    LocalizedText.Get(bill.DueInMinutes <= 0 ? "tablet.property.portfolio.dueNow" : "tablet.property.portfolio.dueNextWeek"));
             }
 
             return IsOwnedApartment(state)
-                ? "Owned residence. No rent due."
-                : string.Format("Weekly rent {0}", ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorWeeklyRent : 0f)));
+                ? LocalizedText.Get("tablet.property.portfolio.ownedApartment")
+                : LocalizedText.Format("tablet.property.portfolio.weeklyRent", ModFormatting.FormatMoney(Math.Max(0f, apartment != null ? apartment.InteriorWeeklyRent : 0f)));
         }
 
         private static string BuildOfficeAssignmentSummary(
@@ -3388,22 +3388,22 @@ namespace LSOL.UI
         {
             if (state == null || (!state.IsOwned && !state.IsRented))
             {
-                return "Acquire site to manage vehicle";
+                return LocalizedText.Get("tablet.property.portfolio.assignment.acquire");
             }
 
             if (state.OutstandingRent > 0.01f || state.IsAccessSuspended)
             {
-                return "Garage paused until office arrears are cleared.";
+                return LocalizedText.Get("tablet.property.portfolio.assignment.paused");
             }
 
             if (!isActive)
             {
-                return "Commercial garage assignment follows the active office.";
+                return LocalizedText.Get("tablet.property.portfolio.assignment.followsActive");
             }
 
             var capacity = office != null ? Math.Max(0, office.MaxCommercialVehicles) : 0;
-            return string.Format(
-                "Active garage {0}/{1} | Reserve {2}",
+            return LocalizedText.Format(
+                "tablet.property.portfolio.assignment.activeGarage",
                 activeGarageVehicleCount,
                 capacity,
                 reserveVehicleCount);
@@ -3501,14 +3501,11 @@ namespace LSOL.UI
         private static string BuildTerritoryOperationsBillDetail(TerritoryOperationsSummary summary)
         {
             summary = summary ?? new TerritoryOperationsSummary();
-            return string.Format(
-                "Weekly corridor, depot, and franchise upkeep | {0} corridor{1} | {2} support site{3} | {4} premium franchise{5} | Risk {6} corridor / {7} contract",
+            return LocalizedText.Format(
+                "tablet.budget.bill.territoryOperationsDetail",
                 summary.ActiveCorridorCount,
-                summary.ActiveCorridorCount == 1 ? string.Empty : "s",
                 summary.SupportSiteCount,
-                summary.SupportSiteCount == 1 ? string.Empty : "s",
                 summary.PremiumFranchiseCount,
-                summary.PremiumFranchiseCount == 1 ? string.Empty : "s",
                 summary.AtRiskCorridorCount,
                 summary.AtRiskServiceSiteCount);
         }
@@ -3517,11 +3514,11 @@ namespace LSOL.UI
         {
             if (entry == null)
             {
-                return "Weekly district charter fee.";
+                return LocalizedText.Get("tablet.budget.bill.territoryCharterFee");
             }
 
-            return string.Format(
-                "Weekly operating charter | Status {0} | Activity {1:0}/{2:0} t",
+            return LocalizedText.Format(
+                "tablet.budget.bill.territoryCharterDetail",
                 entry.LicenseStatus,
                 entry.LicenseActivityTons,
                 entry.LicenseTargetTons);
@@ -3532,53 +3529,53 @@ namespace LSOL.UI
             switch (category)
             {
                 case CompanyFinanceCategory.PlayerDelivery:
-                    return "Player deliveries";
+                    return LocalizedText.Get("tablet.budget.category.playerDelivery");
                 case CompanyFinanceCategory.PlayerContract:
-                    return "Player contracts";
+                    return LocalizedText.Get("tablet.budget.category.playerContract");
                 case CompanyFinanceCategory.NpcDelivery:
-                    return "NPC deliveries";
+                    return LocalizedText.Get("tablet.budget.category.npcDelivery");
                 case CompanyFinanceCategory.IndustryIncome:
-                    return "Industry income";
+                    return LocalizedText.Get("tablet.budget.category.industryIncome");
                 case CompanyFinanceCategory.MissionReward:
-                    return "Mission rewards";
+                    return LocalizedText.Get("tablet.budget.category.missionReward");
                 case CompanyFinanceCategory.LoanDisbursement:
-                    return "Loan disbursements";
+                    return LocalizedText.Get("tablet.budget.category.loanDisbursement");
                 case CompanyFinanceCategory.OfficeRent:
-                    return "Office rent";
+                    return LocalizedText.Get("tablet.budget.category.officeRent");
                 case CompanyFinanceCategory.ApartmentRent:
-                    return "Apartment rent";
+                    return LocalizedText.Get("tablet.budget.category.apartmentRent");
                 case CompanyFinanceCategory.VehicleRent:
-                    return "Vehicle rent";
+                    return LocalizedText.Get("tablet.budget.category.vehicleRent");
                 case CompanyFinanceCategory.NpcWages:
-                    return "NPC wages";
+                    return LocalizedText.Get("tablet.budget.category.npcWages");
                 case CompanyFinanceCategory.ServiceSiteStaffing:
-                    return "Site staffing";
+                    return LocalizedText.Get("tablet.budget.category.serviceSiteStaffing");
                 case CompanyFinanceCategory.TerritoryOperations:
-                    return "Territory operations";
+                    return LocalizedText.Get("tablet.budget.category.territoryOperations");
                 case CompanyFinanceCategory.CorporateOverhead:
-                    return "Corporate overhead";
+                    return LocalizedText.Get("tablet.budget.category.corporateOverhead");
                 case CompanyFinanceCategory.FleetMaintenance:
-                    return "Fleet maintenance";
+                    return LocalizedText.Get("tablet.budget.category.fleetMaintenance");
                 case CompanyFinanceCategory.WarehouseSpoilage:
-                    return "Warehouse spoilage";
+                    return LocalizedText.Get("tablet.budget.category.warehouseSpoilage");
                 case CompanyFinanceCategory.WarehouseShrinkage:
-                    return "Warehouse shrinkage";
+                    return LocalizedText.Get("tablet.budget.category.warehouseShrinkage");
                 case CompanyFinanceCategory.InventoryLoss:
-                    return "Inventory losses";
+                    return LocalizedText.Get("tablet.budget.category.inventoryLoss");
                 case CompanyFinanceCategory.FuelPurchase:
-                    return "Fuel purchases";
+                    return LocalizedText.Get("tablet.budget.category.fuelPurchase");
                 case CompanyFinanceCategory.RepairCost:
-                    return "Repairs";
+                    return LocalizedText.Get("tablet.budget.category.repairCost");
                 case CompanyFinanceCategory.ServiceCall:
-                    return "Service calls";
+                    return LocalizedText.Get("tablet.budget.category.serviceCall");
                 case CompanyFinanceCategory.PermitOrLicence:
-                    return "Permits and licences";
+                    return LocalizedText.Get("tablet.budget.category.permitOrLicence");
                 case CompanyFinanceCategory.LoanRepayment:
-                    return "Loan repayments";
+                    return LocalizedText.Get("tablet.budget.category.loanRepayment");
                 case CompanyFinanceCategory.OtherExpense:
-                    return "Other expenses";
+                    return LocalizedText.Get("tablet.budget.category.otherExpense");
                 case CompanyFinanceCategory.OtherIncome:
-                    return "Other income";
+                    return LocalizedText.Get("tablet.budget.category.otherIncome");
                 default:
                     return category.ToString();
             }

@@ -3315,7 +3315,7 @@ namespace LSOL.UI
 
             if (!string.IsNullOrWhiteSpace(siteState.ServiceContractStatus))
             {
-                detail += string.Format(" | {0}", siteState.ServiceContractStatus);
+                detail += string.Format(" | {0}", ServiceStatusCatalog.Display(siteState.ServiceContractStatus));
             }
 
             if (siteState.RequiredWeeklyServiceTons > 0.01f)

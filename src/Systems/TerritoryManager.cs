@@ -4332,25 +4332,25 @@ namespace LSOL.Systems
 
             if (!industry.IsOwned)
             {
-                return "Open market";
+                return ServiceStatusCatalog.ContractOpenMarket;
             }
 
             if (siteState.ServicePenaltySteps >= 2)
             {
-                return "Contract at risk";
+                return ServiceStatusCatalog.ContractAtRisk;
             }
 
             if (siteState.ServicePenaltySteps == 1)
             {
-                return "Contract watch";
+                return ServiceStatusCatalog.ContractWatch;
             }
 
             if (siteState.ServiceTargetMetLastWeek)
             {
-                return "Contract secured";
+                return ServiceStatusCatalog.ContractSecured;
             }
 
-            return "Awaiting weekly service";
+            return ServiceStatusCatalog.ContractAwaitingWeeklyService;
         }
 
         private static bool IsServiceSinkStocked(Industry industry)
@@ -4372,30 +4372,30 @@ namespace LSOL.Systems
 
             if (!industry.IsOwned)
             {
-                return "Open market";
+                return ServiceStatusCatalog.ContractOpenMarket;
             }
 
             if (!siteState.SiteOperatorAssigned)
             {
-                return "No staff assigned";
+                return ServiceStatusCatalog.StatusNoStaffAssigned;
             }
 
             if (!IsServiceSinkStocked(industry))
             {
-                return "Understocked";
+                return ServiceStatusCatalog.StatusUnderstocked;
             }
 
             if (siteState.ServicePenaltySteps >= 2)
             {
-                return "Passive income active | Contract at risk";
+                return ServiceStatusCatalog.PassiveIncomeActiveAtRisk;
             }
 
             if (siteState.ServicePenaltySteps == 1)
             {
-                return "Passive income active | Contract watch";
+                return ServiceStatusCatalog.PassiveIncomeActiveWatch;
             }
 
-            return "Passive income active";
+            return ServiceStatusCatalog.PassiveIncomeActive;
         }
 
         private string BuildServiceSinkPassiveIncomeWeeklyOutcome(Industry industry, TerritorySiteState siteState, bool awardedPassiveIncome)
@@ -4409,28 +4409,28 @@ namespace LSOL.Systems
             {
                 if (siteState.ServicePenaltySteps >= 2)
                 {
-                    return "Paid last week | Contract at risk";
+                    return ServiceStatusCatalog.PassiveIncomePaidLastWeekAtRisk;
                 }
 
                 if (siteState.ServicePenaltySteps == 1)
                 {
-                    return "Paid last week | Contract watch";
+                    return ServiceStatusCatalog.PassiveIncomePaidLastWeekWatch;
                 }
 
-                return "Paid last week";
+                return ServiceStatusCatalog.PassiveIncomePaidLastWeek;
             }
 
             if (!siteState.SiteOperatorAssigned)
             {
-                return "Missed last week | No staff assigned";
+                return ServiceStatusCatalog.PassiveIncomeMissedLastWeekNoStaff;
             }
 
             if (!IsServiceSinkStocked(industry))
             {
-                return "Missed last week | Understocked";
+                return ServiceStatusCatalog.PassiveIncomeMissedLastWeekUnderstocked;
             }
 
-            return "Missed last week";
+            return ServiceStatusCatalog.PassiveIncomeMissedLastWeek;
         }
 
         private string BuildCorridorStatus(TerritoryCorridorState corridorState)
