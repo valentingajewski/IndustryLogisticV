@@ -180,9 +180,18 @@ namespace LSOL
                     return new OfficeMenuItem
                     {
                         CaptionFactory = CurrentStartingBalanceCaption,
-                        DetailFactory = () => Text(ModTextKey.DetailNewSaveStartingBalance),
+                        DetailFactory = CurrentStartingBalanceDetail,
                         OnLeft = () => ChangeStartingBalanceSelection(-1),
                         OnRight = () => ChangeStartingBalanceSelection(1),
+                    };
+                case DifficultyRootMenuEntryKind.EconomyMode:
+                    return new OfficeMenuItem
+                    {
+                        CaptionFactory = CurrentEconomyModeCaption,
+                        DetailFactory = CurrentEconomyModeDetail,
+                        OnLeft = () => ChangeEconomyModeSelection(-1),
+                        OnRight = () => ChangeEconomyModeSelection(1),
+                        OnActivate = () => ChangeEconomyModeSelection(1),
                     };
                 case DifficultyRootMenuEntryKind.EnableAll:
                     return CreateDifficultyBulkActionMenuItem(target, true);

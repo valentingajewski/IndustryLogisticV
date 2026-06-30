@@ -3286,15 +3286,6 @@ namespace LSOL.Systems
                 return false;
             }
 
-            if (_territoryManager != null)
-            {
-                string routeReason;
-                if (!_territoryManager.CanCreateNpcRouteWithPermits(origin, destination, out routeReason))
-                {
-                    return false;
-                }
-            }
-
             var normalizedCommodity = CommodityCatalog.Normalize(commodity);
             if (string.IsNullOrWhiteSpace(normalizedCommodity))
             {

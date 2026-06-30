@@ -85,11 +85,12 @@ namespace LSOL
                 return;
             }
 
-            var updatedBalance = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var updatedBalance = balanceBefore;
             var messages = _bankLoanManager.ProcessWeeklyRepayments(GetCurrentInGameWeekMinute(), ref updatedBalance);
-            if (Math.Abs(updatedBalance - _profit) > 0.01f)
+            if (Math.Abs(updatedBalance - balanceBefore) > 0.01f)
             {
-                _profit = updatedBalance;
+                SetCompanyBalance(updatedBalance);
                 _tabletStateStore.MarkAllDirty();
                 RequestCareerAutosave();
             }
@@ -316,7 +317,7 @@ namespace LSOL
             items.Add(new OfficeMenuItem
             {
                 CaptionFactory = () => Text(ModTextKey.BankingRowCompanyBalance),
-                DetailFactory = () => ModFormatting.FormatMoney(_profit),
+                DetailFactory = () => ModFormatting.FormatMoney(GetCompanyBalance()),
             });
             AddBankCreditStandingRows(items);
             items.Add(new OfficeMenuItem
@@ -600,7 +601,7 @@ namespace LSOL
 
             var amount = GetSelectedBankLoanAmount();
             var termWeeks = GetSelectedBankLoanTermWeeks();
-            var updatedBalance = _profit;
+            var updatedBalance = GetCompanyBalance();
             string message;
             if (!_bankLoanManager.TryTakeLoan(_menuBank, amount, termWeeks, GetCurrentInGameWeekMinute(), ref updatedBalance, out message))
             {
@@ -608,7 +609,7 @@ namespace LSOL
                 return;
             }
 
-            _profit = updatedBalance;
+            SetCompanyBalance(updatedBalance);
             SyncPlayerSuccessBalance();
             _tabletStateStore.MarkAllDirty();
             RebuildBankMenuItems();

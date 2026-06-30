@@ -27,6 +27,7 @@ namespace LSOL.Tests.UI
                 new[]
                 {
                     DifficultyRootMenuEntryKind.StartingBalance,
+                    DifficultyRootMenuEntryKind.EconomyMode,
                     DifficultyRootMenuEntryKind.EnableAll,
                     DifficultyRootMenuEntryKind.DisableAll,
                     DifficultyRootMenuEntryKind.Templates,

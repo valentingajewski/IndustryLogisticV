@@ -1510,10 +1510,15 @@ namespace LSOL.Systems
                 TryStoreCommercialVehicle(assetId, fleetManager, fuelSystem, out _);
             }
 
+            var finalChargeMessages = new List<string>();
+            ProcessCommercialVehicleDailyCharge(vehicle, GetDayIndex(GetTrackedCurrentInGameMinute()), ref balance, finalChargeMessages);
+
             DeleteCommercialVehicleAssets(vehicle);
             _state.CommercialVehicles.Remove(vehicle);
             NormalizeCommercialGarageAssignments();
-            message = string.Format("Ended rental for {0}.", vehicle.DisplayName);
+            message = finalChargeMessages.Count > 0
+                ? string.Format("{0} Ended rental for {1}.", finalChargeMessages[finalChargeMessages.Count - 1], vehicle.DisplayName)
+                : string.Format("Ended rental for {0}.", vehicle.DisplayName);
             return true;
         }
 

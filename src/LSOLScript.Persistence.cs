@@ -108,6 +108,7 @@ namespace LSOL
             _pendingSaveName = saveName;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             _pendingStartingGuidesEnabled = false;
+            _pendingUseNativeMoney = false;
             SyncPendingDifficultyProfileFromLive();
 
             _savingOptionsMenu.Close();
@@ -139,9 +140,17 @@ namespace LSOL
             _industryManager.ResetIndustriesToDefaults();
             _territoryManager.Reset();
             _tabletStateStore.ResetAnalyticsState();
-            _profit = GetSelectedStartingBalance();
-            _currentStartingBalance = _profit;
-            _playerSuccessTracker.ResetForNewSave(_profit);
+            _useNativeMoney = _pendingUseNativeMoney;
+            if (_useNativeMoney)
+            {
+                _currentStartingBalance = GetSelectedStartingBalance();
+            }
+            else
+            {
+                _profit = GetSelectedStartingBalance();
+                _currentStartingBalance = _profit;
+            }
+            _playerSuccessTracker.ResetForNewSave(GetCompanyBalance());
             SyncPlayerSuccessBalance(false);
             _startingGuidesController.BeginNewSave(_pendingStartingGuidesEnabled);
 
@@ -153,6 +162,7 @@ namespace LSOL
             var createdSaveName = _pendingSaveName;
             _pendingSaveName = string.Empty;
             _pendingStartingGuidesEnabled = false;
+            _pendingUseNativeMoney = false;
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             SyncPendingDifficultyProfileFromLive();
             if (_startingGuidesController.IsActive)
@@ -575,6 +585,7 @@ namespace LSOL
             {
                 Profit = _profit,
                 StartingBalance = _currentStartingBalance,
+                UseNativeMoney = _useNativeMoney,
                 Language = _language,
                 ColorblindMode = _colorblindMode,
                 UseMetricSpeedDisplay = _useMetricSpeedDisplay,
@@ -602,6 +613,7 @@ namespace LSOL
             {
                 _profit = metadata.Profit;
                 _currentStartingBalance = metadata.StartingBalance;
+                _useNativeMoney = metadata.UseNativeMoney;
                 _language = metadata.Language ?? ModLanguage.English;
                 _useMetricSpeedDisplay = metadata.UseMetricSpeedDisplay;
                 SetLiveDifficultyProfile(DifficultySettingsProfile.FromMetadata(metadata));
@@ -614,6 +626,7 @@ namespace LSOL
                 _useMetricSpeedDisplay = false;
                 SetLiveDifficultyProfile(DifficultySettingsProfile.CreateDefault());
                 _colorblindMode = ColorblindMode.Off;
+                _useNativeMoney = false;
                 _difficultySettingsLocked = lockDifficultySettings;
             }
 
@@ -622,12 +635,13 @@ namespace LSOL
             _bankLoanManager.ApplyPersistenceSnapshot(metadata != null ? metadata.BankLoans : null, GetCurrentInGameWeekMinute());
             _globalMarket.ApplyPersistenceSnapshot(metadata != null ? metadata.Market : null, Game.GameTime);
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
-            _playerSuccessTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerStatistics : null, _profit);
+            _playerSuccessTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerStatistics : null, GetCompanyBalance());
             SyncPlayerSuccessBalance(false);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);
             SyncPendingDifficultyProfileFromLive();
             _pendingStartingGuidesEnabled = false;
+            _pendingUseNativeMoney = false;
             _alertRules = metadata != null && metadata.AlertRules != null
                 ? metadata.AlertRules
                 : new AlertRulesPersistenceSnapshot();

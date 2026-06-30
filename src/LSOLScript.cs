@@ -174,6 +174,8 @@ namespace LSOL
         private bool _careerAutosaveFailureShown;
         private bool _cargoDamageDifficultyEnabled;
         private bool _pendingCargoDamageDifficultyEnabled;
+        private bool _useNativeMoney;
+        private bool _pendingUseNativeMoney;
         private bool _industryPricingDifficultyEnabled;
         private bool _pendingIndustryPricingDifficultyEnabled;
         private bool _licensingDifficultyEnabled;
@@ -375,7 +377,7 @@ namespace LSOL
                 _fleetManager,
                 _globalMarket,
                 GetGroundPosition,
-                () => _profit,
+                () => GetCompanyBalance(),
                 DeductProfit,
                 AddProfit,
                 message => ShowStatus(message),
@@ -404,7 +406,7 @@ namespace LSOL
                 _vehicleFuelSystem,
                 _industryManager,
                 _globalMarket,
-                () => _profit,
+                () => GetCompanyBalance(),
                 DeductProfit,
                 _financeTracker,
                 GetCurrentInGameWeekMinute,
@@ -418,7 +420,7 @@ namespace LSOL
                 _vehicleFuelSystem,
                 _industryManager,
                 _globalMarket,
-                () => _profit,
+                () => GetCompanyBalance(),
                 DeductProfit,
                 _financeTracker,
                 GetCurrentInGameWeekMinute,
@@ -534,7 +536,7 @@ namespace LSOL
                 _territoryManager,
                 _industryManager,
                 CloseAllMenus,
-                () => _profit,
+                () => GetCompanyBalance(),
                 AcquireDistrictLicenseFromOffice,
                 SecureSupportSiteFromOffice,
                 AssignSupportCrewFromOffice,
@@ -556,7 +558,7 @@ namespace LSOL
                 GetCurrentInGameWeekMinute,
                 () => Game.Player.Character,
                 () => _nearestIndustry,
-                () => _profit,
+                () => GetCompanyBalance(),
                 () => _vehicleSpawnController.SelectedFilter,
                 GetIndustryMarkerPosition,
                 () => _cargoTransferController.HasPendingTransfer,
@@ -621,6 +623,8 @@ namespace LSOL
             _modMechanicsEnabled = false;
             _industryPersistenceEnabled = true;
             _difficultySettingsLocked = false;
+            _useNativeMoney = false;
+            _pendingUseNativeMoney = false;
             _language = ModLanguage.English;
             _colorblindMode = ColorblindMode.Off;
             _useMetricSpeedDisplay = false;
@@ -732,7 +736,7 @@ namespace LSOL
                 }
                 _fleetManager.CleanupStates();
                 _vehicleFuelSystem.CleanupStates();
-                _territoryManager.EvaluateFinancialPressure(_profit, gameTime, message => ShowStatus(message, 4500));
+                _territoryManager.EvaluateFinancialPressure(GetCompanyBalance(), gameTime, message => ShowStatus(message, 4500));
                 _tabletStateStore.MarkMarketDirty();
                 _tabletStateStore.MarkNetworkDirty();
             }
@@ -2478,9 +2482,9 @@ namespace LSOL
                 detail += string.Format(" Removes the {0:0}% owner cut.", industry.IndustryOwnerCut * 100f);
             }
 
-            if (_profit < industry.IndustryPrice)
+            if (GetCompanyBalance() < industry.IndustryPrice)
             {
-                detail += string.Format(" Need {0} more.", ModFormatting.FormatMoney(industry.IndustryPrice - _profit));
+                detail += string.Format(" Need {0} more.", ModFormatting.FormatMoney(industry.IndustryPrice - GetCompanyBalance()));
             }
 
             return detail;
@@ -2521,14 +2525,16 @@ namespace LSOL
 
             float cost;
             string result;
-            var balanceBefore = _profit;
-            if (!industry.TryPurchase(ref _profit, out cost, out result))
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
+            if (!industry.TryPurchase(ref balance, out cost, out result))
             {
                 ShowStatus(result);
                 RebuildIndustryPurchaseMenuItems();
                 return;
             }
 
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Purchased industry {0}", industry.Name));
 
             result = AppendIndustryPurchasePermitGrantResult(industry, result);
@@ -2757,7 +2763,45 @@ namespace LSOL
 
         private string CurrentStartingBalanceCaption()
         {
+            if (_pendingUseNativeMoney)
+            {
+                return Text(ModTextKey.RowStartingBalance, ModFormatting.FormatMoney(GetNativeWalletBalance()));
+            }
+
             return Text(ModTextKey.RowStartingBalance,"< " + ModFormatting.FormatMoney(GetSelectedStartingBalance()) + " >");
+        }
+
+        private string CurrentStartingBalanceDetail()
+        {
+            return _pendingUseNativeMoney
+                ? Text(ModTextKey.DetailNewSaveNativeWalletPreview, ModFormatting.FormatMoney(GetNativeWalletBalance()))
+                : Text(ModTextKey.DetailNewSaveStartingBalance);
+        }
+
+        private string CurrentEconomyModeCaption()
+        {
+            var value = _pendingUseNativeMoney
+                ? Text(ModTextKey.EconomyModeNativeWallet)
+                : Text(ModTextKey.EconomyModeLsolStandard);
+            return Text(ModTextKey.RowEconomyMode, "< " + value + " >");
+        }
+
+        private string CurrentEconomyModeDetail()
+        {
+            return _pendingUseNativeMoney
+                ? Text(ModTextKey.DetailEconomyModeNativeWallet, ModFormatting.FormatMoney(GetNativeWalletBalance()))
+                : Text(ModTextKey.DetailEconomyModeLsolStandard);
+        }
+
+        private void ChangeEconomyModeSelection(int delta)
+        {
+            if (delta == 0)
+            {
+                return;
+            }
+
+            _pendingUseNativeMoney = !_pendingUseNativeMoney;
+            RebuildNewSaveSetupMenuItems();
         }
 
         private string CurrentVehicleFuelSettingCaption()
@@ -2898,6 +2942,11 @@ namespace LSOL
 
         private void ChangeStartingBalanceSelection(int delta)
         {
+            if (_pendingUseNativeMoney)
+            {
+                return;
+            }
+
             if (StartingBalanceOptions.Length == 0)
             {
                 return;
@@ -3373,8 +3422,10 @@ namespace LSOL
             float cost;
             string result;
             var hadPermit = industry.HasContractorPermit;
-            var balanceBefore = _profit;
-            industry.TryPurchaseContractorPermit(ref _profit, out cost, out result);
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
+            industry.TryPurchaseContractorPermit(ref balance, out cost, out result);
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.PermitOrLicence, string.Format("Contractor permit for {0}", industry.Name));
             if (!hadPermit && industry.HasContractorPermit)
             {
@@ -3418,8 +3469,9 @@ namespace LSOL
 
             float cost;
             string result;
-            var balanceBefore = _profit;
-            if (!industry.TryPurchase(ref _profit, out cost, out result))
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
+            if (!industry.TryPurchase(ref balance, out cost, out result))
             {
                 ShowStatus(result);
                 _tabletStateStore.MarkBalanceDirty();
@@ -3427,6 +3479,7 @@ namespace LSOL
                 return result;
             }
 
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Purchased industry {0}", industry.Name));
 
             result = AppendIndustryPurchasePermitGrantResult(industry, result);
@@ -3870,6 +3923,57 @@ namespace LSOL
             });
         }
 
+        private float GetCompanyBalance()
+        {
+            return _useNativeMoney ? GetNativeWalletBalance() : _profit;
+        }
+
+        private void SetCompanyBalance(float value)
+        {
+            if (_useNativeMoney)
+            {
+                SetNativeWalletBalance(value);
+            }
+            else
+            {
+                _profit = value;
+            }
+        }
+
+        private void ApplyCompanyBalanceDelta(float delta)
+        {
+            SetCompanyBalance(GetCompanyBalance() + delta);
+        }
+
+        private static float GetNativeWalletBalance()
+        {
+            try
+            {
+                var player = Game.Player;
+                return player != null ? player.Money : 0f;
+            }
+            catch
+            {
+                return 0f;
+            }
+        }
+
+        private static void SetNativeWalletBalance(float value)
+        {
+            try
+            {
+                var player = Game.Player;
+                if (player != null)
+                {
+                    player.Money = Math.Max(0, (int)Math.Round(value));
+                }
+            }
+            catch
+            {
+                // Native wallet unavailable (e.g. headless/test context); ignore.
+            }
+        }
+
         private void AddProfit(float amount)
         {
             AddProfit(CompanyFinanceCategory.OtherIncome, amount, string.Empty);
@@ -3890,7 +3994,7 @@ namespace LSOL
                 return;
             }
 
-            _profit += amount;
+            ApplyCompanyBalanceDelta(amount);
             _financeTracker.RecordIncome(category, amount, GetCurrentInGameWeekMinute(), description, routeContractId, routeLabel, playerContractId, shipperKey, districtName);
             SyncPlayerSuccessBalance();
             if (_tabletStateStore != null)
@@ -3913,7 +4017,7 @@ namespace LSOL
                 return;
             }
 
-            _profit -= amount;
+            ApplyCompanyBalanceDelta(-amount);
             _financeTracker.RecordExpense(category, amount, GetCurrentInGameWeekMinute(), description, routeContractId, routeLabel);
             SyncPlayerSuccessBalance();
             if (_tabletStateStore != null)
@@ -3926,7 +4030,7 @@ namespace LSOL
 
         private void RecordTrackedBalanceDelta(float previousBalance, CompanyFinanceCategory expenseCategory, string expenseDescription, CompanyFinanceCategory incomeCategory = CompanyFinanceCategory.OtherIncome, string incomeDescription = null)
         {
-            var delta = _profit - previousBalance;
+            var delta = GetCompanyBalance() - previousBalance;
             if (Math.Abs(delta) <= 0.001f)
             {
                 return;
@@ -3958,9 +4062,10 @@ namespace LSOL
                 return;
             }
 
-            var balanceChanged = !_hasPlayerSuccessBalanceSync || Math.Abs(_profit - _lastPlayerSuccessBalanceSync) > 0.001f;
-            _playerSuccessTracker.UpdateCompanyBalance(_profit, notifyUnlocks);
-            _lastPlayerSuccessBalanceSync = _profit;
+            var companyBalance = GetCompanyBalance();
+            var balanceChanged = !_hasPlayerSuccessBalanceSync || Math.Abs(companyBalance - _lastPlayerSuccessBalanceSync) > 0.001f;
+            _playerSuccessTracker.UpdateCompanyBalance(companyBalance, notifyUnlocks);
+            _lastPlayerSuccessBalanceSync = companyBalance;
             _hasPlayerSuccessBalanceSync = true;
 
             if (balanceChanged && markBalanceDirty && _tabletStateStore != null)
@@ -4093,10 +4198,12 @@ namespace LSOL
 
         private string AcquireDistrictLicenseFromOffice(string districtName)
         {
-            var balanceBefore = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
             float cost;
             string result;
-            _territoryManager.TryAcquireDistrictLicense(districtName, ref _profit, out cost, out result);
+            _territoryManager.TryAcquireDistrictLicense(districtName, ref balance, out cost, out result);
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.PermitOrLicence, string.Format("District charter for {0}", string.IsNullOrWhiteSpace(districtName) ? "district" : districtName));
             _blipLifecycleManager.Refresh();
             if (_tabletStateStore != null)
@@ -4110,10 +4217,12 @@ namespace LSOL
 
         private string SecureSupportSiteFromOffice(Industry industry)
         {
-            var balanceBefore = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
             float cost;
             string result;
-            _territoryManager.TryAcquireDepot(industry, ref _profit, out cost, out result);
+            _territoryManager.TryAcquireDepot(industry, ref balance, out cost, out result);
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Secured support site at {0}", industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
             if (_tabletStateStore != null)
@@ -4127,10 +4236,12 @@ namespace LSOL
 
         private string AssignSupportCrewFromOffice(Industry industry)
         {
-            var balanceBefore = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
             float cost;
             string result;
-            _territoryManager.TryAssignCrew(industry, ref _profit, out cost, out result);
+            _territoryManager.TryAssignCrew(industry, ref balance, out cost, out result);
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Assigned support crew at {0}", industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
             if (_tabletStateStore != null)
@@ -4144,10 +4255,12 @@ namespace LSOL
 
         private string HireSupportStaffFromOffice(Industry industry, DepotStaffRole staffRole)
         {
-            var balanceBefore = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
             float cost;
             string result;
-            _territoryManager.TryHireDepotStaff(industry, staffRole, ref _profit, out cost, out result);
+            _territoryManager.TryHireDepotStaff(industry, staffRole, ref balance, out cost, out result);
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Hired {0} staff at {1}", staffRole, industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
             if (_tabletStateStore != null)
@@ -4184,10 +4297,12 @@ namespace LSOL
 
         private string SetDepotSpecializationFromOffice(Industry industry, DepotSpecialization specialization)
         {
-            var balanceBefore = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
             float cost;
             string result;
-            _territoryManager.TrySetDepotSpecialization(industry, specialization, ref _profit, out cost, out result);
+            _territoryManager.TrySetDepotSpecialization(industry, specialization, ref balance, out cost, out result);
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Depot specialization at {0}", industry != null ? industry.Name : "support site"));
             _blipLifecycleManager.Refresh();
             if (_tabletStateStore != null)
@@ -5388,13 +5503,15 @@ namespace LSOL
 
             float cost;
             string result;
-            var balanceBefore = _profit;
-            if (!industry.TryUpgradeModule(module, ref _profit, out cost, out result))
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
+            if (!industry.TryUpgradeModule(module, ref balance, out cost, out result))
             {
                 ShowStatus(result);
                 return;
             }
 
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Upgraded {0} at {1}", module, industry.Name));
 
             industry.ClampBuffersToCapacity();
@@ -5551,7 +5668,7 @@ namespace LSOL
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => string.Format("Profit Balance: ${0:0}", _profit),
+                    CaptionFactory = () => string.Format("Profit Balance: ${0:0}", GetCompanyBalance()),
                 },
                 new OfficeMenuItem
                 {
@@ -5655,13 +5772,15 @@ namespace LSOL
 
             float cost;
             string result;
-            var balanceBefore = _profit;
-            if (!_menuIndustry.TryUpgradeModule(module, ref _profit, out cost, out result))
+            var balanceBefore = GetCompanyBalance();
+            var balance = balanceBefore;
+            if (!_menuIndustry.TryUpgradeModule(module, ref balance, out cost, out result))
             {
                 ShowStatus(result);
                 return;
             }
 
+            SetCompanyBalance(balance);
             RecordTrackedBalanceDelta(balanceBefore, CompanyFinanceCategory.OtherExpense, string.Format("Upgraded {0} at {1}", module, _menuIndustry.Name));
 
             _menuIndustry.ClampBuffersToCapacity();
@@ -6479,7 +6598,7 @@ namespace LSOL
             }
 
             AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Debug grant");
-            ShowStatus(string.Format("Added {0}. Balance is now {1}.", ModFormatting.FormatMoney(amount), ModFormatting.FormatMoney(_profit)));
+            ShowStatus(string.Format("Added {0}. Balance is now {1}.", ModFormatting.FormatMoney(amount), ModFormatting.FormatMoney(GetCompanyBalance())));
         }
 
         private float GetSelectedDebugResourceAmountTons()

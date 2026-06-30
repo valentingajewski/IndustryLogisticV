@@ -362,7 +362,7 @@
   <Site catalogId="300" legacyKey="HarborTerminal" name="Port Terminal" role="Warehouse" district="Port" startingTankRatio="0" ownershipTier="Local" enabled="true" industryOwnerCut="0.1">
     <Marker x="1243.65" y="-3135.5" z="5.53" />
     <VehicleSpawn x="1267" y="-3099" z="5.90" heading="90" />
-    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood" />
+    <Inputs primary="Omega,TV,Computer,Alcohol,Clothes,ProcessedFood" />
     <Economy>
       <Casual purchasePrice="180000" inputCapacityTons="1170" outputCapacityTons="1170" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="240000" inputCapacityTons="900" outputCapacityTons="900" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -384,7 +384,7 @@
   <Site catalogId="302" legacyKey="Warehouse3" name="The Secure Unit Storage" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
     <Marker x="917.03" y="-1256.81" z="25.53" />
     <VehicleSpawn x="902" y="-1191.21" z="25.64" heading="92" />
-    <Inputs primary="Plastic,Electronic,Fabric,MechanicalParts,Clothes,ProcessedFood,Alcohol,Chemicals,Paper,TV,Computer" />
+    <Inputs primary="Omega,Plastic,Electronic,Fabric,MechanicalParts,Clothes,ProcessedFood,Alcohol,Chemicals,Paper,TV,Computer" />
     <Economy>
       <Casual purchasePrice="210000" inputCapacityTons="1430" outputCapacityTons="1430" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="280000" inputCapacityTons="1100" outputCapacityTons="1100" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -395,7 +395,7 @@
   <Site catalogId="303" legacyKey="Warehouse4" name="Oil Storage Tanks" role="Warehouse" district="EastLosSantos" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
     <Marker x="494.06" y="-2163.26" z="5.92" />
     <VehicleSpawn x="515.89" y="-2166.25" z="6" heading="177" />
-    <Inputs primary="Oil,Fuel,Omega" />
+    <Inputs primary="Oil,Fuel" />
     <Economy>
       <Casual purchasePrice="240000" inputCapacityTons="780" outputCapacityTons="780" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="320000" inputCapacityTons="600" outputCapacityTons="600" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
@@ -428,7 +428,7 @@
   <Site catalogId="306" legacyKey="Warehouse6" name="Grand Senora Container Storage" role="Warehouse" district="GrandSenora" startingTankRatio="0" ownershipTier="Regional" enabled="true" industryOwnerCut="0.1">
     <Marker x="166.82" y="2761.53" z="42.91" />
     <VehicleSpawn x="195" y="2741.33" z="43.43" heading="231" />
-    <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood" />
+    <Inputs primary="Omega,TV,Computer,Alcohol,Clothes,ProcessedFood" />
     <Economy>
       <Casual purchasePrice="150000" inputCapacityTons="780" outputCapacityTons="780" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
       <Standard purchasePrice="200000" inputCapacityTons="600" outputCapacityTons="600" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />

@@ -57,4 +57,8 @@
     <Marker x="-29.68" y="6458" z="31.46" />
     <Spawn x="-22.81" y="6452.63" z="31.31" heading="313" />
   </Office>
+  <Office id="11" legacyKey="GrapeseedOffice" name="Grapeseed Road Logistic Office" district="Grapeseed" price="65000" weeklyRent="2600" maxCommercialVehicles="5" objectToDelete="2265074802">
+    <Marker x="2510" y="4215.64" z="40" />
+    <Spawn x="2540" y="4209.68" z="40" heading="250" />
+  </Office>
 </Offices>

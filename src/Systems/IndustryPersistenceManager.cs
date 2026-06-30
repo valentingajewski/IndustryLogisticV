@@ -407,6 +407,7 @@ namespace LSOL.Systems
                 writer.WriteLine("NpcRouteLimit={0}", metadata.NpcRouteLimit);
                 writer.WriteLine("MaxModuleLimitPerSite={0}", metadata.MaxModuleLimitPerSite);
                 writer.WriteLine("DifficultySettingsLocked={0}", metadata.DifficultySettingsLocked ? "true" : "false");
+                writer.WriteLine("UseNativeMoney={0}", metadata.UseNativeMoney ? "true" : "false");
             }
             writer.WriteLine();
 
@@ -549,7 +550,8 @@ namespace LSOL.Systems
                 ini.HasKey("Meta", "EconomyDifficultyPreset") ||
                 ini.HasKey("Meta", "NpcWeeklyWageDifficulty") ||
                 ini.HasKey("Meta", "NpcRouteLimit") ||
-                ini.HasKey("Meta", "DifficultySettingsLocked");
+                ini.HasKey("Meta", "DifficultySettingsLocked") ||
+                ini.HasKey("Meta", "UseNativeMoney");
 
             metadata.StartingBalance = ini.GetFloat("Meta", "StartingBalance", 0f);
             metadata.Profit = ini.GetFloat("Meta", "Profit", metadata.StartingBalance);
@@ -582,6 +584,7 @@ namespace LSOL.Systems
                 ini.GetString("Meta", "MaxModuleLimitPerSite", "10"),
                 10);
             metadata.DifficultySettingsLocked = ini.GetBool("Meta", "DifficultySettingsLocked", false);
+            metadata.UseNativeMoney = ini.GetBool("Meta", "UseNativeMoney", false);
             metadata.Analytics = ReadAnalyticsSnapshot(ini);
             metadata.Market = ReadGlobalMarketSnapshot(ini);
             metadata.OwnedFleet = ReadOwnedFleetSnapshot(ini);
@@ -3941,6 +3944,7 @@ namespace LSOL.Systems
         public bool HasGameplayMetadata { get; set; }
         public float Profit { get; set; }
         public float StartingBalance { get; set; }
+        public bool UseNativeMoney { get; set; } = false;
         public ModLanguage? Language { get; set; }
         public ColorblindMode? ColorblindMode { get; set; }
         public bool UseMetricSpeedDisplay { get; set; }

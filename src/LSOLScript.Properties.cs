@@ -461,12 +461,12 @@ namespace LSOL
 
         private void ProcessPropertyWeeklyCharges()
         {
-            var balanceBefore = _profit;
-            var updatedBalance = _profit;
+            var balanceBefore = GetCompanyBalance();
+            var updatedBalance = balanceBefore;
             var messages = _propertyManager.ProcessWeeklyCharges(GetCurrentInGameWeekMinute(), ref updatedBalance);
-            if (Math.Abs(updatedBalance - _profit) > 0.001f)
+            if (Math.Abs(updatedBalance - balanceBefore) > 0.001f)
             {
-                _profit = updatedBalance;
+                SetCompanyBalance(updatedBalance);
                 _tabletStateStore.MarkBalanceDirty();
                 RequestCareerAutosave();
             }
@@ -1096,7 +1096,7 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(_profit)),
+                CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(GetCompanyBalance())),
                 DetailFactory = () => office != null
                     ? Text(ModTextKey.PropertyOfficeDetailVehicleSlotsDistrict, BuildOfficeGarageCapacityLabel(office), office.DistrictName)
                     : Text(ModTextKey.PropertyValueNoOfficeSelected),
@@ -1787,7 +1787,7 @@ namespace LSOL
                 return false;
             }
 
-            return _propertyManager.CanPurchaseOfficeObject(_menuOffice.OfficeId, definition, _profit, out blockedReason);
+            return _propertyManager.CanPurchaseOfficeObject(_menuOffice.OfficeId, definition, GetCompanyBalance(), out blockedReason);
         }
 
         private void ConfirmOfficeObjectPurchase()
@@ -1800,13 +1800,15 @@ namespace LSOL
 
             OfficeObjectPersistenceEntry purchasedEntry;
             string message;
-            if (!_propertyManager.TryPurchaseOfficeObject(_menuOffice.OfficeId, _pendingOfficeObjectPurchaseDefinition.ObjectId, ref _profit, out purchasedEntry, out message))
+            var balance = GetCompanyBalance();
+            if (!_propertyManager.TryPurchaseOfficeObject(_menuOffice.OfficeId, _pendingOfficeObjectPurchaseDefinition.ObjectId, ref balance, out purchasedEntry, out message))
             {
                 ShowStatus(message);
                 RebuildOfficeObjectPurchaseMenuItems();
                 return;
             }
 
+            SetCompanyBalance(balance);
             _tabletStateStore.MarkBalanceDirty();
             _pendingOfficeObjectPurchaseDefinition = null;
             StartOfficeObjectPlacement(purchasedEntry, message);
@@ -2328,21 +2330,27 @@ namespace LSOL
         private PropertyActionResult TryRentOfficeAction(string officeId)
         {
             string message;
-            var success = _propertyManager.TryRentOffice(officeId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryRentOffice(officeId, ref balance, GetCurrentInGameWeekMinute(), out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
         private PropertyActionResult TryTransferOfficeRentalAction(string officeId)
         {
             string message;
-            var success = _propertyManager.TryTransferOfficeRental(officeId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryTransferOfficeRental(officeId, ref balance, GetCurrentInGameWeekMinute(), out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
         private PropertyActionResult TryPurchaseOfficeAction(string officeId)
         {
             string message;
-            var success = _propertyManager.TryPurchaseOffice(officeId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryPurchaseOffice(officeId, ref balance, GetCurrentInGameWeekMinute(), out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
@@ -2363,7 +2371,9 @@ namespace LSOL
         private PropertyActionResult TryPayOfficeArrearsAction(string officeId)
         {
             string message;
-            var success = _propertyManager.TryPayOfficeArrears(officeId, ref _profit, out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryPayOfficeArrears(officeId, ref balance, out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
@@ -2890,8 +2900,10 @@ namespace LSOL
             }
 
             string message;
-            if (_propertyManager.TrySellCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, ref _profit, out message))
+            var balance = GetCompanyBalance();
+            if (_propertyManager.TrySellCommercialVehicle(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, ref balance, out message))
             {
+                SetCompanyBalance(balance);
                 _tabletStateStore.MarkBalanceDirty();
                 _tabletStateStore.MarkCargoDirty();
                 _selectedCommercialGarageVehicle = null;
@@ -2915,8 +2927,10 @@ namespace LSOL
             }
 
             string message;
-            if (_propertyManager.TryEndCommercialVehicleRental(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, ref _profit, out message))
+            var balance = GetCompanyBalance();
+            if (_propertyManager.TryEndCommercialVehicleRental(vehicle.AssetId, _fleetManager, _vehicleFuelSystem, ref balance, out message))
             {
+                SetCompanyBalance(balance);
                 _tabletStateStore.MarkBalanceDirty();
                 _tabletStateStore.MarkCargoDirty();
                 _selectedCommercialGarageVehicle = null;
@@ -2993,7 +3007,7 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(_profit)),
+                CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(GetCompanyBalance())),
                 DetailFactory = () => apartment == null
                     ? string.Empty
                     : Text(
@@ -3145,7 +3159,7 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
-                CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(_profit)),
+                CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(GetCompanyBalance())),
                 DetailFactory = () => motel == null
                     ? string.Empty
                     : Text(
@@ -3263,14 +3277,18 @@ namespace LSOL
         private PropertyActionResult TryPurchaseApartmentAction(string interiorId)
         {
             string message;
-            var success = _propertyManager.TryPurchaseApartment(interiorId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryPurchaseApartment(interiorId, ref balance, GetCurrentInGameWeekMinute(), out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
         private PropertyActionResult TryRentApartmentAction(string interiorId)
         {
             string message;
-            var success = _propertyManager.TryRentApartment(interiorId, ref _profit, GetCurrentInGameWeekMinute(), out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryRentApartment(interiorId, ref balance, GetCurrentInGameWeekMinute(), out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
@@ -3291,14 +3309,18 @@ namespace LSOL
         private PropertyActionResult TrySellApartmentAction(string interiorId)
         {
             string message;
-            var success = _propertyManager.TrySellApartment(interiorId, ref _profit, out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TrySellApartment(interiorId, ref balance, out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
         private PropertyActionResult TryPayApartmentArrearsAction(string interiorId)
         {
             string message;
-            var success = _propertyManager.TryPayApartmentArrears(interiorId, ref _profit, out message);
+            var balance = GetCompanyBalance();
+            var success = _propertyManager.TryPayApartmentArrears(interiorId, ref balance, out message);
+            SetCompanyBalance(balance);
             return new PropertyActionResult(success, message);
         }
 
@@ -3441,7 +3463,7 @@ namespace LSOL
                 return;
             }
 
-            if (_profit + 0.001f < motel.RestPrice)
+            if (GetCompanyBalance() + 0.001f < motel.RestPrice)
             {
                 ShowStatus(Text(ModTextKey.PropertyMotelStatusNeedMoneyToRest, ModFormatting.FormatMoney(motel.RestPrice), motel.DisplayName));
                 return;
@@ -3458,7 +3480,7 @@ namespace LSOL
                 return;
             }
 
-            _profit -= motel.RestPrice;
+            ApplyCompanyBalanceDelta(-motel.RestPrice);
             if (_tabletStateStore != null)
             {
                 _tabletStateStore.MarkBalanceDirty();
@@ -3826,7 +3848,7 @@ namespace LSOL
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(_profit)),
+                    CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(GetCompanyBalance())),
                     DetailFactory = () => string.IsNullOrWhiteSpace(_propertyManager.ActiveApartmentId)
                         ? Text(ModTextKey.PropertyPersonalDealershipDetailNeedApartment)
                         : Text(
@@ -3884,11 +3906,14 @@ namespace LSOL
         {
             string purchaseMessage;
             OwnedPersonalVehiclePersistenceEntry purchasedVehicle;
-            if (!_propertyManager.TryPurchasePersonalVehicle(definition, ref _profit, out purchasedVehicle, out purchaseMessage))
+            var balance = GetCompanyBalance();
+            if (!_propertyManager.TryPurchasePersonalVehicle(definition, ref balance, out purchasedVehicle, out purchaseMessage))
             {
                 ShowStatus(purchaseMessage);
                 return;
             }
+
+            SetCompanyBalance(balance);
 
             ClearPersonalDealershipPreviewVehicle();
 
@@ -3943,7 +3968,7 @@ namespace LSOL
             {
                 new OfficeMenuItem
                 {
-                    CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(_profit)),
+                    CaptionFactory = () => Text(ModTextKey.PropertyOfficeRowBalance, ModFormatting.FormatMoney(GetCompanyBalance())),
                     DetailFactory = BuildCommercialDealershipBalanceDetail,
                 },
             };
@@ -4533,21 +4558,23 @@ namespace LSOL
             var selectedVehicle = GetCommercialDealershipSelectedVehicle(definition);
             var selectedTractor = GetCommercialDealershipSelectedTractor(definition);
             string purchaseMessage;
+            var balance = GetCompanyBalance();
             var acquired = asRental
                 ? _propertyManager.TryRentCommercialVehicle(
                     selectedVehicle,
                     selectedTractor,
-                    ref _profit,
+                    ref balance,
                     GetCurrentInGameWeekMinute(),
                     out _,
                     out purchaseMessage)
                 : _propertyManager.TryPurchaseCommercialVehicle(
                     selectedVehicle,
                     selectedTractor,
-                    ref _profit,
+                    ref balance,
                     out _,
                     out purchaseMessage);
 
+            SetCompanyBalance(balance);
             _commercialDealershipSelectedVehicleModelName = definition.ModelName;
             if (acquired)
             {

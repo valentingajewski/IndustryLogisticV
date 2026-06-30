@@ -5,9 +5,10 @@ namespace LSOL.UI
     internal enum DifficultyRootMenuEntryKind
     {
         StartingBalance = 0,
-        EnableAll = 1,
-        DisableAll = 2,
-        Templates = 3,
+        EconomyMode = 1,
+        EnableAll = 2,
+        DisableAll = 3,
+        Templates = 4,
     }
 
     internal enum DifficultyTemplateMenuEntryKind
@@ -29,6 +30,7 @@ namespace LSOL.UI
         private static readonly DifficultyRootMenuEntryKind[] PendingRootPrefix =
         {
             DifficultyRootMenuEntryKind.StartingBalance,
+            DifficultyRootMenuEntryKind.EconomyMode,
             DifficultyRootMenuEntryKind.EnableAll,
             DifficultyRootMenuEntryKind.DisableAll,
             DifficultyRootMenuEntryKind.Templates,
