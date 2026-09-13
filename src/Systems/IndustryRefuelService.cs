@@ -72,6 +72,7 @@ namespace LSOL.Systems
         private readonly Func<Industry, Vector3> _getIndustryMarkerPosition;
         private readonly Func<Vector3, Vector3> _getGroundPosition;
         private readonly Action<string> _showStatus;
+        private readonly Action<Vehicle, float> _syncVehicleFuel;
         private readonly float _interactionDistance;
         private RemoteRefuelDispatch _activeDispatch;
 
@@ -87,7 +88,8 @@ namespace LSOL.Systems
             Func<Industry, Vector3> getIndustryMarkerPosition,
             Func<Vector3, Vector3> getGroundPosition,
             Action<string> showStatus,
-            float interactionDistance)
+            float interactionDistance,
+            Action<Vehicle, float> syncVehicleFuel = null)
         {
             _fleetManager = fleetManager ?? throw new ArgumentNullException(nameof(fleetManager));
             _vehicleFuelSystem = vehicleFuelSystem ?? throw new ArgumentNullException(nameof(vehicleFuelSystem));
@@ -100,6 +102,7 @@ namespace LSOL.Systems
             _getIndustryMarkerPosition = getIndustryMarkerPosition ?? throw new ArgumentNullException(nameof(getIndustryMarkerPosition));
             _getGroundPosition = getGroundPosition;
             _showStatus = showStatus;
+            _syncVehicleFuel = syncVehicleFuel;
             _interactionDistance = interactionDistance;
             _activeDispatch = null;
         }
@@ -286,10 +289,17 @@ namespace LSOL.Systems
         {
             message = string.Empty;
 
-            var litersNeeded = Math.Max(0f, fuelTelemetry.CapacityLiters - fuelTelemetry.CurrentLiters);
+            var liveTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle) ?? fuelTelemetry;
+            if (liveTelemetry == null || liveTelemetry.CapacityLiters <= 0.001f)
+            {
+                message = "No powered cargo vehicle with a fuel tank is in range.";
+                return false;
+            }
+
+            var litersNeeded = Math.Max(0f, liveTelemetry.CapacityLiters - liveTelemetry.CurrentLiters);
             if (litersNeeded <= 0.05f)
             {
-                message = string.Format("Fuel tank already full ({0:0}/{1:0}L).", fuelTelemetry.CurrentLiters, fuelTelemetry.CapacityLiters);
+                message = string.Format("Fuel tank already full ({0:0}/{1:0}L).", liveTelemetry.CurrentLiters, liveTelemetry.CapacityLiters);
                 return false;
             }
 
@@ -352,7 +362,15 @@ namespace LSOL.Systems
                         industry != null ? industry.Name : "station"));
             }
 
-            var resultingTank = Math.Min(fuelTelemetry.CapacityLiters, fuelTelemetry.CurrentLiters + addedLiters);
+            var updatedTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
+            var resultingTank = updatedTelemetry != null
+                ? updatedTelemetry.CurrentLiters
+                : Math.Min(liveTelemetry.CapacityLiters, liveTelemetry.CurrentLiters + addedLiters);
+            if (updatedTelemetry != null)
+            {
+                _syncVehicleFuel?.Invoke(poweredVehicle, updatedTelemetry.CurrentLiters);
+            }
+
             var notes = new List<string>();
             if (availableStockLiters + 0.05f < litersNeeded)
             {
@@ -375,7 +393,7 @@ namespace LSOL.Systems
                 "Refueled {0:0}L. Tank {1:0}/{2:0}L | {3}{4}",
                 addedLiters,
                 resultingTank,
-                fuelTelemetry.CapacityLiters,
+                liveTelemetry.CapacityLiters,
                 priceText,
                 noteText);
             return true;

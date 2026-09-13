@@ -413,7 +413,14 @@ namespace LSOL
                 GetIndustryMarkerPosition,
                 GetGroundPosition,
                 message => ShowStatus(message, 4500),
-                IndustryInteractionDistance);
+                IndustryInteractionDistance,
+                (vehicle, liters) =>
+                {
+                    if (_propertyManager != null)
+                    {
+                        _propertyManager.SyncCommercialVehicleFuel(vehicle, liters);
+                    }
+                });
             _officeObjectManager = new OfficeObjectManager(
                 _propertyManager,
                 _fleetManager,

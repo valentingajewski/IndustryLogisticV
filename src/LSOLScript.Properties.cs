@@ -1512,7 +1512,7 @@ namespace LSOL
                 return snapshot;
             }
 
-            _vehicleFuelSystem.EnsureTrackedVehicle(poweredVehicle, vehicleEntry.CurrentFuelLiters > 0.001f ? (float?)vehicleEntry.CurrentFuelLiters : null);
+            _vehicleFuelSystem.EnsureTrackedVehicle(poweredVehicle);
             var telemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
             if (telemetry == null || telemetry.CapacityLiters <= 0.01f)
             {

@@ -2211,6 +2211,23 @@ namespace LSOL.Systems
             return false;
         }
 
+        public void SyncCommercialVehicleFuel(Vehicle vehicle, float currentFuelLiters)
+        {
+            OwnedCommercialVehiclePersistenceEntry entry;
+            if (!TryResolveCommercialVehicleRecord(vehicle, out entry) || entry == null)
+            {
+                return;
+            }
+
+            var clampedLiters = Math.Max(0f, currentFuelLiters);
+            entry.CurrentFuelLiters = clampedLiters;
+            var poweredAsset = GetPoweredCommercialVehicleAsset(entry);
+            if (poweredAsset != null)
+            {
+                poweredAsset.CurrentFuelLiters = clampedLiters;
+            }
+        }
+
         private void CaptureAllRuntimeState(FleetManager fleetManager, VehicleFuelSystem fuelSystem)
         {
             for (int i = 0; i < _state.CommercialVehicles.Count; i++)
@@ -2985,13 +3002,13 @@ namespace LSOL.Systems
                     continue;
                 }
 
+                var linkedAssets = GetLinkedCommercialVehicleAssets(vehicle);
+                var poweredAsset = GetPoweredCommercialVehicleAsset(vehicle);
                 var hasCoverage = HasVehicleMaintenanceCoverage(vehicle);
                 var overdueWeeks = GetInspectionOverdueWeeks(vehicle, currentWeekIndex);
                 var weeklyCharge = CalculateWeeklyMaintenanceCharge(vehicle, hasCoverage, overdueWeeks);
                 var charge = weeklyCharge * elapsedWeeks;
                 totalCharge += charge;
-                vehicle.LifetimeMaintenanceCost += charge;
-                vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
 
                 if (hasCoverage)
                 {
@@ -3015,6 +3032,29 @@ namespace LSOL.Systems
                         MinimumMaintenanceCondition,
                         NormalizeMaintenanceCondition(vehicle.MaintenanceCondition) - wear);
                 }
+
+                vehicle.LastMaintenanceWeekIndex = currentWeekIndex;
+
+                // Mirror maintenance bookkeeping onto the source-of-truth asset entries so
+                // RefreshCommercialVehicleSlot cannot revert this week's charge.
+                var lifetimeCostAsset = poweredAsset ?? (linkedAssets.Count > 0 ? linkedAssets[0] : null);
+                if (lifetimeCostAsset != null)
+                {
+                    lifetimeCostAsset.LifetimeMaintenanceCost = Math.Max(0f, lifetimeCostAsset.LifetimeMaintenanceCost + charge);
+                }
+
+                for (int j = 0; j < linkedAssets.Count; j++)
+                {
+                    var asset = linkedAssets[j];
+                    asset.LastMaintenanceWeekIndex = currentWeekIndex;
+                    asset.LastInspectionWeekIndex = vehicle.LastInspectionWeekIndex;
+                    asset.InspectionOverdueWeeks = vehicle.InspectionOverdueWeeks;
+                    asset.MaintenanceCondition = vehicle.MaintenanceCondition;
+                }
+
+                vehicle.LifetimeMaintenanceCost = linkedAssets.Count > 0
+                    ? linkedAssets.Sum(asset => Math.Max(0f, asset.LifetimeMaintenanceCost))
+                    : vehicle.LifetimeMaintenanceCost + charge;
 
                 if (vehicle.MaintenanceCondition < 0.75f || vehicle.InspectionOverdueWeeks > 0)
                 {
@@ -3232,9 +3272,11 @@ namespace LSOL.Systems
                 return 0f;
             }
 
-            var baseCharge = Math.Max(
-                FleetMaintenanceMinimumWeeklyCharge,
-                (Math.Max(0f, vehicle.PurchasePrice) * FleetMaintenancePurchaseRate) + (Math.Max(0f, vehicle.CapacityTons) * FleetMaintenanceCapacityRate));
+            var scaledCharge = (Math.Max(0f, vehicle.PurchasePrice) * FleetMaintenancePurchaseRate)
+                + (Math.Max(0f, vehicle.CapacityTons) * FleetMaintenanceCapacityRate);
+            var baseCharge = vehicle.PurchasePrice <= 0.01f
+                ? scaledCharge
+                : Math.Max(FleetMaintenanceMinimumWeeklyCharge, scaledCharge);
             if (hasCoverage)
             {
                 baseCharge *= FleetMaintenanceCoverageDiscount;

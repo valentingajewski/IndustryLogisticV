@@ -502,7 +502,7 @@ namespace LSOL.Systems
                 return false;
             }
 
-            _vehicleFuelSystem.EnsureTrackedVehicle(poweredVehicle, vehicleEntry.CurrentFuelLiters > 0.001f ? (float?)vehicleEntry.CurrentFuelLiters : null);
+            _vehicleFuelSystem.EnsureTrackedVehicle(poweredVehicle);
             var telemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
             if (telemetry == null || telemetry.CapacityLiters <= 0.01f)
             {
@@ -526,6 +526,8 @@ namespace LSOL.Systems
             }
 
             _propertyManager.TryUpdateOfficeObjectStoredResourceAmount(tankEntry.InstanceId, Math.Max(0f, storedLiters - addedLiters), out tankEntry);
+            var updatedTelemetry = _vehicleFuelSystem.GetTelemetry(poweredVehicle, cargoVehicle);
+            _propertyManager.SyncCommercialVehicleFuel(poweredVehicle, updatedTelemetry != null ? updatedTelemetry.CurrentLiters : addedLiters);
             message = string.Format("Refueled {0:0}L from the office diesel tank. Tank now holds {1:0}/{2:0}L.", addedLiters, Math.Max(0f, storedLiters - addedLiters), tankDefinition.Capacity);
             return true;
         }

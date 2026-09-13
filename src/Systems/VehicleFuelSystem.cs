@@ -100,24 +100,25 @@ namespace LSOL.Systems
 
         public void EnsureTrackedVehicle(Vehicle poweredVehicle, float? currentFuelLiters = null)
         {
+            if (poweredVehicle == null || !poweredVehicle.Exists())
+            {
+                return;
+            }
+
+            var alreadyTracked = _fuelStates.ContainsKey(poweredVehicle.Handle);
             var state = GetOrCreateState(poweredVehicle);
             if (state == null)
             {
                 return;
             }
 
-            if (currentFuelLiters.HasValue)
+            if (currentFuelLiters.HasValue && !alreadyTracked)
             {
                 state.CurrentFuelLiters = Math.Max(0f, Math.Min(state.CapacityLiters, currentFuelLiters.Value));
                 state.OutOfFuelMessageShown = state.CurrentFuelLiters <= 0.001f;
-
-                if (poweredVehicle != null && poweredVehicle.Exists())
-                {
-                    state.LastObservedPosition = poweredVehicle.Position;
-                    state.HasLastObservedPosition = true;
-                }
             }
-            else if (!state.HasLastObservedPosition && poweredVehicle != null && poweredVehicle.Exists())
+
+            if (!state.HasLastObservedPosition)
             {
                 state.LastObservedPosition = poweredVehicle.Position;
                 state.HasLastObservedPosition = true;
