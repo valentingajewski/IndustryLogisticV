@@ -2442,6 +2442,7 @@ namespace LSOL.Systems
 
             private readonly Dictionary<string, Vehicle> _vehicles;
             private TrailerDeliveryStage _stage;
+            private Blip _truckBlip;
 
             public TrailerDeliveryRuntime(
                 SpecialMissionManager owner,
@@ -2501,7 +2502,7 @@ namespace LSOL.Systems
                     return;
                 }
 
-                DrawObjectiveGuidance();
+                UpdateTruckBlip(player);
 
                 switch (_stage)
                 {
@@ -2545,6 +2546,8 @@ namespace LSOL.Systems
 
             public override void Cleanup()
             {
+                DeleteTruckBlip();
+
                 for (int i = 0; i < _vehicles.Count; i++)
                 {
                     var vehicle = _vehicles.ElementAt(i).Value;
@@ -2581,6 +2584,8 @@ namespace LSOL.Systems
                 {
                     return;
                 }
+
+                _truckBlip = CreateTruckBlip();
 
                 if (!TryAttachConfiguredTruckRole(
                     Definition,
@@ -2703,24 +2708,6 @@ namespace LSOL.Systems
                 }
             }
 
-            private void DrawObjectiveGuidance()
-            {
-                var trailer = GetTrailer();
-                switch (_stage)
-                {
-                    case TrailerDeliveryStage.CollectTrailer:
-                        DrawVehicleMarker(GetCollectionTargetVehicle(), Color.FromArgb(195, 82, 196, 235));
-                        break;
-                    case TrailerDeliveryStage.DeliverTrailer:
-                        DrawVehicleMarker(trailer, Color.FromArgb(195, 226, 187, 92));
-                        DrawZoneMarker(DestinationZone, Color.FromArgb(175, 92, 208, 144));
-                        break;
-                    case TrailerDeliveryStage.LeaveQuarryArea:
-                        DrawZoneMarker(CleanupAreaZone, Color.FromArgb(175, 226, 187, 92));
-                        break;
-                }
-            }
-
             private Vector3 ResolveCurrentWaypoint()
             {
                 switch (_stage)
@@ -2836,6 +2823,86 @@ namespace LSOL.Systems
             private Vehicle GetTruck()
             {
                 return GetVehicle(TruckRole);
+            }
+
+            private Blip CreateTruckBlip()
+            {
+                var truck = GetTruck();
+                if (truck == null || !truck.Exists())
+                {
+                    return null;
+                }
+
+                var blip = World.CreateBlip(truck.Position);
+                if (blip == null || !blip.Exists())
+                {
+                    return null;
+                }
+
+                blip.Sprite = BlipSprite.Truck;
+                blip.Color = BlipColor.Green;
+                blip.Name = Definition != null && !string.IsNullOrWhiteSpace(Definition.Name)
+                    ? Definition.Name
+                    : "Truck";
+                blip.Scale = 0.85f;
+                blip.IsShortRange = false;
+                blip.IsHiddenOnLegend = false;
+                return blip;
+            }
+
+            private void UpdateTruckBlip(Ped player)
+            {
+                var truck = GetTruck();
+                if (truck == null || !truck.Exists())
+                {
+                    DeleteTruckBlip();
+                    return;
+                }
+
+                if (IsPlayerInTruck(player))
+                {
+                    DeleteTruckBlip();
+                    return;
+                }
+
+                if (_truckBlip == null || !_truckBlip.Exists())
+                {
+                    _truckBlip = CreateTruckBlip();
+                }
+
+                if (_truckBlip != null && _truckBlip.Exists())
+                {
+                    _truckBlip.Position = truck.Position;
+                }
+            }
+
+            private void DeleteTruckBlip()
+            {
+                if (_truckBlip != null && _truckBlip.Exists())
+                {
+                    _truckBlip.Delete();
+                }
+
+                _truckBlip = null;
+            }
+
+            private bool IsPlayerInTruck(Ped player)
+            {
+                if (player == null || !player.Exists())
+                {
+                    return false;
+                }
+
+                var truck = GetTruck();
+                if (truck == null || !truck.Exists())
+                {
+                    return false;
+                }
+
+                var currentVehicle = player.CurrentVehicle;
+                return currentVehicle != null
+                    && currentVehicle.Exists()
+                    && currentVehicle.Handle == truck.Handle;
             }
 
             private Vehicle GetVehicle(string roleId)

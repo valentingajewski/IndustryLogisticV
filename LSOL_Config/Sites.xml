@@ -486,6 +486,16 @@
       <Impossible purchasePrice="360000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
     </Economy>
   </Site>
+    <Site catalogId="405" legacyKey="AltaConstruction" name="Alta Construction Site" role="ConstructionSiteSink" district="Downtown" startingTankRatio="0.3" density="High" emptyingRate="0.15" ownershipTier="Expansion" enabled="true" industryOwnerCut="0.3" sinkElasticityMultiplier="0.90">
+    <Marker x="103.39" y="-394.49" z="41.27" />
+    <Inputs primary="Beam,Cement,Concrete,Bricks" sinkPreferenceWeights="Concrete:1.16,Beam:1.08,Cement:1.02,Bricks:0.96" />
+    <Economy>
+      <Casual purchasePrice="150000" inputCapacityTons="52" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Standard purchasePrice="200000" inputCapacityTons="40" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Hardcore purchasePrice="280000" inputCapacityTons="32" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+      <Impossible purchasePrice="360000" inputCapacityTons="26" productionRate="0" licencePrice="0" outputCapacityTons="0" productionRatio="0" permitRequired="false" />
+    </Economy>
+  </Site>
   <Site catalogId="500" legacyKey="Store1" name="Davis Carson Store" role="StoreSink" district="SouthLosSantos" startingTankRatio="0.3" density="High" emptyingRate="0.18" weeklyPassiveIncome="3600" ownershipTier="Regional" enabled="true" industryOwnerCut="0.2" sinkElasticityMultiplier="1.18">
     <Marker x="103" y="-1818" z="26.53" />
     <Inputs primary="TV,Computer,Alcohol,Clothes,ProcessedFood,Medicine,Furniture,Meat,Paper" sinkPreferenceWeights="ProcessedFood:1.25,Medicine:1.20,Meat:1.10,Clothes:1.05,Furniture:0.82,TV:0.72,Computer:0.68,Alcohol:0.92,Paper:0.76" />
