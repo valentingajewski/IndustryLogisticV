@@ -452,6 +452,7 @@ namespace LSOL.UI
         private int _lastHistorySampleMs;
         private bool _hasHistorySamples;
         private TabletGraphTimeframe _selectedGraphTimeframe;
+        private int _homeSidebarCategoryIndex;
         private string _selectedTrendCommodity;
         private string _selectedUtilizationIndustryId;
         private string _selectedStorageIndustryId;
@@ -533,6 +534,7 @@ namespace LSOL.UI
             _lastLoadOptionsRefreshMs = int.MinValue;
             _lastHistorySampleMs = int.MinValue;
             _selectedGraphTimeframe = TabletGraphTimeframeCatalog.GetDefault();
+            _homeSidebarCategoryIndex = 0;
             _selectedTrendCommodity = string.Empty;
             _selectedUtilizationIndustryId = string.Empty;
             _selectedStorageIndustryId = string.Empty;
@@ -696,6 +698,12 @@ namespace LSOL.UI
         public TabletGraphTimeframe SelectedGraphTimeframe
         {
             get { return _selectedGraphTimeframe; }
+        }
+
+        public int HomeSidebarCategoryIndex
+        {
+            get { return _homeSidebarCategoryIndex; }
+            set { _homeSidebarCategoryIndex = Math.Max(0, value); }
         }
 
         public string SelectedTrendCommodity

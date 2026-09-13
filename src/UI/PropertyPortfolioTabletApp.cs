@@ -127,8 +127,7 @@ namespace LSOL.UI
                         summary.Offices.Any(entry => entry.HasArrears) ? "offices" : "apartments"),
                     WarningIdle,
                     WarningActive,
-                    null,
-                    "DUE"));
+                    null));
             }
 
             items.Add(TabletUiHelpers.CreateActionItem(
@@ -141,8 +140,7 @@ namespace LSOL.UI
                 () => context.Push(TabletAppIds.PropertyPortfolio, "offices"),
                 OwnedIdle,
                 OwnedActive,
-                null,
-                "OFF"));
+                null));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get(ModTextKey.TabletPropertyApartments),
                 string.Format(
@@ -153,8 +151,7 @@ namespace LSOL.UI
                 () => context.Push(TabletAppIds.PropertyPortfolio, "apartments"),
                 RentalIdle,
                 RentalActive,
-                null,
-                "APT"));
+                null));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get(ModTextKey.TabletPropertyMotels),
                 cheapestMotel != null
@@ -167,8 +164,7 @@ namespace LSOL.UI
                 () => context.Push(TabletAppIds.PropertyPortfolio, "motels"),
                 Color.FromArgb(180, 54, 44, 58),
                 Color.FromArgb(224, 130, 108, 144),
-                null,
-                "MTL"));
+                null));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get(ModTextKey.TabletPropertyActiveOffice),
                 activeOffice != null
@@ -180,8 +176,7 @@ namespace LSOL.UI
                     activeOffice != null ? activeOffice.OfficeId : null),
                 Color.FromArgb(180, 46, 56, 50),
                 Color.FromArgb(224, 110, 132, 114),
-                null,
-                "HQ"));
+                null));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get(ModTextKey.TabletPropertyActiveApartment),
                 activeApartment != null
@@ -193,8 +188,7 @@ namespace LSOL.UI
                     activeApartment != null ? activeApartment.InteriorId : null),
                 Color.FromArgb(180, 44, 50, 62),
                 Color.FromArgb(224, 102, 120, 148),
-                null,
-                "HOME"));
+                null));
             items.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get(ModTextKey.TabletPropertyWeeklyRentOutlook),
                 string.Format(
@@ -203,9 +197,8 @@ namespace LSOL.UI
                 () => context.Push(TabletAppIds.PropertyPortfolio, summary.Offices.Count > 0 ? "offices" : "apartments"),
                 Color.FromArgb(180, 44, 54, 46),
                 Color.FromArgb(224, 106, 134, 112),
-                null,
-                "BIL"));
-            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the company hub.", () => context.GoBack(), "BACK"));
+                null));
+            items.Add(TabletUiHelpers.CreateNavigationItem("Back", "Return to the company hub.", () => context.GoBack()));
 
             return new TabletShellPage
             {
@@ -214,9 +207,7 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Keys Navigate | Enter Open or Manage | Backspace/Esc Back",
                 WidthScale = 0.95f,
-                Layout = SimpleMenuTabletLayout.Dashboard,
-                DashboardSidebarCount = 0,
-                DashboardTileColumns = 3,
+                Layout = SimpleMenuTabletLayout.List,
                 Items = items,
             };
         }

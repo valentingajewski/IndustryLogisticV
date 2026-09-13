@@ -205,43 +205,35 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetCashSummary),
                     string.Format("Balance {0}\n7d net {1}\n{2}", ModFormatting.FormatMoney(overview.CurrentBalance), FormatSignedMoney(overview.WeeklyNet), BudgetFleetResaleFormatter.BuildRootTileDetail(fleetResale)),
-                    () => context.Push(TabletAppIds.Budget, "overview"),
-                    iconLabel: "CSH"),
+                    () => context.Push(TabletAppIds.Budget, "overview")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetExpenseBreakdown),
                     string.Format("7d expenses {0}\n24h net {1}", ModFormatting.FormatMoney(overview.WeeklyExpenses), FormatSignedMoney(overview.DailyNet)),
-                    () => context.Push(TabletAppIds.Budget, "expenses"),
-                    iconLabel: "EXP"),
+                    () => context.Push(TabletAppIds.Budget, "expenses")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetIncomeBreakdown),
                     string.Format("7d income {0}\nRecent inflows by source", ModFormatting.FormatMoney(overview.WeeklyIncome)),
-                    () => context.Push(TabletAppIds.Budget, "income"),
-                    iconLabel: "INC"),
+                    () => context.Push(TabletAppIds.Budget, "income")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetUpcomingBills),
                     string.Format("Known dues {0}\nRent, payroll, fleet, debt, and territorial upkeep", ModFormatting.FormatMoney(overview.UpcomingBills)),
-                    () => context.Push(TabletAppIds.Budget, "bills"),
-                    iconLabel: "BIL"),
+                    () => context.Push(TabletAppIds.Budget, "bills")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetWeeklyForecast),
                     BuildForecastTileDetail(overview.Forecast),
-                    () => context.Push(TabletAppIds.Budget, "forecast"),
-                    iconLabel: "FRC"),
+                    () => context.Push(TabletAppIds.Budget, "forecast")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetRouteProfitability),
                     "Review NPC route revenue against contract and payroll costs.",
-                    () => context.Push(TabletAppIds.Budget, "routes"),
-                    iconLabel: "RTE"),
+                    () => context.Push(TabletAppIds.Budget, "routes")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetInventoryValue),
                     "Estimate on-hand cargo, stockpiles, and office fuel value. Fleet equity is tracked separately.",
-                    () => context.Push(TabletAppIds.Budget, "inventory"),
-                    iconLabel: "INV"),
+                    () => context.Push(TabletAppIds.Budget, "inventory")),
                 TabletUiHelpers.CreateNavigationItem(
                     LocalizedText.Get(ModTextKey.TabletBudgetBack),
                     "Return to the company hub.",
-                    () => context.GoBack(),
-                    "BACK"),
+                    () => context.GoBack()),
             };
 
             return new TabletShellPage
@@ -251,9 +243,7 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Keys Navigate | Enter Open Detail | Backspace/Esc Back",
                 WidthScale = 0.94f,
-                Layout = SimpleMenuTabletLayout.Dashboard,
-                DashboardSidebarCount = 0,
-                DashboardTileColumns = 3,
+                Layout = SimpleMenuTabletLayout.List,
                 Items = items,
             };
         }

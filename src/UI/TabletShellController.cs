@@ -52,6 +52,8 @@ namespace LSOL.UI
             DashboardSidebarCount = 0;
             DashboardTileColumns = 5;
             BottomPanelHeight = 0f;
+            SidebarCategories = Array.Empty<TabletSidebarCategory>();
+            ActiveSidebarIndex = 0;
             FooterText = LocalizedText.Get(ModTextKey.TabletCommonFooterDefault);
             Items = Enumerable.Empty<MenuItem>();
         }
@@ -87,6 +89,12 @@ namespace LSOL.UI
         public int DashboardTileColumns { get; set; }
 
         public float BottomPanelHeight { get; set; }
+
+        public IReadOnlyList<TabletSidebarCategory> SidebarCategories { get; set; }
+
+        public int ActiveSidebarIndex { get; set; }
+
+        public Action<int> SidebarCategoryChanged { get; set; }
 
         public Action<SimpleMenuTabletPanelContext> ContentRenderer { get; set; }
 
@@ -418,6 +426,9 @@ namespace LSOL.UI
             _surface.TabletLayout = page.Layout;
             _surface.TabletDashboardSidebarCount = page.DashboardSidebarCount;
             _surface.TabletDashboardTileColumns = page.DashboardTileColumns;
+            _surface.TabletSidebarCategories = page.SidebarCategories ?? Array.Empty<TabletSidebarCategory>();
+            _surface.TabletActiveSidebarIndex = Math.Max(0, page.ActiveSidebarIndex);
+            _surface.TabletSidebarCategoryChanged = page.SidebarCategoryChanged;
             _surface.TabletCaptionScale = page.CaptionScale;
             _surface.TabletDetailScale = page.DetailScale;
             _surface.TabletCaptionOffsetY = page.CaptionOffsetY;

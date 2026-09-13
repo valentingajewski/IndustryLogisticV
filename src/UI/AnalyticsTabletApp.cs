@@ -84,43 +84,35 @@ namespace LSOL.UI
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsProfitTrend),
                     LocalizedText.Get(ModTextKey.TabletAnalyticsProfitTrendDescription),
-                    () => context.Push(TabletAppIds.Analytics, "profit"),
-                    iconLabel: "PRF"),
+                    () => context.Push(TabletAppIds.Analytics, "profit")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsCommodityTrend) ,
                     LocalizedText.Get(ModTextKey.TabletAnalyticsCommodityTrendDescription),
-                    () => context.Push(TabletAppIds.Analytics, "commodity"),
-                    iconLabel: "MKT"),
+                    () => context.Push(TabletAppIds.Analytics, "commodity")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsSiteUtilization),
                     LocalizedText.Get(ModTextKey.TabletAnalyticsSiteUtilizationDescription),
-                    () => context.Push(TabletAppIds.Analytics, "utilization"),
-                    iconLabel: "UTL"),
+                    () => context.Push(TabletAppIds.Analytics, "utilization")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsStorageFill),
                     LocalizedText.Get(ModTextKey.TabletAnalyticsStorageFillDescription),
-                    () => context.Push(TabletAppIds.Analytics, "storage"),
-                    iconLabel: "STO"),
+                    () => context.Push(TabletAppIds.Analytics, "storage")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsDistrictInfluence),
                     LocalizedText.Get(ModTextKey.TabletAnalyticsDistrictInfluenceDescription),
-                    () => context.Push(TabletAppIds.Analytics, "districts"),
-                    iconLabel: "DST"),
+                    () => context.Push(TabletAppIds.Analytics, "districts")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsNpcRoutes),
                     LocalizedText.Get(ModTextKey.TabletAnalyticsNpcRoutesDescription),
-                    () => context.Push(TabletAppIds.Analytics, "routes"),
-                    iconLabel: "NPC"),
+                    () => context.Push(TabletAppIds.Analytics, "routes")),
                 TabletUiHelpers.CreateActionItem(
                     LocalizedText.Get(ModTextKey.TabletAnalyticsRoutePlanner),
                     LocalizedText.Get(ModTextKey.TabletAnalyticsRoutePlannerDescription),
-                    () => context.Push(TabletAppIds.Analytics, "route-planner"),
-                    iconLabel: "OPT"),
+                    () => context.Push(TabletAppIds.Analytics, "route-planner")),
                 TabletUiHelpers.CreateNavigationItem(
                     LocalizedText.Get(ModTextKey.TabletNavigationBack),
                     LocalizedText.Get(ModTextKey.TabletNavigationReturnToHub),
-                    () => context.GoBack(),
-                    LocalizedText.Get(ModTextKey.TabletNavigationBack)),
+                    () => context.GoBack()),
             };
 
             return new TabletShellPage
@@ -130,9 +122,7 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 FooterText = "Arrow Keys Navigate | Enter Open Detail | Backspace/Esc Back",
                 WidthScale = 0.94f,
-                Layout = SimpleMenuTabletLayout.Dashboard,
-                DashboardSidebarCount = 0,
-                DashboardTileColumns = 3,
+                Layout = SimpleMenuTabletLayout.List,
                 BottomPanelHeight = 156f,
                 BottomPanelRenderer = panel => DrawRootPreviewPanel(panel, context, snapshot),
                 Items = items,

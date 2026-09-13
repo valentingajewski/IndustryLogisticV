@@ -58,6 +58,15 @@ namespace LSOL.UI
             return CreateActionItem(caption, detail, onActivate, NavigationIdle, NavigationActive, null, iconLabel);
         }
 
+        public static MenuItem CreateSeparatorItem(string caption)
+        {
+            return new MenuItem
+            {
+                CaptionFactory = () => caption ?? string.Empty,
+                IsSeparator = true,
+            };
+        }
+
         public static MenuItem CreateSelectorItem(
             Func<string> captionFactory,
             Func<string> detailFactory,
@@ -1077,7 +1086,10 @@ namespace LSOL.UI
                 : new CompanyEndgameSummary();
             var unlockedSuccessCount = _playerSuccessTracker != null ? _playerSuccessTracker.UnlockedCount : 0;
             var totalSuccessCount = _playerSuccessTracker != null ? _playerSuccessTracker.TotalCount : 0;
-            var items = new List<MenuItem>();
+            var companyItems = new List<MenuItem>();
+            var financeItems = new List<MenuItem>();
+            var assetsItems = new List<MenuItem>();
+            var missionsItems = new List<MenuItem>();
             var totalTrackedSites = snapshot.IndustrySummaries.Count + snapshot.ConstructionSiteSummaries.Count + snapshot.WarehouseSummaries.Count + snapshot.StoreSummaries.Count + snapshot.GasStationSummaries.Count;
             var warehouseCount = snapshot.WarehouseSummaries.Count;
             var industryCount = snapshot.IndustrySummaries.Count;
@@ -1133,24 +1145,99 @@ namespace LSOL.UI
                     ? (Action)(() => context.Push(TabletAppIds.Industry, "main", snapshot.NearestIndustry))
                     : (Action)(() => context.Push(TabletAppIds.Network, "detail", snapshot.NearestIndustry)))
                 : (Action)(() => context.Push(TabletAppIds.Network, "industries"));
+            var propertySummary = context.StateStore.GetPropertyPortfolioSummary() ?? new TabletPropertyPortfolioSummary();
+            var propertyControlledCount = propertySummary.Offices.Count(entry => entry.IsOwned || entry.IsRented)
+                + propertySummary.Apartments.Count(entry => entry.IsOwned || entry.IsRented);
+            var propertyArrears = propertySummary.TotalArrears;
+            var dispatchDetail = LocalizedText.Format(
+                "tablet.network.dispatchDetail",
+                dispatchOverview.DispatchHeadline ?? LocalizedText.Get("tablet.home.dispatchIdle"),
+                contractsOverview.BoardHeadline ?? LocalizedText.Get("tablet.network.dispatchBoardCooling"),
+                contractsOverview.AcceptedHeadline ?? LocalizedText.Get("tablet.jobs.acceptedFallbackHeadline"));
 
-            items.Add(TabletUiHelpers.CreateActionItem(
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.company"),
                 LocalizedText.Format("tablet.home.companyDetail", TabletUiHelpers.BuildBalanceChrome(snapshot), totalTrackedSites, snapshot.ActiveNpcRouteCount, dispatchOverview.ActiveJobCount),
                 () => context.Push(TabletAppIds.Network, "root"),
                 Color.FromArgb(176, 28, 32, 38),
-                Color.FromArgb(220, 88, 106, 118),
-                null,
-                "HQ"));
-            items.Add(TabletUiHelpers.CreateActionItem(
+                Color.FromArgb(220, 88, 106, 118)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.operations"),
                 operationsDetail,
                 siteAction,
                 Color.FromArgb(176, 34, 38, 42),
-                Color.FromArgb(220, 96, 108, 118),
-                null,
-                "LIVE"));
-            items.Add(TabletUiHelpers.CreateActionItem(
+                Color.FromArgb(220, 96, 108, 118)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                snapshot.HasNearestIndustry
+                    ? LocalizedText.Get("tablet.home.site")
+                    : LocalizedText.Get("tablet.home.sites"),
+                siteDetail,
+                siteAction,
+                Color.FromArgb(188, 44, 60, 50),
+                Color.FromArgb(228, 100, 136, 112)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.industries"),
+                LocalizedText.Format("tablet.home.industriesDetail", industryCount),
+                () => context.Push(TabletAppIds.Network, "industries"),
+                Color.FromArgb(184, 40, 52, 46),
+                Color.FromArgb(226, 98, 124, 108)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.construction"),
+                constructionSiteCount > 0
+                    ? LocalizedText.Format("tablet.home.constructionDetail", constructionSiteCount)
+                    : LocalizedText.Get("tablet.home.constructionNone"),
+                () => context.Push(TabletAppIds.Network, "construction"),
+                Color.FromArgb(184, 58, 50, 40),
+                Color.FromArgb(226, 124, 104, 84)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.permits"),
+                permitDetail,
+                () => context.Push(TabletAppIds.Network, "permits"),
+                Color.FromArgb(188, 70, 56, 38),
+                Color.FromArgb(228, 154, 126, 82)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.stores"),
+                LocalizedText.Format("tablet.home.storesDetail", snapshot.StoreSummaries.Count),
+                () => context.Push(TabletAppIds.Network, "stores"),
+                Color.FromArgb(188, 46, 52, 60),
+                Color.FromArgb(228, 104, 118, 132)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.stations"),
+                LocalizedText.Format("tablet.home.stationsDetail", snapshot.GasStationSummaries.Count),
+                () => context.Push(TabletAppIds.Network, "stations"),
+                Color.FromArgb(188, 36, 56, 58),
+                Color.FromArgb(228, 88, 128, 130)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.warehouse"),
+                warehouseCount > 0
+                    ? LocalizedText.Format("tablet.home.warehouseDetail", warehouseCount, snapshot.SecuredSupportSiteCount)
+                    : LocalizedText.Get("tablet.home.warehouseNone"),
+                () => context.Push(TabletAppIds.Network, "warehouses"),
+                Color.FromArgb(188, 46, 56, 64),
+                Color.FromArgb(228, 110, 126, 142)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.dispatch"),
+                dispatchDetail,
+                () => context.Push(TabletAppIds.Network, "dispatch"),
+                Color.FromArgb(186, 52, 46, 56),
+                Color.FromArgb(226, 124, 108, 130)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.jobs"),
+                LocalizedText.Format(
+                    "tablet.home.jobsDetail",
+                    Math.Max(0, contractsOverview.QuickJobCount),
+                    Math.Max(0, contractsOverview.FreightMarketCount)),
+                () => context.Push(TabletAppIds.Network, "jobs"),
+                Color.FromArgb(186, 58, 64, 48),
+                Color.FromArgb(226, 132, 148, 110)));
+            companyItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.services"),
+                LocalizedText.Get("tablet.home.servicesDetail"),
+                () => context.Push(TabletAppIds.Network, "services"),
+                Color.FromArgb(188, 44, 48, 52),
+                Color.FromArgb(228, 102, 112, 120)));
+
+            financeItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.budget"),
                 LocalizedText.Format(
                     "tablet.home.budgetDetail",
@@ -1160,14 +1247,21 @@ namespace LSOL.UI
                     ModFormatting.FormatMoney(budgetOverview.UpcomingBills)),
                 () => context.Push(TabletAppIds.Budget, "root"),
                 Color.FromArgb(184, 42, 56, 44),
-                Color.FromArgb(226, 96, 138, 110),
-                null,
-                "BDG"));
-            var propertySummary = context.StateStore.GetPropertyPortfolioSummary() ?? new TabletPropertyPortfolioSummary();
-            var propertyControlledCount = propertySummary.Offices.Count(entry => entry.IsOwned || entry.IsRented)
-                + propertySummary.Apartments.Count(entry => entry.IsOwned || entry.IsRented);
-            var propertyArrears = propertySummary.TotalArrears;
-            items.Add(TabletUiHelpers.CreateActionItem(
+                Color.FromArgb(226, 96, 138, 110)));
+            financeItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.market"),
+                marketDetail,
+                () => context.Push(TabletAppIds.Network, "market"),
+                Color.FromArgb(188, 54, 44, 58),
+                Color.FromArgb(228, 132, 110, 144)));
+            financeItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.analytics"),
+                LocalizedText.Get("tablet.home.analyticsDetail"),
+                () => context.Push(TabletAppIds.Analytics, "root"),
+                Color.FromArgb(186, 48, 52, 66),
+                Color.FromArgb(228, 112, 124, 148)));
+
+            assetsItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.properties"),
                 LocalizedText.Format(
                     "tablet.home.propertiesDetail",
@@ -1175,125 +1269,8 @@ namespace LSOL.UI
                     ModFormatting.FormatMoney(propertyArrears)),
                 () => context.Push(TabletAppIds.PropertyPortfolio, "root"),
                 Color.FromArgb(184, 54, 48, 38),
-                Color.FromArgb(226, 134, 114, 86),
-                null,
-                "PRP"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.industries"),
-                LocalizedText.Format("tablet.home.industriesDetail", industryCount),
-                () => context.Push(TabletAppIds.Network, "industries"),
-                Color.FromArgb(184, 40, 52, 46),
-                Color.FromArgb(226, 98, 124, 108),
-                null,
-                "IND"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.construction"),
-                constructionSiteCount > 0
-                    ? LocalizedText.Format("tablet.home.constructionDetail", constructionSiteCount)
-                    : LocalizedText.Get("tablet.home.constructionNone"),
-                () => context.Push(TabletAppIds.Network, "construction"),
-                Color.FromArgb(184, 58, 50, 40),
-                Color.FromArgb(226, 124, 104, 84),
-                null,
-                "CON"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.permits"),
-                permitDetail,
-                () => context.Push(TabletAppIds.Network, "permits"),
-                Color.FromArgb(188, 70, 56, 38),
-                Color.FromArgb(228, 154, 126, 82),
-                null,
-                "PER"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.stores"),
-                LocalizedText.Format("tablet.home.storesDetail", snapshot.StoreSummaries.Count),
-                () => context.Push(TabletAppIds.Network, "stores"),
-                Color.FromArgb(188, 46, 52, 60),
-                Color.FromArgb(228, 104, 118, 132),
-                null,
-                "STR"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.stations"),
-                LocalizedText.Format("tablet.home.stationsDetail", snapshot.GasStationSummaries.Count),
-                () => context.Push(TabletAppIds.Network, "stations"),
-                Color.FromArgb(188, 36, 56, 58),
-                Color.FromArgb(228, 88, 128, 130),
-                null,
-                "GAS"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.services"),
-                LocalizedText.Get("tablet.home.servicesDetail"),
-                () => context.Push(TabletAppIds.Network, "services"),
-                Color.FromArgb(188, 44, 48, 52),
-                Color.FromArgb(228, 102, 112, 120),
-                null,
-                "SRV"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.jobs"),
-                LocalizedText.Format(
-                    "tablet.home.jobsDetail",
-                    Math.Max(0, contractsOverview.QuickJobCount),
-                    Math.Max(0, contractsOverview.FreightMarketCount)),
-                () => context.Push(TabletAppIds.Network, "jobs"),
-                Color.FromArgb(186, 58, 64, 48),
-                Color.FromArgb(226, 132, 148, 110),
-                null,
-                "JOB"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.market"),
-                marketDetail,
-                () => context.Push(TabletAppIds.Network, "market"),
-                Color.FromArgb(188, 54, 44, 58),
-                Color.FromArgb(228, 132, 110, 144),
-                null,
-                "MKT"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.analytics"),
-                LocalizedText.Get("tablet.home.analyticsDetail"),
-                () => context.Push(TabletAppIds.Analytics, "root"),
-                Color.FromArgb(186, 48, 52, 66),
-                Color.FromArgb(228, 112, 124, 148),
-                null,
-                "ANL"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.successes"),
-                TabletEndgameStatusFormatter.BuildHomeTileDetail(unlockedSuccessCount, totalSuccessCount, endgame),
-                () => context.Push(TabletAppIds.Successes, "root"),
-                Color.FromArgb(186, 60, 52, 46),
-                Color.FromArgb(228, 140, 122, 104),
-                totalSuccessCount > 0
-                    ? (float?)unlockedSuccessCount / totalSuccessCount
-                    : null,
-                "SUS"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.missions"),
-                missionDetail,
-                () => context.Push(TabletAppIds.Missions, "root"),
-                Color.FromArgb(186, 88, 58, 54),
-                Color.FromArgb(228, 208, 144, 112),
-                null,
-                "MIS"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                snapshot.HasNearestIndustry
-                    ? LocalizedText.Get("tablet.home.site")
-                    : LocalizedText.Get("tablet.home.sites"),
-                siteDetail,
-                siteAction,
-                Color.FromArgb(188, 44, 60, 50),
-                Color.FromArgb(228, 100, 136, 112),
-                null,
-                "SITE"));
-            items.Add(TabletUiHelpers.CreateActionItem(
-                LocalizedText.Get("tablet.home.warehouse"),
-                warehouseCount > 0
-                    ? LocalizedText.Format("tablet.home.warehouseDetail", warehouseCount, snapshot.SecuredSupportSiteCount)
-                    : LocalizedText.Get("tablet.home.warehouseNone"),
-                () => context.Push(TabletAppIds.Network, "warehouses"),
-                Color.FromArgb(188, 46, 56, 64),
-                Color.FromArgb(228, 110, 126, 142),
-                null,
-                "WH"));
-            items.Add(TabletUiHelpers.CreateActionItem(
+                Color.FromArgb(226, 134, 114, 86)));
+            assetsItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.footprint"),
                 LocalizedText.Format(
                     "tablet.home.footprintDetail",
@@ -1302,44 +1279,63 @@ namespace LSOL.UI
                     snapshot.SecuredSupportSiteCount),
                 _openCompanyMap,
                 Color.FromArgb(184, 40, 50, 62),
-                Color.FromArgb(224, 96, 116, 136),
-                null,
-                "FPT"));
-            items.Add(TabletUiHelpers.CreateActionItem(
+                Color.FromArgb(224, 96, 116, 136)));
+            assetsItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.districtView"),
                 LocalizedText.Get("tablet.home.districtViewDetail"),
                 _openDistrictView,
                 Color.FromArgb(184, 52, 60, 56),
-                Color.FromArgb(224, 110, 132, 122),
-                null,
-                "DST"));
-            items.Add(TabletUiHelpers.CreateActionItem(
+                Color.FromArgb(224, 110, 132, 122)));
+            assetsItems.Add(TabletUiHelpers.CreateActionItem(
                 LocalizedText.Get("tablet.home.depotYard"),
                 LocalizedText.Get("tablet.home.depotYardDetail"),
                 _openDepotView,
                 Color.FromArgb(184, 58, 48, 60),
-                Color.FromArgb(224, 134, 108, 130),
-                null,
-                "DPT"));
-            items.Add(TabletUiHelpers.CreateNavigationItem(
-                LocalizedText.Get("tablet.home.close"),
-                LocalizedText.Get("tablet.home.closeDetail"),
-                context.Close,
-                "EXIT"));
+                Color.FromArgb(224, 134, 108, 130)));
+
+            missionsItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.missions"),
+                missionDetail,
+                () => context.Push(TabletAppIds.Missions, "root"),
+                Color.FromArgb(186, 88, 58, 54),
+                Color.FromArgb(228, 208, 144, 112)));
+            missionsItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.home.successes"),
+                TabletEndgameStatusFormatter.BuildHomeTileDetail(unlockedSuccessCount, totalSuccessCount, endgame),
+                () => context.Push(TabletAppIds.Successes, "root"),
+                Color.FromArgb(186, 60, 52, 46),
+                Color.FromArgb(228, 140, 122, 104),
+                totalSuccessCount > 0
+                    ? (float?)unlockedSuccessCount / totalSuccessCount
+                    : null));
+
+            var categories = new List<TabletSidebarCategory>
+            {
+                new TabletSidebarCategory { Id = "company", Caption = LocalizedText.Get("tablet.home.category.company"), Items = companyItems },
+                new TabletSidebarCategory { Id = "finance", Caption = LocalizedText.Get("tablet.home.category.finance"), Items = financeItems },
+                new TabletSidebarCategory { Id = "assets", Caption = LocalizedText.Get("tablet.home.category.assets"), Items = assetsItems },
+                new TabletSidebarCategory { Id = "missions", Caption = LocalizedText.Get("tablet.home.category.missions"), Items = missionsItems },
+            };
+            var activeCategoryIndex = Math.Max(0, Math.Min(context.StateStore.HomeSidebarCategoryIndex, categories.Count - 1));
 
             return new TabletShellPage
             {
                 Title = LocalizedText.Get("tablet.home.title"),
                 Subtitle = LocalizedText.Get("tablet.home.subtitle"),
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
-                FooterText = LocalizedText.Get("tablet.home.footer"),
+                FooterText = LocalizedText.Get("tablet.home.sidebarFooter"),
                 WidthScale = 0.96f,
-                CaptionScale = 0.44f,
-                DetailScale = 0.275f,
+                CaptionScale = 0.38f,
+                DetailScale = 0.225f,
+                CaptionOffsetY = 12f,
+                DetailOffsetY = 38f,
+                MinRowHeight = 64f,
+                MinProgressRowHeight = 64f,
                 MaxVisibleItems = 0,
-                Layout = SimpleMenuTabletLayout.Dashboard,
-                DashboardSidebarCount = 2,
-                DashboardTileColumns = 6,
+                Layout = SimpleMenuTabletLayout.Sidebar,
+                SidebarCategories = categories,
+                ActiveSidebarIndex = activeCategoryIndex,
+                SidebarCategoryChanged = index => context.StateStore.HomeSidebarCategoryIndex = index,
                 BottomPanelHeight = 146f,
                 BottomPanelRenderer = panel => TabletChartRenderer.DrawHistoryPanel(
                     panel,
@@ -1348,7 +1344,7 @@ namespace LSOL.UI
                     context.StateStore.GetProfitHistory(context.StateStore.SelectedGraphTimeframe),
                     Color.FromArgb(214, 118, 200, 176),
                     value => ModFormatting.FormatMoney(value)),
-                Items = items,
+                Items = categories[activeCategoryIndex].Items,
             };
         }
 

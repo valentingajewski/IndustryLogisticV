@@ -31,6 +31,18 @@ namespace LSOL.UI
     {
         List = 0,
         Dashboard = 1,
+        Sidebar = 2,
+    }
+
+    public sealed class TabletSidebarCategory
+    {
+        public string Id { get; set; }
+
+        public string Caption { get; set; }
+
+        public string IconLabel { get; set; }
+
+        public IEnumerable<MenuItem> Items { get; set; }
     }
 
     public sealed class MenuItem
@@ -77,6 +89,9 @@ namespace LSOL.UI
             TabletDashboardSidebarCount = 0;
             TabletDashboardTileColumns = 5;
             TabletBottomPanelHeight = 0f;
+            TabletSidebarCategories = Array.Empty<TabletSidebarCategory>();
+            TabletActiveSidebarIndex = 0;
+            TabletSidebarFocused = true;
             MaxVisibleItems = 0;
         }
 
@@ -97,6 +112,10 @@ namespace LSOL.UI
         public int TabletDashboardSidebarCount { get; set; }
         public int TabletDashboardTileColumns { get; set; }
         public float TabletBottomPanelHeight { get; set; }
+        public IReadOnlyList<TabletSidebarCategory> TabletSidebarCategories { get; set; }
+        public int TabletActiveSidebarIndex { get; set; }
+        public bool TabletSidebarFocused { get; set; }
+        public Action<int> TabletSidebarCategoryChanged { get; set; }
         public Action<SimpleMenuTabletPanelContext> TabletContentRenderer { get; set; }
         public Action<SimpleMenuTabletPanelContext> TabletBottomPanelRenderer { get; set; }
         public Action TabletSelectAction { get; set; }
@@ -126,6 +145,12 @@ namespace LSOL.UI
             }
 
             SelectedIndex = Math.Max(0, Math.Min(_items.Count - 1, selectedIndex));
+            if (_items[SelectedIndex] != null && _items[SelectedIndex].IsSeparator)
+            {
+                MoveSelection(1);
+                return;
+            }
+
             EnsureSelectionVisible();
         }
 
@@ -154,6 +179,14 @@ namespace LSOL.UI
             if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.Dashboard)
             {
                 if (TryHandleDashboardNavigation(key, controls))
+                {
+                    return;
+                }
+            }
+
+            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.Sidebar)
+            {
+                if (TryHandleSidebarNavigation(key, controls))
                 {
                     return;
                 }
@@ -346,6 +379,12 @@ namespace LSOL.UI
             if (TabletLayout == SimpleMenuTabletLayout.Dashboard)
             {
                 DrawTabletDashboardTheme();
+                return;
+            }
+
+            if (TabletLayout == SimpleMenuTabletLayout.Sidebar)
+            {
+                DrawTabletSidebarTheme();
                 return;
             }
 
@@ -718,6 +757,322 @@ namespace LSOL.UI
                 12f);
         }
 
+        private void DrawTabletSidebarTheme()
+        {
+            var palette = AccessibilityTheme.Service.Palette;
+            var resolution = GTA.UI.Screen.MainWindowResolution;
+            var scale = Math.Max(0.26f, TabletWidthScale);
+            var lineHeight = resolution.Height * 0.043f;
+            var headerHeight = lineHeight * 1.95f;
+            var footerHeight = lineHeight * 0.88f;
+            var screenWidth = resolution.Width * 0.56f * scale;
+            var screenHeight = resolution.Height * 0.58f;
+            var bottomPanelHeight = TabletBottomPanelRenderer != null && TabletBottomPanelHeight > 0f
+                ? TabletBottomPanelHeight
+                : 0f;
+            var contentHeight = GetTabletListContentHeight(screenHeight, lineHeight, headerHeight, footerHeight, bottomPanelHeight);
+            var visibleItems = GetVisibleItems(lineHeight, contentHeight);
+            var bodyX = (resolution.Width - (screenWidth + 58f)) * 0.5f;
+            var bodyY = resolution.Height * 0.08f;
+            var screenX = bodyX + 29f;
+            var screenY = bodyY + 34f;
+            var bodyWidth = screenWidth + 58f;
+            var bodyHeight = screenHeight + 82f;
+            var sidebarWidth = Math.Max(158f, screenWidth * 0.25f);
+            var contentGap = 14f;
+            var contentX = screenX + sidebarWidth + contentGap;
+            var contentWidth = screenWidth - sidebarWidth - contentGap - 18f;
+            var contentTopY = screenY + headerHeight + 12f;
+
+            DrawTabletDeviceFrame(resolution, bodyX, bodyY, bodyWidth, bodyHeight, screenX, screenY, screenWidth, screenHeight);
+            DrawTabletWallpaper(resolution, screenX, screenY, screenWidth, screenHeight);
+            DrawRect(resolution.Width, resolution.Height, screenX, screenY, screenWidth, headerHeight + 8f, palette.Get(ModColorRole.BackgroundOuter, 94));
+
+            DrawTextBlock(
+                resolution,
+                Title,
+                screenX + 20f,
+                screenY + 16f,
+                0.43f,
+                palette.Get(ModColorRole.TextPrimary, 236),
+                GTA.UI.Font.ChaletComprimeCologne,
+                Alignment.Left,
+                14f);
+
+            if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                DrawTextBlock(
+                    resolution,
+                    Subtitle,
+                    screenX + 20f,
+                    screenY + 42f,
+                    0.275f,
+                    palette.Get(ModColorRole.TextSecondary, 222),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Left,
+                    12f);
+            }
+
+            var headerRightText = GetHeaderRightText();
+            if (!string.IsNullOrWhiteSpace(headerRightText))
+            {
+                DrawTextBlock(
+                    resolution,
+                    headerRightText,
+                    screenX + screenWidth - 20f,
+                    screenY + 18f,
+                    0.255f,
+                    palette.Get(ModColorRole.TextSecondary, 230),
+                    GTA.UI.Font.ChaletLondon,
+                    Alignment.Right,
+                    12f);
+            }
+
+            DrawTabletSidebarColumn(resolution, screenX, contentTopY, sidebarWidth, contentHeight, palette, TabletSidebarCategories, TabletActiveSidebarIndex, TabletSidebarFocused);
+
+            var rowY = contentTopY;
+            for (int i = 0; i < visibleItems.Count; i++)
+            {
+                var itemIndex = _firstVisibleIndex + i;
+                var item = visibleItems[i];
+                var rowHeight = GetItemRowHeight(lineHeight, item);
+                if (item != null && item.IsSeparator)
+                {
+                    var headerCaption = item.CaptionFactory != null ? item.CaptionFactory() : string.Empty;
+                    DrawTextBlock(
+                        resolution,
+                        (headerCaption ?? string.Empty).ToUpperInvariant(),
+                        contentX + 10f,
+                        rowY + 2f,
+                        0.155f,
+                        palette.Get(ModColorRole.TextMuted, 214),
+                        GTA.UI.Font.ChaletComprimeCologne,
+                        Alignment.Left,
+                        10f,
+                        contentWidth - 20f);
+                    DrawRect(resolution.Width, resolution.Height, contentX + 10f, rowY + 13f, contentWidth - 20f, 1f, palette.Get(ModColorRole.TextMuted, 92));
+                    rowY += rowHeight;
+                    continue;
+                }
+
+                var detail = GetDetailText(item);
+                var isSelectedRow = itemIndex == SelectedIndex;
+                var listFocused = !TabletSidebarFocused;
+                var highlighted = isSelectedRow && listFocused;
+                var idleColor = item.IdleBackgroundColor ?? palette.Get(ModColorRole.BackgroundCard, 142);
+                var activeColor = item.SelectedBackgroundColor ?? palette.Get(ModColorRole.BackgroundCardSelected, 218);
+                var cardX = contentX;
+                var cardWidth = contentWidth;
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    cardX + 4f,
+                    rowY + 6f,
+                    cardWidth,
+                    rowHeight - 4f,
+                    palette.Get(ModColorRole.BackgroundOuter, 56));
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    cardX,
+                    rowY,
+                    cardWidth,
+                    rowHeight - 2f,
+                    palette.Get(ModColorRole.BackgroundPanel, highlighted ? 210 : 170));
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    cardX + 2f,
+                    rowY + 2f,
+                    cardWidth - 4f,
+                    rowHeight - 6f,
+                    highlighted ? activeColor : idleColor);
+                DrawRect(
+                    resolution.Width,
+                    resolution.Height,
+                    cardX + 2f,
+                    rowY + 2f,
+                    6f,
+                    rowHeight - 6f,
+                    highlighted
+                        ? palette.Get(ModColorRole.Highlight, 236)
+                        : (isSelectedRow ? palette.Get(ModColorRole.TextMuted, 150) : palette.Get(ModColorRole.TextMuted, 188)));
+
+                var color = highlighted
+                    ? palette.Get(ModColorRole.TextPrimary, 238)
+                    : palette.Get(ModColorRole.TextSecondary, 220);
+                DrawMenuItemCaption(
+                    resolution,
+                    item,
+                    cardX + 24f,
+                    rowY + TabletCaptionOffsetY,
+                    TabletCaptionScale,
+                    color,
+                    GTA.UI.Font.ChaletComprimeCologne,
+                    Alignment.Left,
+                    18f,
+                    cardWidth - 48f);
+
+                if (!string.IsNullOrWhiteSpace(detail))
+                {
+                    var detailColor = highlighted
+                        ? palette.Get(ModColorRole.TextPrimary, 225)
+                        : palette.Get(ModColorRole.TextMuted, 205);
+                    DrawTextBlock(
+                        resolution,
+                        detail,
+                        cardX + 24f,
+                        rowY + TabletDetailOffsetY,
+                        TabletDetailScale,
+                        detailColor,
+                        GTA.UI.Font.ChaletLondon,
+                        Alignment.Left,
+                        16f,
+                        cardWidth - 48f);
+                }
+
+                DrawProgressBarIfNeeded(
+                    resolution,
+                    item,
+                    cardX + 24f,
+                    rowY + rowHeight - 12f,
+                    cardWidth - 48f,
+                    7f,
+                    highlighted);
+
+                rowY += rowHeight;
+            }
+
+            if (bottomPanelHeight > 0f)
+            {
+                var panelY = screenY + screenHeight - footerHeight - 22f - bottomPanelHeight;
+                DrawTabletBottomPanel(
+                    resolution,
+                    contentX,
+                    panelY,
+                    contentWidth,
+                    bottomPanelHeight,
+                    visibleItems);
+            }
+
+            var footerText = GetFooterText("Left/Right Switch Panel | Up/Down Navigate | Enter Select | Backspace/Esc Close");
+            if (string.IsNullOrWhiteSpace(footerText))
+            {
+                footerText = "Left/Right Switch Panel | Up/Down Navigate | Enter Select | Backspace/Esc Close";
+            }
+
+            DrawRect(
+                resolution.Width,
+                resolution.Height,
+                screenX + 18f,
+                screenY + screenHeight - footerHeight - 12f,
+                screenWidth - 36f,
+                footerHeight,
+                Color.FromArgb(84, 9, 14, 24));
+            DrawTextBlock(
+                resolution,
+                footerText,
+                screenX + 24f,
+                screenY + screenHeight - footerHeight - 6f,
+                0.235f,
+                Color.FromArgb(214, 195, 206, 218),
+                GTA.UI.Font.ChaletLondon,
+                Alignment.Left,
+                14f);
+        }
+
+        private static void DrawTabletSidebarColumn(
+            Size resolution,
+            float x,
+            float y,
+            float width,
+            float height,
+            AccessibilityPalette palette,
+            IReadOnlyList<TabletSidebarCategory> categories,
+            int activeIndex,
+            bool focused)
+        {
+            var categoryCount = categories == null ? 0 : categories.Count;
+            if (categoryCount == 0)
+            {
+                return;
+            }
+
+            var gap = 10f;
+            var buttonHeight = Math.Max(30f, ((height - ((categoryCount - 1) * gap)) / categoryCount) * 0.5f);
+
+            for (int i = 0; i < categoryCount; i++)
+            {
+                var category = categories[i];
+                var isActiveCategory = i == activeIndex;
+                var selected = focused && isActiveCategory;
+                var buttonY = y + (i * (buttonHeight + gap));
+                var idleColor = palette.Get(ModColorRole.BackgroundCard, 150);
+                var activeColor = palette.Get(ModColorRole.BackgroundCardSelected, 224);
+
+                DrawRect(resolution.Width, resolution.Height, x + 3f, buttonY + 4f, width - 6f, buttonHeight, palette.Get(ModColorRole.BackgroundOuter, 54));
+                DrawRect(resolution.Width, resolution.Height, x, buttonY, width, buttonHeight, palette.Get(ModColorRole.BackgroundPanel, selected ? 210 : 160));
+                DrawRect(resolution.Width, resolution.Height, x + 2f, buttonY + 2f, width - 4f, buttonHeight - 4f, selected ? activeColor : idleColor);
+                if (selected)
+                {
+                    DrawRect(resolution.Width, resolution.Height, x + 2f, buttonY + 2f, 5f, buttonHeight - 4f, palette.Get(ModColorRole.Highlight, 248));
+                    DrawRect(resolution.Width, resolution.Height, x + 2f, buttonY + 2f, width - 4f, buttonHeight - 4f, palette.Get(ModColorRole.Highlight, 26));
+                }
+                else if (isActiveCategory)
+                {
+                    DrawRect(resolution.Width, resolution.Height, x + 2f, buttonY + 2f, 5f, buttonHeight - 4f, palette.Get(ModColorRole.TextMuted, 150));
+                }
+
+                var labelColor = selected
+                    ? palette.Get(ModColorRole.TextPrimary, 244)
+                    : (isActiveCategory ? palette.Get(ModColorRole.TextSecondary, 232) : palette.Get(ModColorRole.TextMuted, 218));
+                var caption = category != null && !string.IsNullOrWhiteSpace(category.Caption)
+                    ? category.Caption
+                    : (category != null && !string.IsNullOrWhiteSpace(category.Id) ? category.Id : string.Empty);
+                var iconLabel = category != null ? category.IconLabel : null;
+
+                if (!string.IsNullOrWhiteSpace(iconLabel))
+                {
+                    DrawTextBlock(
+                        resolution,
+                        iconLabel,
+                        x + 14f,
+                        buttonY + 4f,
+                        0.15f,
+                        selected ? palette.Get(ModColorRole.Highlight, 238) : palette.Get(ModColorRole.TextMuted, 200),
+                        GTA.UI.Font.ChaletComprimeCologne,
+                        Alignment.Left,
+                        10f,
+                        width - 24f);
+                    DrawTextBlock(
+                        resolution,
+                        caption,
+                        x + 14f,
+                        buttonY + 18f,
+                        0.30f,
+                        labelColor,
+                        GTA.UI.Font.ChaletComprimeCologne,
+                        Alignment.Left,
+                        12f,
+                        width - 24f);
+                }
+                else
+                {
+                    DrawTextBlock(
+                        resolution,
+                        caption,
+                        x + 14f,
+                        buttonY + 6f,
+                        0.30f,
+                        labelColor,
+                        GTA.UI.Font.ChaletComprimeCologne,
+                        Alignment.Left,
+                        12f,
+                        width - 24f);
+                }
+            }
+        }
+
         private bool TryHandleDashboardNavigation(WinForms.Keys key, ControlBindings controls)
         {
             if (_items.Count == 0 || controls == null)
@@ -839,6 +1194,80 @@ namespace LSOL.UI
             return false;
         }
 
+        private bool TryHandleSidebarNavigation(WinForms.Keys key, ControlBindings controls)
+        {
+            var categories = TabletSidebarCategories;
+            if (categories == null || categories.Count == 0 || controls == null)
+            {
+                return false;
+            }
+
+            if (key == controls.MenuLeft || key == controls.MenuRight)
+            {
+                TabletSidebarFocused = !TabletSidebarFocused;
+                return true;
+            }
+
+            if (key == controls.MenuUp || key == controls.MenuDown)
+            {
+                var delta = key == controls.MenuDown ? 1 : -1;
+                if (TabletSidebarFocused)
+                {
+                    var newIndex = ((TabletActiveSidebarIndex + delta) % categories.Count + categories.Count) % categories.Count;
+                    SwitchSidebarCategory(newIndex);
+                }
+                else
+                {
+                    MoveSelection(delta);
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private void SwitchSidebarCategory(int newIndex)
+        {
+            var categories = TabletSidebarCategories;
+            if (categories == null || newIndex < 0 || newIndex >= categories.Count)
+            {
+                return;
+            }
+
+            TabletActiveSidebarIndex = newIndex;
+            var category = categories[newIndex];
+            SetItems(category != null && category.Items != null ? category.Items : Array.Empty<MenuItem>());
+            SetSelectedIndex(0);
+
+            var changed = TabletSidebarCategoryChanged;
+            if (changed != null)
+            {
+                changed(newIndex);
+            }
+        }
+
+        private void MoveSelection(int direction)
+        {
+            if (_items.Count == 0)
+            {
+                return;
+            }
+
+            var index = SelectedIndex;
+            for (int step = 0; step < _items.Count; step++)
+            {
+                index = ((index + direction) % _items.Count + _items.Count) % _items.Count;
+                var item = _items[index];
+                if (item != null && !item.IsSeparator)
+                {
+                    SelectedIndex = index;
+                    EnsureSelectionVisible();
+                    return;
+                }
+            }
+        }
+
         private string GetHeaderRightText()
         {
             return HeaderRightTextFactory != null
@@ -884,7 +1313,7 @@ namespace LSOL.UI
                 return new List<MenuItem>(_items);
             }
 
-            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.List && lineHeight > 0f && availableContentHeight > 0f)
+            if (Theme == SimpleMenuTheme.Tablet && (TabletLayout == SimpleMenuTabletLayout.List || TabletLayout == SimpleMenuTabletLayout.Sidebar) && lineHeight > 0f && availableContentHeight > 0f)
             {
                 _firstVisibleIndex = Math.Max(0, Math.Min(_firstVisibleIndex, _items.Count - 1));
                 var dynamicVisibleCount = GetVisibleItemCount(_firstVisibleIndex, lineHeight, availableContentHeight);
@@ -909,7 +1338,7 @@ namespace LSOL.UI
 
         private void EnsureSelectionVisible()
         {
-            if (Theme == SimpleMenuTheme.Tablet && TabletLayout == SimpleMenuTabletLayout.List)
+            if (Theme == SimpleMenuTheme.Tablet && (TabletLayout == SimpleMenuTabletLayout.List || TabletLayout == SimpleMenuTabletLayout.Sidebar))
             {
                 if (_items.Count == 0)
                 {
@@ -922,7 +1351,12 @@ namespace LSOL.UI
                 var screenHeight = resolution.Height * 0.58f;
                 var headerHeight = lineHeight * 1.95f;
                 var footerHeight = lineHeight * 0.88f;
-                var availableContentHeight = GetTabletListContentHeight(screenHeight, lineHeight, headerHeight, footerHeight);
+                var bottomPanelHeight = TabletLayout == SimpleMenuTabletLayout.Sidebar
+                    && TabletBottomPanelRenderer != null
+                    && TabletBottomPanelHeight > 0f
+                        ? TabletBottomPanelHeight
+                        : 0f;
+                var availableContentHeight = GetTabletListContentHeight(screenHeight, lineHeight, headerHeight, footerHeight, bottomPanelHeight);
 
                 _firstVisibleIndex = Math.Max(0, Math.Min(_firstVisibleIndex, _items.Count - 1));
                 if (SelectedIndex < _firstVisibleIndex)
@@ -993,6 +1427,11 @@ namespace LSOL.UI
 
         private float GetItemRowHeight(float baseLineHeight, MenuItem item)
         {
+            if (item != null && item.IsSeparator)
+            {
+                return baseLineHeight * 0.62f;
+            }
+
             var detail = GetDetailText(item);
             var hasProgressBar = HasProgressBar(item);
             var rowHeight = GetRowHeight(baseLineHeight, detail, hasProgressBar);
