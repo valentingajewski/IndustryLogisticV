@@ -421,7 +421,10 @@ namespace LSOL.UI
             _surface.Title = page.Title ?? "Tablet";
             _surface.Subtitle = page.Subtitle ?? string.Empty;
             _surface.Theme = SimpleMenuTheme.Tablet;
-            _surface.TabletWidthScale = page.WidthScale;
+            // Keep every tablet page (hub and all section windows) at the same
+            // frame width as the F8 company hub so the window never resizes
+            // between navigation targets.
+            _surface.TabletWidthScale = 0.96f;
             _surface.TabletAlignRight = false;
             _surface.TabletLayout = page.Layout;
             _surface.TabletDashboardSidebarCount = page.DashboardSidebarCount;
