@@ -90,6 +90,7 @@ namespace LSOL
         private readonly CareerAutosaveScheduler _careerAutosaveScheduler;
         private readonly PlayerSuccessTracker _playerSuccessTracker;
         private readonly PlayerSkillSystem _playerSkillSystem;
+        private readonly TowingSideJobSystem _towingSideJobSystem;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
         private readonly GlobalMarketManager _globalMarket;
@@ -112,6 +113,10 @@ namespace LSOL
         private readonly LemonMenu _notificationsMenu;
         private readonly LemonMenu _debugMenu;
         private readonly LemonMenu _debugMissionMenu;
+        private readonly LemonMenu _towTruckMenu;
+        private readonly LemonMenu _sideJobsMenu;
+        private readonly LemonMenu _sideJobDetailMenu;
+        private readonly Dictionary<string, bool> _sideJobEnabled;
         private readonly DebugMenuProvider _debugMenuProvider;
         private readonly BlipLifecycleManager _blipLifecycleManager;
         private readonly CargoTransferController _cargoTransferController;
@@ -162,6 +167,7 @@ namespace LSOL
         private string _pendingSaveName;
         private string _pendingDeleteSavePath;
         private string _statusMessage;
+        private string _selectedSideJobId;
 
         private float _profit;
         private float _currentStartingBalance;
@@ -218,6 +224,7 @@ namespace LSOL
         private OwnedFleetPersistenceSnapshot _pendingOwnedFleetRestore;
         private PropertyOwnershipPersistenceSnapshot _pendingPropertyRestore;
         private SpecialMissionPersistenceSnapshot _pendingSpecialMissionRestore;
+        private TowingPersistenceSnapshot _pendingTowingRestore;
 
         public LSOLScript()
         {
@@ -534,6 +541,35 @@ namespace LSOL
                 MaxVisibleItems = 10,
                 Theme = LemonMenuTheme.Default,
             };
+            _towTruckMenu = new LemonMenu("Tow Trucks")
+            {
+                Subtitle = "Choose a tow truck for the towing job",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _sideJobsMenu = new LemonMenu("Side Jobs")
+            {
+                Subtitle = "Activate or hide side jobs",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _sideJobDetailMenu = new LemonMenu("Side Job")
+            {
+                Subtitle = "Toggle this side job",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _sideJobEnabled = new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
+            {
+                { "Towing", true },
+                { "Garbage", true },
+                { "Taxi", true },
+                { "FoodDelivery", true },
+                { "Bus", true },
+            };
             _debugMenuProvider = new DebugMenuProvider();
             InitializePropertyMenus();
             InitializeBankingMenus();
@@ -591,6 +627,13 @@ namespace LSOL
                 _financeTracker,
                 ShowStatus);
             _playerSkillSystem = new PlayerSkillSystem();
+            _towingSideJobSystem = new TowingSideJobSystem(
+                _configDirectory,
+                _config.PersonalVehicleDefinitions,
+                _playerSkillSystem,
+                message => ShowStatus(message),
+                amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Towing delivery"),
+                RequestCareerAutosave);
             _territoryManager.ConfigureEndgameContext(
                 () => _playerSuccessTracker != null ? _playerSuccessTracker.GetEndgameSummary() : new CompanyEndgameSummary(),
                 () => _npcLogisticsManager != null ? _npcLogisticsManager.GetDistrictCompetitionSummaries() : Array.Empty<NpcDistrictCompetitionSummary>(),
@@ -695,6 +738,9 @@ namespace LSOL
                     || _notificationsMenu.IsOpen
                     || _debugMenu.IsOpen
                     || _debugMissionMenu.IsOpen
+                    || _towTruckMenu.IsOpen
+                    || _sideJobsMenu.IsOpen
+                    || _sideJobDetailMenu.IsOpen
                     || HasPropertyMenuOpen()
                     || _npcLogisticsController.AnyMenuOpen
                     || _companyMapController.AnyMenuOpen
@@ -722,6 +768,9 @@ namespace LSOL
             {
                 _lastIndustryTickMs = gameTime;
             }
+
+            _towingSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
+            _towingSideJobSystem.SetJobEnabled(_sideJobEnabled["Towing"]);
 
             if (!_modMechanicsEnabled)
             {
@@ -793,6 +842,7 @@ namespace LSOL
             UpdateCruiseControl(player);
 
             _specialMissionManager.Update(player, gameTime);
+            _towingSideJobSystem.Update(player, gameTime);
             _officeObjectManager.Update(
                 player,
                 GetSelectedOfficeObjectPreviewDefinition(),
@@ -917,6 +967,15 @@ namespace LSOL
 
                     if (_specialMissionManager.HandleInteract(player))
                     {
+                        return;
+                    }
+
+                    Vector3 towPointPosition;
+                    string towPointName;
+                    float towPointHeading;
+                    if (_towingSideJobSystem.TryGetNearestTowPoint(player.Position, 6f, out towPointPosition, out towPointName, out towPointHeading))
+                    {
+                        OpenTowTruckMenu();
                         return;
                     }
                 }
@@ -1124,6 +1183,46 @@ namespace LSOL
                 return true;
             }
 
+            if (_towTruckMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _towTruckMenu.Close();
+                    return true;
+                }
+
+                _towTruckMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_sideJobDetailMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _sideJobDetailMenu.Close();
+                    RebuildSideJobsMenuItems();
+                    _sideJobsMenu.Open();
+                    return true;
+                }
+
+                _sideJobDetailMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_sideJobsMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _sideJobsMenu.Close();
+                    RebuildOptionsMenuItems();
+                    _optionsMenu.Open();
+                    return true;
+                }
+
+                _sideJobsMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_upgradeMenu.IsOpen)
             {
                 _upgradeMenu.HandleKey(key, _controls);
@@ -1175,11 +1274,14 @@ namespace LSOL
             _vehicleCargoMenu.Draw();
             _debugMenu.Draw();
             _debugMissionMenu.Draw();
+            _towTruckMenu.Draw();
+            _sideJobsMenu.Draw();
+            _sideJobDetailMenu.Draw();
             DrawPropertyMenus();
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1188,6 +1290,53 @@ namespace LSOL
             {
                 _upgradeMenu.Draw();
             }
+        }
+
+        private void OpenTowTruckMenu()
+        {
+            var items = new List<OfficeMenuItem>();
+            var trucks = _towingSideJobSystem != null ? _towingSideJobSystem.GetTowTrucks() : null;
+            if (trucks != null)
+            {
+                foreach (var truck in trucks)
+                {
+                    if (truck == null || string.IsNullOrWhiteSpace(truck.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = truck.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1:0.#}t)", truck.Name, truck.TowCapacityTons),
+                        DetailFactory = () => truck.UnlockLevel > 0
+                            ? string.Format("Requires Towing level {0}. Price {1}.", truck.UnlockLevel, ModFormatting.FormatMoney(truck.Price))
+                            : string.Format("Price {0}.", ModFormatting.FormatMoney(truck.Price)),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_towingSideJobSystem.TrySpawnTowTruck(modelName, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                _towTruckMenu.Close();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => "Close",
+                OnActivate = () => _towTruckMenu.Close(),
+            });
+
+            _towTruckMenu.SetItems(items.ToArray());
+            _towTruckMenu.Open();
         }
 
         private void DrawTabletShell()
@@ -2325,10 +2474,114 @@ namespace LSOL
                 },
                 new OfficeMenuItem
                 {
+                    CaptionFactory = () => "Side Jobs",
+                    DetailFactory = () => "Activate or hide side jobs (towing, taxi, and more).",
+                    OnActivate = OpenSideJobsMenu,
+                },
+                new OfficeMenuItem
+                {
                     CaptionFactory = () => Text(ModTextKey.CommonBack),
                     OnActivate = ReturnToModControlMenu,
                 },
             });
+        }
+
+        private void OpenSideJobsMenu()
+        {
+            _optionsMenu.Close();
+            RebuildSideJobsMenuItems();
+            _sideJobsMenu.Open();
+        }
+
+        private void RebuildSideJobsMenuItems()
+        {
+            var items = new List<OfficeMenuItem>();
+            var jobIds = new[] { "Towing", "Garbage", "Taxi", "FoodDelivery", "Bus" };
+            for (int i = 0; i < jobIds.Length; i++)
+            {
+                var jobId = jobIds[i];
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => GetSideJobDisplayName(jobId),
+                    DetailFactory = () => _sideJobEnabled[jobId] ? "Active" : "Hidden",
+                    OnActivate = () =>
+                    {
+                        _selectedSideJobId = jobId;
+                        OpenSideJobDetailMenu();
+                    },
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _sideJobsMenu.Close();
+                    RebuildOptionsMenuItems();
+                    _optionsMenu.Open();
+                },
+            });
+
+            _sideJobsMenu.SetItems(items.ToArray());
+        }
+
+        private void OpenSideJobDetailMenu()
+        {
+            _sideJobsMenu.Close();
+            RebuildSideJobDetailMenuItems();
+            _sideJobDetailMenu.Open();
+        }
+
+        private void RebuildSideJobDetailMenuItems()
+        {
+            var jobId = _selectedSideJobId;
+            _sideJobDetailMenu.Title = GetSideJobDisplayName(jobId);
+            _sideJobDetailMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Activate",
+                    DetailFactory = () => _sideJobEnabled[jobId]
+                        ? "This side job is active and visible."
+                        : "This side job is hidden.",
+                    CheckboxStateFactory = () => _sideJobEnabled[jobId],
+                    OnActivate = () =>
+                    {
+                        _sideJobEnabled[jobId] = !_sideJobEnabled[jobId];
+                        RebuildSideJobDetailMenuItems();
+                    },
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
+                    OnActivate = () =>
+                    {
+                        _sideJobDetailMenu.Close();
+                        RebuildSideJobsMenuItems();
+                        _sideJobsMenu.Open();
+                    },
+                },
+            });
+        }
+
+        private static string GetSideJobDisplayName(string jobId)
+        {
+            switch (jobId)
+            {
+                case "FoodDelivery":
+                    return "Food Delivery";
+                case "Towing":
+                    return "Towing";
+                case "Garbage":
+                    return "Garbage";
+                case "Taxi":
+                    return "Taxi";
+                case "Bus":
+                    return "Bus";
+                default:
+                    return jobId ?? string.Empty;
+            }
         }
 
         private void RebuildNotificationsMenuItems()

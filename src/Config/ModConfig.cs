@@ -455,6 +455,7 @@ namespace LSOL.Config
                     FuelCapacityLiters = x.FuelCapacityLiters,
                     Price = x.Price,
                     DailyRent = x.DailyRent,
+                    VehicleWeightTons = x.VehicleWeightTons,
                     IsEnabled = x.IsEnabled,
                     IsTrailer = x.IsTrailer,
                     IsTractor = x.IsTractor,
@@ -687,6 +688,7 @@ namespace LSOL.Config
                             ModelName = x.ModelName,
                             Category = x.Category,
                             Price = x.Price,
+                            VehicleWeightTons = x.VehicleWeightTons,
                         })
                         .ToList();
             }

@@ -1,0 +1,46 @@
+<JobCoordinates>
+  <!--
+    Job coordinate points. Each point = one location + one function for the job loop.
+
+    Common attributes:
+      id, name, job, function, x, y, z, heading
+
+    job:      TowTruck | Taxi | FoodDelivery | Garbage | Bus
+    function: per job, see vocabulary below.
+    heading:  optional facing in degrees.
+
+    Function vocabulary:
+      TowTruck      TowDropoff          garage where a towed vehicle is delivered
+      Taxi          TaxiStand            idle/queue spot for taxis
+                    FarePickup           passenger pickup zone
+                    FareDropoff          passenger dropoff zone
+      FoodDelivery  RestaurantPickup     food pickup point
+                    CustomerDropoff      meal dropoff point
+      Garbage       GarbagePickup        garbage collection point
+                    IncineratorDropoff   incinerator delivery point
+      Bus           BusStop              passenger stop
+                    BusDepot             route start/end depot
+
+    Coordinates are example placeholders; replace with final locations.
+  -->
+
+  <!-- Towing -->
+  <JobPoint id="1" name="Strawberry Garage" job="TowTruck" function="TowDropoff" x="-194.43" y="-1385.20" z="31.19" heading="230" />
+
+  <!-- Taxi -->
+  <JobPoint id="3" name="Downtown Taxi Stand" job="Taxi" function="TaxiStand" x="215.3" y="-810.1" z="30.6" heading="0" />
+  <JobPoint id="4" name="LSIA Terminal" job="Taxi" function="FareDropoff" x="-1037.9" y="-2737.9" z="13.8" heading="270" />
+
+  <!-- Food Delivery -->
+  <JobPoint id="5" name="Cluckin Bell (Davis)" job="FoodDelivery" function="RestaurantPickup" x="143.2" y="-1952.7" z="30.1" heading="0" />
+  <JobPoint id="6" name="Vespucci Beach" job="FoodDelivery" function="CustomerDropoff" x="-1244.5" y="-1490.2" z="4.3" heading="0" />
+
+  <!-- Garbage -->
+  <JobPoint id="7" name="Davis Dumpster" job="Garbage" function="GarbagePickup" x="102.4" y="-1921.8" z="30.9" heading="0" />
+  <JobPoint id="8" name="La Puerta Incinerator" job="Garbage" function="IncineratorDropoff" x="-604.5" y="-1840.1" z="22.6" heading="0" />
+
+  <!-- Bus -->
+  <JobPoint id="9" name="Del Perro Pier" job="Bus" function="BusStop" x="-1617.6" y="-1120.1" z="0.9" heading="0" />
+  <JobPoint id="10" name="Downtown Bus Depot" job="Bus" function="BusDepot" x="267.4" y="-1204.2" z="38.4" heading="0" />
+
+</JobCoordinates>

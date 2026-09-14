@@ -983,6 +983,17 @@ namespace LSOL.Config
                     fuelCapacityLiters = ResolveDefaultFuelCapacityLiters(vehicleType, capacity, isTractor, isTrailer);
                 }
 
+                var vehicleWeight = ReadFloatAttribute(element, "vehicleWeight", float.NaN);
+                if (float.IsNaN(vehicleWeight))
+                {
+                    vehicleWeight = ReadFloatAttribute(element, "VehicleWeight", float.NaN);
+                }
+
+                if (float.IsNaN(vehicleWeight))
+                {
+                    vehicleWeight = ResolveDefaultVehicleWeightTons(vehicleType, capacity);
+                }
+
                 if (rejectDuplicates)
                 {
                     if (!string.IsNullOrWhiteSpace(vehicleId)
@@ -1011,6 +1022,7 @@ namespace LSOL.Config
                     FuelCapacityLiters = Math.Max(0f, fuelCapacityLiters),
                     Price = Math.Max(0f, ReadFloatAttribute(element, "price", 0f)),
                     DailyRent = Math.Max(0f, ReadFloatAttribute(element, "dailyRent", 0f)),
+                    VehicleWeightTons = ClampVehicleWeightTons(vehicleWeight),
                     IsEnabled = ReadBoolAttribute(element, "enabled", capacity > 0f || isTractor),
                     IsTrailer = isTrailer && !isTractor,
                     IsTractor = isTractor,
@@ -1364,6 +1376,17 @@ namespace LSOL.Config
                     continue;
                 }
 
+                var vehicleWeight = ReadFloatAttribute(element, "vehicleWeight", float.NaN);
+                if (float.IsNaN(vehicleWeight))
+                {
+                    vehicleWeight = ReadFloatAttribute(element, "VehicleWeight", float.NaN);
+                }
+
+                if (float.IsNaN(vehicleWeight))
+                {
+                    vehicleWeight = ResolveDealershipVehicleWeightTons(category);
+                }
+
                 catalog.PersonalVehicleDefinitions.Add(new DealershipVehicleDefinition
                 {
                     VehicleId = modelName.Trim(),
@@ -1371,6 +1394,7 @@ namespace LSOL.Config
                     ModelName = modelName.Trim(),
                     Category = category,
                     Price = Math.Max(0f, price),
+                    VehicleWeightTons = ClampVehicleWeightTons(vehicleWeight),
                 });
             }
 
@@ -2316,6 +2340,72 @@ namespace LSOL.Config
             }
 
             return capacityTons >= 8f ? 120f : 70f;
+        }
+
+        private static float ResolveDefaultVehicleWeightTons(string vehicleType, float capacityTons)
+        {
+            var normalizedType = (vehicleType ?? string.Empty).Trim();
+            if (IsBikeVehicleType(normalizedType))
+            {
+                return 0f;
+            }
+
+            if (normalizedType.IndexOf("Trailer", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedType.IndexOf("Tractor", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedType.IndexOf("BigTruck", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedType.IndexOf("Mixer", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalizedType.IndexOf("Dumper", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 3f;
+            }
+
+            if (capacityTons <= 5f)
+            {
+                return 1f;
+            }
+
+            return 2f;
+        }
+
+        private static bool IsBikeVehicleType(string vehicleType)
+        {
+            var normalized = (vehicleType ?? string.Empty).Trim();
+            return normalized.IndexOf("Bike", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("Bicycle", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("Motorcycle", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("Quad", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static float ResolveDealershipVehicleWeightTons(string category)
+        {
+            var normalized = (category ?? string.Empty).Trim();
+            if (IsBikeVehicleType(normalized))
+            {
+                return 0f;
+            }
+
+            if (normalized.IndexOf("Muscle", StringComparison.OrdinalIgnoreCase) >= 0
+                || normalized.IndexOf("SUV", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 2f;
+            }
+
+            if (normalized.IndexOf("Offroad", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return 3f;
+            }
+
+            return 1f;
+        }
+
+        private static float ClampVehicleWeightTons(float rawWeight)
+        {
+            if (float.IsNaN(rawWeight) || rawWeight <= 0f)
+            {
+                return 0f;
+            }
+
+            return Math.Max(0f, Math.Min(3f, rawWeight));
         }
 
         private static string NormalizeDensity(string raw, string fallback)

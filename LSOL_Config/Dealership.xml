@@ -1,25 +1,25 @@
 <Dealership>
 	<Models>
 		<!-- Compact -->
-		<Model name="Asbo" model="asbo" price="14000" category="Compact"/>
-		<Model name="Blista" model="blista" price="13500" category="Compact"/>
-		<Model name="Club" model="club" price="10000" category="Compact"/>
-		<Model name="Dilettante" model="dilettante" price="12000" category="Compact"/>
-		<Model name="Issi" model="issi2" price="15500" category="Compact"/>
-		<Model name="Panto" model="panto" price="7200" category="Compact"/>
-		<Model name="Prairie" model="prairie" price="21000" category="Compact"/>
-		<Model name="Rhapsody" model="rhapsody" price="11000" category="Compact"/>
+		<Model name="Asbo" model="asbo" price="14000" category="Compact" vehicleWeight="1"/>
+		<Model name="Blista" model="blista" price="13500" category="Compact" vehicleWeight="1"/>
+		<Model name="Club" model="club" price="10000" category="Compact" vehicleWeight="1"/>
+		<Model name="Dilettante" model="dilettante" price="12000" category="Compact" vehicleWeight="1"/>
+		<Model name="Issi" model="issi2" price="15500" category="Compact" vehicleWeight="1"/>
+		<Model name="Panto" model="panto" price="7200" category="Compact" vehicleWeight="1"/>
+		<Model name="Prairie" model="prairie" price="21000" category="Compact" vehicleWeight="1"/>
+		<Model name="Rhapsody" model="rhapsody" price="11000" category="Compact" vehicleWeight="1"/>
 		<!-- Coupe -->
-		<Model name="Cogcabrio" model="cogcabrio" price="53000" category="Coupe"/>
-		<Model name="Exemplar" model="exemplar" price="175000" category="Coupe"/>
-		<Model name="F620" model="f620" price="92000" category="Coupe"/>
-		<Model name="Felon" model="felon2" price="47000" category="Coupe"/>
-		<Model name="Jackal" model="jackal" price="51000" category="Coupe"/>
-		<Model name="Kanjosj" model="kanjosj" price="24000" category="Coupe"/>
-		<Model name="Oracle" model="oracle2" price="68000" category="Coupe"/>
-		<Model name="Previon" model="previon" price="30000" category="Coupe"/>
-		<Model name="Sentinel XS" model="sentinel" price="51000" category="Coupe"/>
-		<Model name="Zion" model="zion" price="51000" category="Coupe"/>
+		<Model name="Cogcabrio" model="cogcabrio" price="53000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Exemplar" model="exemplar" price="175000" category="Coupe" vehicleWeight="1"/>
+		<Model name="F620" model="f620" price="92000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Felon" model="felon2" price="47000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Jackal" model="jackal" price="51000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Kanjosj" model="kanjosj" price="24000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Oracle" model="oracle2" price="68000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Previon" model="previon" price="30000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Sentinel XS" model="sentinel" price="51000" category="Coupe" vehicleWeight="1"/>
+		<Model name="Zion" model="zion" price="51000" category="Coupe" vehicleWeight="1"/>
 		<!-- Motorcycle -->
 		<Model name="Akuma" model="akuma" price="7500" category="Motorcycle"/>
 		<Model name="Avarus" model="avarus" price="10000" category="Motorcycle"/>
@@ -33,110 +33,110 @@
 		<Model name="Ruffian" model="ruffian" price="12000" category="Motorcycle"/>
 		<Model name="Sanchez" model="sanchez" price="6000" category="Motorcycle"/>
 		<!-- Muscle -->
-		<Model name="Blade" model="blade" price="78000" category="Muscle"/>
-		<Model name="Buccaneer" model="buccaneer" price="25000" category="Muscle"/>
-		<Model name="Chino" model="chino" price="75000" category="Muscle"/>
-		<Model name="Deviant" model="deviant" price="78000" category="Muscle"/>
-		<Model name="Dominator" model="dominator" price="30000" category="Muscle"/>
-		<Model name="Dominator Modern" model="dominator3" price="85000" category="Muscle"/>
-		<Model name="Dukes" model="dukes" price="55000" category="Muscle"/>
-		<Model name="Gauntlet" model="gauntlet" price="75000" category="Muscle"/>
-		<Model name="Greenwood" model="greenwood" price="48000" category="Muscle"/>
-		<Model name="Impaler" model="impaler" price="67000" category="Muscle"/>
-		<Model name="Ruiner" model="ruiner" price="8500" category="Muscle"/>
-		<Model name="Sabre GT" model="sabregt" price="80000" category="Muscle"/>
-		<Model name="Vigero" model="vigero" price="80000" category="Muscle"/>
-		<Model name="Virgo" model="virgo2" price="54000" category="Muscle"/>
+		<Model name="Blade" model="blade" price="78000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Buccaneer" model="buccaneer" price="25000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Chino" model="chino" price="75000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Deviant" model="deviant" price="78000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Dominator" model="dominator" price="30000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Dominator Modern" model="dominator3" price="85000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Dukes" model="dukes" price="55000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Gauntlet" model="gauntlet" price="75000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Greenwood" model="greenwood" price="48000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Impaler" model="impaler" price="67000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Ruiner" model="ruiner" price="8500" category="Muscle" vehicleWeight="2"/>
+		<Model name="Sabre GT" model="sabregt" price="80000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Vigero" model="vigero" price="80000" category="Muscle" vehicleWeight="2"/>
+		<Model name="Virgo" model="virgo2" price="54000" category="Muscle" vehicleWeight="2"/>
 		<!-- Offroad -->
-		<Model name="Blazer" model="blazer4" price="30000" category="Offroad"/>
-		<Model name="Bodhi" model="bodhi2" price="28000" category="Offroad"/>
-		<Model name="Caracara 4x4" model="caracara2" price="745000" category="Offroad"/>
-		<Model name="Everon" model="everon" price="1250000" category="Offroad"/>
-		<Model name="Mesa" model="mesa3" price="74000" category="Offroad"/>
-		<Model name="Rancher XL" model="rancherxl" price="7500" category="Offroad"/>
-		<Model name="Riata" model="riata" price="35000" category="Offroad"/>
-		<Model name="Sandking SWB" model="sandking2" price="32000" category="Offroad"/>
-		<Model name="Yosemite Rancher" model="yosemite3" price="595000" category="Offroad"/>
+		<Model name="Blazer" model="blazer4" price="30000" category="Offroad" vehicleWeight="1"/>
+		<Model name="Bodhi" model="bodhi2" price="28000" category="Offroad" vehicleWeight="3"/>
+		<Model name="Caracara 4x4" model="caracara2" price="745000" category="Offroad" vehicleWeight="3"/>
+		<Model name="Everon" model="everon" price="1250000" category="Offroad" vehicleWeight="3"/>
+		<Model name="Mesa" model="mesa3" price="74000" category="Offroad" vehicleWeight="2"/>
+		<Model name="Rancher XL" model="rancherxl" price="7500" category="Offroad" vehicleWeight="3"/>
+		<Model name="Riata" model="riata" price="35000" category="Offroad" vehicleWeight="3"/>
+		<Model name="Sandking SWB" model="sandking2" price="32000" category="Offroad" vehicleWeight="3"/>
+		<Model name="Yosemite Rancher" model="yosemite3" price="595000" category="Offroad" vehicleWeight="3"/>
 		<!-- SUV -->
-		<Model name="Aleutian" model="aleutian" price="30000" category="SUV"/>
-		<Model name="Astron" model="astron" price="68000" category="SUV"/>
-		<Model name="Baller" model="baller" price="32000" category="SUV"/>
-		<Model name="Baller XL" model="baller2" price="77000" category="SUV"/>
-		<Model name="Cavalcade" model="cavalcade2" price="60000" category="SUV"/>
-		<Model name="Dubsta" model="dubsta" price="60000" category="SUV"/>
-		<Model name="FQ2" model="fq2" price="45000" category="SUV"/>
-		<Model name="Granger" model="granger" price="30000" category="SUV"/>
-		<Model name="Habanero" model="habanero" price="28000" category="SUV"/>
-		<Model name="Huntley" model="huntley" price="50000" category="SUV"/>
-		<Model name="Iwagen" model="iwagen" price="38000" category="SUV"/>
-		<Model name="Jubilee" model="jubilee" price="60000" category="SUV"/>
-		<Model name="Landstalker XL" model="landstalker2" price="1040000" category="SUV"/>
-		<Model name="Patriot" model="patriot" price="43000" category="SUV"/>
-		<Model name="Radi" model="radi" price="25000" category="SUV"/>
-		<Model name="Rebla" model="rebla" price="30000" category="SUV"/>
-		<Model name="Serrano" model="serrano" price="51000" category="SUV"/>
+		<Model name="Aleutian" model="aleutian" price="30000" category="SUV" vehicleWeight="2"/>
+		<Model name="Astron" model="astron" price="68000" category="SUV" vehicleWeight="2"/>
+		<Model name="Baller" model="baller" price="32000" category="SUV" vehicleWeight="2"/>
+		<Model name="Baller XL" model="baller2" price="77000" category="SUV" vehicleWeight="2"/>
+		<Model name="Cavalcade" model="cavalcade2" price="60000" category="SUV" vehicleWeight="2"/>
+		<Model name="Dubsta" model="dubsta" price="60000" category="SUV" vehicleWeight="2"/>
+		<Model name="FQ2" model="fq2" price="45000" category="SUV" vehicleWeight="2"/>
+		<Model name="Granger" model="granger" price="30000" category="SUV" vehicleWeight="2"/>
+		<Model name="Habanero" model="habanero" price="28000" category="SUV" vehicleWeight="2"/>
+		<Model name="Huntley" model="huntley" price="50000" category="SUV" vehicleWeight="2"/>
+		<Model name="Iwagen" model="iwagen" price="38000" category="SUV" vehicleWeight="2"/>
+		<Model name="Jubilee" model="jubilee" price="60000" category="SUV" vehicleWeight="2"/>
+		<Model name="Landstalker XL" model="landstalker2" price="1040000" category="SUV" vehicleWeight="2"/>
+		<Model name="Patriot" model="patriot" price="43000" category="SUV" vehicleWeight="2"/>
+		<Model name="Radi" model="radi" price="25000" category="SUV" vehicleWeight="2"/>
+		<Model name="Rebla" model="rebla" price="30000" category="SUV" vehicleWeight="2"/>
+		<Model name="Serrano" model="serrano" price="51000" category="SUV" vehicleWeight="2"/>
 		<!-- Sedan -->
-		<Model name="Asea" model="asea" price="10000" category="Sedan"/>
-		<Model name="Asterope" model="asterope" price="9000" category="Sedan"/>
-		<Model name="Cognoscenti" model="cognoscenti" price="95000" category="Sedan"/>
-		<Model name="Emperor" model="emperor" price="7000" category="Sedan"/>
-		<Model name="Fugitive" model="fugitive" price="20000" category="Sedan"/>
-		<Model name="Glendale" model="glendale" price="8500" category="Sedan"/>
-		<Model name="Ingot" model="ingot" price="7500" category="Sedan"/>
-		<Model name="Intruder" model="intruder" price="10000" category="Sedan"/>
-		<Model name="Premier" model="premier" price="8500" category="Sedan"/>
-		<Model name="Primo" model="primo" price="7500" category="Sedan"/>
-		<Model name="Schafter" model="schafter2" price="55000" category="Sedan"/>
-		<Model name="Stanier" model="stanier" price="8000" category="Sedan"/>
-		<Model name="Super Diamond" model="superd" price="69000" category="Sedan"/>
-		<Model name="Surge" model="surge" price="32000" category="Sedan"/>
-		<Model name="Tailgater" model="tailgater" price="47000" category="Sedan"/>
-		<Model name="Washington" model="washington" price="13000" category="Sedan"/>
+		<Model name="Asea" model="asea" price="10000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Asterope" model="asterope" price="9000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Cognoscenti" model="cognoscenti" price="95000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Emperor" model="emperor" price="7000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Fugitive" model="fugitive" price="20000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Glendale" model="glendale" price="8500" category="Sedan" vehicleWeight="1"/>
+		<Model name="Ingot" model="ingot" price="7500" category="Sedan" vehicleWeight="1"/>
+		<Model name="Intruder" model="intruder" price="10000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Premier" model="premier" price="8500" category="Sedan" vehicleWeight="1"/>
+		<Model name="Primo" model="primo" price="7500" category="Sedan" vehicleWeight="1"/>
+		<Model name="Schafter" model="schafter2" price="55000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Stanier" model="stanier" price="8000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Super Diamond" model="superd" price="69000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Surge" model="surge" price="32000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Tailgater" model="tailgater" price="47000" category="Sedan" vehicleWeight="1"/>
+		<Model name="Washington" model="washington" price="13000" category="Sedan" vehicleWeight="1"/>
 		<!-- Sport -->
-		<Model name="9F Cabrio" model="ninef2" price="111000" category="Sport"/>
-		<Model name="Alpha" model="alpha" price="60000" category="Sport"/>
-		<Model name="Banshee" model="banshee" price="50000" category="Sport"/>
-		<Model name="Buffalo" model="buffalo" price="50000" category="Sport"/>
-		<Model name="Carbonizzare" model="carbonizzare" price="166000" category="Sport"/>
-		<Model name="Comet" model="comet2" price="70000" category="Sport"/>
-		<Model name="Coquette" model="coquette" price="117000" category="Sport"/>
-		<Model name="Elegy" model="elegy" price="110000" category="Sport"/>
-		<Model name="Fusilade" model="fusilade" price="30000" category="Sport"/>
-		<Model name="Futo" model="futo" price="40000" category="Sport"/>
-		<Model name="Growler" model="growler" price="1380000" category="Sport"/>
-		<Model name="Jester" model="jester" price="205000" category="Sport"/>
-		<Model name="Jugular" model="jugular" price="1040000" category="Sport"/>
-		<Model name="Kuruma" model="kuruma" price="107000" category="Sport"/>
-		<Model name="Omnis" model="omnis" price="100000" category="Sport"/>
-		<Model name="Rapid GT" model="rapidgt2" price="119000" category="Sport"/>
-		<Model name="Schwarzer" model="schwarzer" price="68000" category="Sport"/>
-		<Model name="Sultan Sport" model="sultan2" price="150000" category="Sport"/>
-		<Model name="Surano" model="surano" price="84000" category="Sport"/>
+		<Model name="9F Cabrio" model="ninef2" price="111000" category="Sport" vehicleWeight="1"/>
+		<Model name="Alpha" model="alpha" price="60000" category="Sport" vehicleWeight="1"/>
+		<Model name="Banshee" model="banshee" price="50000" category="Sport" vehicleWeight="1"/>
+		<Model name="Buffalo" model="buffalo" price="50000" category="Sport" vehicleWeight="1"/>
+		<Model name="Carbonizzare" model="carbonizzare" price="166000" category="Sport" vehicleWeight="1"/>
+		<Model name="Comet" model="comet2" price="70000" category="Sport" vehicleWeight="1"/>
+		<Model name="Coquette" model="coquette" price="117000" category="Sport" vehicleWeight="1"/>
+		<Model name="Elegy" model="elegy" price="110000" category="Sport" vehicleWeight="1"/>
+		<Model name="Fusilade" model="fusilade" price="30000" category="Sport" vehicleWeight="1"/>
+		<Model name="Futo" model="futo" price="40000" category="Sport" vehicleWeight="1"/>
+		<Model name="Growler" model="growler" price="1380000" category="Sport" vehicleWeight="1"/>
+		<Model name="Jester" model="jester" price="205000" category="Sport" vehicleWeight="1"/>
+		<Model name="Jugular" model="jugular" price="1040000" category="Sport" vehicleWeight="1"/>
+		<Model name="Kuruma" model="kuruma" price="107000" category="Sport" vehicleWeight="1"/>
+		<Model name="Omnis" model="omnis" price="100000" category="Sport" vehicleWeight="1"/>
+		<Model name="Rapid GT" model="rapidgt2" price="119000" category="Sport" vehicleWeight="1"/>
+		<Model name="Schwarzer" model="schwarzer" price="68000" category="Sport" vehicleWeight="1"/>
+		<Model name="Sultan Sport" model="sultan2" price="150000" category="Sport" vehicleWeight="1"/>
+		<Model name="Surano" model="surano" price="84000" category="Sport" vehicleWeight="1"/>
 		<!-- Sport Classic-->
-		<Model name="Albany Roosevelt" model="btype" price="280000" category="SportClassic"/>
-		<Model name="Albany Roosevelt Valor" model="btype3" price="300000" category="SportClassic"/>
-		<Model name="Ardent" model="ardent" price="300000" category="SportClassic"/>
-		<Model name="Casco" model="casco" price="178000" category="SportClassic"/>
-		<Model name="Cheetah" model="cheetah2" price="450000" category="SportClassic"/>
-		<Model name="Coquette Classic" model="coquette2" price="200000" category="SportClassic"/>
-		<Model name="Mamba" model="mamba" price="240000" category="SportClassic"/>
-		<Model name="Manana" model="manana" price="35000" category="SportClassic"/>
-		<Model name="Monroe" model="monroe" price="300000" category="SportClassic"/>
-		<Model name="Peyote" model="peyote" price="40000" category="SportClassic"/>
-		<Model name="Pigalle" model="pigalle" price="150000" category="SportClassic"/>
-		<Model name="Stinger" model="stinger" price="220000" category="SportClassic"/>
-		<Model name="Stinger GT" model="stingergt" price="240000" category="SportClassic"/>
-		<Model name="Torero" model="torero" price="250000" category="SportClassic"/>
-		<Model name="Z-Type" model="ztype" price="325000" category="SportClassic"/>
+		<Model name="Albany Roosevelt" model="btype" price="280000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Albany Roosevelt Valor" model="btype3" price="300000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Ardent" model="ardent" price="300000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Casco" model="casco" price="178000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Cheetah" model="cheetah2" price="450000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Coquette Classic" model="coquette2" price="200000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Mamba" model="mamba" price="240000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Manana" model="manana" price="35000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Monroe" model="monroe" price="300000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Peyote" model="peyote" price="40000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Pigalle" model="pigalle" price="150000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Stinger" model="stinger" price="220000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Stinger GT" model="stingergt" price="240000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Torero" model="torero" price="250000" category="SportClassic" vehicleWeight="1"/>
+		<Model name="Z-Type" model="ztype" price="325000" category="SportClassic" vehicleWeight="1"/>
 		<!-- Super -->
-		<Model name="Adder" model="adder" price="1000000" category="Super"/>
-		<Model name="Bullet" model="bullet" price="155000" category="Super"/>
-		<Model name="Cheetah" model="cheetah" price="650000" category="Super"/>
-		<Model name="Entity XF" model="entityxf" price="225000" category="Super"/>
-		<Model name="Infernus" model="infernus" price="240000" category="Super"/>
-		<Model name="Nero" model="nero" price="540000" category="Super"/>
-		<Model name="Osiris" model="osiris" price="950000" category="Super"/>
-		<Model name="Reaper" model="reaper" price="300000" category	="Super"/>
-		<Model name="T20" model="t20" price="220000" category="Super"/>
+		<Model name="Adder" model="adder" price="1000000" category="Super" vehicleWeight="1"/>
+		<Model name="Bullet" model="bullet" price="155000" category="Super" vehicleWeight="1"/>
+		<Model name="Cheetah" model="cheetah" price="650000" category="Super" vehicleWeight="1"/>
+		<Model name="Entity XF" model="entityxf" price="225000" category="Super" vehicleWeight="1"/>
+		<Model name="Infernus" model="infernus" price="240000" category="Super" vehicleWeight="1"/>
+		<Model name="Nero" model="nero" price="540000" category="Super" vehicleWeight="1"/>
+		<Model name="Osiris" model="osiris" price="950000" category="Super" vehicleWeight="1"/>
+		<Model name="Reaper" model="reaper" price="300000" category="Super" vehicleWeight="1"/>
+		<Model name="T20" model="t20" price="220000" category="Super" vehicleWeight="1"/>
 	</Models>
 </Dealership>

@@ -379,6 +379,11 @@ namespace LSOL.Systems
                 persistenceVersion = 29;
             }
 
+            if (metadata != null && HasTowingData(metadata.Towing))
+            {
+                persistenceVersion = 30;
+            }
+
             writer.WriteLine(
                 "Version={0}",
                 persistenceVersion);
@@ -424,6 +429,11 @@ namespace LSOL.Systems
             if (metadata != null && HasPlayerSkillsData(metadata.PlayerSkills))
             {
                 WritePlayerSkillsSnapshot(writer, metadata.PlayerSkills);
+            }
+
+            if (metadata != null && HasTowingData(metadata.Towing))
+            {
+                WriteTowingSnapshot(writer, metadata.Towing);
             }
 
             foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
@@ -608,6 +618,7 @@ namespace LSOL.Systems
             metadata.AlertRules = ReadAlertRulesSnapshot(ini);
             metadata.StartingGuides = ReadStartingGuidesSnapshot(ini);
             metadata.PlayerSkills = ReadPlayerSkillsSnapshot(ini);
+            metadata.Towing = ReadTowingSnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
@@ -615,7 +626,8 @@ namespace LSOL.Systems
                 || HasPlayerContractsData(metadata.PlayerContracts)
                 || HasAlertRulesData(metadata.AlertRules)
                 || HasStartingGuidesData(metadata.StartingGuides)
-                || HasPlayerSkillsData(metadata.PlayerSkills);
+                || HasPlayerSkillsData(metadata.PlayerSkills)
+                || HasTowingData(metadata.Towing);
             return metadata;
         }
 
@@ -3956,6 +3968,99 @@ namespace LSOL.Systems
             return snapshot.HasData ? snapshot : null;
         }
 
+        private static bool HasTowingData(TowingPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WriteTowingSnapshot(StreamWriter writer, TowingPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Towing]");
+            writer.WriteLine("NextSpawnId={0}", Math.Max(1, snapshot.NextSpawnId));
+            if (snapshot.ActiveTow != null && !string.IsNullOrWhiteSpace(snapshot.ActiveTow.TowTruckModelName))
+            {
+                writer.WriteLine("ActiveTowTruckModel={0}", snapshot.ActiveTow.TowTruckModelName ?? string.Empty);
+                writer.WriteLine("ActiveTowedSpawnId={0}", Math.Max(0, snapshot.ActiveTow.TowedSpawnId));
+            }
+
+            writer.WriteLine();
+
+            if (snapshot.DamagedVehicles == null)
+            {
+                return;
+            }
+
+            foreach (var entry in snapshot.DamagedVehicles
+                .Where(item => item != null && !string.IsNullOrWhiteSpace(item.ModelName))
+                .OrderBy(item => item.SpawnId))
+            {
+                writer.WriteLine("[Towing:DamagedVehicle:{0}]", Math.Max(1, entry.SpawnId));
+                writer.WriteLine("ModelName={0}", entry.ModelName ?? string.Empty);
+                writer.WriteLine("DisplayName={0}", entry.DisplayName ?? string.Empty);
+                writer.WriteLine("WeightTons={0}", FormatFloat(entry.WeightTons));
+                writer.WriteLine("Position={0}", FormatVector3(entry.Position));
+                writer.WriteLine("Heading={0}", FormatFloat(entry.Heading));
+                writer.WriteLine("SpawnedAtGameTime={0}", entry.SpawnedAtGameTime);
+                writer.WriteLine();
+            }
+        }
+
+        private static TowingPersistenceSnapshot ReadTowingSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new TowingPersistenceSnapshot();
+            if (ini.HasSection("Towing"))
+            {
+                snapshot.NextSpawnId = ParseInt(ini.GetString("Towing", "NextSpawnId", "1"), 1);
+                var activeTowModel = ini.GetString("Towing", "ActiveTowTruckModel", string.Empty);
+                if (!string.IsNullOrWhiteSpace(activeTowModel))
+                {
+                    snapshot.ActiveTow = new TowingActiveTowSnapshot
+                    {
+                        TowTruckModelName = activeTowModel,
+                        TowedSpawnId = ParseInt(ini.GetString("Towing", "ActiveTowedSpawnId", "0"), 0),
+                    };
+                }
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("Towing:DamagedVehicle:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var spawnId = ParseInt(section.Substring("Towing:DamagedVehicle:".Length).Trim(), 0);
+                var modelName = ini.GetString(section, "ModelName", string.Empty);
+                if (spawnId <= 0 || string.IsNullOrWhiteSpace(modelName))
+                {
+                    continue;
+                }
+
+                snapshot.DamagedVehicles.Add(new TowingDamagedVehicleSnapshot
+                {
+                    SpawnId = spawnId,
+                    ModelName = modelName,
+                    DisplayName = ini.GetString(section, "DisplayName", modelName),
+                    WeightTons = ini.GetFloat(section, "WeightTons", 1f),
+                    Position = ParseVector3(ini.GetString(section, "Position", string.Empty), Vector3.Zero),
+                    Heading = ini.GetFloat(section, "Heading", 0f),
+                    SpawnedAtGameTime = ParseInt(ini.GetString(section, "SpawnedAtGameTime", "0"), 0),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
         private static bool HasStartingGuidesData(StartingGuidesPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -4037,5 +4142,6 @@ namespace LSOL.Systems
         public PlayerContractsPersistenceSnapshot PlayerContracts { get; set; }
         public AlertRulesPersistenceSnapshot AlertRules { get; set; }
         public StartingGuidesPersistenceSnapshot StartingGuides { get; set; }
+        public TowingPersistenceSnapshot Towing { get; set; }
     }
 }

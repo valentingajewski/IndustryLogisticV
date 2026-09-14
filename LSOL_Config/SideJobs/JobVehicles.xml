@@ -1,0 +1,42 @@
+<JobVehicles>
+  <!--
+    Job vehicle base. Independent of the industry/logistics cargo system.
+    No acceptedResources, no capacityTons — each type carries its own payload metric.
+
+    Common attributes:
+      id, name, model, type, unlockLevel, price, dailyRent, fuelCapacityLiters
+
+    unlockLevel = skill level of the matching job skill (Towing / Taxi / FoodDelivery / Garbage)
+                  required before this vehicle can be purchased or spawned.
+
+    Type-specific attributes (present only on that type):
+      TowTruck      towCapacityTons   max weight (t) of a vehicle it can tow
+      Taxi          seats             passenger seats
+      FoodDelivery  mealCapacity      max meals per run
+      Garbage       garbageTons       max garbage (t) per run
+
+    model values are placeholders; replace with final game models.
+  -->
+
+  <!-- Towing -->
+  <JobVehicle id="1" name="Tow Truck" model="towtruck2" type="TowTruck" unlockLevel="0" price="0" dailyRent="500" fuelCapacityLiters="120" towCapacityTons="3" />
+  <JobVehicle id="2" name="Heavy Tow Truck" model="towtruck" type="TowTruck" unlockLevel="3" price="0" dailyRent="750" fuelCapacityLiters="120" towCapacityTons="10" />
+
+  <!-- Taxi -->
+  <JobVehicle id="6" name="Taxi" model="taxi" type="Taxi" unlockLevel="0" price="8000" dailyRent="350" fuelCapacityLiters="80" seats="3" confort="2" />
+  <JobVehicle id="7" name="Limo" model="stanier" type="Taxi" unlockLevel="30" price="120000" dailyRent="3000" fuelCapacityLiters="90" seats="3" confort="5" />
+
+  <!-- Food Delivery -->
+  <JobVehicle id="9" name="Delivery Scooter" model="pizzaboy" type="FoodDelivery" unlockLevel="0" price="3000" dailyRent="150" fuelCapacityLiters="30" mealCapacity="6" />
+  <JobVehicle id="11" name="Food Truck" model="taco" type="FoodDelivery" unlockLevel="10" price="23000" dailyRent="1100" fuelCapacityLiters="120" mealCapacity="40" />
+
+  <!-- Garbage -->
+  <JobVehicle id="12" name="Trash Truck" model="trash" type="Garbage" unlockLevel="0" price="22000" dailyRent="900" fuelCapacityLiters="160" garbageTons="10" />
+  <JobVehicle id="13" name="Trash Truck (Large)" model="trash2" type="Garbage" unlockLevel="8" price="45000" dailyRent="1800" fuelCapacityLiters="220" garbageTons="20" />
+
+  <!-- Bus -->
+  <JobVehicle id="15" name="Rental Bus" model="rentalbus" type="Bus" unlockLevel="0" price="80000" dailyRent="2500" fuelCapacityLiters="180" seats="8" />
+  <JobVehicle id="16" name="City Bus" model="bus" type="Bus" unlockLevel="10" price="100000" dailyRent="2000" fuelCapacityLiters="200" seats="30" />
+  <JobVehicle id="17" name="Coach" model="coach" type="Bus" unlockLevel="30" price="120000" dailyRent="5000" fuelCapacityLiters="300" seats="30" />
+
+</JobVehicles>

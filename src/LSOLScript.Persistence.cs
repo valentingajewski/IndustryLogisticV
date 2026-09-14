@@ -28,7 +28,9 @@ namespace LSOL
             _pendingOwnedFleetRestore = null;
             _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
+            _pendingTowingRestore = null;
             _specialMissionManager.ResetState();
+            _towingSideJobSystem.ResetState();
             _globalMarket.Reset(Game.GameTime);
             _npcLogisticsManager.ClearAll();
             _playerContractsManager.ClearAll();
@@ -51,7 +53,7 @@ namespace LSOL
 
         private void RestorePendingWorldState()
         {
-            if (_pendingOwnedFleetRestore == null && _pendingPropertyRestore == null && _pendingSpecialMissionRestore == null)
+            if (_pendingOwnedFleetRestore == null && _pendingPropertyRestore == null && _pendingSpecialMissionRestore == null && _pendingTowingRestore == null)
             {
                 return;
             }
@@ -59,9 +61,11 @@ namespace LSOL
             var ownedFleetSnapshot = _pendingOwnedFleetRestore;
             var propertySnapshot = _pendingPropertyRestore;
             var specialMissionSnapshot = _pendingSpecialMissionRestore;
+            var towingSnapshot = _pendingTowingRestore;
             _pendingOwnedFleetRestore = null;
             _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
+            _pendingTowingRestore = null;
 
             if (propertySnapshot != null && propertySnapshot.HasData)
             {
@@ -79,6 +83,7 @@ namespace LSOL
             }
 
             _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
+            _towingSideJobSystem.ApplyPersistenceSnapshot(towingSnapshot);
             ReevaluatePlayerSuccesses(false);
             _tabletStateStore.MarkAllDirty();
         }
@@ -604,6 +609,7 @@ namespace LSOL
                 PlayerContracts = _playerContractsManager.CreatePersistenceSnapshot(),
                 AlertRules = EnsureAlertRules(),
                 StartingGuides = _startingGuidesController != null ? _startingGuidesController.CreatePersistenceSnapshot() : null,
+                Towing = _towingSideJobSystem != null ? _towingSideJobSystem.CreatePersistenceSnapshot() : null,
             };
             CaptureLiveDifficultyProfile().ApplyToMetadata(metadata);
             return metadata;
@@ -657,6 +663,7 @@ namespace LSOL
             var ownedFleetSnapshot = metadata != null ? metadata.OwnedFleet : null;
             var propertySnapshot = metadata != null ? metadata.PropertyOwnership : null;
             var specialMissionSnapshot = metadata != null ? metadata.SpecialMissions : null;
+            var towingSnapshot = metadata != null ? metadata.Towing : null;
             if ((propertySnapshot == null || !propertySnapshot.HasData) && ownedFleetSnapshot != null && ownedFleetSnapshot.HasData)
             {
                 propertySnapshot = _propertyManager.CreateLegacyMigrationSnapshot(ownedFleetSnapshot, GetCurrentInGameWeekMinute());
@@ -680,12 +687,16 @@ namespace LSOL
                 _pendingSpecialMissionRestore = specialMissionSnapshot != null && specialMissionSnapshot.HasData
                     ? specialMissionSnapshot
                     : null;
+                _pendingTowingRestore = towingSnapshot != null && towingSnapshot.HasData
+                    ? towingSnapshot
+                    : null;
             }
             else
             {
                 _pendingOwnedFleetRestore = null;
                 _pendingPropertyRestore = null;
                 _pendingSpecialMissionRestore = null;
+                _pendingTowingRestore = null;
                 if (propertySnapshot != null && propertySnapshot.HasData)
                 {
                     _propertyManager.RestoreWorldState(
@@ -702,6 +713,7 @@ namespace LSOL
                 }
 
                 _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
+                _towingSideJobSystem.ApplyPersistenceSnapshot(towingSnapshot);
             }
 
             ReevaluatePlayerSuccesses(false);

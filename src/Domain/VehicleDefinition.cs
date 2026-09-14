@@ -22,6 +22,13 @@ namespace LSOL.Domain
         public float FuelCapacityLiters { get; set; }
         public float Price { get; set; }
         public float DailyRent { get; set; }
+
+        /// <summary>
+        /// Physical towable weight in tons (1-3 for non-bike vehicles). Bikes carry
+        /// no weight and are excluded from the towing side job's damaged-vehicle spawns.
+        /// </summary>
+        public float VehicleWeightTons { get; set; }
+
         public bool IsEnabled { get; set; }
         public bool IsTrailer { get; set; }
         public bool IsTractor { get; set; }
