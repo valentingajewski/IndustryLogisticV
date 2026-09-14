@@ -1060,14 +1060,16 @@ namespace LSOL.UI
         private readonly Action _openDepotView;
         private readonly SpecialMissionManager _specialMissionManager;
         private readonly PlayerSuccessTracker _playerSuccessTracker;
+        private readonly PlayerSkillSystem _playerSkillSystem;
 
-        public HomeTabletApp(Action openCompanyMap, Action openDistrictView, Action openDepotView, SpecialMissionManager specialMissionManager, PlayerSuccessTracker playerSuccessTracker)
+        public HomeTabletApp(Action openCompanyMap, Action openDistrictView, Action openDepotView, SpecialMissionManager specialMissionManager, PlayerSuccessTracker playerSuccessTracker, PlayerSkillSystem playerSkillSystem)
         {
             _openCompanyMap = openCompanyMap;
             _openDistrictView = openDistrictView;
             _openDepotView = openDepotView;
             _specialMissionManager = specialMissionManager;
             _playerSuccessTracker = playerSuccessTracker;
+            _playerSkillSystem = playerSkillSystem;
         }
 
         public string AppId
@@ -1309,12 +1311,21 @@ namespace LSOL.UI
                     ? (float?)unlockedSuccessCount / totalSuccessCount
                     : null));
 
+            var skillsItems = new List<MenuItem>();
+            skillsItems.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.GetOrDefault("tablet.home.skills", "Skills"),
+                BuildSkillsTileDetail(),
+                () => context.Push(TabletAppIds.Skills, "root"),
+                Color.FromArgb(186, 46, 58, 50),
+                Color.FromArgb(228, 104, 138, 116)));
+
             var categories = new List<TabletSidebarCategory>
             {
                 new TabletSidebarCategory { Id = "company", Caption = LocalizedText.Get("tablet.home.category.company"), Items = companyItems },
                 new TabletSidebarCategory { Id = "finance", Caption = LocalizedText.Get("tablet.home.category.finance"), Items = financeItems },
                 new TabletSidebarCategory { Id = "assets", Caption = LocalizedText.Get("tablet.home.category.assets"), Items = assetsItems },
                 new TabletSidebarCategory { Id = "missions", Caption = LocalizedText.Get("tablet.home.category.missions"), Items = missionsItems },
+                new TabletSidebarCategory { Id = "skills", Caption = LocalizedText.GetOrDefault("tablet.home.category.skills", "Skills"), Items = skillsItems },
             };
             var activeCategoryIndex = Math.Max(0, Math.Min(context.StateStore.HomeSidebarCategoryIndex, categories.Count - 1));
 
@@ -1346,6 +1357,24 @@ namespace LSOL.UI
                     value => ModFormatting.FormatMoney(value)),
                 Items = categories[activeCategoryIndex].Items,
             };
+        }
+
+        private string BuildSkillsTileDetail()
+        {
+            if (_playerSkillSystem == null)
+            {
+                return LocalizedText.GetOrDefault("tablet.home.skillsDetailFallback", "Player job skills and payout bonuses.");
+            }
+
+            var truckingName = LocalizedText.GetOrDefault("tablet.skills.name.trucking", "Trucking");
+            var truckingLevel = _playerSkillSystem.GetLevel(PlayerSkillId.Trucking);
+            var truckingBonus = _playerSkillSystem.GetBonusPercent(PlayerSkillId.Trucking);
+            return LocalizedText.FormatOrDefault(
+                "tablet.home.skillsDetail",
+                "{0} Lv {1} | +{2:0.#}% payout",
+                truckingName,
+                truckingLevel,
+                truckingBonus);
         }
 
         private static string BuildHomeOperationsStatus(TabletStateSnapshot snapshot)

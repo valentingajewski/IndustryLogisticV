@@ -50,6 +50,16 @@ namespace LSOL.UI
         public Action FillNearbyIndustryOutputs { get; set; }
         public Action EmptyNearbyIndustryOutputs { get; set; }
         public Action MultiplyNearbyIndustryProductionRate { get; set; }
+        public Func<string> SkillCaption { get; set; }
+        public Func<string> SkillDetail { get; set; }
+        public Action SelectPreviousSkill { get; set; }
+        public Action SelectNextSkill { get; set; }
+        public Func<string> SkillXpAmountCaption { get; set; }
+        public Action SelectPreviousSkillXpAmount { get; set; }
+        public Action SelectNextSkillXpAmount { get; set; }
+        public Func<float> SelectedSkillXpAmount { get; set; }
+        public Action AddSkillXp { get; set; }
+        public Action AddSkillLevel { get; set; }
         public Action CloseMenu { get; set; }
     }
 
@@ -232,6 +242,36 @@ namespace LSOL.UI
                     CaptionFactory = () => "Boost production x1000",
                     DetailFactory = () => "Multiplies the nearby industry's production rate by 1000.",
                     OnActivate = callbacks.MultiplyNearbyIndustryProductionRate,
+                },
+                new MenuItem
+                {
+                    IsSeparator = true,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = callbacks.SkillCaption,
+                    DetailFactory = callbacks.SkillDetail,
+                    OnLeft = callbacks.SelectPreviousSkill,
+                    OnRight = callbacks.SelectNextSkill,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = callbacks.SkillXpAmountCaption,
+                    DetailFactory = () => "Used by the add-skill-XP action.",
+                    OnLeft = callbacks.SelectPreviousSkillXpAmount,
+                    OnRight = callbacks.SelectNextSkillXpAmount,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "Add skill XP",
+                    DetailFactory = () => string.Format("Adds {0:0} XP to the selected skill.", callbacks.SelectedSkillXpAmount()),
+                    OnActivate = callbacks.AddSkillXp,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "Add skill level",
+                    DetailFactory = () => "Advances the selected skill by exactly one level.",
+                    OnActivate = callbacks.AddSkillLevel,
                 },
                 new MenuItem
                 {

@@ -49,6 +49,7 @@ namespace LSOL.Systems
         private readonly TerritoryManager _territoryManager;
         private readonly Action<Industry> _notifyIndustryOutputChanged;
         private readonly Action<string> _showStatus;
+        private readonly Func<float> _playerDeliveryBonusMultiplier;
 
         private PendingTransfer _pendingTransfer;
 
@@ -59,7 +60,8 @@ namespace LSOL.Systems
             Action<string> showStatus,
             PlayerContractsManager playerContractsManager = null,
             TerritoryManager territoryManager = null,
-            Action<Industry> notifyIndustryOutputChanged = null)
+            Action<Industry> notifyIndustryOutputChanged = null,
+            Func<float> playerDeliveryBonusMultiplier = null)
         {
             _fleetManager = fleetManager;
             _industryManager = industryManager;
@@ -68,6 +70,17 @@ namespace LSOL.Systems
             _playerContractsManager = playerContractsManager;
             _territoryManager = territoryManager;
             _notifyIndustryOutputChanged = notifyIndustryOutputChanged;
+            _playerDeliveryBonusMultiplier = playerDeliveryBonusMultiplier;
+        }
+
+        private float ApplyPlayerDeliveryBonus(float amount)
+        {
+            if (_playerDeliveryBonusMultiplier == null || amount <= 0.001f)
+            {
+                return amount;
+            }
+
+            return amount * _playerDeliveryBonusMultiplier();
         }
 
         public bool HasPendingTransfer
@@ -385,7 +398,8 @@ namespace LSOL.Systems
                                 _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                             }
 
-                            addProfit(revenue, new CargoTransferProfitContext
+                            var finalRevenue = ApplyPlayerDeliveryBonus(revenue);
+                            addProfit(finalRevenue, new CargoTransferProfitContext
                             {
                                 Category = CompanyFinanceCategory.PlayerDelivery,
                                 Description = industry != null && industry.IsWarehouse
@@ -429,7 +443,7 @@ namespace LSOL.Systems
                                     "Unloaded {0} {1}. Profit {2} | Condition {3}",
                                     ModFormatting.FormatTons(accepted),
                                     commodity,
-                                    ModFormatting.FormatSignedMoney(revenue),
+                                    ModFormatting.FormatSignedMoney(finalRevenue),
                                     ModFormatting.FormatPercent(conditionRatio * 100f)));
                             }
 
@@ -692,7 +706,8 @@ namespace LSOL.Systems
                                 _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                             }
 
-                            addProfit(revenue, new CargoTransferProfitContext
+                            var finalRevenue = ApplyPlayerDeliveryBonus(revenue);
+                            addProfit(finalRevenue, new CargoTransferProfitContext
                             {
                                 Category = CompanyFinanceCategory.PlayerDelivery,
                                 Description = string.Format("Player delivery of {0} to {1}", commodity, industry != null ? industry.Name : "destination"),
@@ -726,7 +741,7 @@ namespace LSOL.Systems
                             }
                             else
                             {
-                                _showStatus(string.Format("Unloaded {0} {1}. Profit {2}", ModFormatting.FormatTons(accepted), commodity, ModFormatting.FormatSignedMoney(revenue)));
+                                _showStatus(string.Format("Unloaded {0} {1}. Profit {2}", ModFormatting.FormatTons(accepted), commodity, ModFormatting.FormatSignedMoney(finalRevenue)));
                             }
 
                             onUnloadCompleted?.Invoke(industry, cargoVehicle, commodity, completedDelivery, false);

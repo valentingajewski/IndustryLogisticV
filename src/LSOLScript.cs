@@ -51,6 +51,7 @@ namespace LSOL
         private static readonly float[] DebugMoneyAmountOptions = { 1000f, 5000f, 10000f, 25000f, 50000f, 100000f, 500000f, 1000000f };
         private static readonly float[] DebugDistrictReputationAmountOptions = { 5f, 10f, 25f, 50f, 100f, 250f };
         private static readonly string[] DebugDistrictStateOptions = { "Unknown", "Emerging", "Established", "Dominant" };
+        private static readonly float[] DebugSkillXpAmountOptions = { 50f, 100f, 500f, 1000f, 5000f };
         private static readonly float[] StartingBalanceOptions = BuildStartingBalanceOptions();
         private static readonly ModLanguage[] SelectableLanguages =
         {
@@ -88,6 +89,7 @@ namespace LSOL
         private readonly BankLoanManager _bankLoanManager;
         private readonly CareerAutosaveScheduler _careerAutosaveScheduler;
         private readonly PlayerSuccessTracker _playerSuccessTracker;
+        private readonly PlayerSkillSystem _playerSkillSystem;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
         private readonly GlobalMarketManager _globalMarket;
@@ -147,6 +149,8 @@ namespace LSOL
         private int _selectedDebugDistrictIndex;
         private int _selectedDebugDistrictReputationAmountIndex;
         private int _selectedDebugDistrictStateIndex;
+        private int _selectedDebugSkillIndex;
+        private int _selectedDebugSkillXpAmountIndex;
         private int _selectedStartingBalanceIndex;
         private int _lastIndustryTickMs;
         private int _lastNearestProbeMs;
@@ -334,7 +338,8 @@ namespace LSOL
                     {
                         _industryOutputPropManager.RefreshIndustry(industry);
                     }
-                });
+                },
+                () => _playerSkillSystem != null ? _playerSkillSystem.GetBonusMultiplier(PlayerSkillId.Trucking) : 1f);
             var cargoFilterOrder = _config.CargoTypes != null && _config.CargoTypes.Count > 0
                 ? _config.CargoTypes
                 : new List<VehicleCargoType>
@@ -585,16 +590,18 @@ namespace LSOL
                 _bankLoanManager,
                 _financeTracker,
                 ShowStatus);
+            _playerSkillSystem = new PlayerSkillSystem();
             _territoryManager.ConfigureEndgameContext(
                 () => _playerSuccessTracker != null ? _playerSuccessTracker.GetEndgameSummary() : new CompanyEndgameSummary(),
                 () => _npcLogisticsManager != null ? _npcLogisticsManager.GetDistrictCompetitionSummaries() : Array.Empty<NpcDistrictCompetitionSummary>(),
                 () => _npcLogisticsManager != null ? _npcLogisticsManager.GetCorridorCompetitionSummaries() : Array.Empty<NpcCorridorCompetitionSummary>());
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
-            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager, _playerSuccessTracker));
+            _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager, _playerSuccessTracker, _playerSkillSystem));
             _tabletShellController.RegisterApp(new BudgetTabletApp());
             _tabletShellController.RegisterApp(new PropertyPortfolioTabletApp(CreatePropertyPortfolioTabletActions()));
             _tabletShellController.RegisterApp(new AnalyticsTabletApp(OpenAnalyticsRoutePlannerMapFromTablet, OpenNpcPlannerDraftFromTablet));
             _tabletShellController.RegisterApp(new SuccessesTabletApp(_playerSuccessTracker));
+            _tabletShellController.RegisterApp(new SkillsTabletApp(_playerSkillSystem));
             _tabletShellController.RegisterApp(new SpecialMissionsTabletApp(_specialMissionManager));
             _tabletShellController.RegisterApp(new NetworkTabletApp(IndustryInteractionDistance, PurchaseContractorPermitFromTablet, AddIndustryGpsRouteFromTablet, ClearGpsRouteFromTablet, HandleCompanyServiceRefuelRequested, HandleCompanyServiceRepairRequested, ToggleServiceSiteOperatorFromTablet, message => ShowStatus(message), OpenNetworkRoutePlannerMapFromTablet, OpenNpcPlannerDraftFromTablet));
             _tabletShellController.RegisterApp(new IndustryTabletApp(
@@ -3604,6 +3611,16 @@ namespace LSOL
                 FillNearbyIndustryOutputs = FillNearbyIndustryOutputs,
                 EmptyNearbyIndustryOutputs = EmptyNearbyIndustryOutputs,
                 MultiplyNearbyIndustryProductionRate = MultiplyNearbyIndustryProductionRate,
+                SkillCaption = CurrentDebugSkillCaption,
+                SkillDetail = CurrentDebugSkillDetail,
+                SelectPreviousSkill = () => ChangeDebugSkillSelection(-1),
+                SelectNextSkill = () => ChangeDebugSkillSelection(1),
+                SkillXpAmountCaption = CurrentDebugSkillXpAmountCaption,
+                SelectPreviousSkillXpAmount = () => ChangeDebugSkillXpAmountSelection(-1),
+                SelectNextSkillXpAmount = () => ChangeDebugSkillXpAmountSelection(1),
+                SelectedSkillXpAmount = GetSelectedDebugSkillXpAmount,
+                AddSkillXp = AddDebugSkillXp,
+                AddSkillLevel = AddDebugSkillLevel,
                 CloseMenu = () => _debugMenu.Close(),
             });
         }
@@ -4116,6 +4133,14 @@ namespace LSOL
             if (_playerSuccessTracker != null)
             {
                 _playerSuccessTracker.RecordDeliveryProgress(commodity, deliveredTons, completedDelivery, isCleanDelivery);
+            }
+
+            if (_playerSkillSystem != null)
+            {
+                _playerSkillSystem.AddXp(
+                    PlayerSkillId.Trucking,
+                    _playerSkillSystem.GetTruckingDeliveryXp(deliveredTons, completedDelivery),
+                    PlayerSkillXpSource.Player);
             }
 
             if (_specialMissionManager != null)
@@ -4702,6 +4727,103 @@ namespace LSOL
         private void ChangeDebugDistrictStateSelection(int delta)
         {
             _selectedDebugDistrictStateIndex = (_selectedDebugDistrictStateIndex + delta + DebugDistrictStateOptions.Length) % DebugDistrictStateOptions.Length;
+        }
+
+        private void ChangeDebugSkillSelection(int delta)
+        {
+            var skillIds = PlayerSkillSystem.GetAllSkillIds();
+            if (skillIds.Count == 0)
+            {
+                _selectedDebugSkillIndex = 0;
+                return;
+            }
+
+            _selectedDebugSkillIndex = (_selectedDebugSkillIndex + delta + skillIds.Count) % skillIds.Count;
+        }
+
+        private void ChangeDebugSkillXpAmountSelection(int delta)
+        {
+            _selectedDebugSkillXpAmountIndex = (_selectedDebugSkillXpAmountIndex + delta + DebugSkillXpAmountOptions.Length) % DebugSkillXpAmountOptions.Length;
+        }
+
+        private PlayerSkillId GetSelectedDebugSkill()
+        {
+            var skillIds = PlayerSkillSystem.GetAllSkillIds();
+            if (_selectedDebugSkillIndex < 0 || _selectedDebugSkillIndex >= skillIds.Count)
+            {
+                _selectedDebugSkillIndex = 0;
+            }
+
+            return skillIds[_selectedDebugSkillIndex];
+        }
+
+        private string CurrentDebugSkillCaption()
+        {
+            if (_playerSkillSystem == null)
+            {
+                return "Skill: < unavailable >";
+            }
+
+            var skill = GetSelectedDebugSkill();
+            return string.Format("Skill: < {0} (Lv {1}) >", PlayerSkillSystem.GetSkillName(skill), _playerSkillSystem.GetLevel(skill));
+        }
+
+        private string CurrentDebugSkillDetail()
+        {
+            if (_playerSkillSystem == null)
+            {
+                return "Skill system unavailable.";
+            }
+
+            var skill = GetSelectedDebugSkill();
+            return string.Format(
+                "{0:0} XP total | {1:0} / {2:0} XP to next level | Bonus +{3:0.#}%",
+                _playerSkillSystem.GetTotalXp(skill),
+                _playerSkillSystem.GetXpIntoLevel(skill),
+                _playerSkillSystem.GetXpForNextLevel(skill),
+                _playerSkillSystem.GetBonusPercent(skill));
+        }
+
+        private string CurrentDebugSkillXpAmountCaption()
+        {
+            return string.Format("Skill XP amount: < {0:0} >", GetSelectedDebugSkillXpAmount());
+        }
+
+        private float GetSelectedDebugSkillXpAmount()
+        {
+            if (_selectedDebugSkillXpAmountIndex < 0 || _selectedDebugSkillXpAmountIndex >= DebugSkillXpAmountOptions.Length)
+            {
+                _selectedDebugSkillXpAmountIndex = 0;
+            }
+
+            return DebugSkillXpAmountOptions[_selectedDebugSkillXpAmountIndex];
+        }
+
+        private void AddDebugSkillXp()
+        {
+            if (_playerSkillSystem == null)
+            {
+                ShowStatus("Skill system unavailable.");
+                return;
+            }
+
+            var amount = GetSelectedDebugSkillXpAmount();
+            var skill = GetSelectedDebugSkill();
+            _playerSkillSystem.AddXp(skill, amount, PlayerSkillXpSource.Player);
+            ShowStatus(string.Format("Added {0:0} XP to {1}. Level is now {2}.", amount, PlayerSkillSystem.GetSkillName(skill), _playerSkillSystem.GetLevel(skill)));
+        }
+
+        private void AddDebugSkillLevel()
+        {
+            if (_playerSkillSystem == null)
+            {
+                ShowStatus("Skill system unavailable.");
+                return;
+            }
+
+            var skill = GetSelectedDebugSkill();
+            var added = _playerSkillSystem.AdvanceLevel(skill, 1);
+            ShowStatus(string.Format("Advanced {0} by one level ({1:0} XP). Level is now {2}.", PlayerSkillSystem.GetSkillName(skill), added, _playerSkillSystem.GetLevel(skill)));
         }
 
         private void AdjustDebugDistrictReputation(float direction)

@@ -43,6 +43,7 @@ namespace LSOL
             _financeTracker.Clear();
             _bankLoanManager.ApplyPersistenceSnapshot(null, GetCurrentInGameWeekMinute());
             _playerSuccessTracker.ResetForNewSave(_profit);
+            _playerSkillSystem.ResetForNewSave();
             SyncPlayerSuccessBalance(false);
             ResetAlertRuleRuntimeState(Game.GameTime, true);
             _tabletStateStore.MarkAllDirty();
@@ -599,6 +600,7 @@ namespace LSOL
                 Finance = _financeTracker.CreatePersistenceSnapshot(),
                 BankLoans = _bankLoanManager.CreatePersistenceSnapshot(),
                 PlayerStatistics = _playerSuccessTracker.CreatePersistenceSnapshot(),
+                PlayerSkills = _playerSkillSystem.CreatePersistenceSnapshot(),
                 PlayerContracts = _playerContractsManager.CreatePersistenceSnapshot(),
                 AlertRules = EnsureAlertRules(),
                 StartingGuides = _startingGuidesController != null ? _startingGuidesController.CreatePersistenceSnapshot() : null,
@@ -636,6 +638,7 @@ namespace LSOL
             _globalMarket.ApplyPersistenceSnapshot(metadata != null ? metadata.Market : null, Game.GameTime);
             _tabletStateStore.ApplyPersistenceSnapshot(metadata != null ? metadata.Analytics : null);
             _playerSuccessTracker.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerStatistics : null, GetCompanyBalance());
+            _playerSkillSystem.ApplyPersistenceSnapshot(metadata != null ? metadata.PlayerSkills : null);
             SyncPlayerSuccessBalance(false);
 
             _selectedStartingBalanceIndex = GetNearestStartingBalanceIndex(_currentStartingBalance);

@@ -374,6 +374,11 @@ namespace LSOL.Systems
                 persistenceVersion = 28;
             }
 
+            if (metadata != null && HasPlayerSkillsData(metadata.PlayerSkills))
+            {
+                persistenceVersion = 29;
+            }
+
             writer.WriteLine(
                 "Version={0}",
                 persistenceVersion);
@@ -414,6 +419,11 @@ namespace LSOL.Systems
             if (metadata != null && HasStartingGuidesData(metadata.StartingGuides))
             {
                 WriteStartingGuidesSnapshot(writer, metadata.StartingGuides);
+            }
+
+            if (metadata != null && HasPlayerSkillsData(metadata.PlayerSkills))
+            {
+                WritePlayerSkillsSnapshot(writer, metadata.PlayerSkills);
             }
 
             foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
@@ -597,13 +607,15 @@ namespace LSOL.Systems
             metadata.PlayerContracts = ReadPlayerContractsSnapshot(ini);
             metadata.AlertRules = ReadAlertRulesSnapshot(ini);
             metadata.StartingGuides = ReadStartingGuidesSnapshot(ini);
+            metadata.PlayerSkills = ReadPlayerSkillsSnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
                 || HasPlayerStatisticsData(metadata.PlayerStatistics)
                 || HasPlayerContractsData(metadata.PlayerContracts)
                 || HasAlertRulesData(metadata.AlertRules)
-                || HasStartingGuidesData(metadata.StartingGuides);
+                || HasStartingGuidesData(metadata.StartingGuides)
+                || HasPlayerSkillsData(metadata.PlayerSkills);
             return metadata;
         }
 
@@ -3894,6 +3906,56 @@ namespace LSOL.Systems
             public string Value { get; private set; }
         }
 
+        private static bool HasPlayerSkillsData(PlayerSkillPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WritePlayerSkillsSnapshot(StreamWriter writer, PlayerSkillPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Skills]");
+            foreach (var entry in (snapshot.SkillXp ?? new List<PlayerSkillXpSnapshot>())
+                .Where(item => item != null)
+                .OrderBy(item => item.SkillId))
+            {
+                writer.WriteLine("{0}={1}", entry.SkillId, FormatFloat(Math.Max(0f, entry.Xp)));
+            }
+
+            writer.WriteLine();
+        }
+
+        private static PlayerSkillPersistenceSnapshot ReadPlayerSkillsSnapshot(IniFile ini)
+        {
+            if (ini == null || !ini.HasSection("Skills"))
+            {
+                return null;
+            }
+
+            var snapshot = new PlayerSkillPersistenceSnapshot();
+            var section = ini.GetSection("Skills");
+            foreach (var pair in section)
+            {
+                var skillId = ParseInt(pair.Key, -1);
+                if (skillId < 0)
+                {
+                    continue;
+                }
+
+                snapshot.SkillXp.Add(new PlayerSkillXpSnapshot
+                {
+                    SkillId = skillId,
+                    Xp = Math.Max(0f, ParseFloat(pair.Value, 0f)),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
         private static bool HasStartingGuidesData(StartingGuidesPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -3971,6 +4033,7 @@ namespace LSOL.Systems
         public CompanyFinancePersistenceSnapshot Finance { get; set; }
         public BankLoanPersistenceSnapshot BankLoans { get; set; }
         public PlayerStatisticsPersistenceSnapshot PlayerStatistics { get; set; }
+        public PlayerSkillPersistenceSnapshot PlayerSkills { get; set; }
         public PlayerContractsPersistenceSnapshot PlayerContracts { get; set; }
         public AlertRulesPersistenceSnapshot AlertRules { get; set; }
         public StartingGuidesPersistenceSnapshot StartingGuides { get; set; }
