@@ -4584,7 +4584,7 @@ namespace LSOL.UI
                         LocalizedText.Get("tablet.industry.deliveries.takeOutDetail"),
                         () =>
                         {
-                            _foodDelivery.TakeOutVehicle(ownedVehicle.ModelName);
+                            _foodDelivery.TakeOutVehicle(ownedVehicle.ModelName, key);
                             context.Refresh();
                         })
                     : TabletUiHelpers.CreateInfoItem(
@@ -4655,6 +4655,7 @@ namespace LSOL.UI
                 return BuildUnavailablePage(snapshot, LocalizedText.Get("tablet.industry.deliveries.noRestaurant"), () => context.GoBack());
             }
 
+            var key = string.IsNullOrWhiteSpace(industry.LegacyKey) ? industry.Id : industry.LegacyKey;
             var items = new List<MenuItem>();
             var vehicles = _foodDelivery.GetVehicles();
             for (int i = 0; i < vehicles.Count; i++)
@@ -4685,7 +4686,7 @@ namespace LSOL.UI
                         }
                         else if (isOwned)
                         {
-                            _foodDelivery.TakeOutVehicle(modelName);
+                            _foodDelivery.TakeOutVehicle(modelName, key);
                         }
                         else
                         {
