@@ -5,21 +5,12 @@
     Common attributes:
       id, name, job, function, x, y, z, heading
 
-    job:      TowTruck | Taxi | FoodDelivery | Garbage | Bus
+    job:      TowTruck | FoodDelivery | Garbage | Bus
     function: per job, see vocabulary below.
     heading:  optional facing in degrees.
 
     Function vocabulary:
       TowTruck      TowDropoff          garage where a towed vehicle is delivered
-      Taxi          TaxiStand            stand: taxi spawn/garage (the first one in the file) and the
-                                         dispatch point. Optional demand="1.0" scales the local fare
-                                         density of that stand (city stands deserve more than rural ones).
-                    FareDropoff          a named destination of the taxi job. Author 30-50 of them spread
-                                         over the map: the job picks one inside the rolled distance band
-                                         (short/medium/long) and uses its name as the destination label.
-                                         district="WestLosSantos" tags the district a completed fare
-                                         credits; omit it and the point is resolved from Districts.xml.
-                    FarePickup           accepted but unused: pickups are always rolled near the player.
       FoodDelivery  RestaurantPickup     restaurant: job garage, meal loading point and start of a run.
                                          site="<legacyKey>" links the point to its Sites.xml restaurant
                                          (role="Restaurant"): the site's marker, district, product
@@ -42,75 +33,6 @@
 
   <!-- Towing -->
   <JobPoint id="1" name="Strawberry Garage" job="TowTruck" function="TowDropoff" district="SouthLosSantos" x="-194.43" y="-1385.20" z="31.19" heading="230" />
-
-  <!-- Taxi -->
-  <!--
-    The FIRST TaxiStand in this file is the taxi job garage: taxis are bought and taken out there, and
-    the dispatch board hangs off it. The other stands are extra fare hotspots with their own demand
-    multiplier. Pickups are rolled 80-250 m from the player, never across the map.
-  -->
-  <JobPoint id="3" name="Downtown Taxi Stand" job="Taxi" function="TaxiStand" x="215.3" y="-810.1" z="30.6" heading="0" demand="1.0" />
-  <JobPoint id="20" name="LSIA Taxi Rank" job="Taxi" function="TaxiStand" x="-1042.4" y="-2745.6" z="21.4" heading="90" demand="1.2" />
-  <JobPoint id="21" name="Vinewood Boulevard Rank" job="Taxi" function="TaxiStand" x="292.4" y="180.5" z="89.6" heading="180" demand="1.1" />
-  <JobPoint id="22" name="Del Perro Pier Rank" job="Taxi" function="TaxiStand" x="-1850.4" y="-1231.4" z="8.6" heading="90" demand="1.0" />
-  <JobPoint id="23" name="Paleto Bay Rank" job="Taxi" function="TaxiStand" x="-275.4" y="6635.4" z="31.5" heading="0" demand="0.4" />
-
-  <!--
-    Taxi destinations (FareDropoff). These are placeholders: replace them with the spots you want
-    passengers to ask for, keeping a spread of roughly 1 km to 6 km apart so every distance band has
-    candidates. district= must match a District name in LSOL_Config/Districts.xml.
-  -->
-  <!-- Downtown -->
-  <JobPoint id="100" name="Maze Bank Tower" job="Taxi" function="FareDropoff" district="Downtown" x="-75.0" y="-818.0" z="326.0" />
-  <JobPoint id="101" name="Legion Square" job="Taxi" function="FareDropoff" district="Downtown" x="195.0" y="-946.0" z="30.0" />
-  <JobPoint id="102" name="Alta Street" job="Taxi" function="FareDropoff" district="Downtown" x="240.0" y="-700.0" z="40.0" />
-  <JobPoint id="103" name="Little Seoul Plaza" job="Taxi" function="FareDropoff" district="Downtown" x="-700.0" y="-900.0" z="20.0" />
-  <!-- Vinewood -->
-  <JobPoint id="104" name="Vinewood Boulevard" job="Taxi" function="FareDropoff" district="Vinewood" x="292.0" y="180.0" z="89.6" />
-  <JobPoint id="105" name="Oriental Theater" job="Taxi" function="FareDropoff" district="Vinewood" x="320.0" y="220.0" z="90.0" />
-  <JobPoint id="106" name="Meteor Street" job="Taxi" function="FareDropoff" district="Vinewood" x="100.0" y="-300.0" z="50.0" />
-  <!-- West Los Santos -->
-  <JobPoint id="107" name="Del Perro Pier" job="Taxi" function="FareDropoff" district="WestLosSantos" x="-1850.0" y="-1231.0" z="8.6" />
-  <JobPoint id="108" name="Vespucci Beach" job="Taxi" function="FareDropoff" district="WestLosSantos" x="-1244.5" y="-1490.2" z="4.3" />
-  <JobPoint id="109" name="Muscle Beach" job="Taxi" function="FareDropoff" district="WestLosSantos" x="-1250.0" y="-1400.0" z="6.0" />
-  <JobPoint id="110" name="Morningwood Boulevard" job="Taxi" function="FareDropoff" district="WestLosSantos" x="-1300.0" y="-400.0" z="40.0" />
-  <!-- East Los Santos -->
-  <JobPoint id="111" name="Mirror Park" job="Taxi" function="FareDropoff" district="EastLosSantos" x="1000.0" y="-700.0" z="60.0" />
-  <JobPoint id="112" name="East Vinewood" job="Taxi" function="FareDropoff" district="EastLosSantos" x="700.0" y="-300.0" z="50.0" />
-  <JobPoint id="113" name="Murrieta Heights" job="Taxi" function="FareDropoff" district="EastLosSantos" x="1200.0" y="-1400.0" z="40.0" />
-  <JobPoint id="114" name="El Burro Heights" job="Taxi" function="FareDropoff" district="EastLosSantos" x="1290.0" y="-1740.0" z="50.0" />
-  <!-- South Los Santos -->
-  <JobPoint id="115" name="Grove Street" job="Taxi" function="FareDropoff" district="SouthLosSantos" x="100.0" y="-1900.0" z="30.0" />
-  <JobPoint id="116" name="Davis Mega Mall" job="Taxi" function="FareDropoff" district="SouthLosSantos" x="120.0" y="-1750.0" z="30.0" />
-  <JobPoint id="117" name="Strawberry Avenue" job="Taxi" function="FareDropoff" district="SouthLosSantos" x="-200.0" y="-1400.0" z="30.0" />
-  <JobPoint id="118" name="La Puerta Freeway" job="Taxi" function="FareDropoff" district="SouthLosSantos" x="-300.0" y="-1500.0" z="28.0" />
-  <JobPoint id="119" name="Pillbox Hill Medical" job="Taxi" function="FareDropoff" district="SouthLosSantos" x="115.0" y="-1300.0" z="29.0" />
-  <!-- Port -->
-  <JobPoint id="120" name="Elysian Island" job="Taxi" function="FareDropoff" district="Port" x="110.0" y="-3100.0" z="6.0" />
-  <JobPoint id="121" name="Terminal Docks" job="Taxi" function="FareDropoff" district="Port" x="1000.0" y="-2900.0" z="6.0" />
-  <JobPoint id="122" name="Cypress Flats" job="Taxi" function="FareDropoff" district="Port" x="850.0" y="-2400.0" z="20.0" />
-  <!-- Airport -->
-  <JobPoint id="123" name="LSIA Terminal" job="Taxi" function="FareDropoff" district="Airport" x="-1037.7" y="-2737.7" z="20.0" />
-  <JobPoint id="124" name="LSIA Hangars" job="Taxi" function="FareDropoff" district="Airport" x="-900.0" y="-2500.0" z="20.0" />
-  <!-- North Los Santos -->
-  <JobPoint id="125" name="Palomino Avenue" job="Taxi" function="FareDropoff" district="NorthLosSantos" x="-900.0" y="1200.0" z="60.0" />
-  <JobPoint id="126" name="Richman Glen" job="Taxi" function="FareDropoff" district="NorthLosSantos" x="-1600.0" y="300.0" z="90.0" />
-  <JobPoint id="127" name="Hillcrest Avenue" job="Taxi" function="FareDropoff" district="NorthLosSantos" x="-1400.0" y="900.0" z="80.0" />
-  <!-- Grand Senora -->
-  <JobPoint id="128" name="Harmony" job="Taxi" function="FareDropoff" district="GrandSenora" x="100.0" y="2500.0" z="60.0" />
-  <JobPoint id="129" name="Sandy Shores Airfield" job="Taxi" function="FareDropoff" district="GrandSenora" x="1747.0" y="3274.0" z="40.0" />
-  <JobPoint id="130" name="Redwood Lights Track" job="Taxi" function="FareDropoff" district="GrandSenora" x="529.0" y="2450.0" z="60.0" />
-  <JobPoint id="131" name="Bolingbroke Penitentiary" job="Taxi" function="FareDropoff" district="GrandSenora" x="1850.0" y="2600.0" z="40.0" />
-  <!-- Paleto Bay -->
-  <JobPoint id="132" name="Paleto Boulevard" job="Taxi" function="FareDropoff" district="PaletoBay" x="-275.0" y="6635.0" z="31.5" />
-  <JobPoint id="133" name="Paleto Forest Lookout" job="Taxi" function="FareDropoff" district="PaletoBay" x="-700.0" y="5800.0" z="30.0" />
-  <JobPoint id="134" name="Procopio Beach" job="Taxi" function="FareDropoff" district="PaletoBay" x="-1700.0" y="4700.0" z="6.0" />
-  <JobPoint id="135" name="Cape Catfish" job="Taxi" function="FareDropoff" district="PaletoBay" x="-1100.0" y="4900.0" z="6.0" />
-  <!-- Grapeseed -->
-  <JobPoint id="136" name="Grapeseed Main Street" job="Taxi" function="FareDropoff" district="Grapeseed" x="1700.0" y="4700.0" z="40.0" />
-  <JobPoint id="137" name="McKenzie Field" job="Taxi" function="FareDropoff" district="Grapeseed" x="2100.0" y="4800.0" z="40.0" />
-  <JobPoint id="138" name="Alamo Sea Shore" job="Taxi" function="FareDropoff" district="Grapeseed" x="1300.0" y="4000.0" z="30.0" />
-  <JobPoint id="139" name="Stab City" job="Taxi" function="FareDropoff" district="Grapeseed" x="100.0" y="3700.0" z="30.0" />
 
   <!-- Food Delivery -->
   <JobPoint id="5" name="Well Stacked Pizza (Vespucci)" job="FoodDelivery" function="RestaurantPickup" site="WellStackedPizzaVespucci" serviceRadius="5000" x="-1244.5" y="-1490.2" z="4.3" heading="0" />

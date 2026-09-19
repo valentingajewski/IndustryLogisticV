@@ -218,8 +218,6 @@ namespace LSOL.UI
                     return "tablet.skills.name.foodDelivery";
                 case PlayerSkillId.Garbage:
                     return "tablet.skills.name.garbage";
-                case PlayerSkillId.Taxi:
-                    return "tablet.skills.name.taxi";
                 case PlayerSkillId.Bus:
                     return "tablet.skills.name.bus";
                 default:

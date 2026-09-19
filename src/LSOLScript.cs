@@ -93,7 +93,6 @@ namespace LSOL
         private readonly TowingSideJobSystem _towingSideJobSystem;
         private readonly GarbageSideJobSystem _garbageSideJobSystem;
         private readonly BusSideJobSystem _busSideJobSystem;
-        private readonly TaxiSideJobSystem _taxiSideJobSystem;
         private readonly FoodDeliverySideJobSystem _foodDeliverySideJobSystem;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
@@ -126,10 +125,6 @@ namespace LSOL
         private readonly LemonMenu _busGarageMenu;
         private readonly LemonMenu _busRouteMenu;
         private readonly LemonMenu _busDealershipMenu;
-        private readonly LemonMenu _taxiStandMenu;
-        private readonly LemonMenu _taxiGarageMenu;
-        private readonly LemonMenu _taxiDealershipMenu;
-        private readonly LemonMenu _taxiDispatchMenu;
         private readonly LemonMenu _foodDeliveryRestaurantMenu;
         private readonly LemonMenu _foodDeliveryGarageMenu;
         private readonly LemonMenu _foodDeliveryDealershipMenu;
@@ -247,7 +242,6 @@ namespace LSOL
         private TowingPersistenceSnapshot _pendingTowingRestore;
         private GarbagePersistenceSnapshot _pendingGarbageRestore;
         private BusPersistenceSnapshot _pendingBusRestore;
-        private TaxiPersistenceSnapshot _pendingTaxiRestore;
         private FoodDeliveryPersistenceSnapshot _pendingFoodDeliveryRestore;
 
         /// <summary>Restaurant the food delivery menus were opened from.</summary>
@@ -631,34 +625,6 @@ namespace LSOL
                 MaxVisibleItems = 10,
                 Theme = LemonMenuTheme.Default,
             };
-            _taxiStandMenu = new LemonMenu("Taxi Stand")
-            {
-                Subtitle = "Garage, dispatch board and fares",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
-            _taxiGarageMenu = new LemonMenu("Taxi Garage")
-            {
-                Subtitle = "Take out or park a taxi",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
-            _taxiDealershipMenu = new LemonMenu("Taxis")
-            {
-                Subtitle = "Buy a taxi for the taxi job",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
-            _taxiDispatchMenu = new LemonMenu("Dispatch Board")
-            {
-                Subtitle = "Fares waiting for a driver",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
             _foodDeliveryRestaurantMenu = new LemonMenu("Restaurant")
             {
                 Subtitle = "Garage, deliveries and menus",
@@ -705,7 +671,6 @@ namespace LSOL
             {
                 { "Towing", true },
                 { "Garbage", true },
-                { "Taxi", true },
                 { "FoodDelivery", true },
                 { "Bus", true },
             };
@@ -796,16 +761,6 @@ namespace LSOL
                 GetSideJobDistrictBonusExcluding,
                 ReportSideJobDistrictCompletion,
                 _controls.BusDoors.ToString());
-            _taxiSideJobSystem = new TaxiSideJobSystem(
-                _configDirectory,
-                _playerSkillSystem,
-                message => ShowStatus(message),
-                amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Taxi fares"),
-                RequestCareerAutosave,
-                () => GetCompanyBalance(),
-                (amount, description) => DeductProfit(CompanyFinanceCategory.OtherExpense, amount, description),
-                GetSideJobDistrictBonusExcluding,
-                ReportSideJobDistrictCompletion);
             _foodDeliverySideJobSystem = new FoodDeliverySideJobSystem(
                 _configDirectory,
                 _playerSkillSystem,
@@ -933,10 +888,6 @@ namespace LSOL
                     || _busGarageMenu.IsOpen
                     || _busRouteMenu.IsOpen
                     || _busDealershipMenu.IsOpen
-                    || _taxiStandMenu.IsOpen
-                    || _taxiGarageMenu.IsOpen
-                    || _taxiDealershipMenu.IsOpen
-                    || _taxiDispatchMenu.IsOpen
                 || _foodDeliveryRestaurantMenu.IsOpen
                 || _foodDeliveryGarageMenu.IsOpen
                 || _foodDeliveryDealershipMenu.IsOpen
@@ -977,8 +928,6 @@ namespace LSOL
             _garbageSideJobSystem.SetJobEnabled(_sideJobEnabled["Garbage"]);
             _busSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
             _busSideJobSystem.SetJobEnabled(_sideJobEnabled["Bus"]);
-            _taxiSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
-            _taxiSideJobSystem.SetJobEnabled(_sideJobEnabled["Taxi"]);
             _foodDeliverySideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
             _foodDeliverySideJobSystem.SetJobEnabled(_sideJobEnabled["FoodDelivery"]);
 
@@ -1055,7 +1004,6 @@ namespace LSOL
             _towingSideJobSystem.Update(player, gameTime);
             _garbageSideJobSystem.Update(player, gameTime);
             _busSideJobSystem.Update(player, gameTime);
-            _taxiSideJobSystem.Update(player, gameTime);
             _foodDeliverySideJobSystem.Update(player, gameTime);
             _officeObjectManager.Update(
                 player,
@@ -1226,15 +1174,6 @@ namespace LSOL
                     if (_busSideJobSystem.TryGetNearestBusDepot(player.Position, 6f, out busDepotPosition, out busDepotName, out busDepotHeading))
                     {
                         OpenBusDepotMenu();
-                        return;
-                    }
-
-                    Vector3 taxiStandPosition;
-                    string taxiStandName;
-                    float taxiStandHeading;
-                    if (_taxiSideJobSystem.TryGetNearestTaxiStand(player.Position, 6f, out taxiStandPosition, out taxiStandName, out taxiStandHeading))
-                    {
-                        OpenTaxiStandMenu();
                         return;
                     }
 
@@ -1566,57 +1505,6 @@ namespace LSOL
                 return true;
             }
 
-            if (_taxiStandMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _taxiStandMenu.Close();
-                    return true;
-                }
-
-                _taxiStandMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_taxiGarageMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _taxiGarageMenu.Close();
-                    OpenTaxiStandMenu();
-                    return true;
-                }
-
-                _taxiGarageMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_taxiDealershipMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _taxiDealershipMenu.Close();
-                    OpenTaxiStandMenu();
-                    return true;
-                }
-
-                _taxiDealershipMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_taxiDispatchMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _taxiDispatchMenu.Close();
-                    OpenTaxiStandMenu();
-                    return true;
-                }
-
-                _taxiDispatchMenu.HandleKey(key, _controls);
-                return true;
-            }
-
             if (_foodDeliveryRestaurantMenu.IsOpen)
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
@@ -1756,10 +1644,6 @@ namespace LSOL
             _busGarageMenu.Draw();
             _busRouteMenu.Draw();
             _busDealershipMenu.Draw();
-            _taxiStandMenu.Draw();
-            _taxiGarageMenu.Draw();
-            _taxiDealershipMenu.Draw();
-            _taxiDispatchMenu.Draw();
             _foodDeliveryRestaurantMenu.Draw();
             _foodDeliveryGarageMenu.Draw();
             _foodDeliveryDealershipMenu.Draw();
@@ -1770,7 +1654,7 @@ namespace LSOL
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _garbageDepotMenu.IsOpen || _garbageGarageMenu.IsOpen || _garbageRouteMenu.IsOpen || _garbageDealershipMenu.IsOpen || _busDepotMenu.IsOpen || _busGarageMenu.IsOpen || _busRouteMenu.IsOpen || _busDealershipMenu.IsOpen || _taxiStandMenu.IsOpen || _taxiGarageMenu.IsOpen || _taxiDealershipMenu.IsOpen || _taxiDispatchMenu.IsOpen || _foodDeliveryRestaurantMenu.IsOpen || _foodDeliveryGarageMenu.IsOpen || _foodDeliveryDealershipMenu.IsOpen || _foodDeliveryDispatchMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _garbageDepotMenu.IsOpen || _garbageGarageMenu.IsOpen || _garbageRouteMenu.IsOpen || _garbageDealershipMenu.IsOpen || _busDepotMenu.IsOpen || _busGarageMenu.IsOpen || _busRouteMenu.IsOpen || _busDealershipMenu.IsOpen || _foodDeliveryRestaurantMenu.IsOpen || _foodDeliveryGarageMenu.IsOpen || _foodDeliveryDealershipMenu.IsOpen || _foodDeliveryDispatchMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -2711,302 +2595,6 @@ namespace LSOL
 
             _foodDeliveryDispatchMenu.SetItems(items.ToArray());
             _foodDeliveryDispatchMenu.Open();
-        }
-
-        /// <summary>
-        /// Re-reads the taxi stand, the destination pool and the taxi definitions so the XML can be
-        /// tuned without rebuilding the DLL.
-        /// </summary>
-        private void ReloadTaxiStandConfig()
-        {
-            if (_taxiSideJobSystem == null)
-            {
-                return;
-            }
-
-            string message;
-            _taxiSideJobSystem.TryReloadStandConfiguration(out message);
-            ShowStatus(message, 5000);
-        }
-
-        /// <summary>
-        /// Closes every taxi job menu except the one about to be opened, so picking an entry never
-        /// leaves the parent menu drawn underneath the child.
-        /// </summary>
-        private void CloseTaxiJobMenus(LemonMenu menuToKeepOpen)
-        {
-            if (_taxiStandMenu != menuToKeepOpen)
-            {
-                _taxiStandMenu.Close();
-            }
-
-            if (_taxiGarageMenu != menuToKeepOpen)
-            {
-                _taxiGarageMenu.Close();
-            }
-
-            if (_taxiDealershipMenu != menuToKeepOpen)
-            {
-                _taxiDealershipMenu.Close();
-            }
-
-            if (_taxiDispatchMenu != menuToKeepOpen)
-            {
-                _taxiDispatchMenu.Close();
-            }
-        }
-
-        private void OpenTaxiStandMenu()
-        {
-            CloseTaxiJobMenus(_taxiStandMenu);
-
-            var stand = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetGarageStand() : null;
-            var hasTaxiOut = _taxiSideJobSystem != null && _taxiSideJobSystem.HasTaxiOut;
-
-            _taxiStandMenu.SetItems(new[]
-            {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Garage",
-                    DetailFactory = () => hasTaxiOut
-                        ? "A taxi is out. Park it or take another one out."
-                        : "Take a taxi out of the job garage or park the current one.",
-                    OnActivate = OpenTaxiGarageMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Dispatch board",
-                    DetailFactory = () => _taxiSideJobSystem != null && _taxiSideJobSystem.HasActiveFare
-                        ? "A fare is already accepted. Finish it before taking another."
-                        : "Fares waiting for a driver: price, distance and destination.",
-                    OnActivate = OpenTaxiDispatchMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Buy Taxi",
-                    DetailFactory = () => "Buy a taxi for this side job. Taxis are parked in the job garage.",
-                    OnActivate = OpenTaxiDealershipMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Reload stand config",
-                    DetailFactory = () => "Re-read JobCoordinates.xml and JobVehicles.xml (stands, destinations, seats) without restarting the game.",
-                    OnActivate = ReloadTaxiStandConfig,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Close",
-                    OnActivate = () => _taxiStandMenu.Close(),
-                },
-            });
-
-            _taxiStandMenu.Subtitle = stand != null ? stand.Name : "Taxi stand";
-            _taxiStandMenu.Open();
-        }
-
-        private void OpenTaxiGarageMenu()
-        {
-            CloseTaxiJobMenus(_taxiGarageMenu);
-
-            var items = new List<OfficeMenuItem>();
-            var ownedTaxis = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetOwnedTaxis() : null;
-            if (ownedTaxis != null)
-            {
-                foreach (var taxi in ownedTaxis)
-                {
-                    if (taxi == null || string.IsNullOrWhiteSpace(taxi.ModelName))
-                    {
-                        continue;
-                    }
-
-                    var modelName = taxi.ModelName;
-                    items.Add(new OfficeMenuItem
-                    {
-                        CaptionFactory = () => string.Format("{0} ({1} seats)", taxi.Name, taxi.Seats),
-                        DetailFactory = () => _taxiSideJobSystem.IsActiveTaxiOut(modelName)
-                            ? "Out and ready. Press Enter to park it back at the stand."
-                            : "Owned and parked. Press Enter to take it out at the stand.",
-                        OnActivate = () =>
-                        {
-                            string message;
-                            if (_taxiSideJobSystem.IsActiveTaxiOut(modelName))
-                            {
-                                if (_taxiSideJobSystem.TryStoreTaxi(Game.Player.Character, out message))
-                                {
-                                    ShowStatus(message, 4000);
-                                    OpenTaxiGarageMenu();
-                                }
-                                else
-                                {
-                                    ShowStatus(message, 4000);
-                                }
-
-                                return;
-                            }
-
-                            if (_taxiSideJobSystem.TrySpawnTaxi(modelName, Game.Player.Character, out message))
-                            {
-                                ShowStatus(message, 4000);
-                                OpenTaxiDispatchMenu();
-                            }
-                            else
-                            {
-                                ShowStatus(message, 4000);
-                            }
-                        },
-                    });
-                }
-            }
-
-            if (items.Count == 0)
-            {
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "No taxis in the garage",
-                    DetailFactory = () => "Buy a taxi from the stand menu first.",
-                    OnActivate = OpenTaxiDealershipMenu,
-                });
-            }
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => Text(ModTextKey.CommonBack),
-                OnActivate = () =>
-                {
-                    _taxiGarageMenu.Close();
-                    OpenTaxiStandMenu();
-                },
-            });
-
-            _taxiGarageMenu.SetItems(items.ToArray());
-            _taxiGarageMenu.Open();
-        }
-
-        private void OpenTaxiDealershipMenu()
-        {
-            CloseTaxiJobMenus(_taxiDealershipMenu);
-
-            var items = new List<OfficeMenuItem>();
-            var taxis = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetTaxis() : null;
-            if (taxis != null)
-            {
-                foreach (var taxi in taxis)
-                {
-                    if (taxi == null || string.IsNullOrWhiteSpace(taxi.ModelName))
-                    {
-                        continue;
-                    }
-
-                    var modelName = taxi.ModelName;
-                    items.Add(new OfficeMenuItem
-                    {
-                        CaptionFactory = () => string.Format("{0} ({1} seats)", taxi.Name, taxi.Seats),
-                        DetailFactory = () => _taxiSideJobSystem != null && _taxiSideJobSystem.OwnsTaxi(modelName)
-                            ? "Already parked in the taxi garage."
-                            : string.Format(
-                                "Requires Taxi level {0}. Price {1}.",
-                                taxi.UnlockLevel,
-                                ModFormatting.FormatMoney(taxi.Price)),
-                        OnActivate = () =>
-                        {
-                            string message;
-                            if (_taxiSideJobSystem.TryBuyTaxi(modelName, out message))
-                            {
-                                ShowStatus(message, 4000);
-                                OpenTaxiDealershipMenu();
-                            }
-                            else
-                            {
-                                ShowStatus(message, 4000);
-                            }
-                        },
-                    });
-                }
-            }
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => Text(ModTextKey.CommonBack),
-                OnActivate = () =>
-                {
-                    _taxiDealershipMenu.Close();
-                    OpenTaxiStandMenu();
-                },
-            });
-
-            _taxiDealershipMenu.SetItems(items.ToArray());
-            _taxiDealershipMenu.Open();
-        }
-
-        private void OpenTaxiDispatchMenu()
-        {
-            CloseTaxiJobMenus(_taxiDispatchMenu);
-
-            var items = new List<OfficeMenuItem>();
-            var offers = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetOffers() : null;
-            if (offers != null)
-            {
-                foreach (var offer in offers)
-                {
-                    if (offer == null)
-                    {
-                        continue;
-                    }
-
-                    var offerId = offer.OfferId;
-                    items.Add(new OfficeMenuItem
-                    {
-                        CaptionFactory = () => string.Format(
-                            "{0} | {1:0.0} km",
-                            ModFormatting.FormatMoney(offer.EstimatedFare),
-                            offer.DistanceMeters / 1000f),
-                        DetailFactory = () => string.Format(
-                            "{0} | {1} passenger(s)",
-                            string.IsNullOrWhiteSpace(offer.DestinationName) ? "Drop-off" : offer.DestinationName,
-                            offer.GroupSize),
-                        OnActivate = () =>
-                        {
-                            string message;
-                            if (_taxiSideJobSystem.TryAcceptOffer(offerId, Game.Player.Character, out message))
-                            {
-                                ShowStatus(message, 4000);
-                                _taxiDispatchMenu.Close();
-                            }
-                            else
-                            {
-                                ShowStatus(message, 4000);
-                                OpenTaxiDispatchMenu();
-                            }
-                        },
-                    });
-                }
-            }
-
-            if (items.Count == 0)
-            {
-                var hasTaxiOut = _taxiSideJobSystem != null && _taxiSideJobSystem.HasTaxiOut;
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => hasTaxiOut ? "No fares on the board" : "No taxi out",
-                    DetailFactory = () => hasTaxiOut
-                        ? "Drive around town for a few minutes: new fares appear near you."
-                        : "Take a taxi out of the garage first.",
-                    OnActivate = () => _taxiDispatchMenu.Close(),
-                });
-            }
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => Text(ModTextKey.CommonBack),
-                OnActivate = () =>
-                {
-                    _taxiDispatchMenu.Close();
-                    OpenTaxiStandMenu();
-                },
-            });
-
-            _taxiDispatchMenu.SetItems(items.ToArray());
-            _taxiDispatchMenu.Open();
         }
 
         private void OpenGarbageDealershipMenu()
@@ -4252,7 +3840,7 @@ namespace LSOL
                 new OfficeMenuItem
                 {
                     CaptionFactory = () => "Side Jobs",
-                    DetailFactory = () => "Activate or hide side jobs (towing, taxi, and more).",
+                    DetailFactory = () => "Activate or hide side jobs (towing, garbage, bus and food delivery).",
                     OnActivate = OpenSideJobsMenu,
                 },
                 new OfficeMenuItem
@@ -4273,7 +3861,7 @@ namespace LSOL
         private void RebuildSideJobsMenuItems()
         {
             var items = new List<OfficeMenuItem>();
-            var jobIds = new[] { "Towing", "Garbage", "Taxi", "FoodDelivery", "Bus" };
+            var jobIds = new[] { "Towing", "Garbage", "FoodDelivery", "Bus" };
             for (int i = 0; i < jobIds.Length; i++)
             {
                 var jobId = jobIds[i];
@@ -4311,15 +3899,14 @@ namespace LSOL
         }
 
         /// <summary>
-        /// Stops every running side job (towing, garbage and bus). Job garage contents, skill XP and
-        /// money already earned are kept; only the live job state is cleared.
+        /// Stops every running side job (towing, garbage, bus and food delivery). Job garage contents,
+        /// skill XP and money already earned are kept; only the live job state is cleared.
         /// </summary>
         private void CancelActiveSideJobs()
         {
             _towingSideJobSystem.ResetState();
             _garbageSideJobSystem.CancelCurrentJob();
             _busSideJobSystem.CancelCurrentJob();
-            _taxiSideJobSystem.CancelCurrentJob();
             _foodDeliverySideJobSystem.CancelCurrentJob();
             _sideJobsMenu.Close();
             ShowStatus(LocalizedText.GetOrDefault("sidejob.cancel.done", "Current side jobs cancelled."), 4000);
@@ -4374,8 +3961,6 @@ namespace LSOL
                     return "Towing";
                 case "Garbage":
                     return "Garbage";
-                case "Taxi":
-                    return "Taxi";
                 case "Bus":
                     return "Bus";
                 default:

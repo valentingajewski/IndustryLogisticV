@@ -399,11 +399,6 @@ namespace LSOL.Systems
                 persistenceVersion = 33;
             }
 
-            if (metadata != null && HasTaxiData(metadata.Taxi))
-            {
-                persistenceVersion = 34;
-            }
-
             if (metadata != null && HasFoodDeliveryData(metadata.FoodDelivery))
             {
                 persistenceVersion = 35;
@@ -469,11 +464,6 @@ namespace LSOL.Systems
             if (metadata != null && HasBusData(metadata.Bus))
             {
                 WriteBusSnapshot(writer, metadata.Bus);
-            }
-
-            if (metadata != null && HasTaxiData(metadata.Taxi))
-            {
-                WriteTaxiSnapshot(writer, metadata.Taxi);
             }
 
             if (metadata != null && HasFoodDeliveryData(metadata.FoodDelivery))
@@ -666,7 +656,6 @@ namespace LSOL.Systems
             metadata.Towing = ReadTowingSnapshot(ini);
             metadata.Garbage = ReadGarbageSnapshot(ini);
             metadata.Bus = ReadBusSnapshot(ini);
-            metadata.Taxi = ReadTaxiSnapshot(ini);
             metadata.FoodDelivery = ReadFoodDeliverySnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
@@ -679,7 +668,6 @@ namespace LSOL.Systems
                 || HasTowingData(metadata.Towing)
                 || HasGarbageData(metadata.Garbage)
                 || HasBusData(metadata.Bus)
-                || HasTaxiData(metadata.Taxi)
                 || HasFoodDeliveryData(metadata.FoodDelivery);
             return metadata;
         }
@@ -4426,120 +4414,6 @@ namespace LSOL.Systems
             return snapshot.HasData ? snapshot : null;
         }
 
-        private static bool HasTaxiData(TaxiPersistenceSnapshot snapshot)
-        {
-            return snapshot != null && snapshot.HasData;
-        }
-
-        private static void WriteTaxiSnapshot(StreamWriter writer, TaxiPersistenceSnapshot snapshot)
-        {
-            if (writer == null || snapshot == null || !snapshot.HasData)
-            {
-                return;
-            }
-
-            writer.WriteLine("[Taxi]");
-            writer.WriteLine("ActiveTaxiModelName={0}", snapshot.ActiveTaxiModelName ?? string.Empty);
-            writer.WriteLine("ActiveFareId={0}", Math.Max(0, snapshot.ActiveFareId));
-            writer.WriteLine("NextFareId={0}", Math.Max(1, snapshot.NextFareId));
-            writer.WriteLine("FaresCompleted={0}", Math.Max(0, snapshot.FaresCompleted));
-            writer.WriteLine("FaresAbandoned={0}", Math.Max(0, snapshot.FaresAbandoned));
-            writer.WriteLine("RouteCashEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteCashEarned)));
-            writer.WriteLine("RouteXpEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteXpEarned)));
-            writer.WriteLine(
-                "OwnedTaxis={0}",
-                string.Join(
-                    ",",
-                    (snapshot.OwnedTaxiModels ?? new List<string>())
-                        .Where(model => !string.IsNullOrWhiteSpace(model))
-                        .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)));
-            writer.WriteLine();
-
-            if (snapshot.Fares == null)
-            {
-                return;
-            }
-
-            foreach (var fare in snapshot.Fares
-                .Where(item => item != null && item.FareId > 0)
-                .OrderBy(item => item.FareId))
-            {
-                writer.WriteLine("[Taxi:Fare:{0}]", fare.FareId);
-                writer.WriteLine("PickupPosition={0}", FormatVector3(fare.PickupPosition));
-                writer.WriteLine("DestinationPosition={0}", FormatVector3(fare.DestinationPosition));
-                writer.WriteLine("DestinationName={0}", fare.DestinationName ?? string.Empty);
-                writer.WriteLine("DestinationDistrict={0}", fare.DestinationDistrict ?? string.Empty);
-                writer.WriteLine("DistanceBand={0}", Math.Max(0, fare.DistanceBand));
-                writer.WriteLine("GroupSize={0}", Math.Max(1, fare.GroupSize));
-                writer.WriteLine("Phase={0}", Math.Max(0, fare.Phase));
-                writer.WriteLine("CashEarned={0}", FormatFloat(Math.Max(0f, fare.CashEarned)));
-                writer.WriteLine();
-            }
-        }
-
-        private static TaxiPersistenceSnapshot ReadTaxiSnapshot(IniFile ini)
-        {
-            if (ini == null)
-            {
-                return null;
-            }
-
-            var snapshot = new TaxiPersistenceSnapshot();
-            if (ini.HasSection("Taxi"))
-            {
-                snapshot.ActiveTaxiModelName = ini.GetString("Taxi", "ActiveTaxiModelName", string.Empty);
-                snapshot.ActiveFareId = Math.Max(0, ParseInt(ini.GetString("Taxi", "ActiveFareId", "0"), 0));
-                snapshot.NextFareId = Math.Max(1, ParseInt(ini.GetString("Taxi", "NextFareId", "1"), 1));
-                snapshot.FaresCompleted = Math.Max(0, ParseInt(ini.GetString("Taxi", "FaresCompleted", "0"), 0));
-                snapshot.FaresAbandoned = Math.Max(0, ParseInt(ini.GetString("Taxi", "FaresAbandoned", "0"), 0));
-                snapshot.RouteCashEarned = Math.Max(0f, ParseFloat(ini.GetString("Taxi", "RouteCashEarned", "0"), 0f));
-                snapshot.RouteXpEarned = Math.Max(0f, ParseFloat(ini.GetString("Taxi", "RouteXpEarned", "0"), 0f));
-
-                var ownedTaxis = ini.GetString("Taxi", "OwnedTaxis", string.Empty);
-                if (!string.IsNullOrWhiteSpace(ownedTaxis))
-                {
-                    foreach (var modelName in ownedTaxis.Split(','))
-                    {
-                        var trimmed = modelName.Trim();
-                        if (trimmed.Length > 0)
-                        {
-                            snapshot.OwnedTaxiModels.Add(trimmed);
-                        }
-                    }
-                }
-            }
-
-            foreach (var section in ini.Sections)
-            {
-                if (string.IsNullOrWhiteSpace(section)
-                    || !section.StartsWith("Taxi:Fare:", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                var fareId = ParseInt(section.Substring("Taxi:Fare:".Length).Trim(), 0);
-                if (fareId <= 0)
-                {
-                    continue;
-                }
-
-                snapshot.Fares.Add(new TaxiFareSnapshot
-                {
-                    FareId = fareId,
-                    PickupPosition = ParseVector3(ini.GetString(section, "PickupPosition", string.Empty), Vector3.Zero),
-                    DestinationPosition = ParseVector3(ini.GetString(section, "DestinationPosition", string.Empty), Vector3.Zero),
-                    DestinationName = ini.GetString(section, "DestinationName", string.Empty),
-                    DestinationDistrict = ini.GetString(section, "DestinationDistrict", string.Empty),
-                    DistanceBand = Math.Max(0, ParseInt(ini.GetString(section, "DistanceBand", "0"), 0)),
-                    GroupSize = Math.Max(1, ParseInt(ini.GetString(section, "GroupSize", "1"), 1)),
-                    Phase = Math.Max(0, ParseInt(ini.GetString(section, "Phase", "0"), 0)),
-                    CashEarned = Math.Max(0f, ParseFloat(ini.GetString(section, "CashEarned", "0"), 0f)),
-                });
-            }
-
-            return snapshot.HasData ? snapshot : null;
-        }
-
         private static bool HasFoodDeliveryData(FoodDeliveryPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -4746,7 +4620,6 @@ namespace LSOL.Systems
         public TowingPersistenceSnapshot Towing { get; set; }
         public GarbagePersistenceSnapshot Garbage { get; set; }
         public BusPersistenceSnapshot Bus { get; set; }
-        public TaxiPersistenceSnapshot Taxi { get; set; }
 
         public FoodDeliveryPersistenceSnapshot FoodDelivery { get; set; }
     }
