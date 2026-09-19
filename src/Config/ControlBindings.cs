@@ -13,6 +13,12 @@ namespace LSOL.Config
         public WinForms.Keys Interact { get; set; } = WinForms.Keys.E;
         public WinForms.Keys OpenUpgrade { get; set; } = WinForms.Keys.U;
 
+        /// <summary>
+        /// Bus side job: opens and closes the entry doors. Deliberately not Interact (E, the vehicle
+        /// horn) and not F (enter/exit vehicle), so the player can work the doors while seated.
+        /// </summary>
+        public WinForms.Keys BusDoors { get; set; } = WinForms.Keys.B;
+
         public WinForms.Keys MenuUp { get; set; } = WinForms.Keys.Up;
         public WinForms.Keys MenuDown { get; set; } = WinForms.Keys.Down;
         public WinForms.Keys MenuLeft { get; set; } = WinForms.Keys.Left;
@@ -32,6 +38,7 @@ namespace LSOL.Config
             bindings.OpenModMenu = ReadBinding(iniFile, "OpenModMenu", bindings.OpenModMenu);
             bindings.OpenDebugMenu = ReadBinding(iniFile, "OpenDebugMenu", bindings.OpenDebugMenu);
             bindings.Interact = ReadBinding(iniFile, "Interact", bindings.Interact);
+            bindings.BusDoors = ReadBinding(iniFile, "BusDoors", bindings.BusDoors);
             return bindings;
         }
 
@@ -72,6 +79,7 @@ namespace LSOL.Config
                 MenuRight = source.MenuRight,
                 MenuSelect = source.MenuSelect,
                 MenuBack = source.MenuBack,
+                BusDoors = source.BusDoors,
             };
         }
 

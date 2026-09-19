@@ -14,6 +14,12 @@
       Taxi          seats             passenger seats
       FoodDelivery  mealCapacity      max meals per run
       Garbage       garbageTons       max garbage (t) per run
+      Bus           seats             passenger seats (clamped by the model's own capacity in game)
+                    doorIndices       optional, comma list of door indices the entry doors use,
+                                      e.g. doorIndices="0,2". Omit to keep the default pair (0,1).
+                                      The F9 debug menu reports the indices a model really has;
+                                      the depot menu entry "Reload depot config" re-reads this
+                                      file in game, so a wrong index can be fixed without a rebuild.
 
     model values are placeholders; replace with final game models.
   -->
@@ -27,16 +33,16 @@
   <JobVehicle id="7" name="Limo" model="stanier" type="Taxi" unlockLevel="30" price="120000" dailyRent="3000" fuelCapacityLiters="90" seats="3" confort="5" />
 
   <!-- Food Delivery -->
-  <JobVehicle id="9" name="Delivery Scooter" model="pizzaboy" type="FoodDelivery" unlockLevel="0" price="3000" dailyRent="150" fuelCapacityLiters="30" mealCapacity="6" />
+  <JobVehicle id="9" name="Delivery Scooter" model="pizzaboy" type="FoodDelivery" unlockLevel="0" price="3000" dailyRent="150" fuelCapacityLiters="30" mealCapacity="5" />
   <JobVehicle id="11" name="Food Truck" model="taco" type="FoodDelivery" unlockLevel="10" price="23000" dailyRent="1100" fuelCapacityLiters="120" mealCapacity="40" />
 
   <!-- Garbage -->
   <JobVehicle id="12" name="Trash Truck" model="trash" type="Garbage" unlockLevel="0" price="22000" dailyRent="900" fuelCapacityLiters="160" garbageTons="10" />
-  <JobVehicle id="13" name="Trash Truck (Large)" model="trash2" type="Garbage" unlockLevel="8" price="45000" dailyRent="1800" fuelCapacityLiters="220" garbageTons="20" />
+  <JobVehicle id="13" name="Trash Truck (Large)" model="trash2" type="Garbage" unlockLevel="20" price="45000" dailyRent="1800" fuelCapacityLiters="220" garbageTons="20" />
 
   <!-- Bus -->
-  <JobVehicle id="15" name="Rental Bus" model="rentalbus" type="Bus" unlockLevel="0" price="80000" dailyRent="2500" fuelCapacityLiters="180" seats="8" />
-  <JobVehicle id="16" name="City Bus" model="bus" type="Bus" unlockLevel="10" price="100000" dailyRent="2000" fuelCapacityLiters="200" seats="30" />
-  <JobVehicle id="17" name="Coach" model="coach" type="Bus" unlockLevel="30" price="120000" dailyRent="5000" fuelCapacityLiters="300" seats="30" />
+  <!-- doorIndices is model specific: the F9 debug menu prints the indices a bus really has. -->
+  <JobVehicle id="16" name="City Bus" model="bus" type="Bus" unlockLevel="0" price="100000" dailyRent="2000" fuelCapacityLiters="200" seats="30" doorIndices="0,1" />
+  <JobVehicle id="17" name="Coach" model="coach" type="Bus" unlockLevel="30" price="120000" dailyRent="5000" fuelCapacityLiters="300" seats="30" doorIndices="0,1" />
 
 </JobVehicles>

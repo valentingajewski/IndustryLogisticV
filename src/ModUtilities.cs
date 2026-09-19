@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Text;
 
 namespace LSOL
 {
@@ -59,6 +60,36 @@ namespace LSOL
         public static string FormatTons(double value)
         {
             return string.Concat(FormatNumber(value), "t");
+        }
+
+        /// <summary>
+        /// Player-facing district label: district ids are stored camel-cased ("WestLosSantos") but are
+        /// always shown spaced ("West Los Santos"). Single implementation shared by the Company Hub
+        /// and the side jobs so both spell districts the same way.
+        /// </summary>
+        public static string FormatDistrictName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = name.Trim();
+            var builder = new StringBuilder(trimmed.Length + 4);
+            for (int i = 0; i < trimmed.Length; i++)
+            {
+                var current = trimmed[i];
+                if (i > 0
+                    && char.IsUpper(current)
+                    && (char.IsLower(trimmed[i - 1]) || (i + 1 < trimmed.Length && char.IsLower(trimmed[i + 1]))))
+                {
+                    builder.Append(' ');
+                }
+
+                builder.Append(current);
+            }
+
+            return builder.ToString().Trim();
         }
 
         public static string FormatLiters(double value)

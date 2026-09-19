@@ -37,6 +37,12 @@ namespace LSOL.UI
 
         public string ReputationLabel { get; set; }
 
+        /// <summary>Perishable side job district bonus, in percentage points.</summary>
+        public float DistrictBonusPercent { get; set; }
+
+        /// <summary>Side job that contributed most to the current bonus, or empty.</summary>
+        public string DistrictBonusTopContributor { get; set; }
+
         public int ControlledSites { get; set; }
 
         public int ControlledDepots { get; set; }
@@ -1087,6 +1093,10 @@ namespace LSOL.UI
                     InfluencePercent = Math.Max(0f, district.InfluenceRatio * 100f),
                     ReputationScore = Math.Max(0f, district.ReputationScore),
                     ReputationLabel = district.ReputationLabel ?? string.Empty,
+                    DistrictBonusPercent = _territoryManager != null ? _territoryManager.GetDistrictBonus(district.DistrictName) : 0f,
+                    DistrictBonusTopContributor = _territoryManager != null
+                        ? _territoryManager.GetDistrictBonusBreakdown(district.DistrictName).TopContributorLabel
+                        : string.Empty,
                     ControlledSites = district.ControlledSites,
                     ControlledDepots = district.ControlledDepots,
                     CompetitivePressurePercent = Math.Max(0f, Math.Min(100f, district.CompetitivePressure * 100f)),

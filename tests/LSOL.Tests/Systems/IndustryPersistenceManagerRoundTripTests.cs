@@ -941,6 +941,56 @@ namespace LSOL.Tests.Systems
         }
 
         [TestMethod]
+        public void SaveAndLoad_WithTerritoryDistrictBonus_RoundTripsPoolsAndBumpsVersion()
+        {
+            var filePath = TestWorkspace.CreateTempFilePath("territory-district-bonus.state.xml");
+            var sourceTerritoryManager = CreateTerritoryManager();
+            var restoredTerritoryManager = CreateTerritoryManager();
+
+            try
+            {
+                sourceTerritoryManager.ApplySnapshot(new TerritoryPersistenceSnapshot
+                {
+                    Districts =
+                    {
+                        new TerritoryDistrictSnapshot
+                        {
+                            DistrictName = "Port",
+                            SideJobBonusMinute = 4242,
+                        },
+                    },
+                });
+
+                var sourceDistrict = sourceTerritoryManager.GetDistrictState("Port");
+                sourceDistrict.SideJobBonusPools["Garbage"] = 3.5f;
+                sourceDistrict.SideJobBonusPools["Towing"] = 1.25f;
+                sourceDistrict.SideJobBonusMinute = 4242;
+
+                IndustryPersistenceManager.Save(filePath, Array.Empty<Industry>(), null, sourceTerritoryManager.CreateSnapshot());
+                var rawSave = File.ReadAllText(filePath);
+                IndustryPersistenceManager.LoadWithMetadata(filePath, Array.Empty<Industry>(), restoredTerritoryManager);
+
+                var restoredDistrict = restoredTerritoryManager.GetDistrictState("Port");
+
+                StringAssert.Contains(rawSave, "<Section name=\"TerritoryDistrict:Port\">");
+                StringAssert.Contains(rawSave, "<Value key=\"Version\">32</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"SideJobBonusGarbage\">3.5</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"SideJobBonusTowing\">1.25</Value>");
+                StringAssert.Contains(rawSave, "<Value key=\"SideJobBonusMinute\">4242</Value>");
+                Assert.IsNotNull(restoredDistrict);
+                Assert.IsTrue(restoredDistrict.SideJobBonusPools.ContainsKey("Garbage"));
+                Assert.AreEqual(3.5f, restoredDistrict.SideJobBonusPools["Garbage"], 0.001f);
+                Assert.AreEqual(1.25f, restoredDistrict.SideJobBonusPools["Towing"], 0.001f);
+                Assert.AreEqual(4242, restoredDistrict.SideJobBonusMinute);
+                Assert.AreEqual(4.75f, restoredTerritoryManager.GetDistrictBonus("Port"), 0.001f);
+            }
+            finally
+            {
+                DeleteTempDirectory(filePath);
+            }
+        }
+
+        [TestMethod]
         public void SaveAndLoad_WithTerritoryDistrictEvent_RestoresLiveDistrictEventState()
         {
             var filePath = TestWorkspace.CreateTempFilePath("territory-event.state.xml");

@@ -71,6 +71,7 @@ namespace LSOL.Systems
         private Func<CompanyEndgameSummary> _getEndgameSummary;
         private Func<IEnumerable<NpcDistrictCompetitionSummary>> _getDistrictCompetitionSummaries;
         private Func<IEnumerable<NpcCorridorCompetitionSummary>> _getCorridorCompetitionSummaries;
+        private Func<int> _getCurrentInGameMinute;
 
         private int _lastRepossessionEvaluationMs;
         private int _lastOperationsChargeWeekIndex;
@@ -205,6 +206,15 @@ namespace LSOL.Systems
             _getCorridorCompetitionSummaries = getCorridorCompetitionSummaries;
         }
 
+        /// <summary>
+        /// In-game clock used to decay the perishable side job district bonus. Injected so the
+        /// manager never reads the game clock itself (same convention as the other contexts).
+        /// </summary>
+        internal void ConfigureClock(Func<int> getCurrentInGameMinute)
+        {
+            _getCurrentInGameMinute = getCurrentInGameMinute;
+        }
+
         public void Reset()
         {
             _industriesById.Clear();
@@ -213,6 +223,17 @@ namespace LSOL.Systems
             _districtReputationDebugOffsets.Clear();
             _lastOperationsChargeWeekIndex = -1;
             _lastMaintenanceWeekIndex = -1;
+
+            foreach (var districtState in _districtsByName.Values)
+            {
+                if (districtState == null)
+                {
+                    continue;
+                }
+
+                districtState.SideJobBonusPools.Clear();
+                districtState.SideJobBonusMinute = -1;
+            }
 
             if (_industryManager != null && _industryManager.Industries != null)
             {
@@ -1012,6 +1033,251 @@ namespace LSOL.Systems
             return GetDistrictSupportFactor(districtName);
         }
 
+        /// <summary>
+        /// Perishable side job district bonus in percentage points (decayed and capped). Reads are
+        /// pure: they never re-anchor the decay clock, so the value does not depend on how often a
+        /// UI happens to refresh it.
+        /// </summary>
+        public float GetDistrictBonus(string districtName)
+        {
+            var districtState = GetDistrictState(districtName);
+            return districtState == null
+                ? 0f
+                : SumDistrictBonusPools(districtState.SideJobBonusPools, GetDistrictBonusDecayFactor(districtState), null);
+        }
+
+        /// <summary>
+        /// District bonus with one job's own pool removed. This is what a side job's payout uses so
+        /// that a job can never boost its own revenue in the district it is farming.
+        /// </summary>
+        public float GetDistrictBonusExcluding(string districtName, string jobId)
+        {
+            var districtState = GetDistrictState(districtName);
+            return districtState == null
+                ? 0f
+                : SumDistrictBonusPools(districtState.SideJobBonusPools, GetDistrictBonusDecayFactor(districtState), jobId);
+        }
+
+        /// <summary>Per-job attribution of a district's bonus, for the Company Hub and tablet.</summary>
+        public DistrictBonusBreakdown GetDistrictBonusBreakdown(string districtName)
+        {
+            var districtState = GetDistrictState(districtName);
+            if (districtState == null)
+            {
+                return DistrictBonusCatalog.BuildBreakdown(districtName, null, DistrictBonusCatalog.DecayHorizonInGameHours);
+            }
+
+            var elapsedMinutes = GetDistrictBonusElapsedMinutes(districtState, GetCurrentInGameMinuteOrDefault());
+            var decayed = BuildDecayedPoolView(districtState.SideJobBonusPools, DistrictBonusCatalog.GetDecayFactor(elapsedMinutes));
+            return DistrictBonusCatalog.BuildBreakdown(
+                districtState.DistrictName,
+                decayed,
+                DistrictBonusCatalog.GetRemainingInGameHours(elapsedMinutes));
+        }
+
+        /// <summary>
+        /// Credits a completed side job to a district. Returns what was actually gained: once the
+        /// district sits at the cap, further work reports zero applied points instead of banking them.
+        /// </summary>
+        public DistrictBonusAward RegisterSideJobCompletion(string jobId, string districtName, float units)
+        {
+            var jobLabel = DistrictBonusCatalog.GetJobLabel(jobId);
+            var award = new DistrictBonusAward
+            {
+                CapPercent = DistrictBonusCatalog.CapPercent,
+                RemainingInGameHours = DistrictBonusCatalog.DecayHorizonInGameHours,
+            };
+
+            if (string.IsNullOrWhiteSpace(jobLabel) || units <= 0f)
+            {
+                return award;
+            }
+
+            var districtState = GetDistrictState(districtName);
+            if (districtState == null)
+            {
+                return award;
+            }
+
+            // A new contribution is the only event that materializes decay, so the linear falloff
+            // stays exact no matter how frequently the district was read in between.
+            var currentMinute = GetCurrentInGameMinuteOrDefault();
+            var pools = MaterializeDistrictBonusDecay(districtState, currentMinute);
+            var before = DistrictBonusCatalog.GetTotalPercent(pools);
+            DistrictBonusCatalog.AddPoints(pools, jobId, DistrictBonusCatalog.GetContributionPointsPerUnit(jobId) * units);
+            DistrictBonusCatalog.ClampPoolsToCap(pools);
+
+            var after = DistrictBonusCatalog.GetTotalPercent(pools);
+
+            award.JobId = DistrictBonusCatalog.NormalizeJobId(jobId);
+            award.JobLabel = jobLabel;
+            award.DistrictName = districtState.DistrictName ?? string.Empty;
+            award.AppliedPoints = Math.Max(0f, after - before);
+            award.TotalPercent = after;
+            award.Applied = after > before + 0.0001f;
+            return award;
+        }
+
+        /// <summary>Debug helper: adds (or subtracts) bonus to a district's Garbage pool.</summary>
+        public void AdjustDistrictBonusDebug(string districtName, float deltaPercent)
+        {
+            if (Math.Abs(deltaPercent) <= 0.001f)
+            {
+                return;
+            }
+
+            var districtState = GetDistrictState(districtName);
+            if (districtState == null)
+            {
+                return;
+            }
+
+            var pools = MaterializeDistrictBonusDecay(districtState, GetCurrentInGameMinuteOrDefault());
+            if (deltaPercent <= 0f)
+            {
+                var total = DistrictBonusCatalog.GetTotalPercent(pools);
+                if (total <= 0.001f)
+                {
+                    return;
+                }
+
+                DistrictBonusCatalog.ApplyDecayFactor(pools, Math.Max(0f, 1f - (Math.Abs(deltaPercent) / total)));
+            }
+            else
+            {
+                DistrictBonusCatalog.AddPoints(pools, DistrictBonusCatalog.GarbageJobId, deltaPercent);
+                DistrictBonusCatalog.ClampPoolsToCap(pools);
+            }
+        }
+
+        /// <summary>Debug helper: drops a district's whole side job bonus.</summary>
+        public void ClearDistrictBonusDebug(string districtName)
+        {
+            var districtState = GetDistrictState(districtName);
+            if (districtState == null)
+            {
+                return;
+            }
+
+            districtState.SideJobBonusPools.Clear();
+            districtState.SideJobBonusMinute = -1;
+        }
+
+        private int GetCurrentInGameMinuteOrDefault()
+        {
+            if (_getCurrentInGameMinute == null)
+            {
+                return -1;
+            }
+
+            try
+            {
+                var minute = _getCurrentInGameMinute();
+                return minute < 0 ? -1 : minute;
+            }
+            catch
+            {
+                return -1;
+            }
+        }
+
+        private static float GetDistrictBonusElapsedMinutes(TerritoryDistrictState districtState, int currentMinute)
+        {
+            if (districtState == null || currentMinute < 0 || districtState.SideJobBonusMinute < 0)
+            {
+                return 0f;
+            }
+
+            var elapsed = currentMinute - districtState.SideJobBonusMinute;
+            return elapsed > 0 ? elapsed : 0f;
+        }
+
+        private float GetDistrictBonusDecayFactor(TerritoryDistrictState districtState)
+        {
+            return DistrictBonusCatalog.GetDecayFactor(
+                GetDistrictBonusElapsedMinutes(districtState, GetCurrentInGameMinuteOrDefault()));
+        }
+
+        /// <summary>
+        /// Sums the decayed pools, optionally skipping one job's pool, and clamps to the cap.
+        /// Pure: nothing is written back.
+        /// </summary>
+        private static float SumDistrictBonusPools(IDictionary<string, float> pools, float decayFactor, string excludedJobId)
+        {
+            if (pools == null || pools.Count == 0)
+            {
+                return 0f;
+            }
+
+            var excluded = DistrictBonusCatalog.NormalizeJobId(excludedJobId);
+            var total = 0f;
+            foreach (var pool in pools)
+            {
+                var jobId = DistrictBonusCatalog.NormalizeJobId(pool.Key);
+                if (string.IsNullOrWhiteSpace(jobId) || pool.Value <= 0f)
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(excluded) && string.Equals(jobId, excluded, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                total += pool.Value * decayFactor;
+            }
+
+            return Math.Min(DistrictBonusCatalog.CapPercent, total);
+        }
+
+        private static IDictionary<string, float> BuildDecayedPoolView(IDictionary<string, float> pools, float decayFactor)
+        {
+            var view = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+            if (pools == null)
+            {
+                return view;
+            }
+
+            foreach (var pool in pools)
+            {
+                var decayed = pool.Value * decayFactor;
+                if (decayed > DistrictBonusCatalog.MinimumMeaningfulPoints)
+                {
+                    view[pool.Key] = decayed;
+                }
+            }
+
+            return view;
+        }
+
+        /// <summary>
+        /// Applies pending relative decay to the stored pools and re-anchors the district to the
+        /// current minute. Only called when the bonus changes (a credit or a debug edit), which keeps
+        /// the linear decay independent of read frequency. A clock that moved backwards (older save
+        /// loaded) yields zero elapsed time instead of negative decay.
+        /// </summary>
+        private IDictionary<string, float> MaterializeDistrictBonusDecay(TerritoryDistrictState districtState, int currentMinute)
+        {
+            if (districtState == null)
+            {
+                return null;
+            }
+
+            if (currentMinute < 0)
+            {
+                return districtState.SideJobBonusPools;
+            }
+
+            var elapsed = GetDistrictBonusElapsedMinutes(districtState, currentMinute);
+            if (elapsed > 0f)
+            {
+                DistrictBonusCatalog.ApplyDecayFactor(districtState.SideJobBonusPools, DistrictBonusCatalog.GetDecayFactor(elapsed));
+            }
+
+            districtState.SideJobBonusMinute = currentMinute;
+            return districtState.SideJobBonusPools;
+        }
+
         public bool CanSpawnCompanyVehicleAt(Industry industry, out string reason)
         {
             reason = string.Empty;
@@ -1300,7 +1566,7 @@ namespace LSOL.Systems
             RefreshComputedState();
         }
 
-        public float AdjustDeliveryRevenue(Industry destinationIndustry, string commodity, float deliveredTons, float baseRevenue)
+        public float AdjustDeliveryRevenue(Industry destinationIndustry, string commodity, float deliveredTons, float baseRevenue, bool applySideJobDistrictBonus)
         {
             if (destinationIndustry == null || baseRevenue <= 0.001f)
             {
@@ -1362,6 +1628,13 @@ namespace LSOL.Systems
                 }
 
                 multiplier += Math.Min(0.12f, districtState.CompetitiveOpportunity * 0.12f);
+
+                // Perishable side job bonus. Only applied to player-driven revenue: NPC logistics
+                // passes false so automation cannot farm the loop the player is meant to feed.
+                if (applySideJobDistrictBonus)
+                {
+                    multiplier += GetDistrictBonus(districtState.DistrictName) / 100f;
+                }
             }
 
             if (endgame.ActiveDoctrine == CompanyDoctrine.Industrial
@@ -1639,13 +1912,14 @@ namespace LSOL.Systems
                     || districtState.LastCompetitiveTons > 0.001f
                     || districtState.CompetitiveResponseCount > 0
                     || districtState.CompetitiveWinCount > 0
-                    || (districtState.ActiveEvent != null && districtState.ActiveEvent.HasData);
+                    || (districtState.ActiveEvent != null && districtState.ActiveEvent.HasData)
+                    || districtState.SideJobBonusPools.Count > 0;
                 if (!hasState)
                 {
                     continue;
                 }
 
-                snapshot.Districts.Add(new TerritoryDistrictSnapshot
+                var districtSnapshot = new TerritoryDistrictSnapshot
                 {
                     DistrictName = districtState.DistrictName,
                     LicenseStatus = districtState.LicenseStatus,
@@ -1681,7 +1955,15 @@ namespace LSOL.Systems
                             ImpactSummary = districtState.ActiveEvent.ImpactSummary,
                         }
                         : null,
-                });
+                };
+
+                foreach (var pool in districtState.SideJobBonusPools)
+                {
+                    districtSnapshot.SideJobBonusPools[pool.Key] = pool.Value;
+                }
+
+                districtSnapshot.SideJobBonusMinute = districtState.SideJobBonusMinute;
+                snapshot.Districts.Add(districtSnapshot);
             }
 
             foreach (var corridorState in _corridorsById.Values.OrderBy(x => x.CorridorId, StringComparer.OrdinalIgnoreCase))
@@ -1827,6 +2109,23 @@ namespace LSOL.Systems
                 districtState.LastCompetitiveTons = Math.Max(0f, source.CompetitiveTons);
                 districtState.CompetitiveResponseCount = Math.Max(0, source.CompetitiveResponseCount);
                 districtState.CompetitiveWinCount = Math.Max(0, source.CompetitiveWinCount);
+                districtState.SideJobBonusPools.Clear();
+                if (source.SideJobBonusPools != null)
+                {
+                    foreach (var pool in source.SideJobBonusPools)
+                    {
+                        if (pool.Value > 0f && DistrictBonusCatalog.IsKnownJobId(pool.Key))
+                        {
+                            districtState.SideJobBonusPools[DistrictBonusCatalog.NormalizeJobId(pool.Key)] = pool.Value;
+                        }
+                    }
+                }
+
+                // Keep the stored minute (do not materialize decay here): the pools decay lazily on
+                // first read, so loading a save does not need the clock to be running yet.
+                districtState.SideJobBonusMinute = districtState.SideJobBonusPools.Count > 0
+                    ? Math.Max(-1, source.SideJobBonusMinute)
+                    : -1;
                 if (source.ActiveEvent != null && source.ActiveEvent.HasData)
                 {
                     districtState.ActiveEvent = new TerritoryDistrictEventState
@@ -5024,6 +5323,18 @@ namespace LSOL.Systems
         public string CompetitionStatus { get; set; }
         public TerritoryDistrictEventState ActiveEvent { get; set; }
 
+        /// <summary>
+        /// Perishable side job bonus pools for this district: job id -> percentage points. Decayed
+        /// relatively so the per-job attribution always sums to the district total.
+        /// Deliberately NOT touched by <see cref="Reset"/>: RefreshComputedState resets every district
+        /// on each refresh, which would otherwise wipe the bonus continually. TerritoryManager.Reset
+        /// clears these pools explicitly instead.
+        /// </summary>
+        public Dictionary<string, float> SideJobBonusPools { get; } = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>In-game minute the pools were last decayed, or -1 when never credited.</summary>
+        public int SideJobBonusMinute { get; set; } = -1;
+
         public void Reset()
         {
             SiteCount = 0;
@@ -5154,6 +5465,11 @@ namespace LSOL.Systems
 
     public sealed class TerritoryDistrictSnapshot
     {
+        public TerritoryDistrictSnapshot()
+        {
+            SideJobBonusPools = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+        }
+
         public string DistrictName { get; set; }
         public DistrictLicenseStatus LicenseStatus { get; set; }
         public int LicenseStrikeCount { get; set; }
@@ -5170,6 +5486,12 @@ namespace LSOL.Systems
         public int CompetitiveResponseCount { get; set; }
         public int CompetitiveWinCount { get; set; }
         public TerritoryDistrictEventSnapshot ActiveEvent { get; set; }
+
+        /// <summary>Perishable side job bonus pools (job id -> percentage points).</summary>
+        public Dictionary<string, float> SideJobBonusPools { get; private set; }
+
+        /// <summary>In-game minute of the last credit, used to recompute decay on load.</summary>
+        public int SideJobBonusMinute { get; set; } = -1;
     }
 
     public sealed class TerritoryDistrictEventSnapshot

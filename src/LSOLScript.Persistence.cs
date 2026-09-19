@@ -29,8 +29,16 @@ namespace LSOL
             _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
             _pendingTowingRestore = null;
+            _pendingGarbageRestore = null;
+            _pendingBusRestore = null;
+            _pendingTaxiRestore = null;
+            _pendingFoodDeliveryRestore = null;
             _specialMissionManager.ResetState();
             _towingSideJobSystem.ResetState();
+            _garbageSideJobSystem.ResetState();
+            _busSideJobSystem.ResetState();
+            _taxiSideJobSystem.ResetState();
+            _foodDeliverySideJobSystem.ResetState();
             _globalMarket.Reset(Game.GameTime);
             _npcLogisticsManager.ClearAll();
             _playerContractsManager.ClearAll();
@@ -53,7 +61,7 @@ namespace LSOL
 
         private void RestorePendingWorldState()
         {
-            if (_pendingOwnedFleetRestore == null && _pendingPropertyRestore == null && _pendingSpecialMissionRestore == null && _pendingTowingRestore == null)
+            if (_pendingOwnedFleetRestore == null && _pendingPropertyRestore == null && _pendingSpecialMissionRestore == null && _pendingTowingRestore == null && _pendingGarbageRestore == null && _pendingBusRestore == null && _pendingTaxiRestore == null && _pendingFoodDeliveryRestore == null)
             {
                 return;
             }
@@ -62,10 +70,18 @@ namespace LSOL
             var propertySnapshot = _pendingPropertyRestore;
             var specialMissionSnapshot = _pendingSpecialMissionRestore;
             var towingSnapshot = _pendingTowingRestore;
+            var garbageSnapshot = _pendingGarbageRestore;
+            var busSnapshot = _pendingBusRestore;
+            var taxiSnapshot = _pendingTaxiRestore;
+            var foodDeliverySnapshot = _pendingFoodDeliveryRestore;
             _pendingOwnedFleetRestore = null;
             _pendingPropertyRestore = null;
             _pendingSpecialMissionRestore = null;
             _pendingTowingRestore = null;
+            _pendingGarbageRestore = null;
+            _pendingBusRestore = null;
+            _pendingTaxiRestore = null;
+            _pendingFoodDeliveryRestore = null;
 
             if (propertySnapshot != null && propertySnapshot.HasData)
             {
@@ -84,6 +100,10 @@ namespace LSOL
 
             _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
             _towingSideJobSystem.ApplyPersistenceSnapshot(towingSnapshot);
+            _garbageSideJobSystem.ApplyPersistenceSnapshot(garbageSnapshot);
+            _busSideJobSystem.ApplyPersistenceSnapshot(busSnapshot);
+            _taxiSideJobSystem.ApplyPersistenceSnapshot(taxiSnapshot);
+            _foodDeliverySideJobSystem.ApplyPersistenceSnapshot(foodDeliverySnapshot);
             ReevaluatePlayerSuccesses(false);
             _tabletStateStore.MarkAllDirty();
         }
@@ -610,6 +630,10 @@ namespace LSOL
                 AlertRules = EnsureAlertRules(),
                 StartingGuides = _startingGuidesController != null ? _startingGuidesController.CreatePersistenceSnapshot() : null,
                 Towing = _towingSideJobSystem != null ? _towingSideJobSystem.CreatePersistenceSnapshot() : null,
+                Garbage = _garbageSideJobSystem != null ? _garbageSideJobSystem.CreatePersistenceSnapshot() : null,
+                Bus = _busSideJobSystem != null ? _busSideJobSystem.CreatePersistenceSnapshot() : null,
+                Taxi = _taxiSideJobSystem != null ? _taxiSideJobSystem.CreatePersistenceSnapshot() : null,
+                FoodDelivery = _foodDeliverySideJobSystem != null ? _foodDeliverySideJobSystem.CreatePersistenceSnapshot() : null,
             };
             CaptureLiveDifficultyProfile().ApplyToMetadata(metadata);
             return metadata;
@@ -664,6 +688,10 @@ namespace LSOL
             var propertySnapshot = metadata != null ? metadata.PropertyOwnership : null;
             var specialMissionSnapshot = metadata != null ? metadata.SpecialMissions : null;
             var towingSnapshot = metadata != null ? metadata.Towing : null;
+            var garbageSnapshot = metadata != null ? metadata.Garbage : null;
+            var busSnapshot = metadata != null ? metadata.Bus : null;
+            var taxiSnapshot = metadata != null ? metadata.Taxi : null;
+            var foodDeliverySnapshot = metadata != null ? metadata.FoodDelivery : null;
             if ((propertySnapshot == null || !propertySnapshot.HasData) && ownedFleetSnapshot != null && ownedFleetSnapshot.HasData)
             {
                 propertySnapshot = _propertyManager.CreateLegacyMigrationSnapshot(ownedFleetSnapshot, GetCurrentInGameWeekMinute());
@@ -690,6 +718,18 @@ namespace LSOL
                 _pendingTowingRestore = towingSnapshot != null && towingSnapshot.HasData
                     ? towingSnapshot
                     : null;
+                _pendingGarbageRestore = garbageSnapshot != null && garbageSnapshot.HasData
+                    ? garbageSnapshot
+                    : null;
+                _pendingBusRestore = busSnapshot != null && busSnapshot.HasData
+                    ? busSnapshot
+                    : null;
+                _pendingTaxiRestore = taxiSnapshot != null && taxiSnapshot.HasData
+                    ? taxiSnapshot
+                    : null;
+                _pendingFoodDeliveryRestore = foodDeliverySnapshot != null && foodDeliverySnapshot.HasData
+                    ? foodDeliverySnapshot
+                    : null;
             }
             else
             {
@@ -697,6 +737,9 @@ namespace LSOL
                 _pendingPropertyRestore = null;
                 _pendingSpecialMissionRestore = null;
                 _pendingTowingRestore = null;
+                _pendingGarbageRestore = null;
+                _pendingBusRestore = null;
+                _pendingTaxiRestore = null;
                 if (propertySnapshot != null && propertySnapshot.HasData)
                 {
                     _propertyManager.RestoreWorldState(
@@ -714,6 +757,10 @@ namespace LSOL
 
                 _specialMissionManager.ApplyPersistenceSnapshot(specialMissionSnapshot);
                 _towingSideJobSystem.ApplyPersistenceSnapshot(towingSnapshot);
+                _garbageSideJobSystem.ApplyPersistenceSnapshot(garbageSnapshot);
+                _busSideJobSystem.ApplyPersistenceSnapshot(busSnapshot);
+                _taxiSideJobSystem.ApplyPersistenceSnapshot(taxiSnapshot);
+                _foodDeliverySideJobSystem.ApplyPersistenceSnapshot(foodDeliverySnapshot);
             }
 
             ReevaluatePlayerSuccesses(false);

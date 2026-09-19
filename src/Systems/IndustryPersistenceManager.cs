@@ -384,6 +384,31 @@ namespace LSOL.Systems
                 persistenceVersion = 30;
             }
 
+            if (metadata != null && HasGarbageData(metadata.Garbage))
+            {
+                persistenceVersion = 31;
+            }
+
+            if (HasTerritoryDistrictBonusData(territorySnapshot))
+            {
+                persistenceVersion = 32;
+            }
+
+            if (metadata != null && HasBusData(metadata.Bus))
+            {
+                persistenceVersion = 33;
+            }
+
+            if (metadata != null && HasTaxiData(metadata.Taxi))
+            {
+                persistenceVersion = 34;
+            }
+
+            if (metadata != null && HasFoodDeliveryData(metadata.FoodDelivery))
+            {
+                persistenceVersion = 35;
+            }
+
             writer.WriteLine(
                 "Version={0}",
                 persistenceVersion);
@@ -434,6 +459,26 @@ namespace LSOL.Systems
             if (metadata != null && HasTowingData(metadata.Towing))
             {
                 WriteTowingSnapshot(writer, metadata.Towing);
+            }
+
+            if (metadata != null && HasGarbageData(metadata.Garbage))
+            {
+                WriteGarbageSnapshot(writer, metadata.Garbage);
+            }
+
+            if (metadata != null && HasBusData(metadata.Bus))
+            {
+                WriteBusSnapshot(writer, metadata.Bus);
+            }
+
+            if (metadata != null && HasTaxiData(metadata.Taxi))
+            {
+                WriteTaxiSnapshot(writer, metadata.Taxi);
+            }
+
+            if (metadata != null && HasFoodDeliveryData(metadata.FoodDelivery))
+            {
+                WriteFoodDeliverySnapshot(writer, metadata.FoodDelivery);
             }
 
             foreach (var industry in industries.OrderBy(x => x != null ? x.Id : string.Empty, StringComparer.OrdinalIgnoreCase))
@@ -619,6 +664,10 @@ namespace LSOL.Systems
             metadata.StartingGuides = ReadStartingGuidesSnapshot(ini);
             metadata.PlayerSkills = ReadPlayerSkillsSnapshot(ini);
             metadata.Towing = ReadTowingSnapshot(ini);
+            metadata.Garbage = ReadGarbageSnapshot(ini);
+            metadata.Bus = ReadBusSnapshot(ini);
+            metadata.Taxi = ReadTaxiSnapshot(ini);
+            metadata.FoodDelivery = ReadFoodDeliverySnapshot(ini);
             metadata.HasGameplayMetadata = metadata.HasGameplayMetadata
                 || HasGlobalMarketData(metadata.Market)
                 || HasBankLoanData(metadata.BankLoans)
@@ -627,7 +676,11 @@ namespace LSOL.Systems
                 || HasAlertRulesData(metadata.AlertRules)
                 || HasStartingGuidesData(metadata.StartingGuides)
                 || HasPlayerSkillsData(metadata.PlayerSkills)
-                || HasTowingData(metadata.Towing);
+                || HasTowingData(metadata.Towing)
+                || HasGarbageData(metadata.Garbage)
+                || HasBusData(metadata.Bus)
+                || HasTaxiData(metadata.Taxi)
+                || HasFoodDeliveryData(metadata.FoodDelivery);
             return metadata;
         }
 
@@ -2866,6 +2919,17 @@ namespace LSOL.Systems
                 writer.WriteLine("CompetitiveTons={0}", FormatFloat(district.CompetitiveTons));
                 writer.WriteLine("CompetitiveResponseCount={0}", district.CompetitiveResponseCount);
                 writer.WriteLine("CompetitiveWinCount={0}", district.CompetitiveWinCount);
+                writer.WriteLine("SideJobBonusMinute={0}", district.SideJobBonusMinute);
+                foreach (var jobId in DistrictBonusCatalog.JobIds)
+                {
+                    float points;
+                    if (district.SideJobBonusPools != null
+                        && district.SideJobBonusPools.TryGetValue(jobId, out points)
+                        && points > DistrictBonusCatalog.MinimumMeaningfulPoints)
+                    {
+                        writer.WriteLine("SideJobBonus{0}={1}", jobId, FormatFloat(points));
+                    }
+                }
                 if (district.ActiveEvent != null && district.ActiveEvent.HasData)
                 {
                     writer.WriteLine("ActiveEventId={0}", district.ActiveEvent.EventId ?? string.Empty);
@@ -3012,7 +3076,17 @@ namespace LSOL.Systems
                         ImpactSummary = ini.GetString(section, "ActiveEventImpactSummary", string.Empty),
                     };
 
-                    snapshot.Districts.Add(new TerritoryDistrictSnapshot
+                    var sideJobBonusPools = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase);
+                    foreach (var jobId in DistrictBonusCatalog.JobIds)
+                    {
+                        var points = ini.GetFloat(section, string.Format("SideJobBonus{0}", jobId), 0f);
+                        if (points > DistrictBonusCatalog.MinimumMeaningfulPoints)
+                        {
+                            sideJobBonusPools[jobId] = points;
+                        }
+                    }
+
+                    var districtSnapshot = new TerritoryDistrictSnapshot
                     {
                         DistrictName = districtName,
                         LicenseStatus = ParseDistrictLicenseStatus(ini.GetString(section, "LicenseStatus", DistrictLicenseStatus.None.ToString())),
@@ -3030,7 +3104,17 @@ namespace LSOL.Systems
                         CompetitiveResponseCount = ParseInt(ini.GetString(section, "CompetitiveResponseCount", "0"), 0),
                         CompetitiveWinCount = ParseInt(ini.GetString(section, "CompetitiveWinCount", "0"), 0),
                         ActiveEvent = activeEvent.HasData ? activeEvent : null,
-                    });
+                        SideJobBonusMinute = sideJobBonusPools.Count > 0
+                            ? ParseInt(ini.GetString(section, "SideJobBonusMinute", "-1"), -1)
+                            : -1,
+                    };
+
+                    foreach (var pool in sideJobBonusPools)
+                    {
+                        districtSnapshot.SideJobBonusPools[pool.Key] = pool.Value;
+                    }
+
+                    snapshot.Districts.Add(districtSnapshot);
 
                     continue;
                 }
@@ -3134,6 +3218,15 @@ namespace LSOL.Systems
             return snapshot != null
                 && snapshot.Districts != null
                 && snapshot.Districts.Any(district => district != null && district.ActiveEvent != null && district.ActiveEvent.HasData);
+        }
+
+        private static bool HasTerritoryDistrictBonusData(TerritoryPersistenceSnapshot snapshot)
+        {
+            return snapshot != null
+                && snapshot.Districts != null
+                && snapshot.Districts.Any(district => district != null
+                    && district.SideJobBonusPools != null
+                    && district.SideJobBonusPools.Count > 0);
         }
 
         private static string BuildTerritorySiteSectionName(string siteId)
@@ -4061,6 +4154,514 @@ namespace LSOL.Systems
             return snapshot.HasData ? snapshot : null;
         }
 
+        private static bool HasGarbageData(GarbagePersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WriteGarbageSnapshot(StreamWriter writer, GarbagePersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Garbage]");
+            writer.WriteLine("RouteId={0}", snapshot.RouteId ?? string.Empty);
+            writer.WriteLine("NextBagSpawnId={0}", Math.Max(1, snapshot.NextBagSpawnId));
+            writer.WriteLine("OnBoardBags={0}", Math.Max(0, snapshot.OnBoardBags));
+            writer.WriteLine("OnBoardTons={0}", FormatFloat(Math.Max(0f, snapshot.OnBoardTons)));
+            writer.WriteLine("RouteBagsCollected={0}", Math.Max(0, snapshot.RouteBagsCollected));
+            writer.WriteLine("ActiveTruckModelName={0}", snapshot.ActiveTruckModelName ?? string.Empty);
+            writer.WriteLine(
+                "OwnedTrucks={0}",
+                string.Join(
+                    ",",
+                    (snapshot.OwnedTruckModels ?? new List<string>())
+                        .Where(model => !string.IsNullOrWhiteSpace(model))
+                        .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)));
+            writer.WriteLine();
+
+            if (snapshot.Bags == null)
+            {
+                return;
+            }
+
+            foreach (var entry in snapshot.Bags
+                .Where(item => item != null && !item.Collected && item.SpawnId > 0)
+                .OrderBy(item => item.SpawnId))
+            {
+                writer.WriteLine("[Garbage:Bag:{0}]", entry.SpawnId);
+                writer.WriteLine("StopIndex={0}", Math.Max(0, entry.StopIndex));
+                writer.WriteLine("Position={0}", FormatVector3(entry.Position));
+                writer.WriteLine("WeightTons={0}", FormatFloat(entry.WeightTons));
+                writer.WriteLine("Collected=false");
+                writer.WriteLine();
+            }
+        }
+
+        private static GarbagePersistenceSnapshot ReadGarbageSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new GarbagePersistenceSnapshot();
+            if (ini.HasSection("Garbage"))
+            {
+                snapshot.RouteId = ini.GetString("Garbage", "RouteId", string.Empty);
+                snapshot.NextBagSpawnId = Math.Max(1, ParseInt(ini.GetString("Garbage", "NextBagSpawnId", "1"), 1));
+                snapshot.OnBoardBags = Math.Max(0, ParseInt(ini.GetString("Garbage", "OnBoardBags", "0"), 0));
+                snapshot.OnBoardTons = Math.Max(0f, ParseFloat(ini.GetString("Garbage", "OnBoardTons", "0"), 0f));
+                snapshot.RouteBagsCollected = Math.Max(0, ParseInt(ini.GetString("Garbage", "RouteBagsCollected", "0"), 0));
+                snapshot.ActiveTruckModelName = ini.GetString("Garbage", "ActiveTruckModelName", string.Empty);
+
+                var ownedTrucks = ini.GetString("Garbage", "OwnedTrucks", string.Empty);
+                if (!string.IsNullOrWhiteSpace(ownedTrucks))
+                {
+                    foreach (var modelName in ownedTrucks.Split(','))
+                    {
+                        var trimmed = modelName.Trim();
+                        if (trimmed.Length > 0)
+                        {
+                            snapshot.OwnedTruckModels.Add(trimmed);
+                        }
+                    }
+                }
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section) || !section.StartsWith("Garbage:Bag:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var spawnId = ParseInt(section.Substring("Garbage:Bag:".Length).Trim(), 0);
+                if (spawnId <= 0)
+                {
+                    continue;
+                }
+
+                var collected = ini.GetBool(section, "Collected", false);
+                if (collected)
+                {
+                    continue;
+                }
+
+                snapshot.Bags.Add(new GarbagePendingBagSnapshot
+                {
+                    SpawnId = spawnId,
+                    StopIndex = Math.Max(0, ParseInt(ini.GetString(section, "StopIndex", "0"), 0)),
+                    Position = ParseVector3(ini.GetString(section, "Position", string.Empty), Vector3.Zero),
+                    WeightTons = ParseFloat(ini.GetString(section, "WeightTons", "0.2"), 0.2f),
+                    Collected = false,
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
+        private static bool HasBusData(BusPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WriteBusSnapshot(StreamWriter writer, BusPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Bus]");
+            writer.WriteLine("RouteId={0}", snapshot.RouteId ?? string.Empty);
+            writer.WriteLine("CurrentStationIndex={0}", Math.Max(0, snapshot.CurrentStationIndex));
+            writer.WriteLine("StationsServiced={0}", Math.Max(0, snapshot.StationsServiced));
+            writer.WriteLine("CompletedLoops={0}", Math.Max(0, snapshot.CompletedLoops));
+            writer.WriteLine("RoutePassengersDelivered={0}", Math.Max(0, snapshot.RoutePassengersDelivered));
+            writer.WriteLine("PassengersLeftBehind={0}", Math.Max(0, snapshot.PassengersLeftBehind));
+            writer.WriteLine("RouteCashEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteCashEarned)));
+            writer.WriteLine("RouteXpEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteXpEarned)));
+            writer.WriteLine("DoorsOpen={0}", snapshot.DoorsOpen ? "true" : "false");
+            writer.WriteLine("ActiveBusModelName={0}", snapshot.ActiveBusModelName ?? string.Empty);
+            writer.WriteLine(
+                "OwnedBuses={0}",
+                string.Join(
+                    ",",
+                    (snapshot.OwnedBusModels ?? new List<string>())
+                        .Where(model => !string.IsNullOrWhiteSpace(model))
+                        .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)));
+            writer.WriteLine();
+
+            if (snapshot.OnBoardRiders != null)
+            {
+                foreach (var rider in snapshot.OnBoardRiders
+                    .Where(item => item != null && item.RiderId > 0)
+                    .OrderBy(item => item.RiderId))
+                {
+                    writer.WriteLine("[Bus:Rider:{0}]", rider.RiderId);
+                    writer.WriteLine("BoardedStationIndex={0}", Math.Max(0, rider.BoardedStationIndex));
+                    writer.WriteLine("DestinationIndex={0}", Math.Max(0, rider.DestinationIndex));
+                    writer.WriteLine("RiddenStops={0}", Math.Max(1, rider.RiddenStops));
+                    writer.WriteLine("SeatIndex={0}", Math.Max(0, rider.SeatIndex));
+                    writer.WriteLine();
+                }
+            }
+
+            if (snapshot.StationWaiting == null)
+            {
+                return;
+            }
+
+            foreach (var entry in snapshot.StationWaiting
+                .Where(item => item != null && item.StationIndex >= 0)
+                .OrderBy(item => item.StationIndex))
+            {
+                writer.WriteLine("[Bus:Station:{0}]", entry.StationIndex);
+                writer.WriteLine("Waiting={0}", Math.Max(0, entry.WaitingPassengers));
+                writer.WriteLine(
+                    "RideOffsets={0}",
+                    string.Join(
+                        ",",
+                        (entry.RideOffsets ?? new List<int>()).Where(offset => offset > 0)));
+                writer.WriteLine();
+            }
+        }
+
+        private static BusPersistenceSnapshot ReadBusSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new BusPersistenceSnapshot();
+            if (ini.HasSection("Bus"))
+            {
+                snapshot.RouteId = ini.GetString("Bus", "RouteId", string.Empty);
+                snapshot.CurrentStationIndex = Math.Max(0, ParseInt(ini.GetString("Bus", "CurrentStationIndex", "0"), 0));
+                snapshot.StationsServiced = Math.Max(0, ParseInt(ini.GetString("Bus", "StationsServiced", "0"), 0));
+                snapshot.CompletedLoops = Math.Max(0, ParseInt(ini.GetString("Bus", "CompletedLoops", "0"), 0));
+                snapshot.RoutePassengersDelivered = Math.Max(0, ParseInt(ini.GetString("Bus", "RoutePassengersDelivered", "0"), 0));
+                snapshot.PassengersLeftBehind = Math.Max(0, ParseInt(ini.GetString("Bus", "PassengersLeftBehind", "0"), 0));
+                snapshot.RouteCashEarned = Math.Max(0f, ParseFloat(ini.GetString("Bus", "RouteCashEarned", "0"), 0f));
+                snapshot.RouteXpEarned = Math.Max(0f, ParseFloat(ini.GetString("Bus", "RouteXpEarned", "0"), 0f));
+                snapshot.DoorsOpen = ini.GetBool("Bus", "DoorsOpen", false);
+                snapshot.ActiveBusModelName = ini.GetString("Bus", "ActiveBusModelName", string.Empty);
+
+                var ownedBuses = ini.GetString("Bus", "OwnedBuses", string.Empty);
+                if (!string.IsNullOrWhiteSpace(ownedBuses))
+                {
+                    foreach (var modelName in ownedBuses.Split(','))
+                    {
+                        var trimmed = modelName.Trim();
+                        if (trimmed.Length > 0)
+                        {
+                            snapshot.OwnedBusModels.Add(trimmed);
+                        }
+                    }
+                }
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section))
+                {
+                    continue;
+                }
+
+                if (section.StartsWith("Bus:Rider:", StringComparison.OrdinalIgnoreCase))
+                {
+                    var riderId = ParseInt(section.Substring("Bus:Rider:".Length).Trim(), 0);
+                    if (riderId > 0)
+                    {
+                        snapshot.OnBoardRiders.Add(new BusRiderSnapshot
+                        {
+                            RiderId = riderId,
+                            BoardedStationIndex = Math.Max(0, ParseInt(ini.GetString(section, "BoardedStationIndex", "0"), 0)),
+                            DestinationIndex = Math.Max(0, ParseInt(ini.GetString(section, "DestinationIndex", "0"), 0)),
+                            RiddenStops = Math.Max(1, ParseInt(ini.GetString(section, "RiddenStops", "1"), 1)),
+                            SeatIndex = Math.Max(0, ParseInt(ini.GetString(section, "SeatIndex", "0"), 0)),
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (!section.StartsWith("Bus:Station:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var stationIndex = ParseInt(section.Substring("Bus:Station:".Length).Trim(), -1);
+                if (stationIndex < 0)
+                {
+                    continue;
+                }
+
+                var entry = new BusStationWaitingSnapshot
+                {
+                    StationIndex = stationIndex,
+                    WaitingPassengers = Math.Max(0, ParseInt(ini.GetString(section, "Waiting", "0"), 0)),
+                };
+
+                var rideOffsets = ini.GetString(section, "RideOffsets", string.Empty);
+                if (!string.IsNullOrWhiteSpace(rideOffsets))
+                {
+                    foreach (var offset in rideOffsets.Split(','))
+                    {
+                        var parsed = ParseInt(offset.Trim(), 0);
+                        if (parsed > 0)
+                        {
+                            entry.RideOffsets.Add(parsed);
+                        }
+                    }
+                }
+
+                snapshot.StationWaiting.Add(entry);
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
+        private static bool HasTaxiData(TaxiPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WriteTaxiSnapshot(StreamWriter writer, TaxiPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[Taxi]");
+            writer.WriteLine("ActiveTaxiModelName={0}", snapshot.ActiveTaxiModelName ?? string.Empty);
+            writer.WriteLine("ActiveFareId={0}", Math.Max(0, snapshot.ActiveFareId));
+            writer.WriteLine("NextFareId={0}", Math.Max(1, snapshot.NextFareId));
+            writer.WriteLine("FaresCompleted={0}", Math.Max(0, snapshot.FaresCompleted));
+            writer.WriteLine("FaresAbandoned={0}", Math.Max(0, snapshot.FaresAbandoned));
+            writer.WriteLine("RouteCashEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteCashEarned)));
+            writer.WriteLine("RouteXpEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteXpEarned)));
+            writer.WriteLine(
+                "OwnedTaxis={0}",
+                string.Join(
+                    ",",
+                    (snapshot.OwnedTaxiModels ?? new List<string>())
+                        .Where(model => !string.IsNullOrWhiteSpace(model))
+                        .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)));
+            writer.WriteLine();
+
+            if (snapshot.Fares == null)
+            {
+                return;
+            }
+
+            foreach (var fare in snapshot.Fares
+                .Where(item => item != null && item.FareId > 0)
+                .OrderBy(item => item.FareId))
+            {
+                writer.WriteLine("[Taxi:Fare:{0}]", fare.FareId);
+                writer.WriteLine("PickupPosition={0}", FormatVector3(fare.PickupPosition));
+                writer.WriteLine("DestinationPosition={0}", FormatVector3(fare.DestinationPosition));
+                writer.WriteLine("DestinationName={0}", fare.DestinationName ?? string.Empty);
+                writer.WriteLine("DestinationDistrict={0}", fare.DestinationDistrict ?? string.Empty);
+                writer.WriteLine("DistanceBand={0}", Math.Max(0, fare.DistanceBand));
+                writer.WriteLine("GroupSize={0}", Math.Max(1, fare.GroupSize));
+                writer.WriteLine("Phase={0}", Math.Max(0, fare.Phase));
+                writer.WriteLine("CashEarned={0}", FormatFloat(Math.Max(0f, fare.CashEarned)));
+                writer.WriteLine();
+            }
+        }
+
+        private static TaxiPersistenceSnapshot ReadTaxiSnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new TaxiPersistenceSnapshot();
+            if (ini.HasSection("Taxi"))
+            {
+                snapshot.ActiveTaxiModelName = ini.GetString("Taxi", "ActiveTaxiModelName", string.Empty);
+                snapshot.ActiveFareId = Math.Max(0, ParseInt(ini.GetString("Taxi", "ActiveFareId", "0"), 0));
+                snapshot.NextFareId = Math.Max(1, ParseInt(ini.GetString("Taxi", "NextFareId", "1"), 1));
+                snapshot.FaresCompleted = Math.Max(0, ParseInt(ini.GetString("Taxi", "FaresCompleted", "0"), 0));
+                snapshot.FaresAbandoned = Math.Max(0, ParseInt(ini.GetString("Taxi", "FaresAbandoned", "0"), 0));
+                snapshot.RouteCashEarned = Math.Max(0f, ParseFloat(ini.GetString("Taxi", "RouteCashEarned", "0"), 0f));
+                snapshot.RouteXpEarned = Math.Max(0f, ParseFloat(ini.GetString("Taxi", "RouteXpEarned", "0"), 0f));
+
+                var ownedTaxis = ini.GetString("Taxi", "OwnedTaxis", string.Empty);
+                if (!string.IsNullOrWhiteSpace(ownedTaxis))
+                {
+                    foreach (var modelName in ownedTaxis.Split(','))
+                    {
+                        var trimmed = modelName.Trim();
+                        if (trimmed.Length > 0)
+                        {
+                            snapshot.OwnedTaxiModels.Add(trimmed);
+                        }
+                    }
+                }
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section)
+                    || !section.StartsWith("Taxi:Fare:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var fareId = ParseInt(section.Substring("Taxi:Fare:".Length).Trim(), 0);
+                if (fareId <= 0)
+                {
+                    continue;
+                }
+
+                snapshot.Fares.Add(new TaxiFareSnapshot
+                {
+                    FareId = fareId,
+                    PickupPosition = ParseVector3(ini.GetString(section, "PickupPosition", string.Empty), Vector3.Zero),
+                    DestinationPosition = ParseVector3(ini.GetString(section, "DestinationPosition", string.Empty), Vector3.Zero),
+                    DestinationName = ini.GetString(section, "DestinationName", string.Empty),
+                    DestinationDistrict = ini.GetString(section, "DestinationDistrict", string.Empty),
+                    DistanceBand = Math.Max(0, ParseInt(ini.GetString(section, "DistanceBand", "0"), 0)),
+                    GroupSize = Math.Max(1, ParseInt(ini.GetString(section, "GroupSize", "1"), 1)),
+                    Phase = Math.Max(0, ParseInt(ini.GetString(section, "Phase", "0"), 0)),
+                    CashEarned = Math.Max(0f, ParseFloat(ini.GetString(section, "CashEarned", "0"), 0f)),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
+        private static bool HasFoodDeliveryData(FoodDeliveryPersistenceSnapshot snapshot)
+        {
+            return snapshot != null && snapshot.HasData;
+        }
+
+        private static void WriteFoodDeliverySnapshot(StreamWriter writer, FoodDeliveryPersistenceSnapshot snapshot)
+        {
+            if (writer == null || snapshot == null || !snapshot.HasData)
+            {
+                return;
+            }
+
+            writer.WriteLine("[FoodDelivery]");
+            writer.WriteLine("ActiveVehicleModelName={0}", snapshot.ActiveVehicleModelName ?? string.Empty);
+            writer.WriteLine("ActiveRestaurantKey={0}", snapshot.ActiveRestaurantKey ?? string.Empty);
+            writer.WriteLine("ProductCommodity={0}", snapshot.ProductCommodity ?? string.Empty);
+            writer.WriteLine("LoadedMeals={0}", Math.Max(0, snapshot.LoadedMeals));
+            writer.WriteLine("MealsDelivered={0}", Math.Max(0, snapshot.MealsDelivered));
+            writer.WriteLine("RunsCompleted={0}", Math.Max(0, snapshot.RunsCompleted));
+            writer.WriteLine("RunsAbandoned={0}", Math.Max(0, snapshot.RunsAbandoned));
+            writer.WriteLine("RouteCashEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteCashEarned)));
+            writer.WriteLine("RouteXpEarned={0}", FormatFloat(Math.Max(0f, snapshot.RouteXpEarned)));
+            writer.WriteLine("RunFareEarned={0}", FormatFloat(Math.Max(0f, snapshot.RunFareEarned)));
+            writer.WriteLine("SpoiledAtGameTime={0}", Math.Max(0, snapshot.SpoiledAtGameTime));
+            writer.WriteLine("ActiveOrderId={0}", Math.Max(0, snapshot.ActiveOrderId));
+            writer.WriteLine("NextOrderId={0}", Math.Max(1, snapshot.NextOrderId));
+            writer.WriteLine(
+                "OwnedVehicles={0}",
+                string.Join(
+                    ",",
+                    (snapshot.OwnedVehicleModels ?? new List<string>())
+                        .Where(model => !string.IsNullOrWhiteSpace(model))
+                        .OrderBy(model => model, StringComparer.OrdinalIgnoreCase)));
+            writer.WriteLine();
+
+            if (snapshot.Orders == null)
+            {
+                return;
+            }
+
+            foreach (var order in snapshot.Orders
+                .Where(item => item != null && item.OrderId > 0)
+                .OrderBy(item => item.OrderId))
+            {
+                writer.WriteLine("[FoodDelivery:Order:{0}]", order.OrderId);
+                writer.WriteLine("CustomerName={0}", order.CustomerName ?? string.Empty);
+                writer.WriteLine("CustomerDistrict={0}", order.CustomerDistrict ?? string.Empty);
+                writer.WriteLine("CustomerPosition={0}", FormatVector3(order.CustomerPosition));
+                writer.WriteLine("DistanceBand={0}", Math.Max(0, order.DistanceBand));
+                writer.WriteLine("DistanceMeters={0}", FormatFloat(Math.Max(0f, order.DistanceMeters)));
+                writer.WriteLine("CashEarned={0}", FormatFloat(Math.Max(0f, order.CashEarned)));
+                writer.WriteLine();
+            }
+        }
+
+        private static FoodDeliveryPersistenceSnapshot ReadFoodDeliverySnapshot(IniFile ini)
+        {
+            if (ini == null)
+            {
+                return null;
+            }
+
+            var snapshot = new FoodDeliveryPersistenceSnapshot();
+            if (ini.HasSection("FoodDelivery"))
+            {
+                snapshot.ActiveVehicleModelName = ini.GetString("FoodDelivery", "ActiveVehicleModelName", string.Empty);
+                snapshot.ActiveRestaurantKey = ini.GetString("FoodDelivery", "ActiveRestaurantKey", string.Empty);
+                snapshot.ProductCommodity = ini.GetString("FoodDelivery", "ProductCommodity", string.Empty);
+                snapshot.LoadedMeals = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "LoadedMeals", "0"), 0));
+                snapshot.MealsDelivered = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "MealsDelivered", "0"), 0));
+                snapshot.RunsCompleted = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "RunsCompleted", "0"), 0));
+                snapshot.RunsAbandoned = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "RunsAbandoned", "0"), 0));
+                snapshot.RouteCashEarned = Math.Max(0f, ParseFloat(ini.GetString("FoodDelivery", "RouteCashEarned", "0"), 0f));
+                snapshot.RouteXpEarned = Math.Max(0f, ParseFloat(ini.GetString("FoodDelivery", "RouteXpEarned", "0"), 0f));
+                snapshot.RunFareEarned = Math.Max(0f, ParseFloat(ini.GetString("FoodDelivery", "RunFareEarned", "0"), 0f));
+                snapshot.SpoiledAtGameTime = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "SpoiledAtGameTime", "0"), 0));
+                snapshot.ActiveOrderId = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "ActiveOrderId", "0"), 0));
+                snapshot.NextOrderId = Math.Max(1, ParseInt(ini.GetString("FoodDelivery", "NextOrderId", "1"), 1));
+
+                var ownedVehicles = ini.GetString("FoodDelivery", "OwnedVehicles", string.Empty);
+                if (!string.IsNullOrWhiteSpace(ownedVehicles))
+                {
+                    foreach (var modelName in ownedVehicles.Split(','))
+                    {
+                        var trimmed = modelName.Trim();
+                        if (trimmed.Length > 0)
+                        {
+                            snapshot.OwnedVehicleModels.Add(trimmed);
+                        }
+                    }
+                }
+            }
+
+            foreach (var section in ini.Sections)
+            {
+                if (string.IsNullOrWhiteSpace(section)
+                    || !section.StartsWith("FoodDelivery:Order:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var orderId = ParseInt(section.Substring("FoodDelivery:Order:".Length).Trim(), 0);
+                if (orderId <= 0)
+                {
+                    continue;
+                }
+
+                snapshot.Orders.Add(new FoodDeliveryOrderSnapshot
+                {
+                    OrderId = orderId,
+                    CustomerName = ini.GetString(section, "CustomerName", string.Empty),
+                    CustomerDistrict = ini.GetString(section, "CustomerDistrict", string.Empty),
+                    CustomerPosition = ParseVector3(ini.GetString(section, "CustomerPosition", string.Empty), Vector3.Zero),
+                    DistanceBand = Math.Max(0, ParseInt(ini.GetString(section, "DistanceBand", "0"), 0)),
+                    DistanceMeters = Math.Max(0f, ParseFloat(ini.GetString(section, "DistanceMeters", "0"), 0f)),
+                    CashEarned = Math.Max(0f, ParseFloat(ini.GetString(section, "CashEarned", "0"), 0f)),
+                });
+            }
+
+            return snapshot.HasData ? snapshot : null;
+        }
+
         private static bool HasStartingGuidesData(StartingGuidesPersistenceSnapshot snapshot)
         {
             return snapshot != null && snapshot.HasData;
@@ -4143,5 +4744,10 @@ namespace LSOL.Systems
         public AlertRulesPersistenceSnapshot AlertRules { get; set; }
         public StartingGuidesPersistenceSnapshot StartingGuides { get; set; }
         public TowingPersistenceSnapshot Towing { get; set; }
+        public GarbagePersistenceSnapshot Garbage { get; set; }
+        public BusPersistenceSnapshot Bus { get; set; }
+        public TaxiPersistenceSnapshot Taxi { get; set; }
+
+        public FoodDeliveryPersistenceSnapshot FoodDelivery { get; set; }
     }
 }

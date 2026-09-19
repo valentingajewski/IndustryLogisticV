@@ -1,0 +1,675 @@
+<GarbageRoutes>
+  <GarbageRoute id="DelPerro" name="West Los Santos | Del Perro" district="WestLosSantos">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1003.40" Y="-796.96" Z="16.17" />
+          <Vector3 X="-1002.40" Y="-795.50" Z="16.24" />
+          <Vector3 X="-1004.95" Y="-795.95" Z="16.14" />
+          <Vector3 X="-1000.96" Y="-797.85" Z="16.06" />
+          <Vector3 X="-1003.76" Y="-795.60" Z="16.26" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1089.80" Y="-726.44" Z="19.40" />
+          <Vector3 X="-1089.68" Y="-724.87" Z="19.42" />
+          <Vector3 X="-1089.88" Y="-727.88" Z="19.29" />
+          <Vector3 X="-1085.61" Y="-728.78" Z="19.24" />
+          <Vector3 X="-1087.71" Y="-728.28" Z="19.27" />
+          <Vector3 X="-1086.69" Y="-730.53" Z="19.24" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1155.04" Y="-650.66" Z="22.55" />
+          <Vector3 X="-1154.11" Y="-649.47" Z="22.53" />
+          <Vector3 X="-1156.01" Y="-652.34" Z="22.48" />
+          <Vector3 X="-1158.25" Y="-648.62" Z="22.52" />
+          <Vector3 X="-1151.71" Y="-653.52" Z="22.32" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1239.57" Y="-549.58" Z="28.84" />
+          <Vector3 X="-1240.54" Y="-551.34" Z="28.77" />
+          <Vector3 X="-1242.08" Y="-549.30" Z="28.99" />
+          <Vector3 X="-1239.62" Y="-547.03" Z="29.02" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1339.49" Y="-423.98" Z="34.67" />
+          <Vector3 X="-1343.12" Y="-422.40" Z="34.88" />
+          <Vector3 X="-1342.31" Y="-421.20" Z="34.96" />
+          <Vector3 X="-1340.51" Y="-424.95" Z="34.55" />
+          <Vector3 X="-1341.84" Y="-422.30" Z="34.90" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1432.38" Y="-400.62" Z="35.71" />
+          <Vector3 X="-1431.70" Y="-399.07" Z="35.86" />
+          <Vector3 X="-1429.67" Y="-399.90" Z="35.70" />
+          <Vector3 X="-1430.10" Y="-397.51" Z="35.75" />
+          <Vector3 X="-1432.13" Y="-402.93" Z="35.73" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1552.09" Y="-478.10" Z="35.05" />
+          <Vector3 X="-1554.35" Y="-479.47" Z="34.92" />
+          <Vector3 X="-1556.39" Y="-478.64" Z="34.79" />
+          <Vector3 X="-1551.15" Y="-476.52" Z="35.01" />
+          <Vector3 X="-1555.72" Y="-475.78" Z="35.07" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1647.17" Y="-549.92" Z="33.25" />
+          <Vector3 X="-1647.92" Y="-549.26" Z="33.41" />
+          <Vector3 X="-1646.70" Y="-548.24" Z="33.35" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1550.87" Y="-677.24" Z="28.49" />
+          <Vector3 X="-1549.39" Y="-679.61" Z="28.47" />
+          <Vector3 X="-1554.18" Y="-678.09" Z="28.41" />
+          <Vector3 X="-1549.75" Y="-680.38" Z="28.49" />
+          <Vector3 X="-1553.70" Y="-676.22" Z="28.49" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1372.46" Y="-832.68" Z="18.12" />
+          <Vector3 X="-1372.70" Y="-834.32" Z="18.14" />
+          <Vector3 X="-1368.78" Y="-833.29" Z="18.00" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1204.88" Y="-882.91" Z="12.80" />
+          <Vector3 X="-1206.82" Y="-884.20" Z="12.65" />
+          <Vector3 X="-1205.73" Y="-884.88" Z="12.72" />
+          <Vector3 X="-1209.33" Y="-885.00" Z="12.55" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1067.00" Y="-798.23" Z="18.77" />
+          <Vector3 X="-1062.46" Y="-800.97" Z="18.73" />
+          <Vector3 X="-1064.62" Y="-800.73" Z="18.87" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+  <GarbageRoute id="GroveStreet" name="South Los Santos | Grove Street" district="SouthLosSantos">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="30.74" Y="-1633.54" Z="28.87" />
+          <Vector3 X="28.81" Y="-1632.22" Z="28.91" />
+          <Vector3 X="29.86" Y="-1632.31" Z="28.81" />
+          <Vector3 X="29.59" Y="-1632.96" Z="29.06" />
+          <Vector3 X="28.95" Y="-1631.65" Z="28.94" />
+          <Vector3 X="29.98" Y="-1634.12" Z="28.74" />
+          <Vector3 X="29.07" Y="-1633.08" Z="29.02" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-70.92" Y="-1637.71" Z="28.69" />
+          <Vector3 X="-70.94" Y="-1636.33" Z="28.66" />
+          <Vector3 X="-69.82" Y="-1637.22" Z="29.05" />
+          <Vector3 X="-68.72" Y="-1635.12" Z="28.95" />
+          <Vector3 X="-69.60" Y="-1635.81" Z="28.81" />
+          <Vector3 X="-72.63" Y="-1640.60" Z="28.26" />
+          <Vector3 X="-68.93" Y="-1636.33" Z="28.75" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-129.94" Y="-1708.17" Z="29.55" />
+          <Vector3 X="-129.23" Y="-1707.75" Z="29.59" />
+          <Vector3 X="-128.91" Y="-1707.83" Z="29.35" />
+          <Vector3 X="-129.75" Y="-1707.30" Z="29.41" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-98.95" Y="-1778.88" Z="28.76" />
+          <Vector3 X="-97.90" Y="-1779.18" Z="28.82" />
+          <Vector3 X="-98.62" Y="-1779.78" Z="28.70" />
+          <Vector3 X="-99.22" Y="-1777.77" Z="28.86" />
+          <Vector3 X="-97.06" Y="-1780.32" Z="28.82" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-6.76" Y="-1856.73" Z="23.94" />
+          <Vector3 X="-4.36" Y="-1858.45" Z="23.83" />
+          <Vector3 X="-4.68" Y="-1858.83" Z="23.86" />
+          <Vector3 X="-4.49" Y="-1857.72" Z="24.20" />
+          <Vector3 X="-6.45" Y="-1857.19" Z="24.04" />
+          <Vector3 X="-5.61" Y="-1857.92" Z="24.10" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="79.53" Y="-1929.78" Z="20.38" />
+          <Vector3 X="79.33" Y="-1930.16" Z="20.37" />
+          <Vector3 X="80.08" Y="-1928.82" Z="20.39" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="116.64" Y="-1933.08" Z="20.51" />
+          <Vector3 X="117.60" Y="-1933.22" Z="20.51" />
+          <Vector3 X="115.85" Y="-1932.97" Z="20.37" />
+          <Vector3 X="117.26" Y="-1932.75" Z="20.21" />
+          <Vector3 X="117.30" Y="-1934.25" Z="20.49" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="147.02" Y="-1814.33" Z="27.39" />
+          <Vector3 X="146.39" Y="-1813.92" Z="27.39" />
+          <Vector3 X="146.60" Y="-1812.94" Z="27.60" />
+          <Vector3 X="147.15" Y="-1811.79" Z="27.66" />
+          <Vector3 X="148.33" Y="-1813.97" Z="27.37" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+  <GarbageRoute id="MirrorPark" name="East Los Santos | Mirror Park" district="EastLosSantos">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1213.05" Y="-732.36" Z="58.45" />
+          <Vector3 X="1212.67" Y="-729.01" Z="58.61" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1203.51" Y="-673.67" Z="60.62" />
+          <Vector3 X="1202.06" Y="-672.40" Z="60.67" />
+          <Vector3 X="1205.46" Y="-673.14" Z="60.76" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1190.45" Y="-600.19" Z="63.49" />
+          <Vector3 X="1191.56" Y="-601.24" Z="63.54" />
+          <Vector3 X="1188.47" Y="-582.84" Z="63.87" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1147.49" Y="-345.41" Z="66.53" />
+          <Vector3 X="1146.50" Y="-344.64" Z="66.62" />
+          <Vector3 X="1144.81" Y="-345.50" Z="66.64" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1117.94" Y="-344.56" Z="66.57" />
+          <Vector3 X="1115.63" Y="-342.37" Z="66.73" />
+          <Vector3 X="1118.21" Y="-346.95" Z="66.72" />
+          <Vector3 X="1112.71" Y="-351.79" Z="66.51" />
+          <Vector3 X="1114.71" Y="-351.55" Z="66.60" />
+          <Vector3 X="1113.27" Y="-338.39" Z="66.80" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1067.61" Y="-452.51" Z="64.74" />
+          <Vector3 X="1067.46" Y="-451.10" Z="65.03" />
+          <Vector3 X="1088.41" Y="-452.01" Z="65.15" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1059.85" Y="-496.55" Z="62.71" />
+          <Vector3 X="1059.38" Y="-500.95" Z="62.42" />
+          <Vector3 X="1063.26" Y="-481.17" Z="63.37" />
+          <Vector3 X="1063.53" Y="-479.28" Z="63.66" />
+          <Vector3 X="1080.96" Y="-487.56" Z="63.15" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1013.92" Y="-595.02" Z="58.40" />
+          <Vector3 X="1011.80" Y="-599.01" Z="58.30" />
+          <Vector3 X="1013.75" Y="-597.65" Z="58.31" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1100.30" Y="-773.96" Z="57.82" />
+          <Vector3 X="1098.67" Y="-774.30" Z="57.91" />
+          <Vector3 X="1101.72" Y="-773.36" Z="57.71" />
+          <Vector3 X="1097.12" Y="-773.06" Z="57.62" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1286.25" Y="-676.83" Z="65.57" />
+          <Vector3 X="1284.95" Y="-674.92" Z="65.67" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1256.39" Y="-597.78" Z="68.71" />
+          <Vector3 X="1262.16" Y="-611.34" Z="68.61" />
+          <Vector3 X="1260.60" Y="-610.62" Z="68.59" />
+          <Vector3 X="1251.46" Y="-570.47" Z="68.70" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1264.99" Y="-500.16" Z="68.65" />
+          <Vector3 X="1271.52" Y="-480.80" Z="68.71" />
+          <Vector3 X="1256.92" Y="-527.88" Z="68.74" />
+          <Vector3 X="1271.48" Y="-483.16" Z="68.71" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1268.38" Y="-419.83" Z="68.76" />
+          <Vector3 X="1269.17" Y="-421.92" Z="68.60" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1174.37" Y="-449.85" Z="66.36" />
+          <Vector3 X="1174.19" Y="-448.46" Z="66.20" />
+          <Vector3 X="1173.57" Y="-451.39" Z="66.26" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+  <GarbageRoute id="PaletoBay" name="Paleto Bay" district="PaletoBay">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-275.63" Y="6082.19" Z="30.96" />
+          <Vector3 X="-276.88" Y="6078.55" Z="30.94" />
+          <Vector3 X="-277.49" Y="6080.57" Z="31.00" />
+          <Vector3 X="-276.31" Y="6079.80" Z="31.03" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-167.31" Y="6186.61" Z="31.01" />
+          <Vector3 X="-168.34" Y="6184.57" Z="31.03" />
+          <Vector3 X="-170.41" Y="6183.92" Z="31.03" />
+          <Vector3 X="-170.22" Y="6182.87" Z="31.04" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-126.23" Y="6228.99" Z="30.98" />
+          <Vector3 X="-129.22" Y="6231.79" Z="30.94" />
+          <Vector3 X="-128.29" Y="6229.31" Z="30.96" />
+          <Vector3 X="-128.20" Y="6227.37" Z="34.60" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="149.16" Y="6503.20" Z="31.16" />
+          <Vector3 X="148.96" Y="6504.69" Z="31.15" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="73.28" Y="6622.91" Z="31.09" />
+          <Vector3 X="71.71" Y="6623.65" Z="31.05" />
+          <Vector3 X="71.70" Y="6625.24" Z="31.29" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-43.32" Y="6622.96" Z="29.71" />
+          <Vector3 X="-44.70" Y="6623.76" Z="29.37" />
+          <Vector3 X="-42.55" Y="6624.39" Z="29.67" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-143.09" Y="6488.71" Z="29.39" />
+          <Vector3 X="-143.60" Y="6487.64" Z="29.35" />
+          <Vector3 X="-149.46" Y="6486.47" Z="29.20" />
+          <Vector3 X="-146.03" Y="6489.19" Z="29.30" />
+          <Vector3 X="-148.47" Y="6488.12" Z="29.30" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-196.36" Y="6462.90" Z="30.40" />
+          <Vector3 X="-194.71" Y="6463.63" Z="30.31" />
+          <Vector3 X="-195.45" Y="6461.47" Z="30.34" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-268.09" Y="6368.70" Z="31.03" />
+          <Vector3 X="-266.39" Y="6369.95" Z="30.74" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-339.96" Y="6232.19" Z="31.14" />
+          <Vector3 X="-347.74" Y="6244.92" Z="31.16" />
+          <Vector3 X="-340.96" Y="6233.86" Z="31.09" />
+          <Vector3 X="-346.82" Y="6243.04" Z="31.03" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-385.24" Y="6041.64" Z="31.00" />
+          <Vector3 X="-387.27" Y="6042.96" Z="31.04" />
+          <Vector3 X="-386.80" Y="6041.44" Z="31.08" />
+          <Vector3 X="-383.21" Y="6039.89" Z="31.12" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+  <GarbageRoute id="SandyShores" name="Grand Senora | Sandy Shores" district="GrandSenora">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1954.47" Y="3709.61" Z="31.94" />
+          <Vector3 X="1953.22" Y="3710.94" Z="31.77" />
+          <Vector3 X="1955.57" Y="3711.55" Z="31.84" />
+          <Vector3 X="1952.45" Y="3709.39" Z="31.64" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1948.60" Y="3756.39" Z="31.85" />
+          <Vector3 X="1950.59" Y="3758.13" Z="31.87" />
+          <Vector3 X="1968.48" Y="3771.21" Z="31.83" />
+          <Vector3 X="1967.54" Y="3771.89" Z="31.76" />
+          <Vector3 X="1969.56" Y="3772.48" Z="31.81" />
+          <Vector3 X="1971.04" Y="3772.77" Z="31.82" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1995.86" Y="3822.15" Z="31.75" />
+          <Vector3 X="1996.22" Y="3823.34" Z="31.75" />
+          <Vector3 X="1995.42" Y="3823.02" Z="31.87" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1790.15" Y="3814.87" Z="33.37" />
+          <Vector3 X="1792.65" Y="3814.05" Z="33.33" />
+          <Vector3 X="1791.67" Y="3812.52" Z="33.05" />
+          <Vector3 X="1794.24" Y="3816.41" Z="33.23" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1818.69" Y="3717.83" Z="33.17" />
+          <Vector3 X="1822.00" Y="3717.86" Z="33.15" />
+          <Vector3 X="1818.72" Y="3720.61" Z="33.24" />
+          <Vector3 X="1823.44" Y="3715.87" Z="33.16" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1787.11" Y="3638.90" Z="33.89" />
+          <Vector3 X="1785.69" Y="3636.89" Z="33.91" />
+          <Vector3 X="1786.68" Y="3635.24" Z="33.95" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1677.96" Y="3570.34" Z="35.15" />
+          <Vector3 X="1679.09" Y="3572.07" Z="35.03" />
+          <Vector3 X="1684.66" Y="3574.19" Z="35.17" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1530.74" Y="3753.68" Z="33.98" />
+          <Vector3 X="1530.14" Y="3751.92" Z="34.10" />
+          <Vector3 X="1534.42" Y="3754.92" Z="34.06" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="1457.51" Y="3620.00" Z="34.41" />
+          <Vector3 X="1457.29" Y="3618.10" Z="33.96" />
+          <Vector3 X="1458.98" Y="3620.20" Z="34.38" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+  <GarbageRoute id="Vespucci" name="West Los Santos | Vespucci" district="WestLosSantos">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-786.33" Y="-1056.69" Z="11.58" />
+          <Vector3 X="-785.61" Y="-1055.78" Z="11.63" />
+          <Vector3 X="-784.76" Y="-1058.53" Z="11.52" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-831.52" Y="-972.74" Z="14.43" />
+          <Vector3 X="-830.06" Y="-973.67" Z="14.33" />
+          <Vector3 X="-831.21" Y="-976.66" Z="14.25" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-911.17" Y="-860.00" Z="15.08" />
+          <Vector3 X="-912.81" Y="-860.51" Z="15.04" />
+          <Vector3 X="-909.18" Y="-860.91" Z="15.02" />
+          <Vector3 X="-909.64" Y="-863.21" Z="15.09" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1045.81" Y="-875.08" Z="5.34" />
+          <Vector3 X="-1043.79" Y="-875.04" Z="5.51" />
+          <Vector3 X="-1045.60" Y="-876.59" Z="5.35" />
+          <Vector3 X="-1045.28" Y="-874.31" Z="5.30" />
+          <Vector3 X="-1048.05" Y="-875.21" Z="5.25" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1114.90" Y="-913.49" Z="2.13" />
+          <Vector3 X="-1112.15" Y="-912.53" Z="2.12" />
+          <Vector3 X="-1111.77" Y="-914.44" Z="2.10" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1070.71" Y="-1029.18" Z="1.76" />
+          <Vector3 X="-1070.23" Y="-1024.74" Z="1.75" />
+          <Vector3 X="-1071.31" Y="-1025.89" Z="1.61" />
+          <Vector3 X="-1055.88" Y="-1016.72" Z="1.69" />
+          <Vector3 X="-1053.22" Y="-1017.34" Z="1.81" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1018.02" Y="-1117.32" Z="1.77" />
+          <Vector3 X="-1019.80" Y="-1116.91" Z="1.80" />
+          <Vector3 X="-1020.65" Y="-1126.05" Z="1.65" />
+          <Vector3 X="-992.83" Y="-1122.23" Z="1.65" />
+          <Vector3 X="-994.92" Y="-1121.83" Z="1.88" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1023.91" Y="-1243.46" Z="5.50" />
+          <Vector3 X="-1023.96" Y="-1245.82" Z="5.58" />
+          <Vector3 X="-1023.00" Y="-1244.46" Z="5.36" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1218.33" Y="-1353.15" Z="3.78" />
+          <Vector3 X="-1215.19" Y="-1353.71" Z="3.82" />
+          <Vector3 X="-1213.94" Y="-1351.65" Z="3.80" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1251.44" Y="-1282.33" Z="3.60" />
+          <Vector3 X="-1249.90" Y="-1282.95" Z="3.62" />
+          <Vector3 X="-1250.70" Y="-1284.52" Z="3.51" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1277.74" Y="-1210.41" Z="4.40" />
+          <Vector3 X="-1278.26" Y="-1212.71" Z="4.31" />
+          <Vector3 X="-1276.21" Y="-1212.95" Z="4.05" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1330.05" Y="-1027.96" Z="7.25" />
+          <Vector3 X="-1328.07" Y="-1027.47" Z="7.22" />
+          <Vector3 X="-1328.90" Y="-1027.14" Z="7.28" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1367.40" Y="-902.03" Z="11.81" />
+          <Vector3 X="-1368.17" Y="-901.39" Z="12.11" />
+          <Vector3 X="-1352.52" Y="-896.78" Z="12.98" />
+          <Vector3 X="-1353.20" Y="-897.82" Z="13.17" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="-1240.50" Y="-1034.86" Z="7.89" />
+          <Vector3 X="-1239.14" Y="-1036.10" Z="7.80" />
+          <Vector3 X="-1241.84" Y="-1037.09" Z="8.19" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+  <GarbageRoute id="Vinewood" name="Vinewood" district="Vinewood">
+    <Stops>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="455.79" Y="-68.24" Z="73.55" />
+          <Vector3 X="454.44" Y="-71.50" Z="73.03" />
+          <Vector3 X="453.49" Y="-69.12" Z="73.25" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="388.52" Y="143.35" Z="102.41" />
+          <Vector3 X="390.20" Y="142.80" Z="102.23" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="261.74" Y="190.57" Z="104.54" />
+          <Vector3 X="262.73" Y="190.77" Z="104.38" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="100.43" Y="298.44" Z="109.58" />
+          <Vector3 X="98.13" Y="300.60" Z="109.55" />
+          <Vector3 X="98.75" Y="298.94" Z="109.42" />
+          <Vector3 X="99.20" Y="301.43" Z="109.49" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="103.73" Y="317.93" Z="111.45" />
+          <Vector3 X="100.64" Y="318.34" Z="111.71" />
+          <Vector3 X="99.48" Y="319.82" Z="111.43" />
+          <Vector3 X="114.18" Y="327.14" Z="111.81" />
+          <Vector3 X="115.36" Y="325.73" Z="111.75" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="210.68" Y="339.59" Z="105.05" />
+          <Vector3 X="208.22" Y="338.50" Z="105.10" />
+          <Vector3 X="195.80" Y="338.75" Z="105.50" />
+          <Vector3 X="195.69" Y="334.15" Z="105.10" />
+          <Vector3 X="195.33" Y="323.27" Z="104.91" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="271.86" Y="311.46" Z="105.39" />
+          <Vector3 X="270.28" Y="312.94" Z="105.37" />
+          <Vector3 X="276.89" Y="309.57" Z="105.29" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="342.21" Y="308.84" Z="104.07" />
+          <Vector3 X="337.49" Y="309.92" Z="104.35" />
+          <Vector3 X="349.28" Y="340.99" Z="104.67" />
+          <Vector3 X="346.27" Y="352.59" Z="104.78" />
+          <Vector3 X="347.47" Y="339.28" Z="104.75" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="527.30" Y="248.15" Z="102.75" />
+          <Vector3 X="525.07" Y="248.79" Z="102.77" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="623.62" Y="205.46" Z="98.34" />
+          <Vector3 X="619.29" Y="192.65" Z="98.04" />
+          <Vector3 X="618.24" Y="189.75" Z="98.03" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="665.53" Y="203.21" Z="94.15" />
+          <Vector3 X="661.93" Y="205.72" Z="94.80" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="741.21" Y="135.22" Z="79.76" />
+          <Vector3 X="744.63" Y="135.17" Z="79.83" />
+          <Vector3 X="741.68" Y="137.87" Z="80.26" />
+          <Vector3 X="742.66" Y="137.57" Z="80.03" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="575.30" Y="-59.07" Z="72.53" />
+          <Vector3 X="574.65" Y="-61.08" Z="71.83" />
+          <Vector3 X="577.73" Y="-60.35" Z="72.11" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="513.46" Y="-94.58" Z="64.62" />
+          <Vector3 X="509.50" Y="-93.32" Z="64.82" />
+          <Vector3 X="511.77" Y="-97.62" Z="64.10" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+      <StopBase>
+        <TrashBagsSpawnPosition>
+          <Vector3 X="354.40" Y="-194.91" Z="57.16" />
+          <Vector3 X="349.47" Y="-194.76" Z="56.51" />
+          <Vector3 X="325.83" Y="-184.67" Z="56.97" />
+          <Vector3 X="320.57" Y="-181.88" Z="57.15" />
+        </TrashBagsSpawnPosition>
+      </StopBase>
+    </Stops>
+  </GarbageRoute>
+</GarbageRoutes>

@@ -1,6 +1,6 @@
 # Stores
 
-Generated runtime catalog reference entries in this document: 15.
+Generated runtime catalog reference entries in this document: 19.
 
 | Display name | Catalog ID | Legacy key | Role | District |
 | --- | ---: | --- | --- | --- |
@@ -19,6 +19,10 @@ Generated runtime catalog reference entries in this document: 15.
 | Grapeseed Clothing Store | 512 | Store13 | StoreSink | Grapeseed |
 | Paleto Bay Clothing Store | 513 | Store14 | StoreSink | PaletoBay |
 | Liquor Ace | 514 | Store15 | StoreSink | GrandSenora |
+| Premium Deluxe Motorsport | 515 | Store16 | StoreSink | Downtown |
+| Gallivanter | 516 | Store17 | StoreSink | Vinewood |
+| Grand Senora Clothes Store | 517 | Store18 | StoreSink | GrandSenora |
+| Larry's RV Sales | 518 | Store19 | StoreSink | GrandSenora |
 
 ## Davis Carson Store
 
@@ -37,8 +41,9 @@ Generated runtime catalog reference entries in this document: 15.
 
 ### Supply / Production / Consumption
 
-- Inputs: TV, Computer, Alcohol, Clothes, ProcessedFood, Medicine, Furniture, Meat, Paper
-- Sink preference weights: ProcessedFood: 1.25; Medicine: 1.20; Meat: 1.10; Clothes: 1.05; Furniture: 0.82; TV: 0.72; Computer: 0.68; Alcohol: 0.92; Paper: 0.76
+- Inputs: TV, Computer, Alcohol, Clothes, ProcessedFood, Medicine, Furniture, Meat, Paper, Pizza, Burger
+- Input capacity weights: TV: 1; Computer: 1; Alcohol: 1; Clothes: 1; ProcessedFood: 1; Medicine: 1; Furniture: 1; Meat: 1; Paper: 1; Pizza: 0.5; Burger: 0.5
+- Sink preference weights: ProcessedFood: 1.25; Medicine: 1.20; Meat: 1.10; Clothes: 1.05; Furniture: 0.82; TV: 0.72; Computer: 0.68; Alcohol: 0.92; Paper: 0.76; Pizza: 1.10; Burger: 1.10
 - Starting tank ratio: 0.3
 - Density: High
 - Emptying rate: 0.18
@@ -76,8 +81,9 @@ Generated runtime catalog reference entries in this document: 15.
 
 ### Supply / Production / Consumption
 
-- Inputs: TV, Computer, Alcohol, Clothes, ProcessedFood, Furniture, Meat, Paper, Medicine
-- Sink preference weights: Clothes: 1.24; Furniture: 1.08; Computer: 1.04; TV: 0.98; Alcohol: 0.92; ProcessedFood: 0.84; Meat: 0.78; Paper: 0.72; Medicine: 1.20
+- Inputs: TV, Computer, Alcohol, Clothes, ProcessedFood, Furniture, Meat, Paper, Medicine, Pizza, Burger
+- Input capacity weights: TV: 1; Computer: 1; Alcohol: 1; Clothes: 1; ProcessedFood: 1; Furniture: 1; Meat: 1; Paper: 1; Medicine: 1; Pizza: 0.5; Burger: 0.5
+- Sink preference weights: Clothes: 1.24; Furniture: 1.08; Computer: 1.04; TV: 0.98; Alcohol: 0.92; ProcessedFood: 0.84; Meat: 0.78; Paper: 0.72; Medicine: 1.20; Pizza: 1.10; Burger: 1.10
 - Starting tank ratio: 0.3
 - Density: Low
 - Emptying rate: 0.07
@@ -569,6 +575,154 @@ Generated runtime catalog reference entries in this document: 15.
 - Density: Low
 - Emptying rate: 0.02
 - Weekly passive income: 60
+
+### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 33750 | 0 | 0 | 7.8 | 0 | 0 | false |
+| Standard | 45000 | 0 | 0 | 6 | 0 | 0 | false |
+| Hardcore | 63000 | 0 | 0 | 4.8 | 0 | 0 | false |
+| Impossible | 81000 | 0 | 0 | 3.9 | 0 | 0 | false |
+
+- Industry owner cut: 0.15
+
+### Description
+
+
+## Premium Deluxe Motorsport
+
+### Basic Info
+
+- Catalog ID: 515
+- Legacy key: Store16
+- Role: StoreSink
+- District: Downtown
+- Ownership tier: Local
+- Enabled flag: true
+
+### Logistics / Location
+
+- Marker coordinates: -27.37, -1081.95, 26.64
+
+### Supply / Production / Consumption
+
+- Inputs: Vehicles
+- Starting tank ratio: 0.3
+- Density: Low
+- Emptying rate: 0.02
+- Weekly passive income: 600
+
+### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 33750 | 0 | 0 | 7.8 | 0 | 0 | false |
+| Standard | 45000 | 0 | 0 | 6 | 0 | 0 | false |
+| Hardcore | 63000 | 0 | 0 | 4.8 | 0 | 0 | false |
+| Impossible | 81000 | 0 | 0 | 3.9 | 0 | 0 | false |
+
+- Industry owner cut: 0.15
+
+### Description
+
+
+## Gallivanter
+
+### Basic Info
+
+- Catalog ID: 516
+- Legacy key: Store17
+- Role: StoreSink
+- District: Vinewood
+- Ownership tier: Local
+- Enabled flag: true
+
+### Logistics / Location
+
+- Marker coordinates: -84, 97.80, 72.91
+
+### Supply / Production / Consumption
+
+- Inputs: Vehicles
+- Starting tank ratio: 0.3
+- Density: Low
+- Emptying rate: 0.02
+- Weekly passive income: 800
+
+### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 33750 | 0 | 0 | 7.8 | 0 | 0 | false |
+| Standard | 45000 | 0 | 0 | 6 | 0 | 0 | false |
+| Hardcore | 63000 | 0 | 0 | 4.8 | 0 | 0 | false |
+| Impossible | 81000 | 0 | 0 | 3.9 | 0 | 0 | false |
+
+- Industry owner cut: 0.15
+
+### Description
+
+
+## Grand Senora Clothes Store
+
+### Basic Info
+
+- Catalog ID: 517
+- Legacy key: Store18
+- Role: StoreSink
+- District: GrandSenora
+- Ownership tier: Local
+- Enabled flag: true
+
+### Logistics / Location
+
+- Marker coordinates: 1198.18, 2697, 37.44
+
+### Supply / Production / Consumption
+
+- Inputs: Clothes
+- Starting tank ratio: 0.3
+- Density: Low
+- Emptying rate: 0.02
+- Weekly passive income: 60
+
+### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 33750 | 0 | 0 | 7.8 | 0 | 0 | false |
+| Standard | 45000 | 0 | 0 | 6 | 0 | 0 | false |
+| Hardcore | 63000 | 0 | 0 | 4.8 | 0 | 0 | false |
+| Impossible | 81000 | 0 | 0 | 3.9 | 0 | 0 | false |
+
+- Industry owner cut: 0.15
+
+### Description
+
+
+## Larry's RV Sales
+
+### Basic Info
+
+- Catalog ID: 518
+- Legacy key: Store19
+- Role: StoreSink
+- District: GrandSenora
+- Ownership tier: Local
+- Enabled flag: true
+
+### Logistics / Location
+
+- Marker coordinates: 1210, 2717.46, 38
+
+### Supply / Production / Consumption
+
+- Inputs: Vehicles
+- Starting tank ratio: 0.3
+- Density: Low
+- Emptying rate: 0.02
+- Weekly passive income: 400
 
 ### Economy
 

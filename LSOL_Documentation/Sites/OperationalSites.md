@@ -1,9 +1,13 @@
 # Sites
 
-Generated runtime catalog reference entries in this document: 12.
+Generated runtime catalog reference entries in this document: 17.
 
 | Display name | Catalog ID | Legacy key | Role | District |
 | --- | ---: | --- | --- | --- |
+| Well Stacked Pizza Co. (Vespucci) | 130 | WellStackedPizzaVespucci | Restaurant | WestLosSantos |
+| Burger Shot (Vinewood Boulevard) | 131 | BurgerShotVinewood | Restaurant | Vinewood |
+| Cluckin' Bell (Davis) | 132 | CluckinBellDavis | Restaurant | SouthLosSantos |
+| Pizza This... (Cypress Flats) | 133 | PizzaThisCypress | Restaurant | Port |
 | Port Terminal | 300 | HarborTerminal | Warehouse | Port |
 | San Chianski Grain Silo | 301 | Warehouse2 | Warehouse | Grapeseed |
 | The Secure Unit Storage | 302 | Warehouse3 | Warehouse | EastLosSantos |
@@ -16,6 +20,7 @@ Generated runtime catalog reference entries in this document: 12.
 | Little Seoul Construction Site | 402 | LSConstruction | ConstructionSiteSink | WestLosSantos |
 | Pillbox Hill Construction Site | 403 | PHConstruction | ConstructionSiteSink | Downtown |
 | Redwood Construction Site | 404 | RWConstruction | ConstructionSiteSink | GrandSenora |
+| Alta Construction Site | 405 | AltaConstruction | ConstructionSiteSink | Downtown |
 
 ## Warehouses
 
@@ -37,7 +42,7 @@ Generated runtime catalog reference entries in this document: 12.
 
 #### Supply / Production / Consumption
 
-- Inputs: TV, Computer, Alcohol, Clothes, ProcessedFood
+- Inputs: Omega, TV, Computer, Alcohol, Clothes, ProcessedFood
 - Starting tank ratio: 0
 
 #### Economy
@@ -105,7 +110,7 @@ Generated runtime catalog reference entries in this document: 12.
 
 #### Supply / Production / Consumption
 
-- Inputs: Plastic, Electronic, Fabric, MechanicalParts, Clothes, ProcessedFood, Alcohol, Chemicals, Paper, TV, Computer
+- Inputs: Omega, Plastic, Electronic, Fabric, MechanicalParts, Clothes, ProcessedFood, Alcohol, Chemicals, Paper, TV, Computer
 - Starting tank ratio: 0
 
 #### Economy
@@ -139,7 +144,7 @@ Generated runtime catalog reference entries in this document: 12.
 
 #### Supply / Production / Consumption
 
-- Inputs: Oil, Fuel, Omega
+- Inputs: Oil, Fuel
 - Starting tank ratio: 0
 
 #### Economy
@@ -241,7 +246,7 @@ Generated runtime catalog reference entries in this document: 12.
 
 #### Supply / Production / Consumption
 
-- Inputs: TV, Computer, Alcohol, Clothes, ProcessedFood
+- Inputs: Omega, TV, Computer, Alcohol, Clothes, ProcessedFood
 - Starting tank ratio: 0
 
 #### Economy
@@ -442,5 +447,201 @@ Generated runtime catalog reference entries in this document: 12.
 
 - Industry owner cut: 0.3
 - Sink elasticity multiplier: 0.92
+
+#### Description
+
+### Alta Construction Site
+
+#### Basic Info
+
+- Catalog ID: 405
+- Legacy key: AltaConstruction
+- Role: ConstructionSiteSink
+- District: Downtown
+- Ownership tier: Expansion
+- Enabled flag: true
+
+#### Logistics / Location
+
+- Marker coordinates: 103.39, -394.49, 41.27
+
+#### Supply / Production / Consumption
+
+- Inputs: Beam, Cement, Concrete, Bricks
+- Sink preference weights: Concrete: 1.16; Beam: 1.08; Cement: 1.02; Bricks: 0.96
+- Starting tank ratio: 0.3
+- Density: High
+- Emptying rate: 0.15
+
+#### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 150000 | 0 | 0 | 52 | 0 | 0 | false |
+| Standard | 200000 | 0 | 0 | 40 | 0 | 0 | false |
+| Hardcore | 280000 | 0 | 0 | 32 | 0 | 0 | false |
+| Impossible | 360000 | 0 | 0 | 26 | 0 | 0 | false |
+
+- Industry owner cut: 0.3
+- Sink elasticity multiplier: 0.90
+
+#### Description
+
+
+## Restaurant
+
+### Well Stacked Pizza Co. (Vespucci)
+
+#### Basic Info
+
+- Catalog ID: 130
+- Legacy key: WellStackedPizzaVespucci
+- Role: Restaurant
+- District: WestLosSantos
+- Ownership tier: Regional
+- Enabled flag: true
+
+#### Logistics / Location
+
+- Marker coordinates: -1244.5, -1490.2, 4.3
+- Vehicle spawn coordinates: -1244.5, -1490.2, 4.3 | heading 0
+- Worker coordinates: -1250, -1495, 4.3
+
+#### Supply / Production / Consumption
+
+- Inputs: ProcessedFood, Meat
+- Outputs: Pizza
+- Recipe inputs: ProcessedFood: 2; Meat: 1
+- Recipe outputs: Pizza: 1
+- Input capacity weights: ProcessedFood: 2; Meat: 1
+- Starting tank ratio: 0.3
+
+#### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 225000 | 12600 | 7.2 | 144 | 108 | 1 | true |
+| Standard | 300000 | 18000 | 6 | 120 | 90 | 1 | true |
+| Hardcore | 420000 | 24300 | 5.1 | 96 | 72 | 1 | true |
+| Impossible | 540000 | 30600 | 4.2 | 78 | 58.5 | 1 | true |
+
+- Industry owner cut: 0.25
+
+#### Description
+
+### Burger Shot (Vinewood Boulevard)
+
+#### Basic Info
+
+- Catalog ID: 131
+- Legacy key: BurgerShotVinewood
+- Role: Restaurant
+- District: Vinewood
+- Ownership tier: Regional
+- Enabled flag: true
+
+#### Logistics / Location
+
+- Marker coordinates: 292, 180, 89.6
+- Vehicle spawn coordinates: 292, 180, 89.6 | heading 0
+- Worker coordinates: 288, 186, 89.6
+
+#### Supply / Production / Consumption
+
+- Inputs: ProcessedFood, Meat
+- Outputs: Burger
+- Recipe inputs: ProcessedFood: 2; Meat: 1
+- Recipe outputs: Burger: 1
+- Input capacity weights: ProcessedFood: 2; Meat: 1
+- Starting tank ratio: 0.3
+
+#### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 225000 | 12600 | 7.2 | 144 | 108 | 1 | true |
+| Standard | 300000 | 18000 | 6 | 120 | 90 | 1 | true |
+| Hardcore | 420000 | 24300 | 5.1 | 96 | 72 | 1 | true |
+| Impossible | 540000 | 30600 | 4.2 | 78 | 58.5 | 1 | true |
+
+- Industry owner cut: 0.25
+
+#### Description
+
+### Cluckin' Bell (Davis)
+
+#### Basic Info
+
+- Catalog ID: 132
+- Legacy key: CluckinBellDavis
+- Role: Restaurant
+- District: SouthLosSantos
+- Ownership tier: Regional
+- Enabled flag: true
+
+#### Logistics / Location
+
+- Marker coordinates: 143.2, -1952.7, 30.1
+- Vehicle spawn coordinates: 143.2, -1952.7, 30.1 | heading 0
+- Worker coordinates: 148, -1948, 30.1
+
+#### Supply / Production / Consumption
+
+- Inputs: ProcessedFood, Meat
+- Outputs: Burger
+- Recipe inputs: ProcessedFood: 2; Meat: 1
+- Recipe outputs: Burger: 1
+- Input capacity weights: ProcessedFood: 2; Meat: 1
+- Starting tank ratio: 0.3
+
+#### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 225000 | 12600 | 7.2 | 144 | 108 | 1 | true |
+| Standard | 300000 | 18000 | 6 | 120 | 90 | 1 | true |
+| Hardcore | 420000 | 24300 | 5.1 | 96 | 72 | 1 | true |
+| Impossible | 540000 | 30600 | 4.2 | 78 | 58.5 | 1 | true |
+
+- Industry owner cut: 0.25
+
+#### Description
+
+### Pizza This... (Cypress Flats)
+
+#### Basic Info
+
+- Catalog ID: 133
+- Legacy key: PizzaThisCypress
+- Role: Restaurant
+- District: Port
+- Ownership tier: Local
+- Enabled flag: true
+
+#### Logistics / Location
+
+- Marker coordinates: 850, -2400, 20
+- Vehicle spawn coordinates: 850, -2400, 20 | heading 0
+- Worker coordinates: 855, -2395, 20
+
+#### Supply / Production / Consumption
+
+- Inputs: ProcessedFood, Meat
+- Outputs: Pizza
+- Recipe inputs: ProcessedFood: 2; Meat: 1
+- Recipe outputs: Pizza: 1
+- Input capacity weights: ProcessedFood: 2; Meat: 1
+- Starting tank ratio: 0.3
+
+#### Economy
+
+| Difficulty | Purchase price | Licence price | Production rate | Input capacity tons | Output capacity tons | Production ratio | Permit required |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Casual | 150000 | 7700 | 4.8 | 96 | 60 | 1 | true |
+| Standard | 200000 | 11000 | 4 | 80 | 50 | 1 | true |
+| Hardcore | 280000 | 14850 | 3.4 | 64 | 40 | 1 | true |
+| Impossible | 360000 | 18700 | 2.8 | 52 | 32.5 | 1 | true |
+
+- Industry owner cut: 0.2
 
 #### Description

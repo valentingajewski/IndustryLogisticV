@@ -57,6 +57,7 @@ namespace LSOL.Config
                 coreConfig.Controls.OpenModMenu = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openModMenu"), coreConfig.Controls.OpenModMenu);
                 coreConfig.Controls.OpenDebugMenu = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openDebugMenu"), coreConfig.Controls.OpenDebugMenu);
                 coreConfig.Controls.Interact = ControlBindings.ParseOrDefault(ReadAttribute(controls, "interact"), coreConfig.Controls.Interact);
+        coreConfig.Controls.BusDoors = ControlBindings.ParseOrDefault(ReadAttribute(controls, "busDoors"), coreConfig.Controls.BusDoors);
                 coreConfig.Controls.OpenUpgrade = ControlBindings.ParseOrDefault(ReadAttribute(controls, "openUpgrade"), coreConfig.Controls.OpenUpgrade);
                 coreConfig.Controls.MenuUp = ControlBindings.ParseOrDefault(ReadAttribute(controls, "menuUp"), coreConfig.Controls.MenuUp);
                 coreConfig.Controls.MenuDown = ControlBindings.ParseOrDefault(ReadAttribute(controls, "menuDown"), coreConfig.Controls.MenuDown);

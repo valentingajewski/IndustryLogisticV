@@ -1,0 +1,380 @@
+<BusRoutes>
+  <BusRoute id="PaletoBay" name="Paleto Bay - Pala Springs" districts="PaletoBay">
+    <Station index="1" name="Paleto Bay" x="-167.17" y="6378.89" z="32.16" exportId="23">
+      <Ped x="-172.67" y="6377.80" z="31.47" heading="242.36" />
+      <Ped x="-174.04" y="6376.58" z="31.47" heading="248.77" />
+      <Ped x="-171.69" y="6378.72" z="31.47" heading="228.33" />
+      <Ped x="-170.71" y="6379.80" z="31.47" heading="227.66" />
+      <Ped x="-169.48" y="6381.03" z="31.47" heading="227.08" />
+      <Ped x="-171.48" y="6381.96" z="31.47" heading="231.82" />
+      <Ped x="-174.15" y="6379.34" z="31.47" heading="246.13" />
+    </Station>
+    <Station index="2" name="Paleto Bay" x="-217.51" y="6171.93" z="32.05" exportId="24">
+      <Ped x="-223.43" y="6170.89" z="31.41" heading="231.31" />
+      <Ped x="-224.85" y="6169.45" z="31.41" heading="231.31" />
+      <Ped x="-222.27" y="6171.76" z="31.41" heading="228.47" />
+      <Ped x="-220.94" y="6173.01" z="31.37" heading="228.25" />
+      <Ped x="-222.74" y="6174.41" z="31.43" heading="232.31" />
+      <Ped x="-224.07" y="6172.77" z="31.45" heading="230.49" />
+      <Ped x="-225.31" y="6171.27" z="31.43" heading="230.50" />
+      <Ped x="-223.67" y="6174.66" z="31.47" heading="226.30" />
+    </Station>
+    <Station index="3" name="Pala Springs Aerial Tramway" x="-776.35" y="5584.59" z="34.32" exportId="6">
+      <Ped x="-771.41" y="5588.59" z="33.49" heading="102.93" />
+      <Ped x="-771.88" y="5586.78" z="33.49" heading="99.10" />
+      <Ped x="-771.89" y="5584.62" z="33.49" heading="101.68" />
+      <Ped x="-772.44" y="5591.33" z="33.49" heading="147.82" />
+      <Ped x="-773.86" y="5592.92" z="33.49" heading="172.02" />
+      <Ped x="-769.49" y="5587.70" z="33.49" heading="105.01" />
+    </Station>
+    <Station index="4" name="Paleto Bay" x="-157.31" y="6204.60" z="32.04" exportId="22">
+      <Ped x="-151.28" y="6206.13" z="31.35" heading="62.82" />
+      <Ped x="-150.44" y="6207.41" z="31.35" heading="61.30" />
+      <Ped x="-149.52" y="6208.46" z="31.33" heading="69.68" />
+      <Ped x="-152.52" y="6204.90" z="31.36" heading="55.97" />
+      <Ped x="-153.62" y="6203.89" z="31.36" heading="52.48" />
+      <Ped x="-154.39" y="6202.89" z="31.36" heading="52.48" />
+      <Ped x="-151.11" y="6204.49" z="31.35" heading="52.63" />
+      <Ped x="-149.58" y="6205.98" z="31.33" heading="62.80" />
+    </Station>
+  </BusRoute>
+  <BusRoute id="BlaineCounty" name="Blaine County - Grapeseed - Sandy Shores" districts="Grapeseed,GrandSenora">
+    <Station index="0" name="Sandy Shores" x="1650.96" y="3574.81" z="36.31" exportId="41">
+      <Ped x="1649.67" y="3569.14" z="35.46" heading="299.25" />
+      <Ped x="1650.09" y="3567.24" z="35.38" heading="315.34" />
+      <Ped x="1648.32" y="3570.64" z="35.52" heading="287.57" />
+      <Ped x="1647.39" y="3572.76" z="35.54" heading="287.43" />
+      <Ped x="1645.87" y="3571.11" z="35.55" heading="287.43" />
+      <Ped x="1645.55" y="3568.85" z="35.52" heading="287.56" />
+      <Ped x="1647.13" y="3566.65" z="35.42" heading="288.18" />
+    </Station>
+    <Station index="1" name="Sandy Shores" x="1952.42" y="3773.49" z="33.02" exportId="3">
+      <Ped x="1959.46" y="3773.05" z="32.20" heading="58.27" />
+      <Ped x="1957.90" y="3771.89" z="32.20" heading="54.67" />
+      <Ped x="1956.06" y="3770.64" z="32.20" heading="57.56" />
+      <Ped x="1960.15" y="3771.34" z="32.20" heading="55.02" />
+      <Ped x="1952.77" y="3768.92" z="32.21" heading="48.70" />
+    </Station>
+    <Station index="2" name="Grapeseed - Joshua Rd" x="2494.36" y="4087.93" z="38.03" exportId="40">
+      <Ped x="2498.41" y="4088.66" z="38" heading="50" />
+      <Ped x="2498.25" y="4087.07" z="38" heading="60" />
+      <Ped x="2497.72" y="4084.64" z="38" heading="45" />
+      <Ped x="2500.00" y="4089.71" z="38.49" heading="55" />
+      <Ped x="2499.44" y="4086.76" z="38.32" heading="100" />
+      <Ped x="2499.48" y="4085.41" z="38.33" heading="13" />
+    </Station>
+    <Station index="4" name="Grapeseed Fruit Market" x="1778.92" y="4579.39" z="38.34" exportId="4">
+      <Ped x="1772.22" y="4584.35" z="37.66" heading="215.22" />
+      <Ped x="1774.11" y="4584.65" z="37.66" heading="204.84" />
+      <Ped x="1776.19" y="4583.68" z="37.61" heading="210.23" />
+      <Ped x="1777.53" y="4584.36" z="37.64" heading="204.46" />
+      <Ped x="1779.01" y="4582.99" z="37.59" heading="216.64" />
+    </Station>
+    <Station index="5" name="Grapeseed" x="1678.93" y="4822.84" z="42.80" exportId="5">
+      <Ped x="1682.07" y="4829.68" z="42.13" heading="134.80" />
+      <Ped x="1682.72" y="4827.88" z="42.03" heading="133.76" />
+      <Ped x="1682.56" y="4825.82" z="42.01" heading="133.25" />
+      <Ped x="1683.10" y="4824.08" z="42.02" heading="125.86" />
+      <Ped x="1684.91" y="4825.25" z="42.00" heading="114.05" />
+      <Ped x="1685.33" y="4822.69" z="42.00" heading="109.68" />
+    </Station>
+    <Station index="7" name="Harmony" x="1168.73" y="2690.80" z="38.74" exportId="42">
+      <Ped x="1163.76" y="2694.93" z="37.87" heading="189.77" />
+      <Ped x="1161.55" y="2694.90" z="37.95" heading="214.54" />
+      <Ped x="1161.59" y="2697.10" z="37.89" heading="199.65" />
+      <Ped x="1164.90" y="2695.15" z="37.82" heading="190.08" />
+      <Ped x="1164.25" y="2696.49" z="37.84" heading="190.08" />
+      <Ped x="1165.96" y="2696.34" z="37.83" heading="179.81" />
+      <Ped x="1167.24" y="2695.16" z="37.80" heading="179.97" />
+    </Station>
+    <Station index="8" name="Harmony Hotel" x="339.61" y="2657.25" z="44.75" exportId="2">
+    </Station>
+  </BusRoute>
+  <BusRoute id="WestLosSantos" name="West Los Santos - Del Perro - Vespucci" districts="WestLosSantos,NorthLosSantos">
+    <Station index="0" name="Vespucci Canals | Bay City Ave" x="-1211.59" y="-1224.38" z="7.36" exportId="46">
+      <Ped x="-1213.84" y="-1230.71" z="7.10" heading="288.74" />
+      <Ped x="-1213.55" y="-1232.44" z="7.02" heading="295.95" />
+      <Ped x="-1214.39" y="-1229.39" z="7.18" heading="277.71" />
+      <Ped x="-1215.43" y="-1227.96" z="7.27" heading="274.16" />
+      <Ped x="-1217.38" y="-1228.35" z="7.27" heading="273.65" />
+      <Ped x="-1217.16" y="-1230.96" z="7.13" heading="279.62" />
+    </Station>
+    <Station index="1" name="Palomino Ave" x="-799.42" y="-1143.91" z="9.57" exportId="55">
+      <Ped x="-793.84" y="-1143.97" z="10.22" heading="36.13" />
+      <Ped x="-791.51" y="-1143.46" z="10.42" heading="50.31" />
+      <Ped x="-789.91" y="-1142.96" z="10.50" heading="50.31" />
+      <Ped x="-788.73" y="-1142.30" z="10.56" heading="50.30" />
+      <Ped x="-788.90" y="-1143.97" z="10.51" heading="50.30" />
+      <Ped x="-790.45" y="-1144.80" z="10.44" heading="50.24" />
+      <Shelter model="2142033519" x="-794.72" y="-1145.16" z="8.96" heading="205.85" />
+    </Station>    
+    <Station index="2" name="San Andreas Ave" x="-691.40" y="-668.24" z="30.80" exportId="27">
+      <Ped x="-685.77" y="-671.42" z="31.00" heading="359.53" />
+      <Ped x="-684.20" y="-671.42" z="31.04" heading="359.53" />
+      <Ped x="-682.73" y="-671.43" z="31.07" heading="359.58" />
+      <Ped x="-686.94" y="-671.30" z="30.97" heading="10.11" />
+      <Ped x="-688.41" y="-672.45" z="30.93" heading="7.74" />
+      <Ped x="-687.50" y="-673.97" z="30.94" heading="7.74" />
+      <Ped x="-685.65" y="-673.74" z="30.98" heading="6.53" />
+      <Ped x="-683.76" y="-673.47" z="31.02" heading="8.00" />
+    </Station>
+    <Station index="3" name="Vespucci Blvd" x="-559.17" y="-846.63" z="27.41" exportId="30">
+      <Ped x="-553.40" y="-849.78" z="28.04" heading="5.73" />
+      <Ped x="-552.19" y="-850.18" z="28.15" heading="6.07" />
+      <Ped x="-551.22" y="-851.33" z="28.24" heading="31.61" />
+      <Ped x="-554.85" y="-850.06" z="27.91" heading="358.81" />
+      <Ped x="-555.29" y="-851.71" z="27.87" heading="354.48" />
+      <Ped x="-553.67" y="-851.86" z="28.03" heading="354.48" />
+      <Ped x="-551.86" y="-852.02" z="28.19" heading="354.61" />
+    </Station>
+    <Station index="4" name="Calais Ave" x="-504.75" y="-668.36" z="32.98" exportId="25">
+      <Ped x="-498.90" y="-671.36" z="33.02" heading="4.92" />
+      <Ped x="-497.42" y="-671.28" z="32.99" heading="8.61" />
+      <Ped x="-495.86" y="-671.36" z="32.97" heading="8.08" />
+      <Ped x="-500.53" y="-671.38" z="33.04" heading="5.81" />
+      <Ped x="-501.67" y="-672.23" z="33.06" heading="0.89" />
+      <Ped x="-501.25" y="-673.74" z="33.06" heading="0.66" />
+      <Ped x="-499.43" y="-673.71" z="33.03" heading="0.66" />
+      <Ped x="-497.47" y="-673.68" z="32.99" heading="0.66" />
+    </Station>
+    <Station index="5" name="Burton Mall" x="-267.74" y="-199.58" z="38" exportId="31">
+      <Ped x="-263.47" y="-195.46" z="39.01" heading="90.00" />
+      <Ped x="-261.74" y="-196.00" z="39.01" heading="90.00" />
+      <Ped x="-263.22" y="-199.00" z="39.01" heading="80" />
+      <Ped x="-266.00" y="-198.00" z="39.01" heading="90.00" />
+    </Station>
+    <Station index="6" name="Blvd Del Perro" x="-490.79" y="21.63" z="45.73" exportId="17">
+      <Ped x="-498.91" y="24.73" z="44.86" heading="201.75" />
+      <Ped x="-497.39" y="24.93" z="44.87" heading="191.04" />
+      <Ped x="-495.16" y="24.79" z="44.90" heading="192.51" />
+      <Ped x="-497.07" y="27.12" z="44.85" heading="205.07" />
+      <Ped x="-498.87" y="26.62" z="44.84" heading="203.02" />
+      <Ped x="-500.59" y="25.89" z="44.82" heading="225.62" />
+      <Ped x="-496.38" y="28.03" z="44.86" heading="199.48" />
+    </Station>
+    <Station index="7" name="Strangeways Dr" x="-687.95" y="-4.57" z="39.04" exportId="18">
+      <Ped x="-693.29" y="-2.99" z="38.29" heading="205.21" />
+      <Ped x="-694.75" y="-3.61" z="38.26" heading="210.16" />
+      <Ped x="-695.70" y="-3.96" z="38.24" heading="231.12" />
+      <Ped x="-691.13" y="-2.10" z="38.33" heading="208.41" />
+      <Ped x="-689.06" y="-1.46" z="38.37" heading="206.06" />
+      <Ped x="-694.34" y="-1.68" z="38.29" heading="220.48" />
+      <Ped x="-696.10" y="-2.20" z="38.25" heading="226.29" />
+    </Station>
+    <Station index="8" name="Mad Wayne Thunder Dr" x="-932.22" y="-126.55" z="38.41" exportId="19">
+      <Ped x="-937.66" y="-125.66" z="37.76" heading="212.61" />
+      <Ped x="-936.30" y="-124.79" z="37.76" heading="212.89" />
+      <Ped x="-934.88" y="-124.14" z="37.76" heading="218.92" />
+      <Ped x="-933.34" y="-123.52" z="37.76" heading="222.83" />
+      <Ped x="-936.38" y="-123.64" z="37.77" heading="241.31" />
+      <Ped x="-935.09" y="-122.81" z="37.77" heading="217.31" />
+      <Ped x="-933.31" y="-121.68" z="37.77" heading="213.25" />
+    </Station>
+    <Station index="9" name="Dorset Dr" x="-1168.38" y="-400.80" z="35.36" exportId="28">
+      <Ped x="-1174.48" y="-398.20" z="35.27" heading="193.05" />
+      <Ped x="-1176.06" y="-398.72" z="35.18" heading="201.26" />
+      <Ped x="-1177.26" y="-399.63" z="35.10" heading="216.12" />
+      <Ped x="-1172.91" y="-398.04" z="35.35" heading="193.93" />
+      <Ped x="-1171.97" y="-396.76" z="35.42" heading="193.93" />
+      <Ped x="-1173.55" y="-396.10" z="35.35" heading="193.27" />
+      <Ped x="-1175.35" y="-396.59" z="35.26" heading="197.82" />
+      <Ped x="-1177.24" y="-397.59" z="35.14" heading="208.25" />
+    </Station>
+    <Station index="10" name="Prosperity St" x="-1521.89" y="-463.79" z="35.29" exportId="53">
+      <Ped x="-1529.08" y="-464.90" z="35.41" heading="221.08" />
+      <Ped x="-1528.04" y="-464.15" z="35.40" heading="219.73" />
+      <Ped x="-1526.70" y="-463.29" z="35.40" heading="218.10" />
+      <Ped x="-1525.87" y="-462.53" z="35.40" heading="215.28" />
+    </Station>
+    <Station index="11" name="Dorset Dr" x="-1269.17" y="-315.13" z="36.83" exportId="52">
+      <Ped x="-1274.95" y="-315.49" z="36.86" heading="208.63" />
+      <Ped x="-1276.53" y="-316.54" z="36.84" heading="213.14" />
+      <Ped x="-1273.02" y="-314.05" z="36.89" heading="203.29" />
+      <Ped x="-1278.09" y="-316.05" z="36.82" heading="213.40" />
+      <Ped x="-1272.63" y="-312.92" z="36.90" heading="199.71" />
+      <Ped x="-1272.60" y="-311.60" z="36.91" heading="199.53" />
+      <Shelter model="2142033519" x="-1275.61" y="-314.48" z="35.72" heading="28.21" />
+    </Station>
+    <Station index="12" name="Morningwood Blvd" x="-1429.78" y="-92.04" z="52.64" exportId="21">
+      <Ped x="-1422.70" y="-91.66" z="52.29" heading="54.13" />
+      <Ped x="-1424.25" y="-93.06" z="52.17" heading="42.85" />
+      <Ped x="-1426.11" y="-94.07" z="52.02" heading="36.66" />
+      <Ped x="-1427.57" y="-94.61" z="51.91" heading="22.10" />
+      <Ped x="-1422.45" y="-93.47" z="52.23" heading="60.42" />
+      <Ped x="-1423.94" y="-94.75" z="52.10" heading="40.33" />
+      <Ped x="-1426.26" y="-95.92" z="51.92" heading="22.69" />
+    </Station>
+    <Station index="13" name="Palomino Ave" x="-689.89" y="-372.82" z="34.17" exportId="26">
+      <Ped x="-685.83" y="-377.78" z="34.23" heading="342.39" />
+      <Ped x="-684.63" y="-378.24" z="34.24" heading="345.35" />
+      <Ped x="-683.74" y="-378.82" z="34.24" heading="344.05" />
+      <Ped x="-687.04" y="-376.97" z="34.23" heading="339.70" />
+      <Ped x="-688.44" y="-376.67" z="34.22" heading="339.70" />
+      <Ped x="-689.60" y="-376.23" z="34.22" heading="339.58" />
+      <Ped x="-689.37" y="-378.14" z="34.19" heading="340.43" />
+      <Ped x="-687.61" y="-378.76" z="34.20" heading="340.43" />
+    </Station>
+  </BusRoute>
+  <BusRoute id="DowntownVinewood" name="Downtown - Vinewood" districts="Downtown,Vinewood,SouthLosSantos">
+    <Station index="0" name="DasHound LS - Bay 8" x="462.60" y="-605.26" z="28.49" exportId="56">
+      <Ped x="458.10" y="-597.13" z="28.50" heading="243.67" />
+      <Ped x="455.91" y="-599.39" z="28.52" heading="269.31" />
+      <Ped x="455.71" y="-601.34" z="28.52" heading="270.81" />
+      <Ped x="454.05" y="-600.87" z="28.58" heading="270.81" />
+      <Ped x="454.84" y="-598.64" z="28.56" heading="265.59" />
+      <Ped x="455.05" y="-596.77" z="28.54" heading="259.51" />
+      <Ped x="456.46" y="-595.69" z="28.51" heading="256.31" />
+      <Ped x="455.43" y="-594.33" z="28.50" heading="250.73" />
+      <Ped x="457.10" y="-593.50" z="28.50" heading="250.56" />
+    </Station>
+    <Station index="2" name="Strawerry Ave" x="308.22" y="-761.43" z="29.23" exportId="12">
+      <Ped x="304.26" y="-761.72" z="29.31" heading="255.79" />
+      <Ped x="301.35" y="-759.43" z="29.32" heading="265.54" />
+      <Ped x="303.04" y="-759.69" z="29.31" heading="266.88" />
+      <Ped x="305.03" y="-759.83" z="29.31" heading="253.37" />
+      <Ped x="305.55" y="-758.03" z="29.31" heading="253.94" />
+      <Ped x="306.29" y="-756.36" z="29.31" heading="258.94" />
+      <Ped x="304.16" y="-755.12" z="29.37" heading="254.74" />
+      <Ped x="306.87" y="-754.30" z="29.31" heading="268.77" />
+    </Station>
+    <Station index="3" name="Elgin Ave" x="119.65" y="-785.42" z="31.25" exportId="13">
+      <Ped x="111.70" y="-778.63" z="31.43" heading="168.86" />
+      <Ped x="110.15" y="-778.32" z="31.44" heading="169.54" />
+      <Ped x="108.71" y="-778.11" z="31.45" heading="171.37" />
+      <Ped x="109.11" y="-775.83" z="31.45" heading="166.92" />
+      <Ped x="107.55" y="-776.90" z="31.46" heading="184.27" />
+      <Ped x="106.84" y="-777.54" z="31.46" heading="179.86" />
+      <Ped x="113.10" y="-778.96" z="31.42" heading="109.37" />
+    </Station>
+    <Station index="5" name="Occupation Ave" x="26.38" y="-325.70" z="44.92" exportId="49">
+      <Ped x="28.77" y="-329.10" z="44.76" heading="71.83" />
+      <Ped x="29.26" y="-327.26" z="44.96" heading="71.82" />
+      <Ped x="30.04" y="-325.24" z="45.19" heading="79.89" />
+      <Ped x="29.01" y="-330.71" z="44.62" heading="63.79" />
+      <Ped x="28.17" y="-332.42" z="44.40" heading="63.79" />
+      <Ped x="29.80" y="-331.98" z="44.52" heading="63.79" />
+      <Shelter model="2142033519" x="31.07" y="-321.82" z="45.53" heading="70" />
+    </Station>
+    <Station index="6" name="Laguna Pl" x="-47.03" y="-105.12" z="57.14" exportId="50">
+      <Ped x="-34.93" y="-106.78" z="57.38" heading="160.42" />
+      <Ped x="-37.04" y="-105.07" z="57.47" heading="165.09" />
+      <Ped x="-38.86" y="-104.59" z="57.55" heading="165.09" />
+      <Ped x="-37.32" y="-103.67" z="57.51" heading="165.09" />
+      <Ped x="-36.17" y="-103.98" z="57.45" heading="165.08" />
+      <Ped x="-32.26" y="-107.31" z="57.25" heading="158.96" />
+      <Shelter model="2142033519" x="-50.62" y="-100.38" z="57.81" heading="158.29" />
+    </Station>
+    <Station index="8" name="Vinewood Center" x="407.71" y="109.80" z="101.24" exportId="48">
+      <Ped x="414.39" y="104.63" z="100.88" heading="49" />
+      <Shelter model="2142033519" x="411.97" y="104.78" z="101.00" heading="342.64" />
+    </Station>
+    <Station index="9" name="Vinewood Racetrack - Bay 1" x="942.29" y="151.57" z="80.83" exportId="1">
+      <Ped x="939.02" y="155.55" z="80.83" heading="129" />
+      <Ped x="940.47" y="154.66" z="80.83" heading="169" />
+      <Ped x="942.00" y="155.50" z="80.83" heading="74" />
+      <Ped x="944.50" y="154.78" z="80.83" heading="100" />
+      <Ped x="946.73" y="154.42" z="80.83" heading="140" />
+    </Station>
+    <Station index="10" name="Theater LS" x="666.92" y="676.10" z="128.91" exportId="43">
+      <Ped x="668.50" y="684.00" z="129.05" heading="166.57" />
+      <Ped x="667.29" y="684.30" z="129.05" heading="167.70" />
+      <Ped x="665.89" y="685.16" z="129.05" heading="171.70" />
+      <Ped x="666.51" y="686.72" z="129.05" heading="171.65" />
+      <Ped x="668.69" y="686.08" z="129.05" heading="169.24" />
+      <Ped x="670.40" y="685.42" z="129.05" heading="166.70" />
+      <Ped x="672.23" y="684.68" z="129.05" heading="162.19" />
+    </Station>
+    <Station index="11" name="Fantastic Pl" x="360.51" y="-1064.70" z="29.37" exportId="45">
+      <Ped x="365.95" y="-1067.90" z="29.51" heading="359.83" />
+      <Ped x="367.60" y="-1068.49" z="29.50" heading="10.15" />
+      <Ped x="364.59" y="-1068.80" z="29.51" heading="357.74" />
+      <Ped x="363.05" y="-1069.85" z="29.53" heading="356.61" />
+      <Ped x="365.10" y="-1070.24" z="29.51" heading="357.24" />
+      <Ped x="368.88" y="-1069.87" z="29.49" heading="14.71" />
+    </Station>
+    <Station index="12" name="Fantastic Pl" x="261.88" y="-1123.94" z="29.21" exportId="44">
+      <Ped x="256.43" y="-1120.74" z="29.37" heading="194.02" />
+      <Ped x="253.99" y="-1120.62" z="29.36" heading="225.58" />
+      <Ped x="256.06" y="-1119.34" z="29.35" heading="194.41" />
+      <Ped x="258.00" y="-1120.17" z="29.36" heading="188.44" />
+      <Ped x="260.14" y="-1120.18" z="29.42" heading="192.49" />
+      <Ped x="261.50" y="-1120.47" z="29.36" heading="184.70" />
+    </Station>
+    <Station index="13" name="Strawberry Bus Station" x="262.17" y="-1179.34" z="29.43" exportId="47">
+      <Ped x="256.45" y="-1175.77" z="29.46" heading="187.50" />
+      <Ped x="254.20" y="-1176.06" z="29.47" heading="209.20" />
+      <Ped x="257.57" y="-1176.08" z="29.47" heading="174.48" />
+      <Ped x="259.58" y="-1176.07" z="29.47" heading="174.48" />
+      <Ped x="260.97" y="-1175.83" z="29.46" heading="174.36" />
+      <Ped x="260.24" y="-1173.44" z="29.38" heading="174.36" />
+      <Ped x="258.42" y="-1173.43" z="29.38" heading="174.36" />
+      <Ped x="255.97" y="-1173.51" z="29.38" heading="187.45" />
+      <Ped x="254.34" y="-1174.06" z="29.40" heading="187.45" />
+    </Station>
+  </BusRoute>
+  <BusRoute id="EastSouthAirport" name="East Los Santos - LSIA" districts="EastLosSantos,SouthLosSantos,Airport,Port">
+    <Station index="6" name="Airport" x="-1001.09" y="-2741.18" z="13.67" exportId="32">
+      <Ped x="-997.36" y="-2746.96" z="13.76" heading="345.21" />
+      <Ped x="-995.63" y="-2748.54" z="13.76" heading="349.74" />
+      <Ped x="-999.27" y="-2746.37" z="13.76" heading="331.89" />
+      <Ped x="-1000.32" y="-2748.29" z="13.76" heading="331.89" />
+      <Ped x="-998.11" y="-2748.83" z="13.76" heading="340.16" />
+      <Ped x="-995.78" y="-2749.34" z="13.76" heading="354.11" />
+      <Ped x="-994.24" y="-2749.04" z="13.76" heading="354.11" />
+    </Station>
+    <Station index="5" name="Autopia Pkwy - Maze Bank Arena" x="-139.26" y="-1971.85" z="22.80" exportId="31">
+      <Ped x="-133.75" y="-1974.12" z="22.81" heading="40.97" />
+      <Ped x="-135.71" y="-1974.52" z="22.81" heading="39.17" />
+      <Ped x="-137.05" y="-1974.80" z="22.81" heading="31.79" />
+      <Ped x="-138.47" y="-1974.81" z="22.81" heading="31.79" />
+      <Ped x="-130.68" y="-1972.29" z="22.81" heading="93.44" />
+      <Ped x="-130.55" y="-1970.86" z="22.81" heading="96.77" />
+      <Ped x="-131.22" y="-1969.65" z="22.81" heading="113.50" />
+    </Station>  
+    <Station index="0" name="El Rancho Blvd" x="440.58" y="-2030.88" z="23.49" exportId="33">
+      <Ped x="442.51" y="-2037.13" z="23.74" heading="328.44" />
+      <Ped x="443.38" y="-2039.04" z="23.78" heading="335.68" />
+      <Ped x="444.79" y="-2039.63" z="23.84" heading="0.82" />
+      <Ped x="440.81" y="-2035.83" z="23.66" heading="310.60" />
+      <Ped x="439.15" y="-2036.16" z="23.58" heading="310.60" />
+      <Ped x="439.05" y="-2038.00" z="23.55" heading="310.60" />
+      <Ped x="441.17" y="-2039.42" z="23.64" heading="327.19" />
+    </Station>
+    <Station index="2" name="Innocence Blvd" x="931.56" y="-1752.05" z="31.86" exportId="34">
+      <Ped x="927.04" y="-1748.38" z="31.01" heading="180.55" />
+      <Ped x="925.00" y="-1747.76" z="30.96" heading="195.82" />
+      <Ped x="923.48" y="-1747.25" z="30.92" heading="195.82" />
+      <Ped x="928.89" y="-1747.38" z="31.06" heading="163.65" />
+      <Ped x="928.73" y="-1745.41" z="31.05" heading="167.65" />
+      <Ped x="926.87" y="-1745.45" z="31.00" heading="182.35" />
+      <Ped x="924.80" y="-1745.74" z="30.98" heading="202.15" />
+    </Station>
+    <Station index="1" name="Popular St" x="824.68" y="-1640.72" z="30.99" exportId="35">
+      <Ped x="820.54" y="-1645.17" z="30.02" heading="267.24" />
+      <Ped x="820.10" y="-1646.79" z="29.94" heading="267.25" />
+      <Ped x="820.56" y="-1648.70" z="29.85" heading="302.81" />
+      <Ped x="820.87" y="-1643.56" z="30.11" heading="255.26" />
+      <Ped x="819.91" y="-1642.02" z="30.20" heading="255.06" />
+      <Ped x="818.38" y="-1643.12" z="30.18" heading="262.33" />
+      <Ped x="818.20" y="-1645.73" z="30.03" heading="273.14" />
+    </Station>
+    <Station index="4" name="Vespucci Blvd" x="770.35" y="-942.24" z="26.46" exportId="37">
+      <Ped x="768.08" y="-947.40" z="25.83" heading="284.98" />
+      <Ped x="768.08" y="-949.91" z="25.90" heading="311.46" />
+      <Ped x="767.80" y="-951.63" z="25.93" heading="306.76" />
+      <Ped x="766.93" y="-945.17" z="25.77" heading="261.20" />
+      <Ped x="764.95" y="-945.87" z="25.78" heading="266.90" />
+      <Ped x="765.22" y="-948.23" z="25.85" heading="286.54" />
+      <Ped x="765.48" y="-950.35" z="25.91" heading="286.93" />
+    </Station>
+    <Station index="3" name="Capital Blvd" x="807.70" y="-1361.05" z="27.20" exportId="36">
+      <Ped x="811.24" y="-1356.18" z="26.39" heading="98.50" />
+      <Ped x="811.61" y="-1354.51" z="26.36" heading="110.44" />
+      <Ped x="811.27" y="-1358.19" z="26.42" heading="79.52" />
+      <Ped x="811.66" y="-1360.35" z="26.45" heading="79.53" />
+      <Ped x="813.65" y="-1359.31" z="26.44" heading="86.44" />
+      <Ped x="813.65" y="-1357.00" z="26.40" heading="101.51" />
+      <Ped x="813.55" y="-1354.64" z="26.37" heading="104.33" />
+    </Station>
+  </BusRoute>
+</BusRoutes>

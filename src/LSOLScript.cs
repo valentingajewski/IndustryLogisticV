@@ -91,6 +91,10 @@ namespace LSOL
         private readonly PlayerSuccessTracker _playerSuccessTracker;
         private readonly PlayerSkillSystem _playerSkillSystem;
         private readonly TowingSideJobSystem _towingSideJobSystem;
+        private readonly GarbageSideJobSystem _garbageSideJobSystem;
+        private readonly BusSideJobSystem _busSideJobSystem;
+        private readonly TaxiSideJobSystem _taxiSideJobSystem;
+        private readonly FoodDeliverySideJobSystem _foodDeliverySideJobSystem;
         private readonly VehicleFuelSystem _vehicleFuelSystem;
         private readonly VehicleLoadPowerService _vehicleLoadPowerService;
         private readonly GlobalMarketManager _globalMarket;
@@ -114,6 +118,22 @@ namespace LSOL
         private readonly LemonMenu _debugMenu;
         private readonly LemonMenu _debugMissionMenu;
         private readonly LemonMenu _towTruckMenu;
+        private readonly LemonMenu _garbageDepotMenu;
+        private readonly LemonMenu _garbageGarageMenu;
+        private readonly LemonMenu _garbageRouteMenu;
+        private readonly LemonMenu _garbageDealershipMenu;
+        private readonly LemonMenu _busDepotMenu;
+        private readonly LemonMenu _busGarageMenu;
+        private readonly LemonMenu _busRouteMenu;
+        private readonly LemonMenu _busDealershipMenu;
+        private readonly LemonMenu _taxiStandMenu;
+        private readonly LemonMenu _taxiGarageMenu;
+        private readonly LemonMenu _taxiDealershipMenu;
+        private readonly LemonMenu _taxiDispatchMenu;
+        private readonly LemonMenu _foodDeliveryRestaurantMenu;
+        private readonly LemonMenu _foodDeliveryGarageMenu;
+        private readonly LemonMenu _foodDeliveryDealershipMenu;
+        private readonly LemonMenu _foodDeliveryDispatchMenu;
         private readonly LemonMenu _sideJobsMenu;
         private readonly LemonMenu _sideJobDetailMenu;
         private readonly Dictionary<string, bool> _sideJobEnabled;
@@ -225,6 +245,13 @@ namespace LSOL
         private PropertyOwnershipPersistenceSnapshot _pendingPropertyRestore;
         private SpecialMissionPersistenceSnapshot _pendingSpecialMissionRestore;
         private TowingPersistenceSnapshot _pendingTowingRestore;
+        private GarbagePersistenceSnapshot _pendingGarbageRestore;
+        private BusPersistenceSnapshot _pendingBusRestore;
+        private TaxiPersistenceSnapshot _pendingTaxiRestore;
+        private FoodDeliveryPersistenceSnapshot _pendingFoodDeliveryRestore;
+
+        /// <summary>Restaurant the food delivery menus were opened from.</summary>
+        private string _menuFoodDeliveryRestaurantKey = string.Empty;
 
         public LSOLScript()
         {
@@ -548,6 +575,118 @@ namespace LSOL
                 MaxVisibleItems = 10,
                 Theme = LemonMenuTheme.Default,
             };
+            _garbageDepotMenu = new LemonMenu("Garbage Depot")
+            {
+                Subtitle = "La Puerta Recycling Center services",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _garbageGarageMenu = new LemonMenu("Garbage Garage")
+            {
+                Subtitle = "Take out or store a garbage truck",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _garbageRouteMenu = new LemonMenu("Garbage Routes")
+            {
+                Subtitle = "Choose a collection route",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _garbageDealershipMenu = new LemonMenu("Garbage Trucks")
+            {
+                Subtitle = "Buy a truck for the garbage job",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _busDepotMenu = new LemonMenu("Bus Depot")
+            {
+                Subtitle = "Downtown Bus Depot services",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _busGarageMenu = new LemonMenu("Bus Garage")
+            {
+                Subtitle = "Take out or store a bus",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _busRouteMenu = new LemonMenu("Bus Routes")
+            {
+                Subtitle = "Choose a bus line",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _busDealershipMenu = new LemonMenu("Buses")
+            {
+                Subtitle = "Buy a bus for the bus job",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _taxiStandMenu = new LemonMenu("Taxi Stand")
+            {
+                Subtitle = "Garage, dispatch board and fares",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _taxiGarageMenu = new LemonMenu("Taxi Garage")
+            {
+                Subtitle = "Take out or park a taxi",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _taxiDealershipMenu = new LemonMenu("Taxis")
+            {
+                Subtitle = "Buy a taxi for the taxi job",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _taxiDispatchMenu = new LemonMenu("Dispatch Board")
+            {
+                Subtitle = "Fares waiting for a driver",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _foodDeliveryRestaurantMenu = new LemonMenu("Restaurant")
+            {
+                Subtitle = "Garage, deliveries and menus",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _foodDeliveryGarageMenu = new LemonMenu("Restaurant Garage")
+            {
+                Subtitle = "Take out or park a delivery vehicle",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _foodDeliveryDealershipMenu = new LemonMenu("Delivery Vehicles")
+            {
+                Subtitle = "Buy a vehicle for the food delivery job",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
+            _foodDeliveryDispatchMenu = new LemonMenu("Deliveries")
+            {
+                Subtitle = "Load meals and start a run",
+                AlignRight = true,
+                MaxVisibleItems = 10,
+                Theme = LemonMenuTheme.Default,
+            };
             _sideJobsMenu = new LemonMenu("Side Jobs")
             {
                 Subtitle = "Activate or hide side jobs",
@@ -633,11 +772,58 @@ namespace LSOL
                 _playerSkillSystem,
                 message => ShowStatus(message),
                 amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Towing delivery"),
-                RequestCareerAutosave);
+                RequestCareerAutosave,
+                GetSideJobDistrictBonusExcluding,
+                ReportSideJobDistrictCompletion);
+            _garbageSideJobSystem = new GarbageSideJobSystem(
+                _configDirectory,
+                _playerSkillSystem,
+                message => ShowStatus(message),
+                amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Garbage tip fee"),
+                RequestCareerAutosave,
+                () => GetCompanyBalance(),
+                (amount, description) => DeductProfit(CompanyFinanceCategory.OtherExpense, amount, description),
+                GetSideJobDistrictBonusExcluding,
+                ReportSideJobDistrictCompletion);
+            _busSideJobSystem = new BusSideJobSystem(
+                _configDirectory,
+                _playerSkillSystem,
+                message => ShowStatus(message),
+                amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Bus fares and service fees"),
+                RequestCareerAutosave,
+                () => GetCompanyBalance(),
+                (amount, description) => DeductProfit(CompanyFinanceCategory.OtherExpense, amount, description),
+                GetSideJobDistrictBonusExcluding,
+                ReportSideJobDistrictCompletion,
+                _controls.BusDoors.ToString());
+            _taxiSideJobSystem = new TaxiSideJobSystem(
+                _configDirectory,
+                _playerSkillSystem,
+                message => ShowStatus(message),
+                amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Taxi fares"),
+                RequestCareerAutosave,
+                () => GetCompanyBalance(),
+                (amount, description) => DeductProfit(CompanyFinanceCategory.OtherExpense, amount, description),
+                GetSideJobDistrictBonusExcluding,
+                ReportSideJobDistrictCompletion);
+            _foodDeliverySideJobSystem = new FoodDeliverySideJobSystem(
+                _configDirectory,
+                _playerSkillSystem,
+                message => ShowStatus(message),
+                amount => AddProfit(CompanyFinanceCategory.OtherIncome, amount, "Food delivery"),
+                RequestCareerAutosave,
+                () => GetCompanyBalance(),
+                (amount, description) => DeductProfit(CompanyFinanceCategory.OtherExpense, amount, description),
+                GetSideJobDistrictBonusExcluding,
+                ReportSideJobDistrictCompletion,
+                ResolveFoodDeliveryRestaurant,
+                GetFoodDeliveryRestaurantStock,
+                DrawFoodDeliveryRestaurantIngredient);
             _territoryManager.ConfigureEndgameContext(
                 () => _playerSuccessTracker != null ? _playerSuccessTracker.GetEndgameSummary() : new CompanyEndgameSummary(),
                 () => _npcLogisticsManager != null ? _npcLogisticsManager.GetDistrictCompetitionSummaries() : Array.Empty<NpcDistrictCompetitionSummary>(),
                 () => _npcLogisticsManager != null ? _npcLogisticsManager.GetCorridorCompetitionSummaries() : Array.Empty<NpcCorridorCompetitionSummary>());
+            _territoryManager.ConfigureClock(GetCurrentInGameWeekMinute);
             _tabletShellController = new TabletShellController(_controls, _tabletStateStore);
             _tabletShellController.RegisterApp(new HomeTabletApp(OpenCompanyMapMenuFromTablet, OpenCompanyDistrictViewFromTablet, OpenCompanyDepotViewFromTablet, _specialMissionManager, _playerSuccessTracker, _playerSkillSystem));
             _tabletShellController.RegisterApp(new BudgetTabletApp());
@@ -739,6 +925,22 @@ namespace LSOL
                     || _debugMenu.IsOpen
                     || _debugMissionMenu.IsOpen
                     || _towTruckMenu.IsOpen
+                    || _garbageDepotMenu.IsOpen
+                    || _garbageGarageMenu.IsOpen
+                    || _garbageRouteMenu.IsOpen
+                    || _garbageDealershipMenu.IsOpen
+                    || _busDepotMenu.IsOpen
+                    || _busGarageMenu.IsOpen
+                    || _busRouteMenu.IsOpen
+                    || _busDealershipMenu.IsOpen
+                    || _taxiStandMenu.IsOpen
+                    || _taxiGarageMenu.IsOpen
+                    || _taxiDealershipMenu.IsOpen
+                    || _taxiDispatchMenu.IsOpen
+                || _foodDeliveryRestaurantMenu.IsOpen
+                || _foodDeliveryGarageMenu.IsOpen
+                || _foodDeliveryDealershipMenu.IsOpen
+                || _foodDeliveryDispatchMenu.IsOpen
                     || _sideJobsMenu.IsOpen
                     || _sideJobDetailMenu.IsOpen
                     || HasPropertyMenuOpen()
@@ -771,6 +973,14 @@ namespace LSOL
 
             _towingSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
             _towingSideJobSystem.SetJobEnabled(_sideJobEnabled["Towing"]);
+            _garbageSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
+            _garbageSideJobSystem.SetJobEnabled(_sideJobEnabled["Garbage"]);
+            _busSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
+            _busSideJobSystem.SetJobEnabled(_sideJobEnabled["Bus"]);
+            _taxiSideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
+            _taxiSideJobSystem.SetJobEnabled(_sideJobEnabled["Taxi"]);
+            _foodDeliverySideJobSystem.SetModMechanicsEnabled(_modMechanicsEnabled);
+            _foodDeliverySideJobSystem.SetJobEnabled(_sideJobEnabled["FoodDelivery"]);
 
             if (!_modMechanicsEnabled)
             {
@@ -843,6 +1053,10 @@ namespace LSOL
 
             _specialMissionManager.Update(player, gameTime);
             _towingSideJobSystem.Update(player, gameTime);
+            _garbageSideJobSystem.Update(player, gameTime);
+            _busSideJobSystem.Update(player, gameTime);
+            _taxiSideJobSystem.Update(player, gameTime);
+            _foodDeliverySideJobSystem.Update(player, gameTime);
             _officeObjectManager.Update(
                 player,
                 GetSelectedOfficeObjectPreviewDefinition(),
@@ -942,6 +1156,17 @@ namespace LSOL
                 return;
             }
 
+            // Bus doors use their own key: E is the vehicle horn and F is enter/exit vehicle, so the
+            // driver would leave the seat with either of them.
+            if (e.KeyCode == _controls.BusDoors)
+            {
+                var busDriver = Game.Player.Character;
+                if (busDriver != null && busDriver.Exists() && _busSideJobSystem.TryHandleDoorKey(busDriver))
+                {
+                    return;
+                }
+            }
+
             if (e.KeyCode == _controls.Interact)
             {
                 var player = Game.Player.Character;
@@ -970,12 +1195,56 @@ namespace LSOL
                         return;
                     }
 
+                    // Garbage collection runs before the depot prompt so a bag lying next to
+                    // the Recycling Center is picked up instead of opening the truck menu.
+                    if (_garbageSideJobSystem.TryHandleInteract(player))
+                    {
+                        return;
+                    }
+
+                    Vector3 garbageDepotPosition;
+                    string garbageDepotName;
+                    float garbageDepotHeading;
+                    if (_garbageSideJobSystem.TryGetNearestGarbageDepot(player.Position, 6f, out garbageDepotPosition, out garbageDepotName, out garbageDepotHeading))
+                    {
+                        OpenGarbageDepotMenu();
+                        return;
+                    }
+
                     Vector3 towPointPosition;
                     string towPointName;
                     float towPointHeading;
                     if (_towingSideJobSystem.TryGetNearestTowPoint(player.Position, 6f, out towPointPosition, out towPointName, out towPointHeading))
                     {
                         OpenTowTruckMenu();
+                        return;
+                    }
+
+                    Vector3 busDepotPosition;
+                    string busDepotName;
+                    float busDepotHeading;
+                    if (_busSideJobSystem.TryGetNearestBusDepot(player.Position, 6f, out busDepotPosition, out busDepotName, out busDepotHeading))
+                    {
+                        OpenBusDepotMenu();
+                        return;
+                    }
+
+                    Vector3 taxiStandPosition;
+                    string taxiStandName;
+                    float taxiStandHeading;
+                    if (_taxiSideJobSystem.TryGetNearestTaxiStand(player.Position, 6f, out taxiStandPosition, out taxiStandName, out taxiStandHeading))
+                    {
+                        OpenTaxiStandMenu();
+                        return;
+                    }
+
+                    Vector3 restaurantPosition;
+                    string restaurantName;
+                    float restaurantHeading;
+                    string restaurantKey;
+                    if (_foodDeliverySideJobSystem.TryGetNearestRestaurant(player.Position, 6f, out restaurantPosition, out restaurantName, out restaurantHeading, out restaurantKey))
+                    {
+                        OpenFoodDeliveryRestaurantMenu(restaurantKey);
                         return;
                     }
                 }
@@ -1195,6 +1464,210 @@ namespace LSOL
                 return true;
             }
 
+            if (_garbageDepotMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _garbageDepotMenu.Close();
+                    return true;
+                }
+
+                _garbageDepotMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_garbageGarageMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _garbageGarageMenu.Close();
+                    OpenGarbageDepotMenu();
+                    return true;
+                }
+
+                _garbageGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_garbageRouteMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _garbageRouteMenu.Close();
+                    OpenGarbageDepotMenu();
+                    return true;
+                }
+
+                _garbageRouteMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_garbageDealershipMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _garbageDealershipMenu.Close();
+                    OpenGarbageDepotMenu();
+                    return true;
+                }
+
+                _garbageDealershipMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_busDepotMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _busDepotMenu.Close();
+                    return true;
+                }
+
+                _busDepotMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_busGarageMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _busGarageMenu.Close();
+                    OpenBusDepotMenu();
+                    return true;
+                }
+
+                _busGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_busRouteMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _busRouteMenu.Close();
+                    OpenBusDepotMenu();
+                    return true;
+                }
+
+                _busRouteMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_busDealershipMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _busDealershipMenu.Close();
+                    OpenBusDepotMenu();
+                    return true;
+                }
+
+                _busDealershipMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_taxiStandMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _taxiStandMenu.Close();
+                    return true;
+                }
+
+                _taxiStandMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_taxiGarageMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _taxiGarageMenu.Close();
+                    OpenTaxiStandMenu();
+                    return true;
+                }
+
+                _taxiGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_taxiDealershipMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _taxiDealershipMenu.Close();
+                    OpenTaxiStandMenu();
+                    return true;
+                }
+
+                _taxiDealershipMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_taxiDispatchMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _taxiDispatchMenu.Close();
+                    OpenTaxiStandMenu();
+                    return true;
+                }
+
+                _taxiDispatchMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_foodDeliveryRestaurantMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _foodDeliveryRestaurantMenu.Close();
+                    return true;
+                }
+
+                _foodDeliveryRestaurantMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_foodDeliveryGarageMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _foodDeliveryGarageMenu.Close();
+                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
+                    return true;
+                }
+
+                _foodDeliveryGarageMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_foodDeliveryDealershipMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _foodDeliveryDealershipMenu.Close();
+                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
+                    return true;
+                }
+
+                _foodDeliveryDealershipMenu.HandleKey(key, _controls);
+                return true;
+            }
+
+            if (_foodDeliveryDispatchMenu.IsOpen)
+            {
+                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
+                {
+                    _foodDeliveryDispatchMenu.Close();
+                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
+                    return true;
+                }
+
+                _foodDeliveryDispatchMenu.HandleKey(key, _controls);
+                return true;
+            }
+
             if (_sideJobDetailMenu.IsOpen)
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
@@ -1275,13 +1748,29 @@ namespace LSOL
             _debugMenu.Draw();
             _debugMissionMenu.Draw();
             _towTruckMenu.Draw();
+            _garbageDepotMenu.Draw();
+            _garbageGarageMenu.Draw();
+            _garbageRouteMenu.Draw();
+            _garbageDealershipMenu.Draw();
+            _busDepotMenu.Draw();
+            _busGarageMenu.Draw();
+            _busRouteMenu.Draw();
+            _busDealershipMenu.Draw();
+            _taxiStandMenu.Draw();
+            _taxiGarageMenu.Draw();
+            _taxiDealershipMenu.Draw();
+            _taxiDispatchMenu.Draw();
+            _foodDeliveryRestaurantMenu.Draw();
+            _foodDeliveryGarageMenu.Draw();
+            _foodDeliveryDealershipMenu.Draw();
+            _foodDeliveryDispatchMenu.Draw();
             _sideJobsMenu.Draw();
             _sideJobDetailMenu.Draw();
             DrawPropertyMenus();
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _garbageDepotMenu.IsOpen || _garbageGarageMenu.IsOpen || _garbageRouteMenu.IsOpen || _garbageDealershipMenu.IsOpen || _busDepotMenu.IsOpen || _busGarageMenu.IsOpen || _busRouteMenu.IsOpen || _busDealershipMenu.IsOpen || _taxiStandMenu.IsOpen || _taxiGarageMenu.IsOpen || _taxiDealershipMenu.IsOpen || _taxiDispatchMenu.IsOpen || _foodDeliveryRestaurantMenu.IsOpen || _foodDeliveryGarageMenu.IsOpen || _foodDeliveryDealershipMenu.IsOpen || _foodDeliveryDispatchMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -1337,6 +1826,1294 @@ namespace LSOL
 
             _towTruckMenu.SetItems(items.ToArray());
             _towTruckMenu.Open();
+        }
+
+        private void OpenGarbageDepotMenu()
+        {
+            CloseGarbageJobMenus(_garbageDepotMenu);
+
+            _garbageDepotMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Garage",
+                    DetailFactory = () => "Take a garbage truck out of the job garage or park the current one.",
+                    OnActivate = OpenGarbageGarageMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Route",
+                    DetailFactory = () => _garbageSideJobSystem != null && _garbageSideJobSystem.HasActiveRoute
+                        ? "A route is already running. Pick it again to resume."
+                        : "Choose a collection route to start.",
+                    OnActivate = OpenGarbageRouteMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Buy Truck",
+                    DetailFactory = () => "Buy a garbage truck for this side job. Trucks are parked in the job garage.",
+                    OnActivate = OpenGarbageDealershipMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Reload depot config",
+                    DetailFactory = () => "Re-read JobCoordinates.xml (bag grip, throw-in distance) without restarting the game.",
+                    OnActivate = ReloadGarbageDepotConfig,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _garbageDepotMenu.Close(),
+                },
+            });
+
+            _garbageDepotMenu.Open();
+        }
+
+        /// <summary>
+        /// Re-reads the garbage depot entry (bag grip, throw-in distance, depot position) so the
+        /// grip can be tuned in JobCoordinates.xml without a game restart. Routes, owned trucks and
+        /// the running job are deliberately left untouched.
+        /// </summary>
+        private void ReloadGarbageDepotConfig()
+        {
+            if (_garbageSideJobSystem == null)
+            {
+                return;
+            }
+
+            string message;
+            _garbageSideJobSystem.TryReloadDepotConfiguration(out message);
+            ShowStatus(message, 5000);
+        }
+
+        /// <summary>
+        /// Closes every garbage job menu except the one about to be opened, so picking an entry
+        /// (Garage, Route, Buy Truck) never leaves the parent menu drawn underneath the child.
+        /// </summary>
+        private void CloseGarbageJobMenus(LemonMenu menuToKeepOpen)
+        {
+            if (_garbageDepotMenu != menuToKeepOpen)
+            {
+                _garbageDepotMenu.Close();
+            }
+
+            if (_garbageGarageMenu != menuToKeepOpen)
+            {
+                _garbageGarageMenu.Close();
+            }
+
+            if (_garbageRouteMenu != menuToKeepOpen)
+            {
+                _garbageRouteMenu.Close();
+            }
+
+            if (_garbageDealershipMenu != menuToKeepOpen)
+            {
+                _garbageDealershipMenu.Close();
+            }
+        }
+
+        private void OpenGarbageGarageMenu()
+        {
+            CloseGarbageJobMenus(_garbageGarageMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var ownedTrucks = _garbageSideJobSystem != null ? _garbageSideJobSystem.GetOwnedTrucks() : null;
+            if (ownedTrucks != null)
+            {
+                foreach (var truck in ownedTrucks)
+                {
+                    if (truck == null || string.IsNullOrWhiteSpace(truck.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = truck.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1:0.#} t)", truck.Name, truck.CapacityTons),
+                        DetailFactory = () => _garbageSideJobSystem.IsActiveTruckOut(modelName)
+                            ? "Out and ready. Press Enter to park it back in the garage."
+                            : "Owned and parked. Press Enter to take it out at the depot.",
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_garbageSideJobSystem.IsActiveTruckOut(modelName))
+                            {
+                                if (_garbageSideJobSystem.TryStoreGarbageTruck(Game.Player.Character, out message))
+                                {
+                                    ShowStatus(message, 4000);
+                                    OpenGarbageGarageMenu();
+                                }
+                                else
+                                {
+                                    ShowStatus(message, 4000);
+                                }
+
+                                return;
+                            }
+
+                            if (_garbageSideJobSystem.TrySpawnGarbageTruck(modelName, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                if (!_garbageSideJobSystem.HasActiveRoute)
+                                {
+                                    OpenGarbageRouteMenu();
+                                    return;
+                                }
+
+                                OpenGarbageGarageMenu();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No trucks in the garage",
+                    DetailFactory = () => "Buy a garbage truck from the depot menu first.",
+                    OnActivate = OpenGarbageDealershipMenu,
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _garbageGarageMenu.Close();
+                    OpenGarbageDepotMenu();
+                },
+            });
+
+            _garbageGarageMenu.SetItems(items.ToArray());
+            _garbageGarageMenu.Open();
+        }
+
+        private void OpenBusDepotMenu()
+        {
+            CloseBusJobMenus(_busDepotMenu);
+
+            _busDepotMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Garage",
+                    DetailFactory = () => "Take a bus out of the job garage or park the current one.",
+                    OnActivate = OpenBusGarageMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Route",
+                    DetailFactory = () => _busSideJobSystem != null && _busSideJobSystem.HasActiveRoute
+                        ? "A line is already running. Pick it again to resume."
+                        : "Choose a bus line to drive.",
+                    OnActivate = OpenBusRouteMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Buy Bus",
+                    DetailFactory = () => "Buy a bus for this side job. Buses are parked in the job garage.",
+                    OnActivate = OpenBusDealershipMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Reload depot config",
+                    DetailFactory = () => "Re-read JobCoordinates.xml and JobVehicles.xml (door indices, seats) without restarting the game.",
+                    OnActivate = ReloadBusDepotConfig,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _busDepotMenu.Close(),
+                },
+            });
+
+            _busDepotMenu.Open();
+        }
+
+        /// <summary>
+        /// Re-reads the bus depot entry and the bus definitions (door indices, seats, price) so a
+        /// wrong door index can be fixed in the XML without rebuilding the DLL.
+        /// </summary>
+        private void ReloadBusDepotConfig()
+        {
+            if (_busSideJobSystem == null)
+            {
+                return;
+            }
+
+            string message;
+            _busSideJobSystem.TryReloadDepotConfiguration(out message);
+            ShowStatus(message, 5000);
+        }
+
+        /// <summary>
+        /// Closes every bus job menu except the one about to be opened, so picking an entry (Garage,
+        /// Route, Buy Bus) never leaves the parent menu drawn underneath the child.
+        /// </summary>
+        private void CloseBusJobMenus(LemonMenu menuToKeepOpen)
+        {
+            if (_busDepotMenu != menuToKeepOpen)
+            {
+                _busDepotMenu.Close();
+            }
+
+            if (_busGarageMenu != menuToKeepOpen)
+            {
+                _busGarageMenu.Close();
+            }
+
+            if (_busRouteMenu != menuToKeepOpen)
+            {
+                _busRouteMenu.Close();
+            }
+
+            if (_busDealershipMenu != menuToKeepOpen)
+            {
+                _busDealershipMenu.Close();
+            }
+        }
+
+        private void OpenBusGarageMenu()
+        {
+            CloseBusJobMenus(_busGarageMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var ownedBuses = _busSideJobSystem != null ? _busSideJobSystem.GetOwnedBuses() : null;
+            if (ownedBuses != null)
+            {
+                foreach (var bus in ownedBuses)
+                {
+                    if (bus == null || string.IsNullOrWhiteSpace(bus.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = bus.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1} seats)", bus.Name, bus.Seats),
+                        DetailFactory = () => _busSideJobSystem.IsActiveBusOut(modelName)
+                            ? "Out and ready. Press Enter to park it back in the garage."
+                            : "Owned and parked. Press Enter to take it out at the depot.",
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_busSideJobSystem.IsActiveBusOut(modelName))
+                            {
+                                if (_busSideJobSystem.TryStoreBus(Game.Player.Character, out message))
+                                {
+                                    ShowStatus(message, 4000);
+                                    OpenBusGarageMenu();
+                                }
+                                else
+                                {
+                                    ShowStatus(message, 4000);
+                                }
+
+                                return;
+                            }
+
+                            if (_busSideJobSystem.TrySpawnBus(modelName, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                if (!_busSideJobSystem.HasActiveRoute)
+                                {
+                                    OpenBusRouteMenu();
+                                    return;
+                                }
+
+                                OpenBusGarageMenu();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No buses in the garage",
+                    DetailFactory = () => "Buy a bus from the depot menu first.",
+                    OnActivate = OpenBusDealershipMenu,
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _busGarageMenu.Close();
+                    OpenBusDepotMenu();
+                },
+            });
+
+            _busGarageMenu.SetItems(items.ToArray());
+            _busGarageMenu.Open();
+        }
+
+        private void OpenBusDealershipMenu()
+        {
+            CloseBusJobMenus(_busDealershipMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var buses = _busSideJobSystem != null ? _busSideJobSystem.GetBuses() : null;
+            if (buses != null)
+            {
+                foreach (var bus in buses)
+                {
+                    if (bus == null || string.IsNullOrWhiteSpace(bus.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = bus.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1} seats)", bus.Name, bus.Seats),
+                        DetailFactory = () => _busSideJobSystem != null && _busSideJobSystem.OwnsBus(modelName)
+                            ? "Already parked in the bus garage."
+                            : string.Format(
+                                "Requires Bus level {0}. Price {1}.",
+                                bus.UnlockLevel,
+                                ModFormatting.FormatMoney(bus.Price)),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_busSideJobSystem.TryBuyBus(modelName, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                OpenBusDealershipMenu();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _busDealershipMenu.Close();
+                    OpenBusDepotMenu();
+                },
+            });
+
+            _busDealershipMenu.SetItems(items.ToArray());
+            _busDealershipMenu.Open();
+        }
+
+        private void OpenBusRouteMenu()
+        {
+            CloseBusJobMenus(_busRouteMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var routes = _busSideJobSystem != null ? _busSideJobSystem.GetRoutes() : null;
+            if (routes != null)
+            {
+                foreach (var route in routes)
+                {
+                    if (route == null || string.IsNullOrWhiteSpace(route.RouteId))
+                    {
+                        continue;
+                    }
+
+                    var routeId = route.RouteId;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => route.DisplayName,
+                        DetailFactory = () => string.Format(
+                            "{0} stations | {1}",
+                            route.StationCount,
+                            route.IsClosedLoop ? "loop line" : "out and back"),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_busSideJobSystem.TryStartRoute(routeId, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                _busRouteMenu.Close();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _busRouteMenu.Close();
+                    OpenBusDepotMenu();
+                },
+            });
+
+            _busRouteMenu.SetItems(items.ToArray());
+            _busRouteMenu.Open();
+        }
+
+        /// <summary>
+        /// Resolves a restaurant site key to the live industry data the food delivery job needs:
+        /// position, district, single product, base price, ingredient stock and ownership. The side job
+        /// never sees the IndustryManager itself.
+        /// </summary>
+        private FoodDeliveryRestaurantInfo ResolveFoodDeliveryRestaurant(string siteKey)
+        {
+            var industry = FindRestaurantIndustry(siteKey);
+            if (industry == null)
+            {
+                return null;
+            }
+
+            var product = string.Empty;
+            if (industry.Outputs != null)
+            {
+                foreach (var output in industry.Outputs)
+                {
+                    if (!string.IsNullOrWhiteSpace(output))
+                    {
+                        product = output;
+                        break;
+                    }
+                }
+            }
+
+            var basePrice = 0f;
+            if (!string.IsNullOrWhiteSpace(product) && _config != null && _config.CommodityBasePrices != null)
+            {
+                _config.CommodityBasePrices.TryGetValue(product, out basePrice);
+            }
+
+            var serviceRadius = 0f;
+            var restaurants = _foodDeliverySideJobSystem != null ? _foodDeliverySideJobSystem.GetRestaurants() : null;
+            if (restaurants != null)
+            {
+                for (int i = 0; i < restaurants.Count; i++)
+                {
+                    var definition = restaurants[i];
+                    if (definition != null && string.Equals(definition.SiteKey, siteKey, StringComparison.OrdinalIgnoreCase))
+                    {
+                        serviceRadius = definition.ServiceRadius;
+                        break;
+                    }
+                }
+            }
+
+            return new FoodDeliveryRestaurantInfo
+            {
+                SiteKey = siteKey,
+                Name = industry.Name,
+                District = industry.DistrictName,
+                ProductCommodity = product,
+                Position = industry.Position,
+                Heading = industry.VehicleSpawnHeading.GetValueOrDefault(0f),
+                ServiceRadius = serviceRadius,
+                ProductBasePrice = basePrice,
+                IsOwned = _industryManager.IsIndustryOwnedForGameplay(industry),
+                PositionResolved = industry.Position != Vector3.Zero,
+            };
+        }
+
+        private Industry FindRestaurantIndustry(string siteKey)
+        {
+            if (_industryManager == null || string.IsNullOrWhiteSpace(siteKey))
+            {
+                return null;
+            }
+
+            var industries = _industryManager.Industries;
+            for (int i = 0; i < industries.Count; i++)
+            {
+                var industry = industries[i];
+                if (industry == null)
+                {
+                    continue;
+                }
+
+                if (string.Equals(industry.LegacyKey, siteKey, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(industry.Id, siteKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    return industry;
+                }
+            }
+
+            return null;
+        }
+
+        private float GetFoodDeliveryRestaurantStock(string siteKey, string commodity)
+        {
+            var industry = FindRestaurantIndustry(siteKey);
+            return industry != null ? industry.GetStock(commodity) : 0f;
+        }
+
+        private float DrawFoodDeliveryRestaurantIngredient(string siteKey, string commodity, float tons)
+        {
+            var industry = FindRestaurantIndustry(siteKey);
+            return industry != null ? industry.RemoveInput(commodity, tons) : 0f;
+        }
+
+        private FoodDeliveryRestaurantDefinition FindFoodDeliveryRestaurantDefinition(string restaurantKey)
+        {
+            var system = _foodDeliverySideJobSystem;
+            if (system == null)
+            {
+                return null;
+            }
+
+            var restaurants = system.GetRestaurants();
+            for (int i = 0; i < restaurants.Count; i++)
+            {
+                var definition = restaurants[i];
+                if (definition == null)
+                {
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(restaurantKey)
+                    || string.Equals(definition.SiteKey, restaurantKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    return definition;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Re-reads the restaurant, address pool and vehicle definitions from the XML.</summary>
+        private void ReloadFoodDeliveryConfig()
+        {
+            if (_foodDeliverySideJobSystem == null)
+            {
+                return;
+            }
+
+            string message;
+            _foodDeliverySideJobSystem.TryReloadConfiguration(out message);
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                ShowStatus(message, 4000);
+            }
+        }
+
+        /// <summary>
+        /// Closes every food delivery menu except the one about to be opened, so picking an entry
+        /// never stacks two menus on the same anchor.
+        /// </summary>
+        private void CloseFoodDeliveryJobMenus(LemonMenu menuToKeepOpen)
+        {
+            if (_foodDeliveryRestaurantMenu != menuToKeepOpen)
+            {
+                _foodDeliveryRestaurantMenu.Close();
+            }
+
+            if (_foodDeliveryGarageMenu != menuToKeepOpen)
+            {
+                _foodDeliveryGarageMenu.Close();
+            }
+
+            if (_foodDeliveryDealershipMenu != menuToKeepOpen)
+            {
+                _foodDeliveryDealershipMenu.Close();
+            }
+
+            if (_foodDeliveryDispatchMenu != menuToKeepOpen)
+            {
+                _foodDeliveryDispatchMenu.Close();
+            }
+        }
+
+        private void OpenFoodDeliveryRestaurantMenu(string restaurantKey)
+        {
+            CloseFoodDeliveryJobMenus(_foodDeliveryRestaurantMenu);
+
+            _menuFoodDeliveryRestaurantKey = restaurantKey ?? string.Empty;
+
+            var system = _foodDeliverySideJobSystem;
+            var definition = FindFoodDeliveryRestaurantDefinition(_menuFoodDeliveryRestaurantKey);
+            var info = !string.IsNullOrWhiteSpace(_menuFoodDeliveryRestaurantKey)
+                ? ResolveFoodDeliveryRestaurant(_menuFoodDeliveryRestaurantKey)
+                : null;
+
+            var hasVehicleOut = system != null && system.HasVehicleOut;
+            var hasRun = system != null && system.HasActiveRun;
+
+            _foodDeliveryRestaurantMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Garage",
+                    DetailFactory = () => hasVehicleOut
+                        ? "A delivery vehicle is out. Park it or take another one out."
+                        : "Take a delivery vehicle out of the job garage or park the current one.",
+                    OnActivate = OpenFoodDeliveryGarageMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => hasRun ? "Deliveries (run in progress)" : "Start deliveries",
+                    DetailFactory = () => hasRun
+                        ? "You are carrying meals. Finish the run before loading more."
+                        : "Load meals from this restaurant and roll the first customer.",
+                    OnActivate = OpenFoodDeliveryDispatchMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Buy Delivery Vehicle",
+                    DetailFactory = () => "Buy a delivery scooter or food truck for this side job.",
+                    OnActivate = OpenFoodDeliveryDealershipMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Reload restaurant config",
+                    DetailFactory = () => "Re-read JobCoordinates.xml and JobVehicles.xml without a rebuild.",
+                    OnActivate = ReloadFoodDeliveryConfig,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => Text(ModTextKey.CommonBack),
+                    OnActivate = () => _foodDeliveryRestaurantMenu.Close(),
+                },
+            });
+
+            _foodDeliveryRestaurantMenu.Subtitle = info != null && !string.IsNullOrWhiteSpace(info.Name)
+                ? info.Name
+                : definition != null && !string.IsNullOrWhiteSpace(definition.Name)
+                    ? definition.Name
+                    : "Restaurant";
+            _foodDeliveryRestaurantMenu.Open();
+        }
+
+        private void OpenFoodDeliveryGarageMenu()
+        {
+            CloseFoodDeliveryJobMenus(_foodDeliveryGarageMenu);
+
+            var system = _foodDeliverySideJobSystem;
+            var items = new List<OfficeMenuItem>();
+            var owned = system != null ? system.GetOwnedVehicles() : null;
+            if (owned != null)
+            {
+                foreach (var vehicle in owned)
+                {
+                    if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = vehicle.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1} meals)", vehicle.Name, vehicle.MealCapacity),
+                        DetailFactory = () => system != null && system.IsActiveVehicleOut(modelName)
+                            ? "Take it out, or park it back in the garage."
+                            : "Take this vehicle out of the garage.",
+                        OnActivate = () =>
+                        {
+                            if (system == null)
+                            {
+                                return;
+                            }
+
+                            string message;
+                            if (system.IsActiveVehicleOut(modelName))
+                            {
+                                if (system.TryStoreVehicle(Game.Player.Character, out message))
+                                {
+                                    ShowStatus(message, 4000);
+                                    OpenFoodDeliveryGarageMenu();
+                                }
+                                else
+                                {
+                                    ShowStatus(message, 4000);
+                                }
+
+                                return;
+                            }
+
+                            if (system.TrySpawnVehicle(modelName, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                OpenFoodDeliveryDispatchMenu();
+                            }
+                            else if (!string.IsNullOrWhiteSpace(message))
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No vehicles in the garage",
+                    DetailFactory = () => "Buy a delivery vehicle from the restaurant menu first.",
+                    OnActivate = OpenFoodDeliveryDealershipMenu,
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _foodDeliveryGarageMenu.Close();
+                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
+                },
+            });
+
+            _foodDeliveryGarageMenu.SetItems(items.ToArray());
+            _foodDeliveryGarageMenu.Open();
+        }
+
+        private void OpenFoodDeliveryDealershipMenu()
+        {
+            CloseFoodDeliveryJobMenus(_foodDeliveryDealershipMenu);
+
+            var system = _foodDeliverySideJobSystem;
+            var items = new List<OfficeMenuItem>();
+            var vehicles = system != null ? system.GetVehicles() : null;
+            if (vehicles != null)
+            {
+                foreach (var vehicle in vehicles)
+                {
+                    if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = vehicle.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1} meals)", vehicle.Name, vehicle.MealCapacity),
+                        DetailFactory = () => system != null && system.OwnsVehicle(modelName)
+                            ? "Already parked in the delivery garage."
+                            : string.Format(
+                                "Requires Food Delivery level {0}. Price {1}.",
+                                vehicle.UnlockLevel,
+                                ModFormatting.FormatMoney(vehicle.Price)),
+                        OnActivate = () =>
+                        {
+                            if (system == null)
+                            {
+                                return;
+                            }
+
+                            string message;
+                            if (system.TryBuyVehicle(modelName, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                OpenFoodDeliveryDealershipMenu();
+                            }
+                            else if (!string.IsNullOrWhiteSpace(message))
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _foodDeliveryDealershipMenu.Close();
+                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
+                },
+            });
+
+            _foodDeliveryDealershipMenu.SetItems(items.ToArray());
+            _foodDeliveryDealershipMenu.Open();
+        }
+
+        private void OpenFoodDeliveryDispatchMenu()
+        {
+            CloseFoodDeliveryJobMenus(_foodDeliveryDispatchMenu);
+
+            var system = _foodDeliverySideJobSystem;
+            var hasVehicleOut = system != null && system.HasVehicleOut;
+            var hasRun = system != null && system.HasActiveRun;
+            var loaded = system != null ? system.LoadedMeals : 0;
+            var delivered = system != null ? system.MealsDelivered : 0;
+            var product = system != null ? system.ProductCommodity : string.Empty;
+
+            var items = new List<OfficeMenuItem>();
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => hasRun ? "Run in progress" : "Load meals and start the run",
+                DetailFactory = () => hasRun
+                    ? string.Format(
+                        "{0}: {1} of {2} meal(s) delivered.",
+                        string.IsNullOrWhiteSpace(product) ? "Meals" : product,
+                        delivered,
+                        loaded + delivered)
+                    : hasVehicleOut
+                        ? "Take up to the vehicle capacity in meals from this restaurant."
+                        : "Take a delivery vehicle out of the garage first.",
+                OnActivate = () =>
+                {
+                    if (system == null || hasRun)
+                    {
+                        _foodDeliveryDispatchMenu.Close();
+                        return;
+                    }
+
+                    string message;
+                    if (system.TryStartRun(_menuFoodDeliveryRestaurantKey, out message))
+                    {
+                        ShowStatus(message, 4000);
+                        _foodDeliveryDispatchMenu.Close();
+                    }
+                    else if (!string.IsNullOrWhiteSpace(message))
+                    {
+                        ShowStatus(message, 4000);
+                    }
+                },
+            });
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _foodDeliveryDispatchMenu.Close();
+                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
+                },
+            });
+
+            _foodDeliveryDispatchMenu.SetItems(items.ToArray());
+            _foodDeliveryDispatchMenu.Open();
+        }
+
+        /// <summary>
+        /// Re-reads the taxi stand, the destination pool and the taxi definitions so the XML can be
+        /// tuned without rebuilding the DLL.
+        /// </summary>
+        private void ReloadTaxiStandConfig()
+        {
+            if (_taxiSideJobSystem == null)
+            {
+                return;
+            }
+
+            string message;
+            _taxiSideJobSystem.TryReloadStandConfiguration(out message);
+            ShowStatus(message, 5000);
+        }
+
+        /// <summary>
+        /// Closes every taxi job menu except the one about to be opened, so picking an entry never
+        /// leaves the parent menu drawn underneath the child.
+        /// </summary>
+        private void CloseTaxiJobMenus(LemonMenu menuToKeepOpen)
+        {
+            if (_taxiStandMenu != menuToKeepOpen)
+            {
+                _taxiStandMenu.Close();
+            }
+
+            if (_taxiGarageMenu != menuToKeepOpen)
+            {
+                _taxiGarageMenu.Close();
+            }
+
+            if (_taxiDealershipMenu != menuToKeepOpen)
+            {
+                _taxiDealershipMenu.Close();
+            }
+
+            if (_taxiDispatchMenu != menuToKeepOpen)
+            {
+                _taxiDispatchMenu.Close();
+            }
+        }
+
+        private void OpenTaxiStandMenu()
+        {
+            CloseTaxiJobMenus(_taxiStandMenu);
+
+            var stand = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetGarageStand() : null;
+            var hasTaxiOut = _taxiSideJobSystem != null && _taxiSideJobSystem.HasTaxiOut;
+
+            _taxiStandMenu.SetItems(new[]
+            {
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Garage",
+                    DetailFactory = () => hasTaxiOut
+                        ? "A taxi is out. Park it or take another one out."
+                        : "Take a taxi out of the job garage or park the current one.",
+                    OnActivate = OpenTaxiGarageMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Dispatch board",
+                    DetailFactory = () => _taxiSideJobSystem != null && _taxiSideJobSystem.HasActiveFare
+                        ? "A fare is already accepted. Finish it before taking another."
+                        : "Fares waiting for a driver: price, distance and destination.",
+                    OnActivate = OpenTaxiDispatchMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Buy Taxi",
+                    DetailFactory = () => "Buy a taxi for this side job. Taxis are parked in the job garage.",
+                    OnActivate = OpenTaxiDealershipMenu,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Reload stand config",
+                    DetailFactory = () => "Re-read JobCoordinates.xml and JobVehicles.xml (stands, destinations, seats) without restarting the game.",
+                    OnActivate = ReloadTaxiStandConfig,
+                },
+                new OfficeMenuItem
+                {
+                    CaptionFactory = () => "Close",
+                    OnActivate = () => _taxiStandMenu.Close(),
+                },
+            });
+
+            _taxiStandMenu.Subtitle = stand != null ? stand.Name : "Taxi stand";
+            _taxiStandMenu.Open();
+        }
+
+        private void OpenTaxiGarageMenu()
+        {
+            CloseTaxiJobMenus(_taxiGarageMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var ownedTaxis = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetOwnedTaxis() : null;
+            if (ownedTaxis != null)
+            {
+                foreach (var taxi in ownedTaxis)
+                {
+                    if (taxi == null || string.IsNullOrWhiteSpace(taxi.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = taxi.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1} seats)", taxi.Name, taxi.Seats),
+                        DetailFactory = () => _taxiSideJobSystem.IsActiveTaxiOut(modelName)
+                            ? "Out and ready. Press Enter to park it back at the stand."
+                            : "Owned and parked. Press Enter to take it out at the stand.",
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_taxiSideJobSystem.IsActiveTaxiOut(modelName))
+                            {
+                                if (_taxiSideJobSystem.TryStoreTaxi(Game.Player.Character, out message))
+                                {
+                                    ShowStatus(message, 4000);
+                                    OpenTaxiGarageMenu();
+                                }
+                                else
+                                {
+                                    ShowStatus(message, 4000);
+                                }
+
+                                return;
+                            }
+
+                            if (_taxiSideJobSystem.TrySpawnTaxi(modelName, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                OpenTaxiDispatchMenu();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => "No taxis in the garage",
+                    DetailFactory = () => "Buy a taxi from the stand menu first.",
+                    OnActivate = OpenTaxiDealershipMenu,
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _taxiGarageMenu.Close();
+                    OpenTaxiStandMenu();
+                },
+            });
+
+            _taxiGarageMenu.SetItems(items.ToArray());
+            _taxiGarageMenu.Open();
+        }
+
+        private void OpenTaxiDealershipMenu()
+        {
+            CloseTaxiJobMenus(_taxiDealershipMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var taxis = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetTaxis() : null;
+            if (taxis != null)
+            {
+                foreach (var taxi in taxis)
+                {
+                    if (taxi == null || string.IsNullOrWhiteSpace(taxi.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = taxi.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1} seats)", taxi.Name, taxi.Seats),
+                        DetailFactory = () => _taxiSideJobSystem != null && _taxiSideJobSystem.OwnsTaxi(modelName)
+                            ? "Already parked in the taxi garage."
+                            : string.Format(
+                                "Requires Taxi level {0}. Price {1}.",
+                                taxi.UnlockLevel,
+                                ModFormatting.FormatMoney(taxi.Price)),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_taxiSideJobSystem.TryBuyTaxi(modelName, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                OpenTaxiDealershipMenu();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _taxiDealershipMenu.Close();
+                    OpenTaxiStandMenu();
+                },
+            });
+
+            _taxiDealershipMenu.SetItems(items.ToArray());
+            _taxiDealershipMenu.Open();
+        }
+
+        private void OpenTaxiDispatchMenu()
+        {
+            CloseTaxiJobMenus(_taxiDispatchMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var offers = _taxiSideJobSystem != null ? _taxiSideJobSystem.GetOffers() : null;
+            if (offers != null)
+            {
+                foreach (var offer in offers)
+                {
+                    if (offer == null)
+                    {
+                        continue;
+                    }
+
+                    var offerId = offer.OfferId;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format(
+                            "{0} | {1:0.0} km",
+                            ModFormatting.FormatMoney(offer.EstimatedFare),
+                            offer.DistanceMeters / 1000f),
+                        DetailFactory = () => string.Format(
+                            "{0} | {1} passenger(s)",
+                            string.IsNullOrWhiteSpace(offer.DestinationName) ? "Drop-off" : offer.DestinationName,
+                            offer.GroupSize),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_taxiSideJobSystem.TryAcceptOffer(offerId, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                _taxiDispatchMenu.Close();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                                OpenTaxiDispatchMenu();
+                            }
+                        },
+                    });
+                }
+            }
+
+            if (items.Count == 0)
+            {
+                var hasTaxiOut = _taxiSideJobSystem != null && _taxiSideJobSystem.HasTaxiOut;
+                items.Add(new OfficeMenuItem
+                {
+                    CaptionFactory = () => hasTaxiOut ? "No fares on the board" : "No taxi out",
+                    DetailFactory = () => hasTaxiOut
+                        ? "Drive around town for a few minutes: new fares appear near you."
+                        : "Take a taxi out of the garage first.",
+                    OnActivate = () => _taxiDispatchMenu.Close(),
+                });
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _taxiDispatchMenu.Close();
+                    OpenTaxiStandMenu();
+                },
+            });
+
+            _taxiDispatchMenu.SetItems(items.ToArray());
+            _taxiDispatchMenu.Open();
+        }
+
+        private void OpenGarbageDealershipMenu()
+        {
+            CloseGarbageJobMenus(_garbageDealershipMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var trucks = _garbageSideJobSystem != null ? _garbageSideJobSystem.GetTrucks() : null;
+            if (trucks != null)
+            {
+                foreach (var truck in trucks)
+                {
+                    if (truck == null || string.IsNullOrWhiteSpace(truck.ModelName))
+                    {
+                        continue;
+                    }
+
+                    var modelName = truck.ModelName;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => string.Format("{0} ({1:0.#} t)", truck.Name, truck.CapacityTons),
+                        DetailFactory = () => _garbageSideJobSystem != null && _garbageSideJobSystem.OwnsTruck(modelName)
+                            ? "Already parked in the garbage garage."
+                            : string.Format(
+                                "Requires Garbage level {0}. Price {1}.",
+                                truck.UnlockLevel,
+                                ModFormatting.FormatMoney(truck.Price)),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_garbageSideJobSystem.TryBuyGarbageTruck(modelName, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                OpenGarbageDealershipMenu();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _garbageDealershipMenu.Close();
+                    OpenGarbageDepotMenu();
+                },
+            });
+
+            _garbageDealershipMenu.SetItems(items.ToArray());
+            _garbageDealershipMenu.Open();
+        }
+
+        private void OpenGarbageRouteMenu()
+        {
+            CloseGarbageJobMenus(_garbageRouteMenu);
+
+            var items = new List<OfficeMenuItem>();
+            var routes = _garbageSideJobSystem != null ? _garbageSideJobSystem.GetRoutes() : null;
+            if (routes != null)
+            {
+                foreach (var route in routes)
+                {
+                    if (route == null || string.IsNullOrWhiteSpace(route.RouteId))
+                    {
+                        continue;
+                    }
+
+                    var routeId = route.RouteId;
+                    items.Add(new OfficeMenuItem
+                    {
+                        CaptionFactory = () => route.DisplayName,
+                        DetailFactory = () => string.Format("{0} stops | {1} bags", route.StopCount, route.TotalBags),
+                        OnActivate = () =>
+                        {
+                            string message;
+                            if (_garbageSideJobSystem.TryStartRoute(routeId, Game.Player.Character, out message))
+                            {
+                                ShowStatus(message, 4000);
+                                _garbageRouteMenu.Close();
+                            }
+                            else
+                            {
+                                ShowStatus(message, 4000);
+                            }
+                        },
+                    });
+                }
+            }
+
+            items.Add(new OfficeMenuItem
+            {
+                CaptionFactory = () => Text(ModTextKey.CommonBack),
+                OnActivate = () =>
+                {
+                    _garbageRouteMenu.Close();
+                    OpenGarbageDepotMenu();
+                },
+            });
+
+            _garbageRouteMenu.SetItems(items.ToArray());
+            _garbageRouteMenu.Open();
         }
 
         private void DrawTabletShell()
@@ -2514,6 +4291,13 @@ namespace LSOL
 
             items.Add(new OfficeMenuItem
             {
+                CaptionFactory = () => "Cancel current job(s)",
+                DetailFactory = () => "Stop the active side jobs: clears routes, spawned job vehicles, blips and GPS.",
+                OnActivate = CancelActiveSideJobs,
+            });
+
+            items.Add(new OfficeMenuItem
+            {
                 CaptionFactory = () => Text(ModTextKey.CommonBack),
                 OnActivate = () =>
                 {
@@ -2524,6 +4308,21 @@ namespace LSOL
             });
 
             _sideJobsMenu.SetItems(items.ToArray());
+        }
+
+        /// <summary>
+        /// Stops every running side job (towing, garbage and bus). Job garage contents, skill XP and
+        /// money already earned are kept; only the live job state is cleared.
+        /// </summary>
+        private void CancelActiveSideJobs()
+        {
+            _towingSideJobSystem.ResetState();
+            _garbageSideJobSystem.CancelCurrentJob();
+            _busSideJobSystem.CancelCurrentJob();
+            _taxiSideJobSystem.CancelCurrentJob();
+            _foodDeliverySideJobSystem.CancelCurrentJob();
+            _sideJobsMenu.Close();
+            ShowStatus(LocalizedText.GetOrDefault("sidejob.cancel.done", "Current side jobs cancelled."), 4000);
         }
 
         private void OpenSideJobDetailMenu()
@@ -3854,6 +5653,9 @@ namespace LSOL
                 ApplyDistrictStateToAll = ApplySelectedDebugDistrictStateToAll,
                 IncreaseDistrictReputation = () => AdjustDebugDistrictReputation(1f),
                 DecreaseDistrictReputation = () => AdjustDebugDistrictReputation(-1f),
+                IncreaseDistrictBonus = () => AdjustDebugDistrictBonus(1f),
+                DecreaseDistrictBonus = () => AdjustDebugDistrictBonus(-1f),
+                ClearDistrictBonus = ClearDebugDistrictBonus,
                 AddSelectedResourceToNearbyIndustry = AddSelectedDebugResourceToNearbyIndustry,
                 DeleteResolvedVehicleCargo = DeleteResolvedVehicleCargo,
                 EmptyResolvedVehicleFuelTank = EmptyResolvedVehicleFuelTank,
@@ -3874,8 +5676,30 @@ namespace LSOL
                 SelectedSkillXpAmount = GetSelectedDebugSkillXpAmount,
                 AddSkillXp = AddDebugSkillXp,
                 AddSkillLevel = AddDebugSkillLevel,
+                BusProbeCaption = () => "Bus doors and seats",
+                BusProbeDetail = CurrentDebugBusProbeDetail,
+                LogBusProbe = LogDebugBusProbe,
                 CloseMenu = () => _debugMenu.Close(),
             });
+        }
+
+        /// <summary>
+        /// F9 probe: door indices actually present on the bus the player sits in, the configured
+        /// indices and the seat capacity. Door indices are model specific, so this is the way to find
+        /// the right doorIndices="..." value for a bus in JobVehicles.xml.
+        /// </summary>
+        private string CurrentDebugBusProbeDetail()
+        {
+            return _busSideJobSystem != null
+                ? _busSideJobSystem.BuildDoorProbeReport(Game.Player.Character)
+                : "Bus side job unavailable.";
+        }
+
+        private void LogDebugBusProbe()
+        {
+            var report = CurrentDebugBusProbeDetail();
+            System.Diagnostics.Debug.WriteLine(report);
+            ShowStatus(report, 8000);
         }
 
         private void RebuildDebugMissionMenuItems()
@@ -4932,12 +6756,60 @@ namespace LSOL
             }
 
             var debugOffset = _territoryManager.GetDistrictReputationDebugOffset(districtName);
+            var bonus = _territoryManager.GetDistrictBonus(districtName);
             return string.Format(
-                "{0} | Influence {1:0}% | Reputation {2:0.0} | Debug offset {3:+0.0;-0.0;0.0}",
+                "{0} | Influence {1:0}% | Reputation {2:0.0} | Debug offset {3:+0.0;-0.0;0.0} | Bonus {4:0.#}%",
                 string.IsNullOrWhiteSpace(district.ReputationLabel) ? "Unknown" : district.ReputationLabel,
                 district.InfluenceRatio * 100f,
                 district.ReputationScore,
-                debugOffset);
+                debugOffset,
+                bonus);
+        }
+
+        private void AdjustDebugDistrictBonus(float direction)
+        {
+            if (_territoryManager == null)
+            {
+                ShowStatus("Territory manager unavailable.");
+                return;
+            }
+
+            var districtName = GetSelectedDebugDistrict();
+            if (string.IsNullOrWhiteSpace(districtName))
+            {
+                ShowStatus("No district selected.");
+                return;
+            }
+
+            _territoryManager.AdjustDistrictBonusDebug(districtName, DebugMenuProvider.DistrictBonusStepPercent * direction);
+            _tabletStateStore.MarkNetworkDirty();
+
+            var breakdown = _territoryManager.GetDistrictBonusBreakdown(districtName);
+            ShowStatus(string.Format(
+                "{0} district bonus now {1:0.#}% / {2:0.#}%.",
+                districtName,
+                breakdown.TotalPercent,
+                breakdown.CapPercent));
+        }
+
+        private void ClearDebugDistrictBonus()
+        {
+            if (_territoryManager == null)
+            {
+                ShowStatus("Territory manager unavailable.");
+                return;
+            }
+
+            var districtName = GetSelectedDebugDistrict();
+            if (string.IsNullOrWhiteSpace(districtName))
+            {
+                ShowStatus("No district selected.");
+                return;
+            }
+
+            _territoryManager.ClearDistrictBonusDebug(districtName);
+            _tabletStateStore.MarkNetworkDirty();
+            ShowStatus(string.Format("{0} district bonus cleared.", districtName));
         }
 
         private string CurrentDebugDistrictReputationAmountCaption()
@@ -6881,6 +8753,25 @@ namespace LSOL
             var clockDate = GetCurrentInGameClockDateTime();
             var epoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Unspecified);
             return (int)(clockDate - epoch).TotalMinutes;
+        }
+
+        /// <summary>
+        /// District bonus (percentage points) available to a side job's own payout, with that job's
+        /// own pool excluded so a job can never boost the district it is farming for itself.
+        /// </summary>
+        private float GetSideJobDistrictBonusExcluding(string districtName, string jobId)
+        {
+            return _territoryManager != null
+                ? _territoryManager.GetDistrictBonusExcluding(districtName, jobId)
+                : 0f;
+        }
+
+        /// <summary>Credits a finished side job to its district and reports what was actually gained.</summary>
+        private DistrictBonusAward ReportSideJobDistrictCompletion(string jobId, string districtName, float units)
+        {
+            return _territoryManager != null
+                ? _territoryManager.RegisterSideJobCompletion(jobId, districtName, units)
+                : new DistrictBonusAward { CapPercent = DistrictBonusCatalog.CapPercent };
         }
 
         private static void DrawRect(float screenWidth, float screenHeight, float x, float y, float width, float height, Color color)

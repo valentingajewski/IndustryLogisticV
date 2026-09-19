@@ -40,6 +40,10 @@ namespace LSOL.Systems
             { "Fabric", 700f },
             { "ProcessedFood", 850f },
             { "Meat", 900f },
+            // Restaurant outputs. Keep in lockstep with LSOL_Config/Resources.xml: the no-override
+            // fallback table is guarded by GlobalMarketManagerTests parity tests.
+            { "Pizza", 1200f },
+            { "Burger", 1200f },
             { "LiquidFertilizer", 600f },
             { "Steel", 900f },
             { "Alloy", 1100f },

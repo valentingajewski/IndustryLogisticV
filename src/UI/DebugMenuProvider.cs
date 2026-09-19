@@ -40,6 +40,9 @@ namespace LSOL.UI
         public Action ApplyDistrictStateToAll { get; set; }
         public Action IncreaseDistrictReputation { get; set; }
         public Action DecreaseDistrictReputation { get; set; }
+        public Action IncreaseDistrictBonus { get; set; }
+        public Action DecreaseDistrictBonus { get; set; }
+        public Action ClearDistrictBonus { get; set; }
         public Action AddSelectedResourceToNearbyIndustry { get; set; }
         public Action DeleteResolvedVehicleCargo { get; set; }
         public Action EmptyResolvedVehicleFuelTank { get; set; }
@@ -60,6 +63,12 @@ namespace LSOL.UI
         public Func<float> SelectedSkillXpAmount { get; set; }
         public Action AddSkillXp { get; set; }
         public Action AddSkillLevel { get; set; }
+
+        /// <summary>Bus side job probe: reports the door indices and seat capacity of the bus sat in.</summary>
+        public Func<string> BusProbeCaption { get; set; }
+        public Func<string> BusProbeDetail { get; set; }
+        public Action LogBusProbe { get; set; }
+
         public Action CloseMenu { get; set; }
     }
 
@@ -75,6 +84,9 @@ namespace LSOL.UI
 
     internal sealed class DebugMenuProvider
     {
+        /// <summary>Step applied by the district bonus debug actions, in percentage points.</summary>
+        public const float DistrictBonusStepPercent = 2.5f;
+
         public void PopulateRootMenu(LemonMenu menu, DebugMenuCallbacks callbacks)
         {
             if (menu == null)
@@ -185,6 +197,24 @@ namespace LSOL.UI
                 },
                 new MenuItem
                 {
+                    CaptionFactory = () => "Increase district bonus",
+                    DetailFactory = () => string.Format("Adds {0:0.#}% perishable side job bonus to the selected district.", DistrictBonusStepPercent),
+                    OnActivate = callbacks.IncreaseDistrictBonus,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "Decrease district bonus",
+                    DetailFactory = () => string.Format("Removes {0:0.#}% perishable side job bonus from the selected district.", DistrictBonusStepPercent),
+                    OnActivate = callbacks.DecreaseDistrictBonus,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = () => "Clear district bonus",
+                    DetailFactory = () => "Removes the entire perishable side job bonus from the selected district.",
+                    OnActivate = callbacks.ClearDistrictBonus,
+                },
+                new MenuItem
+                {
                     CaptionFactory = () => "Add selected resource",
                     DetailFactory = () => "Adds the selected tonnage to the highlighted nearby industry resource.",
                     OnActivate = callbacks.AddSelectedResourceToNearbyIndustry,
@@ -272,6 +302,12 @@ namespace LSOL.UI
                     CaptionFactory = () => "Add skill level",
                     DetailFactory = () => "Advances the selected skill by exactly one level.",
                     OnActivate = callbacks.AddSkillLevel,
+                },
+                new MenuItem
+                {
+                    CaptionFactory = callbacks.BusProbeCaption,
+                    DetailFactory = callbacks.BusProbeDetail,
+                    OnActivate = callbacks.LogBusProbe,
                 },
                 new MenuItem
                 {

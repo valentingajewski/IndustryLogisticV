@@ -46,6 +46,9 @@
   </Group>
   <Group name="Refrigeration" cargoType="Refrigeration">
     <Commodity name="Meat" basePrice="900" substituteFamily="ConsumerStaples" demandClasses="EmergencyRelief" substitutes="ProcessedFood:0.54" perishability="0.95" sinkElasticity="0.28" sinkPreference="1.05" eventAffinity="1.10" volatility="1.18" />
+    <!-- Restaurant outputs. Their base price also feeds the Food Delivery side job fare, so keep them in the finished-goods band. -->
+    <Commodity name="Pizza" basePrice="1200" substituteFamily="StoreConsumables" demandClasses="EmergencyRelief" substitutes="Burger:0.62" perishability="0.85" sinkPreference="1.05" eventAffinity="1.10" />
+    <Commodity name="Burger" basePrice="1200" substituteFamily="StoreConsumables" demandClasses="EmergencyRelief" substitutes="Pizza:0.62" perishability="0.85" sinkPreference="1.05" eventAffinity="1.10" />
   </Group>
   <Group name="Recyclable" cargoType="Recyclable">
     <Commodity name="Recyclable" basePrice="180" substituteFamily="IndustrialFeedstock" demandClasses="SupplyRelief" sinkElasticity="0.72" />

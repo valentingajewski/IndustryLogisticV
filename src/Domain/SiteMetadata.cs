@@ -19,6 +19,13 @@ namespace LSOL.Domain
         Depot = 12,
         StorageYard = 13,
         TruckYard = 14,
+
+        /// <summary>
+        /// Restaurant: a ProcessingPlant that turns ProcessedFood/Meat into Pizza or Burger and doubles
+        /// as a Food Delivery side job hub (RestaurantPickup). Behaviourally a production site - the
+        /// role exists so the Food Delivery job, the tablet and the docs can label it.
+        /// </summary>
+        Restaurant = 15,
     }
 
     public enum SiteOwnershipTier
@@ -78,6 +85,8 @@ namespace LSOL.Domain
                     return SiteRole.StorageYard;
                 case "truckyard":
                     return SiteRole.TruckYard;
+                case "restaurant":
+                    return SiteRole.Restaurant;
                 default:
                     return SiteRole.Unknown;
             }

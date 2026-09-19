@@ -394,7 +394,7 @@ namespace LSOL.Systems
                             var revenue = baseRevenue * conditionRatio;
                             if (_territoryManager != null)
                             {
-                                revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
+                                revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue, true);
                                 _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                             }
 
@@ -702,7 +702,7 @@ namespace LSOL.Systems
                             var revenue = _industryManager.ComputeDeliveryProfit(industry, commodity, accepted, _globalMarket, Game.GameTime);
                             if (_territoryManager != null)
                             {
-                                revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue);
+                                revenue = _territoryManager.AdjustDeliveryRevenue(industry, commodity, accepted, revenue, true);
                                 _territoryManager.RegisterDelivery(industry, commodity, accepted, false, sourceIndustryId, sourceDistrictName);
                             }
 

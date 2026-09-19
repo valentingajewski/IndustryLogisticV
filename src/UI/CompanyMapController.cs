@@ -454,9 +454,11 @@ namespace LSOL.UI
                 var licenseForecast = CompanyMapForecastFormatter.BuildDistrictLicenseForecast(district);
                 TerritoryDistrictOperationsEntry districtOperations;
                 operationsByDistrict.TryGetValue(district.DistrictName, out districtOperations);
+                var districtBonusSuffix = CompanyMapDistrictBonusFormatter.BuildShortSuffix(
+                    _territoryManager != null ? _territoryManager.GetDistrictBonusBreakdown(district.DistrictName) : null);
                 items.Add(new MenuItem
                 {
-                    CaptionFactory = () => string.Format("{0} {1}", district.DistrictName, FormatReputationLabel(reputationLabel)),
+                    CaptionFactory = () => string.Format("{0} {1}{2}", district.DistrictName, FormatReputationLabel(reputationLabel), districtBonusSuffix),
                     DetailFactory = () => string.Format(
                         "Influence {0} | Charter {1}{2} | Depots {3} | Corridors {4}{5} | Ops {6}/wk{7}",
                         ModFormatting.FormatPercent(district.InfluenceRatio * 100f),
@@ -520,6 +522,15 @@ namespace LSOL.UI
                     ? "District is established enough to support local fleet privileges and better delivery terms."
                     : "Grow deliveries, depots, and corridors here to anchor the district.",
                 ProgressRatioFactory = () => Math.Max(0f, Math.Min(1f, district.InfluenceRatio)),
+            });
+            var districtBonus = _territoryManager != null
+                ? _territoryManager.GetDistrictBonusBreakdown(district.DistrictName)
+                : null;
+            items.Add(new MenuItem
+            {
+                CaptionFactory = () => CompanyMapDistrictBonusFormatter.BuildCaption(districtBonus),
+                DetailFactory = () => CompanyMapDistrictBonusFormatter.BuildDetail(districtBonus),
+                ProgressRatioFactory = () => CompanyMapDistrictBonusFormatter.GetProgressRatio(districtBonus),
             });
             items.Add(new MenuItem
             {
@@ -1821,26 +1832,7 @@ namespace LSOL.UI
 
         internal static string FormatDistrictDisplayName(string name)
         {
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return string.Empty;
-            }
-
-            var builder = new StringBuilder(name.Length + 4);
-            for (int i = 0; i < name.Length; i++)
-            {
-                var current = name[i];
-                if (i > 0
-                    && char.IsUpper(current)
-                    && (char.IsLower(name[i - 1]) || (i + 1 < name.Length && char.IsLower(name[i + 1]))))
-                {
-                    builder.Append(' ');
-                }
-
-                builder.Append(current);
-            }
-
-            return builder.ToString().Trim();
+            return ModFormatting.FormatDistrictName(name);
         }
 
         internal static SizeF GetNetworkNodeSize(string districtName)

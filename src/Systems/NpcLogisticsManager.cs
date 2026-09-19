@@ -4539,7 +4539,7 @@ namespace LSOL.Systems
             var revenue = _industryManager.ComputeDeliveryProfit(contract.DestinationIndustry, contract.Commodity, acceptedTons, _globalMarket, now);
             if (_territoryManager != null)
             {
-                revenue = _territoryManager.AdjustDeliveryRevenue(contract.DestinationIndustry, contract.Commodity, acceptedTons, revenue);
+                revenue = _territoryManager.AdjustDeliveryRevenue(contract.DestinationIndustry, contract.Commodity, acceptedTons, revenue, false);
                 _territoryManager.RegisterDelivery(
                     contract.DestinationIndustry,
                     contract.Commodity,

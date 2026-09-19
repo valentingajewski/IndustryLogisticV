@@ -379,9 +379,10 @@ namespace LSOL.UI
                 items.Add(TabletUiHelpers.CreateInfoItem(
                     district.DistrictName,
                     string.Format(
-                        "{0} influence | {1} | Charter {2}{3}{4}{5} | Comp {6} / Opp {7} | Lanes {8}{9}{10}",
+                        "{0} influence | {1} | {2} | Charter {3}{4}{5}{6} | Comp {7} / Opp {8} | Lanes {9}{10}{11}",
                         ModFormatting.FormatPercent(district.InfluencePercent),
                         district.ReputationLabel,
+                        CompanyMapDistrictBonusFormatter.BuildTabletSummary(district.DistrictBonusPercent, district.DistrictBonusTopContributor),
                         district.LicenseStatus,
                         district.LicenseTargetTons > 0.01f
                             ? string.Format(" {0:0}/{1:0} t", district.LicenseActivityTons, district.LicenseTargetTons)

@@ -85,8 +85,8 @@ Grouped catalog reference docs now live alongside the player guides in these gen
 
 - [Industries/Industries.md](Industries/Industries.md): 28 entries covering roles Raw Producers, Processing Plants, Manufacturing Plants, Recycling Hubs, Special Plants
 - [Sites/GasStations.md](Sites/GasStations.md): 25 entries covering roles Gas Stations
-- [Sites/OperationalSites.md](Sites/OperationalSites.md): 12 entries covering roles Warehouses, Construction Site Sinks
-- [Stores/Stores.md](Stores/Stores.md): 15 entries covering roles Stores
+- [Sites/OperationalSites.md](Sites/OperationalSites.md): 17 entries covering roles Warehouses, Construction Site Sinks, Restaurant
+- [Stores/Stores.md](Stores/Stores.md): 19 entries covering roles Stores
 
 Folder indexes:
 
