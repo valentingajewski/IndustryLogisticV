@@ -1,45 +1,15 @@
 <JobCoordinates>
-  <!--
-    Job coordinate points. Each point = one location + one function for the job loop.
-
-    Common attributes:
-      id, name, job, function, x, y, z, heading
-
-    job:      TowTruck | FoodDelivery | Garbage | Bus
-    function: per job, see vocabulary below.
-    heading:  optional facing in degrees.
-
-    Function vocabulary:
-      TowTruck      TowDropoff          garage where a towed vehicle is delivered
-      FoodDelivery  RestaurantPickup     restaurant: job garage, meal loading point and start of a run.
-                                         site="<legacyKey>" links the point to its Sites.xml restaurant
-                                         (role="Restaurant"): the site's marker, district, product
-                                         commodity and ingredient stock win over the coordinates
-                                         below, which are only the fallback anchor used when the site
-                                         cannot be resolved. serviceRadius="5000" is the metre radius
-                                         around the restaurant the job delivers inside. Keep it larger
-                                         than the longest distance band or far customers never appear.
-                    CustomerDropoff      one customer address of the shared delivery pool. The pool is
-                                         shared on purpose: the job keeps the candidates that are
-                                         inside the restaurant's serviceRadius and inside the rolled
-                                         distance band, so one address can serve any restaurant that
-                                         is close enough. district= must match Districts.xml.
-      Garbage       GarbageDepot         depot: spawn garbage trucks, start/choose a route, and tip loads
-      Bus           BusStop              passenger stop
-                    BusDepot             route start/end depot
-
-    Coordinates are example placeholders; replace with final locations.
-  -->
 
   <!-- Towing -->
   <JobPoint id="1" name="Strawberry Garage" job="TowTruck" function="TowDropoff" district="SouthLosSantos" x="-194.43" y="-1385.20" z="31.19" heading="230" />
 
   <!-- Food Delivery -->
-  <JobPoint id="5" name="Well Stacked Pizza (Vespucci)" job="FoodDelivery" function="RestaurantPickup" site="WellStackedPizzaVespucci" serviceRadius="5000" x="-1244.5" y="-1490.2" z="4.3" heading="0" />
-  <JobPoint id="40" name="Burger Shot (Vinewood)" job="FoodDelivery" function="RestaurantPickup" site="BurgerShotVinewood" serviceRadius="5000" x="292.0" y="180.0" z="89.6" heading="0" />
-  <JobPoint id="41" name="Cluckin' Bell (Davis)" job="FoodDelivery" function="RestaurantPickup" site="CluckinBellDavis" serviceRadius="5000" x="143.2" y="-1952.7" z="30.1" heading="0" />
-  <JobPoint id="42" name="Pizza This... (Cypress Flats)" job="FoodDelivery" function="RestaurantPickup" site="PizzaThisCypress" serviceRadius="5000" x="850.0" y="-2400.0" z="20.0" heading="0" />
-
+  <!--
+    The only Food Delivery data here is this shared customer address pool. Restaurants are ordinary
+    Sites.xml industries (role="Restaurant") whose marker, VehicleSpawn and district drive the job, and
+    they are opened from the industry tablet's "Food Deliveries" action like any other industry action.
+    Meals are drawn as ingredients (ProcessedFood/Meat) from the restaurant's input tank.
+  -->
   <!-- Downtown -->
   <JobPoint id="200" name="Maze Bank Tower" job="FoodDelivery" function="CustomerDropoff" district="Downtown" x="-75.0" y="-818.0" z="326.0" />
   <JobPoint id="201" name="Legion Square" job="FoodDelivery" function="CustomerDropoff" district="Downtown" x="195.0" y="-946.0" z="30.0" />

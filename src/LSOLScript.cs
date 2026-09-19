@@ -125,10 +125,6 @@ namespace LSOL
         private readonly LemonMenu _busGarageMenu;
         private readonly LemonMenu _busRouteMenu;
         private readonly LemonMenu _busDealershipMenu;
-        private readonly LemonMenu _foodDeliveryRestaurantMenu;
-        private readonly LemonMenu _foodDeliveryGarageMenu;
-        private readonly LemonMenu _foodDeliveryDealershipMenu;
-        private readonly LemonMenu _foodDeliveryDispatchMenu;
         private readonly LemonMenu _sideJobsMenu;
         private readonly LemonMenu _sideJobDetailMenu;
         private readonly Dictionary<string, bool> _sideJobEnabled;
@@ -243,9 +239,6 @@ namespace LSOL
         private GarbagePersistenceSnapshot _pendingGarbageRestore;
         private BusPersistenceSnapshot _pendingBusRestore;
         private FoodDeliveryPersistenceSnapshot _pendingFoodDeliveryRestore;
-
-        /// <summary>Restaurant the food delivery menus were opened from.</summary>
-        private string _menuFoodDeliveryRestaurantKey = string.Empty;
 
         public LSOLScript()
         {
@@ -625,34 +618,6 @@ namespace LSOL
                 MaxVisibleItems = 10,
                 Theme = LemonMenuTheme.Default,
             };
-            _foodDeliveryRestaurantMenu = new LemonMenu("Restaurant")
-            {
-                Subtitle = "Garage, deliveries and menus",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
-            _foodDeliveryGarageMenu = new LemonMenu("Restaurant Garage")
-            {
-                Subtitle = "Take out or park a delivery vehicle",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
-            _foodDeliveryDealershipMenu = new LemonMenu("Delivery Vehicles")
-            {
-                Subtitle = "Buy a vehicle for the food delivery job",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
-            _foodDeliveryDispatchMenu = new LemonMenu("Deliveries")
-            {
-                Subtitle = "Load meals and start a run",
-                AlignRight = true,
-                MaxVisibleItems = 10,
-                Theme = LemonMenuTheme.Default,
-            };
             _sideJobsMenu = new LemonMenu("Side Jobs")
             {
                 Subtitle = "Activate or hide side jobs",
@@ -771,7 +736,7 @@ namespace LSOL
                 (amount, description) => DeductProfit(CompanyFinanceCategory.OtherExpense, amount, description),
                 GetSideJobDistrictBonusExcluding,
                 ReportSideJobDistrictCompletion,
-                ResolveFoodDeliveryRestaurant,
+                ResolveFoodDeliveryRestaurants,
                 GetFoodDeliveryRestaurantStock,
                 DrawFoodDeliveryRestaurantIngredient);
             _territoryManager.ConfigureEndgameContext(
@@ -797,6 +762,7 @@ namespace LSOL
                 HandleTabletRefuelRequested,
                 HandleTabletUpgradeModuleRequested,
                 HandleTabletVehicleSpawnerRequested,
+                _foodDeliverySideJobSystem,
                 PurchaseIndustryFromTablet));
             _startingGuidesController = new StartingGuidesController(
                 _industryManager,
@@ -888,10 +854,6 @@ namespace LSOL
                     || _busGarageMenu.IsOpen
                     || _busRouteMenu.IsOpen
                     || _busDealershipMenu.IsOpen
-                || _foodDeliveryRestaurantMenu.IsOpen
-                || _foodDeliveryGarageMenu.IsOpen
-                || _foodDeliveryDealershipMenu.IsOpen
-                || _foodDeliveryDispatchMenu.IsOpen
                     || _sideJobsMenu.IsOpen
                     || _sideJobDetailMenu.IsOpen
                     || HasPropertyMenuOpen()
@@ -1174,16 +1136,6 @@ namespace LSOL
                     if (_busSideJobSystem.TryGetNearestBusDepot(player.Position, 6f, out busDepotPosition, out busDepotName, out busDepotHeading))
                     {
                         OpenBusDepotMenu();
-                        return;
-                    }
-
-                    Vector3 restaurantPosition;
-                    string restaurantName;
-                    float restaurantHeading;
-                    string restaurantKey;
-                    if (_foodDeliverySideJobSystem.TryGetNearestRestaurant(player.Position, 6f, out restaurantPosition, out restaurantName, out restaurantHeading, out restaurantKey))
-                    {
-                        OpenFoodDeliveryRestaurantMenu(restaurantKey);
                         return;
                     }
                 }
@@ -1505,57 +1457,6 @@ namespace LSOL
                 return true;
             }
 
-            if (_foodDeliveryRestaurantMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _foodDeliveryRestaurantMenu.Close();
-                    return true;
-                }
-
-                _foodDeliveryRestaurantMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_foodDeliveryGarageMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _foodDeliveryGarageMenu.Close();
-                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
-                    return true;
-                }
-
-                _foodDeliveryGarageMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_foodDeliveryDealershipMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _foodDeliveryDealershipMenu.Close();
-                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
-                    return true;
-                }
-
-                _foodDeliveryDealershipMenu.HandleKey(key, _controls);
-                return true;
-            }
-
-            if (_foodDeliveryDispatchMenu.IsOpen)
-            {
-                if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
-                {
-                    _foodDeliveryDispatchMenu.Close();
-                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
-                    return true;
-                }
-
-                _foodDeliveryDispatchMenu.HandleKey(key, _controls);
-                return true;
-            }
-
             if (_sideJobDetailMenu.IsOpen)
             {
                 if (key == _controls.MenuBack || key == WinForms.Keys.Escape)
@@ -1644,17 +1545,13 @@ namespace LSOL
             _busGarageMenu.Draw();
             _busRouteMenu.Draw();
             _busDealershipMenu.Draw();
-            _foodDeliveryRestaurantMenu.Draw();
-            _foodDeliveryGarageMenu.Draw();
-            _foodDeliveryDealershipMenu.Draw();
-            _foodDeliveryDispatchMenu.Draw();
             _sideJobsMenu.Draw();
             _sideJobDetailMenu.Draw();
             DrawPropertyMenus();
             _npcLogisticsController.Draw();
             _companyMapController.Draw();
 
-            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _garbageDepotMenu.IsOpen || _garbageGarageMenu.IsOpen || _garbageRouteMenu.IsOpen || _garbageDealershipMenu.IsOpen || _busDepotMenu.IsOpen || _busGarageMenu.IsOpen || _busRouteMenu.IsOpen || _busDealershipMenu.IsOpen || _foodDeliveryRestaurantMenu.IsOpen || _foodDeliveryGarageMenu.IsOpen || _foodDeliveryDealershipMenu.IsOpen || _foodDeliveryDispatchMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
+            if (_modControlMenu.IsOpen || _savingOptionsMenu.IsOpen || _newSaveSetupMenu.IsOpen || _saveSlotsMenu.IsOpen || _industryPurchaseMenu.IsOpen || _difficultyMenu.IsOpen || _difficultyActionsMenu.IsOpen || _difficultyTemplateMenu.IsOpen || _optionsMenu.IsOpen || _notificationsMenu.IsOpen || _officeMenu.IsOpen || (_bankMenu != null && _bankMenu.IsOpen) || _vehicleCargoMenu.IsOpen || _debugMenu.IsOpen || _debugMissionMenu.IsOpen || _towTruckMenu.IsOpen || _garbageDepotMenu.IsOpen || _garbageGarageMenu.IsOpen || _garbageRouteMenu.IsOpen || _garbageDealershipMenu.IsOpen || _busDepotMenu.IsOpen || _busGarageMenu.IsOpen || _busRouteMenu.IsOpen || _busDealershipMenu.IsOpen || _sideJobsMenu.IsOpen || _sideJobDetailMenu.IsOpen || HasPropertyMenuOpen() || _npcLogisticsController.AnyMenuOpen || _companyMapController.AnyMenuOpen)
             {
                 return;
             }
@@ -2162,13 +2059,40 @@ namespace LSOL
         }
 
         /// <summary>
-        /// Resolves a restaurant site key to the live industry data the food delivery job needs:
-        /// position, district, single product, base price, ingredient stock and ownership. The side job
-        /// never sees the IndustryManager itself.
+        /// Every restaurant of the industry catalog. Restaurants are ordinary Sites.xml industries
+        /// (role="Restaurant"): the site is the only place a restaurant is defined, so adding one there
+        /// is enough for the job to pick it up.
         /// </summary>
-        private FoodDeliveryRestaurantInfo ResolveFoodDeliveryRestaurant(string siteKey)
+        private IReadOnlyList<FoodDeliveryRestaurantInfo> ResolveFoodDeliveryRestaurants()
         {
-            var industry = FindRestaurantIndustry(siteKey);
+            var result = new List<FoodDeliveryRestaurantInfo>();
+            var industries = _industryManager != null ? _industryManager.Industries : null;
+            if (industries == null)
+            {
+                return result;
+            }
+
+            for (int i = 0; i < industries.Count; i++)
+            {
+                var industry = industries[i];
+                if (industry == null || industry.SiteRole != SiteRole.Restaurant || industry.Position == Vector3.Zero)
+                {
+                    continue;
+                }
+
+                var info = BuildFoodDeliveryRestaurantInfo(industry);
+                if (info != null)
+                {
+                    result.Add(info);
+                }
+            }
+
+            return result;
+        }
+
+        /// <summary>Builds the job's view of one restaurant from its live industry.</summary>
+        private FoodDeliveryRestaurantInfo BuildFoodDeliveryRestaurantInfo(Industry industry)
+        {
             if (industry == null)
             {
                 return null;
@@ -2193,33 +2117,21 @@ namespace LSOL
                 _config.CommodityBasePrices.TryGetValue(product, out basePrice);
             }
 
-            var serviceRadius = 0f;
-            var restaurants = _foodDeliverySideJobSystem != null ? _foodDeliverySideJobSystem.GetRestaurants() : null;
-            if (restaurants != null)
-            {
-                for (int i = 0; i < restaurants.Count; i++)
-                {
-                    var definition = restaurants[i];
-                    if (definition != null && string.Equals(definition.SiteKey, siteKey, StringComparison.OrdinalIgnoreCase))
-                    {
-                        serviceRadius = definition.ServiceRadius;
-                        break;
-                    }
-                }
-            }
-
             return new FoodDeliveryRestaurantInfo
             {
-                SiteKey = siteKey,
+                SiteKey = string.IsNullOrWhiteSpace(industry.LegacyKey) ? industry.Id : industry.LegacyKey,
                 Name = industry.Name,
                 District = industry.DistrictName,
                 ProductCommodity = product,
                 Position = industry.Position,
                 Heading = industry.VehicleSpawnHeading.GetValueOrDefault(0f),
-                ServiceRadius = serviceRadius,
+                SpawnPosition = industry.VehicleSpawnPosition ?? industry.Position,
+                SpawnHeading = industry.VehicleSpawnHeading.GetValueOrDefault(0f),
+                SpawnResolved = industry.VehicleSpawnPosition.HasValue,
+                ServiceRadius = FoodDeliverySideJobSystem.DefaultServiceRadius,
                 ProductBasePrice = basePrice,
                 IsOwned = _industryManager.IsIndustryOwnedForGameplay(industry),
-                PositionResolved = industry.Position != Vector3.Zero,
+                PositionResolved = true,
             };
         }
 
@@ -2259,342 +2171,6 @@ namespace LSOL
         {
             var industry = FindRestaurantIndustry(siteKey);
             return industry != null ? industry.RemoveInput(commodity, tons) : 0f;
-        }
-
-        private FoodDeliveryRestaurantDefinition FindFoodDeliveryRestaurantDefinition(string restaurantKey)
-        {
-            var system = _foodDeliverySideJobSystem;
-            if (system == null)
-            {
-                return null;
-            }
-
-            var restaurants = system.GetRestaurants();
-            for (int i = 0; i < restaurants.Count; i++)
-            {
-                var definition = restaurants[i];
-                if (definition == null)
-                {
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(restaurantKey)
-                    || string.Equals(definition.SiteKey, restaurantKey, StringComparison.OrdinalIgnoreCase))
-                {
-                    return definition;
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>Re-reads the restaurant, address pool and vehicle definitions from the XML.</summary>
-        private void ReloadFoodDeliveryConfig()
-        {
-            if (_foodDeliverySideJobSystem == null)
-            {
-                return;
-            }
-
-            string message;
-            _foodDeliverySideJobSystem.TryReloadConfiguration(out message);
-            if (!string.IsNullOrWhiteSpace(message))
-            {
-                ShowStatus(message, 4000);
-            }
-        }
-
-        /// <summary>
-        /// Closes every food delivery menu except the one about to be opened, so picking an entry
-        /// never stacks two menus on the same anchor.
-        /// </summary>
-        private void CloseFoodDeliveryJobMenus(LemonMenu menuToKeepOpen)
-        {
-            if (_foodDeliveryRestaurantMenu != menuToKeepOpen)
-            {
-                _foodDeliveryRestaurantMenu.Close();
-            }
-
-            if (_foodDeliveryGarageMenu != menuToKeepOpen)
-            {
-                _foodDeliveryGarageMenu.Close();
-            }
-
-            if (_foodDeliveryDealershipMenu != menuToKeepOpen)
-            {
-                _foodDeliveryDealershipMenu.Close();
-            }
-
-            if (_foodDeliveryDispatchMenu != menuToKeepOpen)
-            {
-                _foodDeliveryDispatchMenu.Close();
-            }
-        }
-
-        private void OpenFoodDeliveryRestaurantMenu(string restaurantKey)
-        {
-            CloseFoodDeliveryJobMenus(_foodDeliveryRestaurantMenu);
-
-            _menuFoodDeliveryRestaurantKey = restaurantKey ?? string.Empty;
-
-            var system = _foodDeliverySideJobSystem;
-            var definition = FindFoodDeliveryRestaurantDefinition(_menuFoodDeliveryRestaurantKey);
-            var info = !string.IsNullOrWhiteSpace(_menuFoodDeliveryRestaurantKey)
-                ? ResolveFoodDeliveryRestaurant(_menuFoodDeliveryRestaurantKey)
-                : null;
-
-            var hasVehicleOut = system != null && system.HasVehicleOut;
-            var hasRun = system != null && system.HasActiveRun;
-
-            _foodDeliveryRestaurantMenu.SetItems(new[]
-            {
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Garage",
-                    DetailFactory = () => hasVehicleOut
-                        ? "A delivery vehicle is out. Park it or take another one out."
-                        : "Take a delivery vehicle out of the job garage or park the current one.",
-                    OnActivate = OpenFoodDeliveryGarageMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => hasRun ? "Deliveries (run in progress)" : "Start deliveries",
-                    DetailFactory = () => hasRun
-                        ? "You are carrying meals. Finish the run before loading more."
-                        : "Load meals from this restaurant and roll the first customer.",
-                    OnActivate = OpenFoodDeliveryDispatchMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Buy Delivery Vehicle",
-                    DetailFactory = () => "Buy a delivery scooter or food truck for this side job.",
-                    OnActivate = OpenFoodDeliveryDealershipMenu,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => "Reload restaurant config",
-                    DetailFactory = () => "Re-read JobCoordinates.xml and JobVehicles.xml without a rebuild.",
-                    OnActivate = ReloadFoodDeliveryConfig,
-                },
-                new OfficeMenuItem
-                {
-                    CaptionFactory = () => Text(ModTextKey.CommonBack),
-                    OnActivate = () => _foodDeliveryRestaurantMenu.Close(),
-                },
-            });
-
-            _foodDeliveryRestaurantMenu.Subtitle = info != null && !string.IsNullOrWhiteSpace(info.Name)
-                ? info.Name
-                : definition != null && !string.IsNullOrWhiteSpace(definition.Name)
-                    ? definition.Name
-                    : "Restaurant";
-            _foodDeliveryRestaurantMenu.Open();
-        }
-
-        private void OpenFoodDeliveryGarageMenu()
-        {
-            CloseFoodDeliveryJobMenus(_foodDeliveryGarageMenu);
-
-            var system = _foodDeliverySideJobSystem;
-            var items = new List<OfficeMenuItem>();
-            var owned = system != null ? system.GetOwnedVehicles() : null;
-            if (owned != null)
-            {
-                foreach (var vehicle in owned)
-                {
-                    if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.ModelName))
-                    {
-                        continue;
-                    }
-
-                    var modelName = vehicle.ModelName;
-                    items.Add(new OfficeMenuItem
-                    {
-                        CaptionFactory = () => string.Format("{0} ({1} meals)", vehicle.Name, vehicle.MealCapacity),
-                        DetailFactory = () => system != null && system.IsActiveVehicleOut(modelName)
-                            ? "Take it out, or park it back in the garage."
-                            : "Take this vehicle out of the garage.",
-                        OnActivate = () =>
-                        {
-                            if (system == null)
-                            {
-                                return;
-                            }
-
-                            string message;
-                            if (system.IsActiveVehicleOut(modelName))
-                            {
-                                if (system.TryStoreVehicle(Game.Player.Character, out message))
-                                {
-                                    ShowStatus(message, 4000);
-                                    OpenFoodDeliveryGarageMenu();
-                                }
-                                else
-                                {
-                                    ShowStatus(message, 4000);
-                                }
-
-                                return;
-                            }
-
-                            if (system.TrySpawnVehicle(modelName, Game.Player.Character, out message))
-                            {
-                                ShowStatus(message, 4000);
-                                OpenFoodDeliveryDispatchMenu();
-                            }
-                            else if (!string.IsNullOrWhiteSpace(message))
-                            {
-                                ShowStatus(message, 4000);
-                            }
-                        },
-                    });
-                }
-            }
-
-            if (items.Count == 0)
-            {
-                items.Add(new OfficeMenuItem
-                {
-                    CaptionFactory = () => "No vehicles in the garage",
-                    DetailFactory = () => "Buy a delivery vehicle from the restaurant menu first.",
-                    OnActivate = OpenFoodDeliveryDealershipMenu,
-                });
-            }
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => Text(ModTextKey.CommonBack),
-                OnActivate = () =>
-                {
-                    _foodDeliveryGarageMenu.Close();
-                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
-                },
-            });
-
-            _foodDeliveryGarageMenu.SetItems(items.ToArray());
-            _foodDeliveryGarageMenu.Open();
-        }
-
-        private void OpenFoodDeliveryDealershipMenu()
-        {
-            CloseFoodDeliveryJobMenus(_foodDeliveryDealershipMenu);
-
-            var system = _foodDeliverySideJobSystem;
-            var items = new List<OfficeMenuItem>();
-            var vehicles = system != null ? system.GetVehicles() : null;
-            if (vehicles != null)
-            {
-                foreach (var vehicle in vehicles)
-                {
-                    if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.ModelName))
-                    {
-                        continue;
-                    }
-
-                    var modelName = vehicle.ModelName;
-                    items.Add(new OfficeMenuItem
-                    {
-                        CaptionFactory = () => string.Format("{0} ({1} meals)", vehicle.Name, vehicle.MealCapacity),
-                        DetailFactory = () => system != null && system.OwnsVehicle(modelName)
-                            ? "Already parked in the delivery garage."
-                            : string.Format(
-                                "Requires Food Delivery level {0}. Price {1}.",
-                                vehicle.UnlockLevel,
-                                ModFormatting.FormatMoney(vehicle.Price)),
-                        OnActivate = () =>
-                        {
-                            if (system == null)
-                            {
-                                return;
-                            }
-
-                            string message;
-                            if (system.TryBuyVehicle(modelName, out message))
-                            {
-                                ShowStatus(message, 4000);
-                                OpenFoodDeliveryDealershipMenu();
-                            }
-                            else if (!string.IsNullOrWhiteSpace(message))
-                            {
-                                ShowStatus(message, 4000);
-                            }
-                        },
-                    });
-                }
-            }
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => Text(ModTextKey.CommonBack),
-                OnActivate = () =>
-                {
-                    _foodDeliveryDealershipMenu.Close();
-                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
-                },
-            });
-
-            _foodDeliveryDealershipMenu.SetItems(items.ToArray());
-            _foodDeliveryDealershipMenu.Open();
-        }
-
-        private void OpenFoodDeliveryDispatchMenu()
-        {
-            CloseFoodDeliveryJobMenus(_foodDeliveryDispatchMenu);
-
-            var system = _foodDeliverySideJobSystem;
-            var hasVehicleOut = system != null && system.HasVehicleOut;
-            var hasRun = system != null && system.HasActiveRun;
-            var loaded = system != null ? system.LoadedMeals : 0;
-            var delivered = system != null ? system.MealsDelivered : 0;
-            var product = system != null ? system.ProductCommodity : string.Empty;
-
-            var items = new List<OfficeMenuItem>();
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => hasRun ? "Run in progress" : "Load meals and start the run",
-                DetailFactory = () => hasRun
-                    ? string.Format(
-                        "{0}: {1} of {2} meal(s) delivered.",
-                        string.IsNullOrWhiteSpace(product) ? "Meals" : product,
-                        delivered,
-                        loaded + delivered)
-                    : hasVehicleOut
-                        ? "Take up to the vehicle capacity in meals from this restaurant."
-                        : "Take a delivery vehicle out of the garage first.",
-                OnActivate = () =>
-                {
-                    if (system == null || hasRun)
-                    {
-                        _foodDeliveryDispatchMenu.Close();
-                        return;
-                    }
-
-                    string message;
-                    if (system.TryStartRun(_menuFoodDeliveryRestaurantKey, out message))
-                    {
-                        ShowStatus(message, 4000);
-                        _foodDeliveryDispatchMenu.Close();
-                    }
-                    else if (!string.IsNullOrWhiteSpace(message))
-                    {
-                        ShowStatus(message, 4000);
-                    }
-                },
-            });
-
-            items.Add(new OfficeMenuItem
-            {
-                CaptionFactory = () => Text(ModTextKey.CommonBack),
-                OnActivate = () =>
-                {
-                    _foodDeliveryDispatchMenu.Close();
-                    OpenFoodDeliveryRestaurantMenu(_menuFoodDeliveryRestaurantKey);
-                },
-            });
-
-            _foodDeliveryDispatchMenu.SetItems(items.ToArray());
-            _foodDeliveryDispatchMenu.Open();
         }
 
         private void OpenGarbageDealershipMenu()

@@ -961,30 +961,9 @@
       <Impossible purchasePrice="198000" inputCapacityTons="39" outputCapacityTons="0" productionRatio="0" permitRequired="false" productionRate="0" licencePrice="0" />
     </Economy>
   </Site>
-  <!--
-    Restaurants (role="Restaurant"): ProcessedFood/Meat sinks that produce ONE finished good each and
-    double as Food Delivery side job hubs. Link a restaurant to the job with a RestaurantPickup JobPoint
-    in LSOL_Config/SideJobs/JobCoordinates.xml using site="<legacyKey>".
-    productionRate is the ingredient appetite (restaurant sized, not factory sized); the seeded
-    startingTankRatio 0.3 of inputCapacityTons is what gives the delivery job ingredient stock on day one.
-    Coordinates below are placeholders: replace them with the final restaurant spots.
-  -->
-  <Site catalogId="130" legacyKey="WellStackedPizzaVespucci" name="Well Stacked Pizza Co. (Vespucci)" role="Restaurant" district="WestLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
-    <Marker x="-1244.5" y="-1490.2" z="4.3" />
-    <VehicleSpawn x="-1244.5" y="-1490.2" z="4.3" heading="0" />
-    <Worker x="-1250" y="-1495" z="4.3" />
-    <Inputs primary="ProcessedFood,Meat" outputs="Pizza" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Pizza:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
-    <Economy>
-      <Casual productionRate="7.2" licencePrice="12600" purchasePrice="225000" inputCapacityTons="144" outputCapacityTons="108" productionRatio="1" permitRequired="true" />
-      <Standard productionRate="6" licencePrice="18000" purchasePrice="300000" inputCapacityTons="120" outputCapacityTons="90" productionRatio="1" permitRequired="true" />
-      <Hardcore productionRate="5.1" licencePrice="24300" purchasePrice="420000" inputCapacityTons="96" outputCapacityTons="72" productionRatio="1" permitRequired="true" />
-      <Impossible productionRate="4.2" licencePrice="30600" purchasePrice="540000" inputCapacityTons="78" outputCapacityTons="58.5" productionRatio="1" permitRequired="true" />
-    </Economy>
-  </Site>
-  <Site catalogId="131" legacyKey="BurgerShotVinewood" name="Burger Shot (Vinewood Boulevard)" role="Restaurant" district="Vinewood" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
-    <Marker x="292" y="180" z="89.6" />
-    <VehicleSpawn x="292" y="180" z="89.6" heading="0" />
-    <Worker x="288" y="186" z="89.6" />
+  <Site catalogId="130" legacyKey="UpNAtom" name="Vinewood Up-n-Atom Burger" role="Restaurant" district="Vinewood" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="91.92" y="303.93" z="110.01" />
+    <VehicleSpawn x="111" y="295.28" z="110" heading="75" />
     <Inputs primary="ProcessedFood,Meat" outputs="Burger" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Burger:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
     <Economy>
       <Casual productionRate="7.2" licencePrice="12600" purchasePrice="225000" inputCapacityTons="144" outputCapacityTons="108" productionRatio="1" permitRequired="true" />
@@ -993,10 +972,9 @@
       <Impossible productionRate="4.2" licencePrice="30600" purchasePrice="540000" inputCapacityTons="78" outputCapacityTons="58.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
-  <Site catalogId="132" legacyKey="CluckinBellDavis" name="Cluckin' Bell (Davis)" role="Restaurant" district="SouthLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
-    <Marker x="143.2" y="-1952.7" z="30.1" />
-    <VehicleSpawn x="143.2" y="-1952.7" z="30.1" heading="0" />
-    <Worker x="148" y="-1948" z="30.1" />
+  <Site catalogId="131" legacyKey="BurgerShotVespucci" name="Vespucci Burger Shot" role="Restaurant" district="WestLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="-1177.82" y="-891.16" z="13.78" />
+    <VehicleSpawn x="-1172.92" y="-889.76" z="13.78" heading="37" />
     <Inputs primary="ProcessedFood,Meat" outputs="Burger" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Burger:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
     <Economy>
       <Casual productionRate="7.2" licencePrice="12600" purchasePrice="225000" inputCapacityTons="144" outputCapacityTons="108" productionRatio="1" permitRequired="true" />
@@ -1005,11 +983,65 @@
       <Impossible productionRate="4.2" licencePrice="30600" purchasePrice="540000" inputCapacityTons="78" outputCapacityTons="58.5" productionRatio="1" permitRequired="true" />
     </Economy>
   </Site>
-  <Site catalogId="133" legacyKey="PizzaThisCypress" name="Pizza This... (Cypress Flats)" role="Restaurant" district="Port" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.2" enabled="true">
-    <Marker x="850" y="-2400" z="20" />
-    <VehicleSpawn x="850" y="-2400" z="20" heading="0" />
-    <Worker x="855" y="-2395" z="20" />
+  <Site catalogId="132" legacyKey="PizzaThisVinewood" name="Pizza This Downtown Vinewood" role="Restaurant" district="Vinewood" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="537.46" y="101.19" z="96.53" />
+    <VehicleSpawn x="532.08" y="114.54" z="96.38" heading="340" />
     <Inputs primary="ProcessedFood,Meat" outputs="Pizza" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Pizza:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
+    <Economy>
+      <Casual productionRate="7.2" licencePrice="12600" purchasePrice="225000" inputCapacityTons="144" outputCapacityTons="108" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="6" licencePrice="18000" purchasePrice="300000" inputCapacityTons="120" outputCapacityTons="90" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="5.1" licencePrice="24300" purchasePrice="420000" inputCapacityTons="96" outputCapacityTons="72" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="4.2" licencePrice="30600" purchasePrice="540000" inputCapacityTons="78" outputCapacityTons="58.5" productionRatio="1" permitRequired="true" />
+    </Economy>
+  </Site>
+  <Site catalogId="133" legacyKey="PizzaThisMissionRow" name="Pizza This Mission Row" role="Restaurant" district="Downtown" startingTankRatio="0.3" ownershipTier="Local" industryOwnerCut="0.2" enabled="true">
+    <Marker x="287.11" y="-963.12" z="29.42" />
+    <VehicleSpawn x="287.12" y="-957.06" z="28.80" heading="266" />
+    <Inputs primary="ProcessedFood,Meat" outputs="Pizza" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Pizza:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
+    <Economy>
+      <Casual productionRate="4.8" licencePrice="7700" purchasePrice="150000" inputCapacityTons="96" outputCapacityTons="60" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="4" licencePrice="11000" purchasePrice="200000" inputCapacityTons="80" outputCapacityTons="50" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="3.4" licencePrice="14850" purchasePrice="280000" inputCapacityTons="64" outputCapacityTons="40" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="2.8" licencePrice="18700" purchasePrice="360000" inputCapacityTons="52" outputCapacityTons="32.5" productionRatio="1" permitRequired="true" />
+    </Economy>
+  </Site>
+  <Site catalogId="134" legacyKey="PizzaThisDelPerro" name="Pizza This Del Perro" role="Restaurant" district="WestLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="-1500.38" y="-892.36" z="10.11" />
+    <VehicleSpawn x="-1499.22" y="-890.16" z="09.61" heading="230" />
+    <Inputs primary="ProcessedFood,Meat" outputs="Pizza" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Pizza:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
+    <Economy>
+      <Casual productionRate="4.8" licencePrice="7700" purchasePrice="150000" inputCapacityTons="96" outputCapacityTons="60" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="4" licencePrice="11000" purchasePrice="200000" inputCapacityTons="80" outputCapacityTons="50" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="3.4" licencePrice="14850" purchasePrice="280000" inputCapacityTons="64" outputCapacityTons="40" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="2.8" licencePrice="18700" purchasePrice="360000" inputCapacityTons="52" outputCapacityTons="32.5" productionRatio="1" permitRequired="true" />
+    </Economy>
+  </Site>
+  <Site catalogId="135" legacyKey="CluckinBellRockfordPlaza" name="Cluckin Bell Rockford Plaza" role="Restaurant" district="Vinewood" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="-137.70" y="-251.40" z="43.74" />
+    <VehicleSpawn x="-130.15" y="-255.04" z="43.04" heading="162.38" />
+    <Inputs primary="ProcessedFood,Meat" outputs="Burger" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Burger:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
+    <Economy>
+      <Casual productionRate="4.8" licencePrice="7700" purchasePrice="150000" inputCapacityTons="96" outputCapacityTons="60" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="4" licencePrice="11000" purchasePrice="200000" inputCapacityTons="80" outputCapacityTons="50" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="3.4" licencePrice="14850" purchasePrice="280000" inputCapacityTons="64" outputCapacityTons="40" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="2.8" licencePrice="18700" purchasePrice="360000" inputCapacityTons="52" outputCapacityTons="32.5" productionRatio="1" permitRequired="true" />
+    </Economy>
+  </Site>
+  <Site catalogId="136" legacyKey="LuckyPluckerStrawberry" name="Lucky Plucker Strawberry" role="Restaurant" district="SouthLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="143.54" y="-1481.24" z="29.36" />
+    <VehicleSpawn x="141.60" y="-1485.40" z="28.64" heading="80" />
+    <Inputs primary="ProcessedFood,Meat" outputs="Burger" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Burger:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
+    <Economy>
+      <Casual productionRate="4.8" licencePrice="7700" purchasePrice="150000" inputCapacityTons="96" outputCapacityTons="60" productionRatio="1" permitRequired="true" />
+      <Standard productionRate="4" licencePrice="11000" purchasePrice="200000" inputCapacityTons="80" outputCapacityTons="50" productionRatio="1" permitRequired="true" />
+      <Hardcore productionRate="3.4" licencePrice="14850" purchasePrice="280000" inputCapacityTons="64" outputCapacityTons="40" productionRatio="1" permitRequired="true" />
+      <Impossible productionRate="2.8" licencePrice="18700" purchasePrice="360000" inputCapacityTons="52" outputCapacityTons="32.5" productionRatio="1" permitRequired="true" />
+    </Economy>
+  </Site>
+  <Site catalogId="137" legacyKey="BishopChicken" name="Bishop Chicken Davis Ave" role="Restaurant" district="SouthLosSantos" startingTankRatio="0.3" ownershipTier="Regional" industryOwnerCut="0.25" enabled="true">
+    <Marker x="165.68" y="-1634" z="29.29" />
+    <VehicleSpawn x="156.45" y="-1643.54" z="29.29" heading="32.74" />
+    <Inputs primary="ProcessedFood,Meat" outputs="Burger" recipeInputs="ProcessedFood:2,Meat:1" recipeOutputs="Burger:1" inputCapacityWeights="ProcessedFood:2,Meat:1" />
     <Economy>
       <Casual productionRate="4.8" licencePrice="7700" purchasePrice="150000" inputCapacityTons="96" outputCapacityTons="60" productionRatio="1" permitRequired="true" />
       <Standard productionRate="4" licencePrice="11000" purchasePrice="200000" inputCapacityTons="80" outputCapacityTons="50" productionRatio="1" permitRequired="true" />

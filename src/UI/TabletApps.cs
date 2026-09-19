@@ -4105,6 +4105,7 @@ namespace LSOL.UI
         private readonly Action<Industry> _refuelRequested;
         private readonly Action<Industry, IndustryUpgradeModule> _upgradeModuleRequested;
         private readonly Action<Industry> _vehicleSpawnerRequested;
+        private readonly FoodDeliverySideJobSystem _foodDelivery;
         private readonly Func<Industry, string> _purchaseIndustry;
 
         public IndustryTabletApp(
@@ -4116,6 +4117,7 @@ namespace LSOL.UI
             Action<Industry> refuelRequested,
             Action<Industry, IndustryUpgradeModule> upgradeModuleRequested,
             Action<Industry> vehicleSpawnerRequested,
+            FoodDeliverySideJobSystem foodDelivery,
             Func<Industry, string> purchaseIndustry)
         {
             _interactionDistance = interactionDistance;
@@ -4126,6 +4128,7 @@ namespace LSOL.UI
             _refuelRequested = refuelRequested;
             _upgradeModuleRequested = upgradeModuleRequested;
             _vehicleSpawnerRequested = vehicleSpawnerRequested;
+            _foodDelivery = foodDelivery;
             _purchaseIndustry = purchaseIndustry;
         }
 
@@ -4149,6 +4152,10 @@ namespace LSOL.UI
                     return BuildUpgradesPage(context, industry);
                 case "purchase-confirm":
                     return BuildPurchaseConfirmPage(context, industry);
+                case "deliveries":
+                    return BuildDeliveriesPage(context, industry);
+                case "deliveries-vehicles":
+                    return BuildDeliveryVehiclesPage(context, industry);
                 default:
                     return BuildMainPage(context, industry);
             }
@@ -4252,6 +4259,16 @@ namespace LSOL.UI
                     _vehicleSpawnerRequested?.Invoke(industry);
                     context.Refresh();
                 }));
+
+            // Restaurants are ordinary industries, so the Food Delivery job lives in this tablet as a
+            // page of its own instead of handing the player over to a separate menu renderer.
+            if (industry.SiteRole == SiteRole.Restaurant)
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    LocalizedText.Get("tablet.industry.foodDeliveries"),
+                    LocalizedText.Get("tablet.industry.foodDeliveriesDetail"),
+                    () => context.Push(TabletAppIds.Industry, "deliveries", industry)));
+            }
 
             if (industry.SiteRole == SiteRole.Warehouse)
             {
@@ -4506,6 +4523,198 @@ namespace LSOL.UI
                 HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
                 WidthScale = 0.84f,
                 MaxVisibleItems = 4,
+                Items = items,
+            };
+        }
+
+        /// <summary>
+        /// Food Delivery hub: the whole job is driven from this page, exactly like the other industry
+        /// operations, so the player never leaves the tablet. Restaurants come from the industry catalog,
+        /// so this works for any restaurant added to Sites.xml.
+        /// </summary>
+        private TabletShellPage BuildDeliveriesPage(TabletShellContext context, Industry industry)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            var summary = TabletUiHelpers.FindSummary(context, industry);
+            if (industry == null || summary == null || _foodDelivery == null)
+            {
+                return BuildUnavailablePage(snapshot, LocalizedText.Get("tablet.industry.deliveries.noRestaurant"), () => context.GoBack());
+            }
+
+            // Pick up restaurants added to Sites.xml since the job was created.
+            _foodDelivery.RefreshRestaurants();
+
+            var key = string.IsNullOrWhiteSpace(industry.LegacyKey) ? industry.Id : industry.LegacyKey;
+            var capacity = _foodDelivery.ActiveMealCapacity;
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateBannerItem(
+                    string.Format("{0} {1} {2}", industry.Name, summary.OwnershipTag, summary.PermitTag),
+                    TabletUiHelpers.BuildIndustryStatusDetail(summary, industry)),
+            };
+
+            if (_foodDelivery.HasVehicleOut)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    LocalizedText.Get("tablet.industry.deliveries.vehicleOut"),
+                    LocalizedText.Format(
+                        "tablet.industry.deliveries.vehicleOutDetail",
+                        _foodDelivery.ActiveVehicleDisplayName,
+                        capacity,
+                        _foodDelivery.LoadedMeals)));
+
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    LocalizedText.Get("tablet.industry.deliveries.park"),
+                    LocalizedText.Get("tablet.industry.deliveries.parkDetail"),
+                    () =>
+                    {
+                        _foodDelivery.ParkVehicle();
+                        context.Refresh();
+                    }));
+            }
+            else
+            {
+                var owned = _foodDelivery.GetOwnedVehicles();
+                var ownedVehicle = owned.Count > 0 ? owned[0] : null;
+
+                items.Add(ownedVehicle != null
+                    ? TabletUiHelpers.CreateActionItem(
+                        LocalizedText.Format("tablet.industry.deliveries.takeOut", ownedVehicle.Name),
+                        LocalizedText.Get("tablet.industry.deliveries.takeOutDetail"),
+                        () =>
+                        {
+                            _foodDelivery.TakeOutVehicle(ownedVehicle.ModelName);
+                            context.Refresh();
+                        })
+                    : TabletUiHelpers.CreateInfoItem(
+                        LocalizedText.Get("tablet.industry.deliveries.noVehicle"),
+                        LocalizedText.Get("tablet.industry.deliveries.noVehicleDetail")));
+            }
+
+            items.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.industry.deliveries.buy"),
+                LocalizedText.Get("tablet.industry.deliveries.buyDetail"),
+                () => context.Push(TabletAppIds.Industry, "deliveries-vehicles", industry)));
+
+            if (_foodDelivery.HasActiveRun)
+            {
+                var order = _foodDelivery.ActiveOrder;
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    LocalizedText.Get("tablet.industry.deliveries.runInProgress"),
+                    LocalizedText.Format(
+                        "tablet.industry.deliveries.runInProgressDetail",
+                        order != null ? order.CustomerName : string.Empty,
+                        _foodDelivery.MealsDelivered,
+                        _foodDelivery.MealsDelivered + _foodDelivery.LoadedMeals,
+                        _foodDelivery.LoadedMeals)));
+            }
+            else
+            {
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    LocalizedText.Format("tablet.industry.deliveries.startRun", Math.Max(1, capacity)),
+                    LocalizedText.Get("tablet.industry.deliveries.startRunDetail"),
+                    () =>
+                    {
+                        _foodDelivery.StartRun(key);
+                        context.Refresh();
+                    }));
+            }
+
+            items.Add(TabletUiHelpers.CreateActionItem(
+                LocalizedText.Get("tablet.industry.deliveries.reloadConfig"),
+                LocalizedText.Get("tablet.industry.deliveries.reloadConfigDetail"),
+                () =>
+                {
+                    _foodDelivery.ReloadConfiguration();
+                    context.Refresh();
+                }));
+
+            items.Add(TabletUiHelpers.CreateNavigationItem(
+                LocalizedText.Get("tablet.industry.operationsBack"),
+                LocalizedText.Get("tablet.industry.operationsBackDetail"),
+                () => context.GoBack()));
+
+            return new TabletShellPage
+            {
+                Title = LocalizedText.Get("tablet.industry.deliveries.pageTitle"),
+                Subtitle = industry.Name,
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.90f,
+                MaxVisibleItems = 7,
+                Items = items,
+            };
+        }
+
+        /// <summary>Garage and dealership for the delivery job, as one list of every configured vehicle.</summary>
+        private TabletShellPage BuildDeliveryVehiclesPage(TabletShellContext context, Industry industry)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            if (industry == null || _foodDelivery == null)
+            {
+                return BuildUnavailablePage(snapshot, LocalizedText.Get("tablet.industry.deliveries.noRestaurant"), () => context.GoBack());
+            }
+
+            var items = new List<MenuItem>();
+            var vehicles = _foodDelivery.GetVehicles();
+            for (int i = 0; i < vehicles.Count; i++)
+            {
+                var vehicle = vehicles[i];
+                if (vehicle == null || string.IsNullOrWhiteSpace(vehicle.ModelName))
+                {
+                    continue;
+                }
+
+                var modelName = vehicle.ModelName;
+                var isOut = _foodDelivery.IsActiveVehicleOut(modelName);
+                var isOwned = _foodDelivery.OwnsVehicle(modelName);
+
+                items.Add(TabletUiHelpers.CreateActionItem(
+                    LocalizedText.Format("tablet.industry.deliveries.vehicleRow", vehicle.Name, vehicle.MealCapacity),
+                    isOwned
+                        ? LocalizedText.Get("tablet.industry.deliveries.vehicleOwned")
+                        : LocalizedText.Format(
+                            "tablet.industry.deliveries.vehicleDetail",
+                            vehicle.UnlockLevel,
+                            ModFormatting.FormatMoney(vehicle.Price)),
+                    () =>
+                    {
+                        if (isOut)
+                        {
+                            _foodDelivery.ParkVehicle();
+                        }
+                        else if (isOwned)
+                        {
+                            _foodDelivery.TakeOutVehicle(modelName);
+                        }
+                        else
+                        {
+                            _foodDelivery.BuyVehicle(modelName);
+                        }
+
+                        context.Refresh();
+                    }));
+            }
+
+            if (items.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    LocalizedText.Get("tablet.industry.deliveries.noVehicle"),
+                    LocalizedText.Get("tablet.industry.deliveries.noVehicleDetail")));
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem(
+                LocalizedText.Get("tablet.industry.operationsBack"),
+                LocalizedText.Get("tablet.industry.operationsBackDetail"),
+                () => context.GoBack()));
+
+            return new TabletShellPage
+            {
+                Title = LocalizedText.Get("tablet.industry.deliveries.vehiclesPageTitle"),
+                Subtitle = industry.Name,
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.88f,
+                MaxVisibleItems = 5,
                 Items = items,
             };
         }
