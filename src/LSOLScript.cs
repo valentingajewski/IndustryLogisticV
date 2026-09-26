@@ -4752,7 +4752,11 @@ namespace LSOL
                 _lastIndustryTickMs = Game.GameTime;
                 _lastNearestProbeMs = 0;
                 _lastBlipRefreshMs = 0;
-                CreateMapBlips();
+                // Enhanced SHVDN hard-crashes in native blip creation; pause blip building on that runtime.
+                if (!ShvdnRuntimeCompatibility.IsEnhancedRuntime)
+                {
+                    CreateMapBlips();
+                }
                 ShowStatus(Text(ModTextKey.DetailMechanicsEnabled));
                 return;
             }
@@ -7638,6 +7642,12 @@ namespace LSOL
 
         private void RefreshBlipPositions()
         {
+            // Enhanced SHVDN hard-crashes in native blip creation; pause blip building on that runtime.
+            if (ShvdnRuntimeCompatibility.IsEnhancedRuntime)
+            {
+                return;
+            }
+
             _blipLifecycleManager.Refresh();
             RefreshCommercialVehicleBlips();
             RefreshPersonalVehicleBlips();

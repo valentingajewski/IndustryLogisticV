@@ -75,6 +75,12 @@ namespace LSOL.Systems
 
         public void Create()
         {
+            // Enhanced SHVDN hard-crashes in native blip creation; pause blip building on that runtime.
+            if (ShvdnRuntimeCompatibility.IsEnhancedRuntime)
+            {
+                return;
+            }
+
             Destroy();
 
             CreateOfficeBlips();
@@ -100,6 +106,12 @@ namespace LSOL.Systems
 
         public void Refresh()
         {
+            // Enhanced SHVDN hard-crashes in native blip creation; pause blip building on that runtime.
+            if (ShvdnRuntimeCompatibility.IsEnhancedRuntime)
+            {
+                return;
+            }
+
             var offices = ResolveOfficeDefinitions();
             var expectedOfficeBlipCount = offices.Count > 0 ? offices.Count : 1;
             if (_officeBlips.Count != expectedOfficeBlipCount)
