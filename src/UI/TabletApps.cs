@@ -4154,6 +4154,8 @@ namespace LSOL.UI
                     return BuildPurchaseConfirmPage(context, industry);
                 case "deliveries":
                     return BuildDeliveriesPage(context, industry);
+                case "deliveries-routes":
+                    return BuildDeliveryRoutesPage(context, industry);
                 case "deliveries-vehicles":
                     return BuildDeliveryVehiclesPage(context, industry);
                 default:
@@ -4608,17 +4610,23 @@ namespace LSOL.UI
                         _foodDelivery.MealsDelivered,
                         _foodDelivery.MealsDelivered + _foodDelivery.LoadedMeals,
                         _foodDelivery.LoadedMeals)));
+
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    LocalizedText.Get("tablet.industry.deliveries.routeInProgress"),
+                    LocalizedText.Format(
+                        "tablet.industry.deliveries.routeInProgressDetail",
+                        DescribeDeliveryRoute(_foodDelivery.RouteDistrict),
+                        _foodDelivery.RouteStopsDelivered,
+                        _foodDelivery.RouteStopCount)));
             }
             else
             {
                 items.Add(TabletUiHelpers.CreateActionItem(
-                    LocalizedText.Format("tablet.industry.deliveries.startRun", Math.Max(1, capacity)),
-                    LocalizedText.Get("tablet.industry.deliveries.startRunDetail"),
-                    () =>
-                    {
-                        _foodDelivery.StartRun(key);
-                        context.Refresh();
-                    }));
+                    LocalizedText.Get("tablet.industry.deliveries.chooseRoute"),
+                    LocalizedText.Format(
+                        "tablet.industry.deliveries.chooseRouteDetail",
+                        Math.Max(1, capacity)),
+                    () => context.Push(TabletAppIds.Industry, "deliveries-routes", industry)));
             }
 
             items.Add(TabletUiHelpers.CreateActionItem(
@@ -4644,6 +4652,89 @@ namespace LSOL.UI
                 MaxVisibleItems = 7,
                 Items = items,
             };
+        }
+
+        /// <summary>
+        /// Route picker: one row per district that has authored CustomerDropoff addresses in
+        /// JobCoordinates.xml, built from the file so new addresses or a new district appear without a
+        /// code change. Nothing is capped and every address is used as authored.
+        /// </summary>
+        private TabletShellPage BuildDeliveryRoutesPage(TabletShellContext context, Industry industry)
+        {
+            var snapshot = context.Snapshot ?? new TabletStateSnapshot();
+            if (industry == null || _foodDelivery == null)
+            {
+                return BuildUnavailablePage(snapshot, LocalizedText.Get("tablet.industry.deliveries.noRestaurant"), () => context.GoBack());
+            }
+
+            var key = string.IsNullOrWhiteSpace(industry.LegacyKey) ? industry.Id : industry.LegacyKey;
+            var capacity = Math.Max(1, _foodDelivery.ActiveMealCapacity);
+            var routes = _foodDelivery.GetRoutes(key);
+
+            var items = new List<MenuItem>
+            {
+                TabletUiHelpers.CreateBannerItem(
+                    LocalizedText.Get("tablet.industry.deliveries.routes.pageTitle"),
+                    LocalizedText.Format("tablet.industry.deliveries.routes.pageDetail", capacity)),
+            };
+
+            if (routes.Count == 0)
+            {
+                items.Add(TabletUiHelpers.CreateInfoItem(
+                    LocalizedText.Get("tablet.industry.deliveries.routes.empty"),
+                    LocalizedText.Get("tablet.industry.deliveries.routes.emptyDetail")));
+            }
+            else
+            {
+                for (int i = 0; i < routes.Count; i++)
+                {
+                    var route = routes[i];
+                    if (route == null || route.StopCount == 0)
+                    {
+                        continue;
+                    }
+
+                    var districtName = route.DistrictName;
+                    var stops = route.StopCount;
+                    var nearest = route.NearestDistanceMeters >= 0f
+                        ? ModFormatting.FormatDistance(route.NearestDistanceMeters, true)
+                        : LocalizedText.Get("tablet.industry.deliveries.routes.unknownDistance");
+
+                    items.Add(TabletUiHelpers.CreateActionItem(
+                        LocalizedText.Format("tablet.industry.deliveries.routes.row", route.DisplayName, stops),
+                        stops > capacity
+                            ? LocalizedText.Format("tablet.industry.deliveries.routes.rowDetailShuffled", nearest, capacity)
+                            : LocalizedText.Format("tablet.industry.deliveries.routes.rowDetail", nearest),
+                        () =>
+                        {
+                            _foodDelivery.StartRun(key, districtName);
+                            context.GoBack();
+                        }));
+                }
+            }
+
+            items.Add(TabletUiHelpers.CreateNavigationItem(
+                LocalizedText.Get("tablet.industry.operationsBack"),
+                LocalizedText.Get("tablet.industry.operationsBackDetail"),
+                () => context.GoBack()));
+
+            return new TabletShellPage
+            {
+                Title = LocalizedText.Get("tablet.industry.deliveries.routes.pageTitle"),
+                Subtitle = industry.Name,
+                HeaderRightText = TabletUiHelpers.BuildBalanceChrome(snapshot),
+                WidthScale = 0.90f,
+                MaxVisibleItems = 7,
+                Items = items,
+            };
+        }
+
+        /// <summary>Player-facing name of a district route, with a fallback for unassigned addresses.</summary>
+        private static string DescribeDeliveryRoute(string districtName)
+        {
+            return string.IsNullOrWhiteSpace(districtName)
+                ? LocalizedText.Get("tablet.industry.deliveries.routes.unassigned")
+                : ModFormatting.FormatDistrictName(districtName);
         }
 
         /// <summary>Garage and dealership for the delivery job, as one list of every configured vehicle.</summary>

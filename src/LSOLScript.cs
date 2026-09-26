@@ -2128,7 +2128,6 @@ namespace LSOL
                 SpawnPosition = industry.VehicleSpawnPosition ?? industry.Position,
                 SpawnHeading = industry.VehicleSpawnHeading.GetValueOrDefault(0f),
                 SpawnResolved = industry.VehicleSpawnPosition.HasValue,
-                ServiceRadius = FoodDeliverySideJobSystem.DefaultServiceRadius,
                 ProductBasePrice = basePrice,
                 IsOwned = _industryManager.IsIndustryOwnedForGameplay(industry),
                 PositionResolved = true,

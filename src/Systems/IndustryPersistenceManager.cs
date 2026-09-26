@@ -401,7 +401,7 @@ namespace LSOL.Systems
 
             if (metadata != null && HasFoodDeliveryData(metadata.FoodDelivery))
             {
-                persistenceVersion = 35;
+                persistenceVersion = 36;
             }
 
             writer.WriteLine(
@@ -4063,6 +4063,20 @@ namespace LSOL.Systems
 
             writer.WriteLine("[Towing]");
             writer.WriteLine("NextSpawnId={0}", Math.Max(1, snapshot.NextSpawnId));
+            if (snapshot.LastPointIds != null)
+            {
+                var lastPoints = snapshot.LastPointIds
+                    .Where(pair => !string.IsNullOrWhiteSpace(pair.Key) && pair.Value != 0)
+                    .OrderBy(pair => pair.Key, StringComparer.OrdinalIgnoreCase)
+                    .Select(pair => string.Format(CultureInfo.InvariantCulture, "{0}:{1}", pair.Key, pair.Value))
+                    .ToList();
+                if (lastPoints.Count > 0)
+                {
+                    // Keeps the "never the same coordinates twice in a row" rotation across reloads.
+                    writer.WriteLine("LastPointIds={0}", string.Join("|", lastPoints));
+                }
+            }
+
             if (snapshot.ActiveTow != null && !string.IsNullOrWhiteSpace(snapshot.ActiveTow.TowTruckModelName))
             {
                 writer.WriteLine("ActiveTowTruckModel={0}", snapshot.ActiveTow.TowTruckModelName ?? string.Empty);
@@ -4081,6 +4095,8 @@ namespace LSOL.Systems
                 .OrderBy(item => item.SpawnId))
             {
                 writer.WriteLine("[Towing:DamagedVehicle:{0}]", Math.Max(1, entry.SpawnId));
+                writer.WriteLine("PointId={0}", entry.PointId);
+                writer.WriteLine("DistrictName={0}", entry.DistrictName ?? string.Empty);
                 writer.WriteLine("ModelName={0}", entry.ModelName ?? string.Empty);
                 writer.WriteLine("DisplayName={0}", entry.DisplayName ?? string.Empty);
                 writer.WriteLine("WeightTons={0}", FormatFloat(entry.WeightTons));
@@ -4102,6 +4118,7 @@ namespace LSOL.Systems
             if (ini.HasSection("Towing"))
             {
                 snapshot.NextSpawnId = ParseInt(ini.GetString("Towing", "NextSpawnId", "1"), 1);
+                ReadTowingLastPointIds(ini.GetString("Towing", "LastPointIds", string.Empty), snapshot);
                 var activeTowModel = ini.GetString("Towing", "ActiveTowTruckModel", string.Empty);
                 if (!string.IsNullOrWhiteSpace(activeTowModel))
                 {
@@ -4130,6 +4147,8 @@ namespace LSOL.Systems
                 snapshot.DamagedVehicles.Add(new TowingDamagedVehicleSnapshot
                 {
                     SpawnId = spawnId,
+                    PointId = ParseInt(ini.GetString(section, "PointId", "0"), 0),
+                    DistrictName = ini.GetString(section, "DistrictName", string.Empty),
                     ModelName = modelName,
                     DisplayName = ini.GetString(section, "DisplayName", modelName),
                     WeightTons = ini.GetFloat(section, "WeightTons", 1f),
@@ -4140,6 +4159,42 @@ namespace LSOL.Systems
             }
 
             return snapshot.HasData ? snapshot : null;
+        }
+
+        /// <summary>
+        /// Parses the "District:PointId|District:PointId" rotation memory of the towing section.
+        /// </summary>
+        private static void ReadTowingLastPointIds(string raw, TowingPersistenceSnapshot snapshot)
+        {
+            if (snapshot == null || string.IsNullOrWhiteSpace(raw))
+            {
+                return;
+            }
+
+            var entries = raw.Split('|');
+            for (int i = 0; i < entries.Length; i++)
+            {
+                var entry = entries[i];
+                if (string.IsNullOrWhiteSpace(entry))
+                {
+                    continue;
+                }
+
+                var separator = entry.LastIndexOf(':');
+                if (separator <= 0 || separator >= entry.Length - 1)
+                {
+                    continue;
+                }
+
+                var district = entry.Substring(0, separator).Trim();
+                var pointId = ParseInt(entry.Substring(separator + 1).Trim(), 0);
+                if (district.Length == 0 || pointId == 0)
+                {
+                    continue;
+                }
+
+                snapshot.LastPointIds[district] = pointId;
+            }
         }
 
         private static bool HasGarbageData(GarbagePersistenceSnapshot snapshot)
@@ -4440,6 +4495,9 @@ namespace LSOL.Systems
             writer.WriteLine("SpoiledAtGameTime={0}", Math.Max(0, snapshot.SpoiledAtGameTime));
             writer.WriteLine("ActiveOrderId={0}", Math.Max(0, snapshot.ActiveOrderId));
             writer.WriteLine("NextOrderId={0}", Math.Max(1, snapshot.NextOrderId));
+            writer.WriteLine("RouteDistrict={0}", snapshot.RouteDistrict ?? string.Empty);
+            writer.WriteLine("RouteSeed={0}", Math.Max(0, snapshot.RouteSeed));
+            writer.WriteLine("RouteStopsDelivered={0}", Math.Max(0, snapshot.RouteStopsDelivered));
             writer.WriteLine(
                 "OwnedVehicles={0}",
                 string.Join(
@@ -4492,6 +4550,9 @@ namespace LSOL.Systems
                 snapshot.SpoiledAtGameTime = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "SpoiledAtGameTime", "0"), 0));
                 snapshot.ActiveOrderId = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "ActiveOrderId", "0"), 0));
                 snapshot.NextOrderId = Math.Max(1, ParseInt(ini.GetString("FoodDelivery", "NextOrderId", "1"), 1));
+                snapshot.RouteDistrict = ini.GetString("FoodDelivery", "RouteDistrict", string.Empty);
+                snapshot.RouteSeed = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "RouteSeed", "0"), 0));
+                snapshot.RouteStopsDelivered = Math.Max(0, ParseInt(ini.GetString("FoodDelivery", "RouteStopsDelivered", "0"), 0));
 
                 var ownedVehicles = ini.GetString("FoodDelivery", "OwnedVehicles", string.Empty);
                 if (!string.IsNullOrWhiteSpace(ownedVehicles))
